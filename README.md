@@ -79,3 +79,49 @@ than incorrectly attributing Docker startup delay to the generated program.
 
 The image uses a pinned Step Tracer commit. Build the image again when that pinned
 version or the worker implementation changes.
+
+## Fake generation pipeline
+
+Before connecting an AI provider, the model-independent generation pipeline can
+be exercised using the existing examples:
+
+```powershell
+uv run python -m edcraft_validator.generation `
+  --topic loops `
+  --difficulty intermediate `
+  --num-distractors 3
+```
+
+Supported topics are `arithmetic`, `conditionals`, `loops`, `functions`, and
+`lists`. Difficulties are `beginner`, `intermediate`, and `advanced`. The fake
+generator selects a fixed example by topic; difficulty will be used by the future
+AI implementation.
+
+The service makes at most three generation attempts. Invalid questions are sent
+back as feedback for another attempt, while infrastructure or execution errors
+stop the run without wasting another generation. Attempts are appended to
+`.artifacts/generation_attempts.jsonl`, which is excluded from Git.
+
+## OpenAI generation pipeline
+
+Paste your replacement API key into the local `.env` file. This file is excluded
+from Git and must never be committed:
+
+```dotenv
+OPENAI_API_KEY=your-key-here
+OPENAI_MODEL=gpt-5.6-luna
+```
+
+Then generate and deterministically validate one question:
+
+```powershell
+uv run python -m edcraft_validator.generation `
+  --provider openai `
+  --topic loops `
+  --difficulty intermediate `
+  --num-distractors 3
+```
+
+The OpenAI model only generates candidates. The existing AST safety checks,
+Docker execution, answer comparison, and retry rules remain responsible for
+validation.

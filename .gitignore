@@ -24,9 +24,11 @@ dist/
 .env.*
 !.env.example
 
+# Local generation-evaluation output
+.artifacts/
+
 # Editor and operating-system files
 .idea/
 .vscode/
 .DS_Store
 Thumbs.db
-
