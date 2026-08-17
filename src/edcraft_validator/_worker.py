@@ -1,17 +1,28 @@
 import json
+import signal
 import sys
 from typing import Any
 
 from step_tracer import BranchExecution, FunctionCall, LoopExecution, StepTracer
 
 
-def _respond(payload: dict[str, Any]) -> None:
-    sys.stdout.write(json.dumps(payload, allow_nan=False))
+class ExecutionTimedOutError(TimeoutError):
+    pass
 
 
-def main() -> None:
+def _raise_execution_timeout(signum: int, frame: Any) -> None:
+    raise ExecutionTimedOutError
+
+
+def execute_request(request: dict[str, Any]) -> dict[str, Any]:
+    """Execute one trusted request; production callers must use the container."""
+    timeout_seconds = request.get("timeout_seconds")
+    timer_enabled = timeout_seconds is not None and hasattr(signal, "setitimer")
     try:
-        request = json.loads(sys.stdin.read())
+        if timer_enabled:
+            signal.signal(signal.SIGALRM, _raise_execution_timeout)
+            signal.setitimer(signal.ITIMER_REAL, float(timeout_seconds))
+
         entry_function = request["entry_function"]
         invocation = f"\n\n{entry_function}(**{request['inputs']!r})"
 
@@ -27,29 +38,21 @@ def main() -> None:
             and event.func_call_exec_ctx_id == 0
         ]
         if len(entry_calls) != 1:
-            _respond(
-                {
-                    "ok": False,
-                    "error_code": "ENTRY_RESULT_NOT_FOUND",
-                    "error_message": (
-                        "Could not identify exactly one entry-function call"
-                    ),
-                }
-            )
-            return
+            return {
+                "ok": False,
+                "error_code": "ENTRY_RESULT_NOT_FOUND",
+                "error_message": "Could not identify exactly one entry-function call",
+            }
 
         answer = entry_calls[0].return_value
         try:
             json.dumps(answer, allow_nan=False)
         except (TypeError, ValueError):
-            _respond(
-                {
-                    "ok": False,
-                    "error_code": "UNSUPPORTED_RESULT",
-                    "error_message": "The return value is not JSON-compatible",
-                }
-            )
-            return
+            return {
+                "ok": False,
+                "error_code": "UNSUPPORTED_RESULT",
+                "error_message": "The return value is not JSON-compatible",
+            }
 
         summary = {
             "entry_function": entry_function,
@@ -64,24 +67,35 @@ def main() -> None:
             ),
             "variable_snapshots": len(context.variables),
         }
-        _respond({"ok": True, "answer": answer, "trace_summary": summary})
+        return {"ok": True, "answer": answer, "trace_summary": summary}
+    except ExecutionTimedOutError:
+        return {
+            "ok": False,
+            "error_code": "EXECUTION_TIMEOUT",
+            "error_message": f"Execution exceeded {timeout_seconds:g} seconds",
+        }
     except Exception as exc:
-        try:
-            _respond(
-                {
-                    "ok": False,
-                    "error_code": "EXECUTION_FAILED",
-                    "error_message": f"{type(exc).__name__}: {exc}",
-                }
-            )
-        except (TypeError, ValueError):
-            _respond(
-                {
-                    "ok": False,
-                    "error_code": "UNSUPPORTED_RESULT",
-                    "error_message": "The return value is not JSON-compatible",
-                }
-            )
+        return {
+            "ok": False,
+            "error_code": "EXECUTION_FAILED",
+            "error_message": f"{type(exc).__name__}: {exc}",
+        }
+    finally:
+        if timer_enabled:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+
+
+def main() -> None:
+    try:
+        request = json.loads(sys.stdin.read())
+        response = execute_request(request)
+    except Exception as exc:
+        response = {
+            "ok": False,
+            "error_code": "INVALID_REQUEST",
+            "error_message": f"{type(exc).__name__}: {exc}",
+        }
+    sys.stdout.write(json.dumps(response, allow_nan=False))
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
+import math
+
 from edcraft_validator.comparison import equivalent
-from edcraft_validator.executor import execute_with_tracer
+from edcraft_validator.executor import DockerExecutor, ExecutionBackend
 from edcraft_validator.models import (
     GeneratedQuestion,
     TraceSummary,
@@ -10,8 +12,16 @@ from edcraft_validator.safety import check_code_safety
 
 
 class QuestionValidator:
-    def __init__(self, *, timeout_seconds: float = 2.0) -> None:
+    def __init__(
+        self,
+        *,
+        timeout_seconds: float = 2.0,
+        executor: ExecutionBackend | None = None,
+    ) -> None:
+        if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be finite and greater than zero")
         self.timeout_seconds = timeout_seconds
+        self.executor = executor or DockerExecutor()
 
     def validate(self, question: GeneratedQuestion) -> ValidationReport:
         safety = check_code_safety(question.code, question.entry_function)
@@ -24,7 +34,7 @@ class QuestionValidator:
                 ],
             )
 
-        execution = execute_with_tracer(
+        execution = self.executor.execute(
             question.code,
             question.entry_function,
             question.inputs,

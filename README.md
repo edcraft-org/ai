@@ -7,7 +7,7 @@ second LLM to judge correctness.
 
 1. Parse the AI response using a strict Pydantic schema.
 2. Reject unsupported or risky Python syntax using an AST safety gate.
-3. run EdCraft's `step-tracer` in a child process with a timeout.
+3. Run EdCraft's `step-tracer` inside a restricted Docker container.
 4. Extract the entry function's traced return value.
 5. Compare it with the proposed answer and ensure distractors are unique and wrong.
 6. Return an explainable `valid`, `invalid`, or `execution_error` report.
@@ -16,7 +16,15 @@ second LLM to judge correctness.
 
 ```powershell
 uv sync
+docker build -f docker/Dockerfile -t edcraft-validator-executor:local .
 uv run python -m edcraft_validator examples/valid_square.json
+uv run pytest
+```
+
+To include the real-container integration test:
+
+```powershell
+$env:EDCRAFT_RUN_DOCKER_TESTS = "1"
 uv run pytest
 ```
 
@@ -52,6 +60,22 @@ Python instrumentation engine.
 - It does not decide whether an AI answer or distractor is correct.
 - It does not check whether natural-language wording matches the code semantics.
 
-This prototype adds an AST gate and process timeout. That reduces risk but is not
-a production security boundary. Container isolation with explicit CPU, memory,
-filesystem, and network limits is the next security milestone.
+## Docker execution boundary
+
+The default executor starts one disposable container per question. It applies:
+
+- no network access;
+- a read-only root filesystem;
+- 128 MB memory and swap limits;
+- half of one CPU and a 64-process limit;
+- all Linux capabilities dropped;
+- `no-new-privileges` and an unprivileged user;
+- 16 MB of temporary storage; and
+- an in-container code timeout, plus a separate Docker startup allowance and
+  host-enforced cleanup fallback.
+
+If the host fallback is reached, validation reports `CONTAINER_TIMEOUT` rather
+than incorrectly attributing Docker startup delay to the generated program.
+
+The image uses a pinned Step Tracer commit. Build the image again when that pinned
+version or the worker implementation changes.
