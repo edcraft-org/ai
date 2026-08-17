@@ -1,5 +1,8 @@
 {
-  "code": "def square(x):\n    return x * x",
+  "code": [
+    "def square(x):",
+    "    return x * x"
+  ],
   "entry_function": "square",
   "inputs": {"x": 4},
   "question": "What value is returned by square(4)?",

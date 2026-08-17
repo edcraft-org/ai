@@ -20,9 +20,14 @@ uv run python -m edcraft_validator examples/valid_square.json
 uv run pytest
 ```
 
+The `examples` directory also contains end-to-end cases for loops and branches,
+floating-point calculations, helper-function calls, and structured dictionary
+answers. Every `valid_*.json` example is automatically exercised by the test suite.
+
 ## Supported scope
 
 - One Python function return-value question per JSON document
+- Python code supplied as a readable array of lines or an escaped string
 - JSON-compatible inputs and answers
 - Basic expressions, assignments, `if`, and `for` loops
 - A small allowlist of safe built-in functions

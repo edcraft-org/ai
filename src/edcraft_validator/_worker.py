@@ -39,6 +39,18 @@ def main() -> None:
             return
 
         answer = entry_calls[0].return_value
+        try:
+            json.dumps(answer, allow_nan=False)
+        except (TypeError, ValueError):
+            _respond(
+                {
+                    "ok": False,
+                    "error_code": "UNSUPPORTED_RESULT",
+                    "error_message": "The return value is not JSON-compatible",
+                }
+            )
+            return
+
         summary = {
             "entry_function": entry_function,
             "function_calls": sum(

@@ -16,6 +16,14 @@ class GeneratedQuestion(BaseModel):
     distractors: list[Any] = Field(min_length=2)
     question_type: Literal["mcq"] = "mcq"
 
+    @field_validator("code", mode="before", json_schema_input_type=str | list[str])
+    @classmethod
+    def join_code_lines(cls, value: Any) -> Any:
+        """Normalize readable JSON line arrays to executable Python source."""
+        if isinstance(value, list) and all(isinstance(line, str) for line in value):
+            return "\n".join(value)
+        return value
+
     @field_validator("code", "question")
     @classmethod
     def reject_blank_text(cls, value: str) -> str:
