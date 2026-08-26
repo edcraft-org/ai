@@ -1,0 +1,16 @@
+{
+  "code": [
+    "def accumulated_bonus(scores, threshold):",
+    "    total = 0",
+    "    for score in scores:",
+    "        if score >= threshold:",
+    "            total += score - threshold",
+    "    return total"
+  ],
+  "entry_function": "accumulated_bonus",
+  "inputs": {"scores": [72, 88, 91, 65], "threshold": 70},
+  "question": "What value is returned by accumulated_bonus([72, 88, 91, 65], 70)?",
+  "proposed_answer": 41,
+  "distractors": [36, 46, 251],
+  "question_type": "mcq"
+}

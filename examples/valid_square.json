@@ -1,0 +1,13 @@
+{
+  "code": [
+    "def square(x):",
+    "    return x * x"
+  ],
+  "entry_function": "square",
+  "inputs": {"x": 4},
+  "question": "What value is returned by square(4)?",
+  "proposed_answer": 16,
+  "distractors": [4, 8, 20],
+  "question_type": "mcq"
+}
+
