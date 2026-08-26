@@ -45,4 +45,3 @@ def test_missing_example_is_reported() -> None:
     request = GenerationRequest(topic="arithmetic", difficulty="beginner")
     with pytest.raises(FileNotFoundError):
         FakeQuestionGenerator(Path("missing-examples")).generate(request)
-

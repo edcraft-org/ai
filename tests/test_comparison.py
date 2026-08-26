@@ -31,4 +31,3 @@ def test_non_finite_numbers_are_not_equivalent() -> None:
 
 def test_different_scalar_types_are_not_equivalent() -> None:
     assert not equivalent("16", 16)
-

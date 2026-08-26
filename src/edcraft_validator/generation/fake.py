@@ -33,4 +33,3 @@ class FakeQuestionGenerator:
         return question.model_copy(
             update={"distractors": question.distractors[: request.num_distractors]}
         )
-

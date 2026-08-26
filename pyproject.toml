@@ -22,7 +22,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-step-tracer = { path = "../step-tracer", editable = true }
+step-tracer = { git = "https://github.com/edcraft-org/step-tracer.git", rev = "ab7e22ef18b776a9cbd5260bef4b4eeacc17db11" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

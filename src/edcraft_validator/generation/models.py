@@ -35,4 +35,3 @@ class GenerationOutcome(BaseModel):
     request: GenerationRequest
     question: GeneratedQuestion | None = None
     attempts: list[GenerationAttempt]
-
