@@ -26,4 +26,3 @@ def test_generation_request_rejects_unknown_topic() -> None:
         GenerationRequest.model_validate(
             {"topic": "networking", "difficulty": "beginner"}
         )
-

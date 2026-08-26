@@ -56,4 +56,3 @@ class ValidationReport(BaseModel):
     @property
     def is_valid(self) -> bool:
         return self.status == "valid"
-

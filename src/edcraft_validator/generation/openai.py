@@ -91,9 +91,7 @@ class OpenAIQuestionGenerator:
             {
                 "code": parsed.code,
                 "entry_function": parsed.entry_function,
-                "inputs": {
-                    item.name: item.value.to_python() for item in parsed.inputs
-                },
+                "inputs": {item.name: item.value.to_python() for item in parsed.inputs},
                 "question": parsed.question,
                 "proposed_answer": parsed.proposed_answer.to_python(),
                 "distractors": [item.to_python() for item in parsed.distractors],

@@ -73,7 +73,7 @@ requires-dist = [
     { name = "openai", specifier = ">=1.99,<2" },
     { name = "pydantic", specifier = ">=2.11,<3" },
     { name = "python-dotenv", specifier = ">=1.1,<2" },
-    { name = "step-tracer", editable = "../step-tracer" },
+    { name = "step-tracer", git = "https://github.com/edcraft-org/step-tracer.git?rev=ab7e22ef18b776a9cbd5260bef4b4eeacc17db11" },
 ]
 
 [package.metadata.requires-dev]
@@ -403,16 +403,7 @@ wheels = [
 [[package]]
 name = "step-tracer"
 version = "0.1.0"
-source = { editable = "../step-tracer" }
-
-[package.metadata]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=1.17.1" },
-    { name = "pytest", specifier = ">=8.4.1" },
-    { name = "ruff", specifier = ">=0.12.8" },
-]
+source = { git = "https://github.com/edcraft-org/step-tracer.git?rev=ab7e22ef18b776a9cbd5260bef4b4eeacc17db11#ab7e22ef18b776a9cbd5260bef4b4eeacc17db11" }
 
 [[package]]
 name = "tqdm"

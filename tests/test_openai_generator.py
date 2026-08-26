@@ -21,9 +21,7 @@ def api_question() -> OpenAIQuestionResponse:
         inputs=[
             OpenAIInput(
                 name="x",
-                value=OpenAIJsonValue(
-                    kind="scalar", scalar=4, items=[], properties=[]
-                ),
+                value=OpenAIJsonValue(kind="scalar", scalar=4, items=[], properties=[]),
             )
         ],
         question="What does square(4) return?",
@@ -93,6 +91,4 @@ def test_reports_missing_parsed_response() -> None:
     generator = OpenAIQuestionGenerator(client_with(None), model="test-model")
 
     with pytest.raises(OpenAIGenerationError, match="no parsed question"):
-        generator.generate(
-            GenerationRequest(topic="arithmetic", difficulty="beginner")
-        )
+        generator.generate(GenerationRequest(topic="arithmetic", difficulty="beginner"))

@@ -71,4 +71,3 @@ def test_rejects_decorated_functions() -> None:
     result = check_code_safety("@staticmethod\ndef main():\n    return 1", "main")
     assert not result.is_safe
     assert any("Decorators" in error for error in result.errors)
-
