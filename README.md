@@ -125,3 +125,7 @@ uv run python -m edcraft_validator.generation `
 The OpenAI model only generates candidates. The existing AST safety checks,
 Docker execution, answer comparison, and retry rules remain responsible for
 validation.
+
+## Reproducibility
+
+See [REPRODUCIBILITY.md](REPRODUCIBILITY.md) for pinned dependencies, environment setup, and verification commands.
