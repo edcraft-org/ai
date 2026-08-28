@@ -42,7 +42,6 @@ class RecordingGenerator:
             entry_function=question.entry_function,
             inputs=question.inputs,
             question=question.question,
-            proposed_answer=question.proposed_answer,
             distractors=question.distractors,
             distractor_reasons=["reason"] * len(question.distractors),
         )
@@ -87,7 +86,6 @@ class TwoStageGenerator:
             entry_function="square",
             inputs={"x": 4},
             question="What does square(4) return?",
-            proposed_answer=999,
             distractors=self.distractors,
             distractor_reasons=["Conceptual misunderstanding"] * len(self.distractors),
         )

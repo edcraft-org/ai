@@ -29,7 +29,6 @@ class QuestionDraft(BaseModel):
     entry_function: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     inputs: dict[str, object]
     question: str = Field(min_length=1)
-    proposed_answer: object | None = None
     distractors: list[object] = Field(min_length=2)
     distractor_reasons: list[str] = Field(default_factory=list)
     question_type: Literal["mcq"] = "mcq"

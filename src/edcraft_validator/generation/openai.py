@@ -50,7 +50,6 @@ class OpenAIQuestionDraftResponse(BaseModel):
     entry_function: str
     inputs: list[OpenAIInput]
     question: str
-    proposed_answer: OpenAIJsonValue
     distractors: list[OpenAIJsonValue]
     distractor_reasons: list[str]
     question_type: Literal["mcq"]
@@ -103,7 +102,6 @@ class OpenAIQuestionGenerator:
             entry_function=parsed.entry_function,
             inputs={item.name: item.value.to_python() for item in parsed.inputs},
             question=parsed.question,
-            proposed_answer=parsed.proposed_answer.to_python(),
             distractors=[item.to_python() for item in parsed.distractors],
             distractor_reasons=parsed.distractor_reasons,
             question_type=parsed.question_type,
@@ -165,15 +163,19 @@ class OpenAIQuestionGenerator:
 
 
 def _api_key(provider: str) -> str | None:
-    if provider == "ollama":
-        return os.getenv("OLLAMA_API_KEY") or "ollama"
-    return os.getenv("SOCLAAS_API_KEY") or os.getenv("OPENAI_API_KEY")
+    return {
+        "ollama": os.getenv("OLLAMA_API_KEY") or "ollama",
+        "soclaas": os.getenv("SOCLAAS_API_KEY"),
+        "openai": os.getenv("OPENAI_API_KEY"),
+    }[provider]
 
 
 def _base_url(provider: str) -> str | None:
-    if provider == "ollama":
-        return os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-    return os.getenv("SOCLAAS_BASE_URL") or os.getenv("OPENAI_BASE_URL")
+    return {
+        "ollama": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
+        "soclaas": os.getenv("SOCLAAS_BASE_URL"),
+        "openai": os.getenv("OPENAI_BASE_URL"),
+    }[provider]
 
 
 _SYSTEM_PROMPT = """\
@@ -200,20 +202,20 @@ The generated code must stay within this validator's deliberately small subset:
 - Return code as one readable, correctly indented string with newline characters.
 - Respond with a single valid JSON object and no markdown fences or extra text.
 - The JSON object must have exactly these top-level keys: code, entry_function,
-  inputs, question, proposed_answer, distractors, distractor_reasons,
+  inputs, question, distractors, distractor_reasons,
   question_type.
 - Use this exact shape (values are illustrative):
   {"code":"def f(x):\\n    return x + 1","entry_function":"f",
    "inputs":[{"name":"x","value":{"kind":"scalar","scalar":2,
    "items":[],"properties":[]}}],"question":"What does f(2) return?",
-   "proposed_answer":{"kind":"scalar","scalar":3,"items":[],
-   "properties":[]},"distractors":[{"kind":"scalar","scalar":2,
-   "items":[],"properties":[]}],"question_type":"mcq"}
+   "distractors":[{"kind":"scalar","scalar":2,
+   "items":[],"properties":[]}],"distractor_reasons":["adds one"],
+   "question_type":"mcq"}
 - Every input must be an object with both name and value keys. The value object
   must always contain scalar, items, and properties; empty collections are []
   (never {}). question_type must be exactly "mcq".
-The deterministic validator will execute the code and replace proposed_answer
-with the independently computed answer. The model answer is only a draft.
+The deterministic validator will execute the code and use its return value as
+the final answer. The generated distractors remain subject to validation.
 """
 
 def _build_prompt(
@@ -228,7 +230,8 @@ def _build_prompt(
     prompt = (
         f"Topic: {request.topic}\n"
         f"Difficulty: {request.difficulty} ({difficulty})\n"
-        "Create the code, inputs, question, proposed answer, distractors, and "
+        f"Create exactly {request.num_distractors} distractors. Create the code, "
+        "inputs, question, distractors, and "
         "one misconception reason for each distractor."
     )
     if feedback is not None:
@@ -240,16 +243,3 @@ def _build_prompt(
             f"Correct these issues: {issues}"
         )
     return prompt
-
-
-def _build_legacy_prompt(
-    request: GenerationRequest,
-    feedback: ValidationReport | None,
-) -> str:
-    prompt = _build_prompt(request, feedback)
-    if feedback is not None and feedback.actual_answer is not None:
-        prompt += f"\nThe executed return value was: {feedback.actual_answer!r}"
-    return prompt + (
-        "\nFor compatibility, include proposed_answer and distractors using the "
-        "tagged value schema."
-    )

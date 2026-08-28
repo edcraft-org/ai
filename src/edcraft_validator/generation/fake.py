@@ -38,8 +38,12 @@ class FakeQuestionGenerator:
             entry_function=question.entry_function,
             inputs=question.inputs,
             question=question.question,
-            proposed_answer=question.proposed_answer,
             distractors=question.distractors[: request.num_distractors],
-            distractor_reasons=[],
+            distractor_reasons=[
+                f"Fixed example misconception {index + 1}"
+                for index in range(
+                    min(request.num_distractors, len(question.distractors))
+                )
+            ],
             question_type=question.question_type,
         )

@@ -153,7 +153,7 @@ class GenerationService:
                 "entry_function": draft.entry_function,
                 "inputs": draft.inputs,
                 "question": draft.question,
-                "proposed_answer": draft.proposed_answer,
+                "proposed_answer": None,
                 "distractors": draft.distractors,
                 "question_type": draft.question_type,
             }
