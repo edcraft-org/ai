@@ -38,6 +38,7 @@ class QuestionDraft(BaseModel):
 class GenerationAttempt(BaseModel):
     attempt_number: int = Field(ge=1)
     question: GeneratedQuestion
+    distractor_reasons: list[str] = Field(default_factory=list)
     validation_report: ValidationReport
     duration_ms: float = Field(ge=0)
 

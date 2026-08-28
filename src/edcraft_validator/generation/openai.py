@@ -70,14 +70,6 @@ class OpenAIQuestionResponse(BaseModel):
     question_type: Literal["mcq"]
 
 
-class OpenAIDistractorResponse(BaseModel):
-    """Schema for distractors generated after Docker computes the answer."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    distractors: list[OpenAIJsonValue]
-
-
 class OpenAIGenerationError(RuntimeError):
     """Raised when OpenAI does not return a parsed question."""
 
@@ -116,7 +108,7 @@ class OpenAIQuestionGenerator:
         feedback: ValidationReport | None = None,
     ) -> GeneratedQuestion:
         # Compatibility path for existing integrations. GenerationService uses
-        # generate_draft()/generate_distractors() for the authoritative pipeline.
+        # Compatibility path for callers using the original one-request API.
         parsed = self._request_model(
             _LEGACY_SYSTEM_PROMPT,
             _build_legacy_prompt(request, feedback),
@@ -155,22 +147,6 @@ class OpenAIQuestionGenerator:
             distractor_reasons=parsed.distractor_reasons,
             question_type=parsed.question_type,
         )
-
-    def generate_distractors(
-        self,
-        draft: QuestionDraft,
-        answer: object,
-        num_distractors: int,
-        *,
-        feedback: ValidationReport | None = None,
-    ) -> list[object]:
-        prompt = _build_distractor_prompt(draft, answer, num_distractors, feedback)
-        parsed = self._request_model(
-            _DISTRACTOR_SYSTEM_PROMPT,
-            prompt,
-            OpenAIDistractorResponse,
-        )
-        return [item.to_python() for item in parsed.distractors]
 
     def _request_model(
         self,
@@ -281,9 +257,6 @@ The deterministic validator will execute the code and replace proposed_answer
 with the independently computed answer. The model answer is only a draft.
 """
 
-# Compatibility prompt for callers that still invoke the old distractor method.
-_DISTRACTOR_SYSTEM_PROMPT = _SYSTEM_PROMPT
-
 # Kept for callers that still use the original one-request API.
 _LEGACY_SYSTEM_PROMPT = _SYSTEM_PROMPT
 
@@ -325,45 +298,3 @@ def _build_legacy_prompt(
         "\nFor compatibility, include proposed_answer and distractors using the "
         "tagged value schema."
     )
-
-
-def _build_distractor_prompt(
-    draft: QuestionDraft,
-    answer: object,
-    num_distractors: int,
-    feedback: ValidationReport | None,
-) -> str:
-    answer_shape = _value_shape(answer)
-    prompt = (
-        f"Code:\n{draft.code}\n"
-        f"Entry function: {draft.entry_function}\n"
-        f"Inputs: {draft.inputs!r}\n"
-        f"Question: {draft.question}\n"
-        f"Correct answer computed by Docker: {answer!r}\n"
-        f"Correct answer shape: {answer_shape}. Every distractor must be one "
-        f"{answer_shape} value, not a collection of answer options.\n"
-        f"Generate exactly {num_distractors} distractors."
-    )
-    if answer_shape == "scalar number":
-        prompt += (
-            "\nFor example, the distractor values should look like "
-            '{"kind":"scalar","scalar":14,"items":[],"properties":[]} '
-            "rather than kind=list."
-        )
-    if feedback is not None:
-        prompt += "\nPrevious distractors failed validation: " + "; ".join(
-            f"{issue.code}: {issue.message}" for issue in feedback.issues
-        )
-    return prompt
-
-
-def _value_shape(value: object) -> str:
-    if isinstance(value, bool):
-        return "scalar boolean"
-    if isinstance(value, (int, float)):
-        return "scalar number"
-    if isinstance(value, list):
-        return "list"
-    if isinstance(value, dict):
-        return "object"
-    return "scalar string"

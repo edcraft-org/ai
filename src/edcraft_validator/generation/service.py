@@ -31,17 +31,13 @@ class GenerationService:
         validator: QuestionValidationBackend,
         *,
         max_attempts: int = 3,
-        max_distractor_attempts: int = 3,
         attempt_log_path: Path | None = DEFAULT_ATTEMPT_LOG,
     ) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be greater than zero")
-        if max_distractor_attempts < 1:
-            raise ValueError("max_distractor_attempts must be greater than zero")
         self.generator = generator
         self.validator = validator
         self.max_attempts = max_attempts
-        self.max_distractor_attempts = max_distractor_attempts
         self.logger = (
             JsonlAttemptLogger(attempt_log_path)
             if attempt_log_path is not None
@@ -58,15 +54,17 @@ class GenerationService:
             if hasattr(self.generator, "generate_draft") and hasattr(
                 self.validator, "compute_answer"
             ):
-                question, report = self._generate_two_stage(
+                question, report, distractor_reasons = self._generate_two_stage(
                     request, feedback
                 )
             else:
                 question = self.generator.generate(request, feedback=feedback)
                 report = self._validate_candidate(request, question)
+                distractor_reasons = []
             attempt = GenerationAttempt(
                 attempt_number=attempt_number,
                 question=question,
+                distractor_reasons=distractor_reasons,
                 validation_report=report,
                 duration_ms=(time.perf_counter() - started) * 1000,
             )
@@ -102,34 +100,85 @@ class GenerationService:
         self,
         request: GenerationRequest,
         feedback: ValidationReport | None,
-    ) -> tuple[GeneratedQuestion, ValidationReport]:
+    ) -> tuple[GeneratedQuestion, ValidationReport, list[str]]:
         draft: QuestionDraft = self.generator.generate_draft(
             request, feedback=feedback
         )
         placeholder = GeneratedQuestion.model_validate(
             {
-                **draft.model_dump(),
+                "code": draft.code,
+                "entry_function": draft.entry_function,
+                "inputs": draft.inputs,
+                "question": draft.question,
                 "proposed_answer": None,
                 "distractors": [None] * request.num_distractors,
+                "question_type": draft.question_type,
             }
         )
         answer_report = self.validator.compute_answer(placeholder)
         if answer_report.status != "valid":
-            return placeholder, answer_report
+            return placeholder, answer_report, draft.distractor_reasons
 
         question = GeneratedQuestion.model_validate(
             {
-                **draft.model_dump(),
+                "code": draft.code,
+                "entry_function": draft.entry_function,
+                "inputs": draft.inputs,
+                "question": draft.question,
                 "proposed_answer": answer_report.actual_answer,
-                "distractors": draft.distractors[: request.num_distractors],
+                "distractors": draft.distractors,
+                "question_type": draft.question_type,
             }
         )
+        if len(draft.distractors) != request.num_distractors:
+            return (
+                question,
+                self._count_report(
+                    request.num_distractors,
+                    len(draft.distractors),
+                    answer_report,
+                    field="distractors",
+                ),
+                draft.distractor_reasons,
+            )
+        if len(draft.distractor_reasons) != len(draft.distractors):
+            return (
+                question,
+                self._count_report(
+                    len(draft.distractors),
+                    len(draft.distractor_reasons),
+                    answer_report,
+                    field="distractor_reasons",
+                ),
+                draft.distractor_reasons,
+            )
         report = self.validator.validate(
             question,
             actual_answer=answer_report.actual_answer,
             trace_summary=answer_report.trace_summary,
         )
-        return question, report
+        return question, report, draft.distractor_reasons
+
+    @staticmethod
+    def _count_report(
+        expected: int,
+        received: int,
+        answer_report: ValidationReport,
+        *,
+        field: str,
+    ) -> ValidationReport:
+        return ValidationReport(
+            status="invalid",
+            actual_answer=answer_report.actual_answer,
+            issues=[
+                ValidationIssue(
+                    code="COUNT_MISMATCH",
+                    message=f"Expected {expected} items, received {received}",
+                    field=field,
+                )
+            ],
+            trace_summary=answer_report.trace_summary,
+        )
 
     def _validate_candidate(
         self,

@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 from pathlib import Path
 
@@ -55,7 +56,10 @@ def main() -> int:
         attempt_log_path=None if args.no_log else DEFAULT_ATTEMPT_LOG,
     )
     outcome = service.generate(request)
-    print(outcome.model_dump_json(indent=2))
+    output = outcome.model_dump(mode="json")
+    for attempt in output["attempts"]:
+        attempt.pop("distractor_reasons", None)
+    print(json.dumps(output, indent=2))
     return 0 if outcome.status == "accepted" else 1
 
 

@@ -9,7 +9,8 @@ second LLM to judge correctness.
 2. Reject unsupported or risky Python syntax using an AST safety gate.
 3. Run EdCraft's `step-tracer` inside a restricted Docker container.
 4. Use the traced return value as the authoritative answer.
-5. Ask the model to generate distractors using that computed answer.
+5. Keep the model-generated distractors and misconception metadata with the
+   generation attempt, while excluding the metadata from the final question.
 6. Ensure distractors are unique, type-compatible, and wrong.
 7. Return an explainable `valid`, `invalid`, or `execution_error` report.
 
@@ -98,10 +99,11 @@ Supported topics are `arithmetic`, `conditionals`, `loops`, `functions`, and
 generator selects a fixed example by topic; difficulty will be used by the future
 AI implementation.
 
-The service makes at most three draft generation attempts and up to three
-distractor-generation attempts per draft. Invalid drafts are sent back as
-feedback for another attempt, while infrastructure or execution errors stop the
-run without wasting another generation. Attempts are appended to
+The service makes at most three complete generation attempts. Invalid drafts are
+sent back as feedback for another attempt, while infrastructure or execution
+errors stop the run without wasting another generation. Misconception reasons
+are retained in attempt logs but are not part of the final question payload.
+Attempts are appended to
 `.artifacts/generation_attempts.jsonl`, which is excluded from Git.
 
 ## OpenAI generation pipeline

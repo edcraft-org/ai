@@ -75,12 +75,8 @@ class TwoStageGenerator:
             inputs={"x": 4},
             question="What does square(4) return?",
             proposed_answer=999,
-            distractors=[4, 8, 20],
-            distractor_reasons=[
-                "Confuses input with output",
-                "Adds instead of multiplying",
-                "Adds four to the square",
-            ],
+            distractors=self.distractors,
+            distractor_reasons=["Conceptual misunderstanding"] * len(self.distractors),
         )
 
     def generate(self, request, *, feedback=None):
@@ -160,6 +156,24 @@ def test_two_stage_pipeline_uses_computed_answer() -> None:
     assert outcome.question is not None
     assert outcome.question.proposed_answer == 16
     assert generator.draft_calls == 1
+    assert outcome.attempts[0].distractor_reasons == [
+        "Conceptual misunderstanding"
+    ] * 3
+
+
+def test_two_stage_pipeline_rejects_wrong_distractor_count() -> None:
+    generator = TwoStageGenerator([4, 8])
+    service = GenerationService(
+        generator,
+        AnswerComputingValidator(),
+        max_attempts=1,
+        attempt_log_path=None,
+    )
+
+    outcome = service.generate(request())
+
+    assert outcome.status == "rejected"
+    assert outcome.attempts[0].validation_report.issues[0].code == "COUNT_MISMATCH"
 
 
 def test_retries_invalid_question_with_feedback() -> None:

@@ -14,15 +14,6 @@ class QuestionGenerator(Protocol):
         feedback: ValidationReport | None = None,
     ) -> QuestionDraft: ...
 
-    def generate_distractors(
-        self,
-        draft: QuestionDraft,
-        answer: object,
-        num_distractors: int,
-        *,
-        feedback: ValidationReport | None = None,
-    ) -> list[object]: ...
-
     # Kept as a compatibility method for existing integrations.
     def generate(
         self,

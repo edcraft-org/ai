@@ -21,7 +21,6 @@ class FakeQuestionGenerator:
 
     def __init__(self, examples_dir: Path) -> None:
         self.examples_dir = examples_dir
-        self._last_question: GeneratedQuestion | None = None
 
     def generate(
         self,
@@ -46,7 +45,6 @@ class FakeQuestionGenerator:
         feedback: ValidationReport | None = None,
     ) -> QuestionDraft:
         question = self.generate(request, feedback=feedback)
-        self._last_question = question
         return QuestionDraft(
             code=question.code,
             entry_function=question.entry_function,
@@ -54,19 +52,6 @@ class FakeQuestionGenerator:
             question=question.question,
             proposed_answer=question.proposed_answer,
             distractors=question.distractors[: request.num_distractors],
-            distractor_reasons=question.distractor_reasons,
+            distractor_reasons=[],
             question_type=question.question_type,
         )
-
-    def generate_distractors(
-        self,
-        draft: QuestionDraft,
-        answer: object,
-        num_distractors: int,
-        *,
-        feedback: ValidationReport | None = None,
-    ) -> list[object]:
-        _ = draft, answer, feedback
-        if self._last_question is None:
-            raise RuntimeError("generate_draft must be called first")
-        return self._last_question.distractors[:num_distractors]

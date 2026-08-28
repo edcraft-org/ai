@@ -7,6 +7,7 @@ from edcraft_validator.generation.openai import (
     OpenAIGenerationError,
     OpenAIInput,
     OpenAIJsonValue,
+    OpenAIQuestionDraftResponse,
     OpenAIQuestionGenerator,
     OpenAIQuestionResponse,
 )
@@ -55,6 +56,29 @@ def client_with(parsed: OpenAIQuestionResponse | None) -> SimpleNamespace:
     )
 
 
+def draft_response() -> OpenAIQuestionDraftResponse:
+    return OpenAIQuestionDraftResponse(
+        code="def square(x):\n    return x * x",
+        entry_function="square",
+        inputs=[
+            OpenAIInput(
+                name="x",
+                value=OpenAIJsonValue(kind="scalar", scalar=4, items=[], properties=[]),
+            )
+        ],
+        question="What does square(4) return?",
+        proposed_answer=OpenAIJsonValue(
+            kind="scalar", scalar=999, items=[], properties=[]
+        ),
+        distractors=[
+            OpenAIJsonValue(kind="scalar", scalar=value, items=[], properties=[])
+            for value in [4, 8, 20]
+        ],
+        distractor_reasons=["Confuses input", "Adds instead", "Adds four"],
+        question_type="mcq",
+    )
+
+
 def test_generates_question_using_json_output() -> None:
     client = client_with(api_question())
     generator = OpenAIQuestionGenerator(client, model="test-model")
@@ -68,6 +92,19 @@ def test_generates_question_using_json_output() -> None:
     assert client.chat.completions.arguments["response_format"] == {
         "type": "json_object"
     }
+
+
+def test_generates_co_located_draft_and_distractors() -> None:
+    client = client_with(draft_response())
+    generator = OpenAIQuestionGenerator(client, model="test-model")
+
+    draft = generator.generate_draft(
+        GenerationRequest(topic="arithmetic", difficulty="beginner")
+    )
+
+    assert draft.proposed_answer == 999
+    assert draft.distractors == [4, 8, 20]
+    assert len(draft.distractor_reasons) == 3
 
 
 def test_includes_validation_feedback_in_retry_prompt() -> None:
