@@ -1,6 +1,6 @@
 import math
 
-from edcraft_validator.comparison import equivalent
+from edcraft_validator.comparison import equivalent, same_value_shape
 from edcraft_validator.executor import DockerExecutor, ExecutionBackend
 from edcraft_validator.models import (
     GeneratedQuestion,
@@ -23,7 +23,7 @@ class QuestionValidator:
         self.timeout_seconds = timeout_seconds
         self.executor = executor or DockerExecutor()
 
-    def validate(self, question: GeneratedQuestion) -> ValidationReport:
+    def compute_answer(self, question: GeneratedQuestion) -> ValidationReport:
         safety = check_code_safety(question.code, question.entry_function)
         if not safety.is_safe:
             return ValidationReport(
@@ -52,9 +52,35 @@ class QuestionValidator:
                 ],
             )
 
-        actual = execution.answer
+        return ValidationReport(
+            status="valid",
+            actual_answer=execution.answer,
+            trace_summary=(
+                TraceSummary.model_validate(execution.trace_summary)
+                if execution.trace_summary
+                else None
+            ),
+        )
+
+    def validate(
+        self,
+        question: GeneratedQuestion,
+        *,
+        actual_answer: object | None = None,
+        trace_summary: TraceSummary | None = None,
+    ) -> ValidationReport:
+        answer_was_supplied = actual_answer is not None
+        if actual_answer is None:
+            execution_report = self.compute_answer(question)
+            if execution_report.status != "valid":
+                return execution_report
+            actual_answer = execution_report.actual_answer
+            trace_summary = execution_report.trace_summary
+
         issues: list[ValidationIssue] = []
-        if not equivalent(question.proposed_answer, actual):
+        if not answer_was_supplied and not equivalent(
+            question.proposed_answer, actual_answer
+        ):
             issues.append(
                 ValidationIssue(
                     code="WRONG_PROPOSED_ANSWER",
@@ -66,7 +92,15 @@ class QuestionValidator:
             )
 
         for index, distractor in enumerate(question.distractors):
-            if equivalent(distractor, actual):
+            if not same_value_shape(distractor, actual_answer):
+                issues.append(
+                    ValidationIssue(
+                        code="DISTRACTOR_TYPE_MISMATCH",
+                        message="Distractor has a different value type from the answer",
+                        field=f"distractors.{index}",
+                    )
+                )
+            elif equivalent(distractor, actual_answer):
                 issues.append(
                     ValidationIssue(
                         code="DISTRACTOR_EQUALS_ANSWER",
@@ -101,11 +135,7 @@ class QuestionValidator:
         has_errors = any(issue.severity == "error" for issue in issues)
         return ValidationReport(
             status="invalid" if has_errors else "valid",
-            actual_answer=actual,
+            actual_answer=actual_answer,
             issues=issues,
-            trace_summary=(
-                TraceSummary.model_validate(execution.trace_summary)
-                if execution.trace_summary
-                else None
-            ),
+            trace_summary=trace_summary,
         )

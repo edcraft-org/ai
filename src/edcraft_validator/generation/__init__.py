@@ -7,7 +7,8 @@ from edcraft_validator.generation.models import (
     GenerationOutcome,
     GenerationRequest,
 )
-from edcraft_validator.generation.openai import OpenAIQuestionGenerator
+from edcraft_validator.generation.ollama import OllamaQuestionGenerator
+from edcraft_validator.generation.openai import OpenAICompatibleQuestionGenerator
 from edcraft_validator.generation.service import GenerationService
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "GenerationOutcome",
     "GenerationRequest",
     "GenerationService",
-    "OpenAIQuestionGenerator",
+    "OpenAICompatibleQuestionGenerator",
+    "OllamaQuestionGenerator",
     "QuestionGenerator",
 ]

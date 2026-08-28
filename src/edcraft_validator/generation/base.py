@@ -1,19 +1,27 @@
 from typing import Protocol
 
-from edcraft_validator.generation.models import GenerationRequest
-from edcraft_validator.models import GeneratedQuestion, ValidationReport
+from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
+from edcraft_validator.models import GeneratedQuestion, TraceSummary, ValidationReport
 
 
 class QuestionGenerator(Protocol):
-    """Model-independent contract for producing one candidate question."""
+    """Model-independent contract for producing a question in two stages."""
 
-    def generate(
+    def generate_draft(
         self,
         request: GenerationRequest,
         *,
         feedback: ValidationReport | None = None,
-    ) -> GeneratedQuestion: ...
+    ) -> QuestionDraft: ...
 
 
 class QuestionValidationBackend(Protocol):
-    def validate(self, question: GeneratedQuestion) -> ValidationReport: ...
+    def compute_answer(self, question: GeneratedQuestion) -> ValidationReport: ...
+
+    def validate(
+        self,
+        question: GeneratedQuestion,
+        *,
+        actual_answer: object | None = None,
+        trace_summary: TraceSummary | None = None,
+    ) -> ValidationReport: ...

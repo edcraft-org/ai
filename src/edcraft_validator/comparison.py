@@ -26,3 +26,16 @@ def equivalent(left: Any, right: Any, *, tolerance: float = 1e-9) -> bool:
         )
 
     return type(left) is type(right) and left == right
+
+
+def same_value_shape(left: Any, right: Any) -> bool:
+    """Return whether two JSON values have compatible MCQ answer shapes."""
+    if isinstance(left, bool) or isinstance(right, bool):
+        return type(left) is type(right)
+    if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+        return True
+    if isinstance(left, list) or isinstance(right, list):
+        return isinstance(left, list) and isinstance(right, list)
+    if isinstance(left, dict) or isinstance(right, dict):
+        return isinstance(left, dict) and isinstance(right, dict)
+    return type(left) is type(right)

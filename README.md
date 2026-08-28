@@ -5,12 +5,14 @@ second LLM to judge correctness.
 
 ## Current flow
 
-1. Parse the AI response using a strict Pydantic schema.
+1. Parse the AI-generated draft using a strict Pydantic schema.
 2. Reject unsupported or risky Python syntax using an AST safety gate.
 3. Run EdCraft's `step-tracer` inside a restricted Docker container.
-4. Extract the entry function's traced return value.
-5. Compare it with the proposed answer and ensure distractors are unique and wrong.
-6. Return an explainable `valid`, `invalid`, or `execution_error` report.
+4. Use the traced return value as the authoritative answer.
+5. Keep the model-generated distractors and misconception metadata with the
+   generation attempt, while excluding the metadata from the final question.
+6. Ensure distractors are unique, type-compatible, and wrong.
+7. Return an explainable `valid`, `invalid`, or `execution_error` report.
 
 ## Run
 
@@ -87,6 +89,7 @@ be exercised using the existing examples:
 
 ```powershell
 uv run python -m edcraft_validator.generation `
+  --provider fake `
   --topic loops `
   --difficulty intermediate `
   --num-distractors 3
@@ -97,9 +100,11 @@ Supported topics are `arithmetic`, `conditionals`, `loops`, `functions`, and
 generator selects a fixed example by topic; difficulty will be used by the future
 AI implementation.
 
-The service makes at most three generation attempts. Invalid questions are sent
-back as feedback for another attempt, while infrastructure or execution errors
-stop the run without wasting another generation. Attempts are appended to
+The service makes at most three complete generation attempts. Invalid drafts are
+sent back as feedback for another attempt, while infrastructure or execution
+errors stop the run without wasting another generation. Misconception reasons
+are retained in attempt logs but are not part of the final question payload.
+Attempts are appended to
 `.artifacts/generation_attempts.jsonl`, which is excluded from Git.
 
 ## OpenAI generation pipeline
@@ -111,6 +116,9 @@ from Git and must never be committed:
 OPENAI_API_KEY=your-key-here
 OPENAI_MODEL=gpt-5.6-luna
 ```
+
+Select the provider explicitly with `--provider`; provider selection is not read
+from `.env`.
 
 Then generate and deterministically validate one question:
 

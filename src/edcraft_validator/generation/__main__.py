@@ -1,11 +1,13 @@
 import argparse
+import json
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 from edcraft_validator.generation.fake import FakeQuestionGenerator
 from edcraft_validator.generation.models import GenerationRequest
-from edcraft_validator.generation.openai import OpenAIQuestionGenerator
+from edcraft_validator.generation.ollama import OllamaQuestionGenerator
+from edcraft_validator.generation.openai import OpenAICompatibleQuestionGenerator
 from edcraft_validator.generation.service import (
     DEFAULT_ATTEMPT_LOG,
     GenerationService,
@@ -15,7 +17,11 @@ from edcraft_validator.validator import QuestionValidator
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the generation pipeline")
-    parser.add_argument("--provider", choices=["fake", "openai"], default="fake")
+    parser.add_argument(
+        "--provider",
+        choices=["fake", "openai", "ollama", "soclaas"],
+        required=True,
+    )
     parser.add_argument(
         "--topic",
         required=True,
@@ -38,18 +44,23 @@ def main() -> int:
         difficulty=args.difficulty,
         num_distractors=args.num_distractors,
     )
-    generator = (
-        FakeQuestionGenerator(args.examples_dir)
-        if args.provider == "fake"
-        else OpenAIQuestionGenerator()
-    )
+    provider = args.provider
+    if provider == "fake":
+        generator = FakeQuestionGenerator(args.examples_dir)
+    elif provider == "ollama":
+        generator = OllamaQuestionGenerator()
+    else:
+        generator = OpenAICompatibleQuestionGenerator(provider=provider)
     service = GenerationService(
         generator,
         QuestionValidator(),
         attempt_log_path=None if args.no_log else DEFAULT_ATTEMPT_LOG,
     )
     outcome = service.generate(request)
-    print(outcome.model_dump_json(indent=2))
+    output = outcome.model_dump(mode="json")
+    for attempt in output["attempts"]:
+        attempt.pop("distractor_reasons", None)
+    print(json.dumps(output, indent=2))
     return 0 if outcome.status == "accepted" else 1
 
 
