@@ -4,11 +4,11 @@ import pytest
 
 from edcraft_validator.generation.models import GenerationRequest
 from edcraft_validator.generation.openai import (
+    OpenAICompatibleQuestionGenerator,
     OpenAIGenerationError,
     OpenAIInput,
     OpenAIJsonValue,
     OpenAIQuestionDraftResponse,
-    OpenAIQuestionGenerator,
     _api_key,
     _base_url,
 )
@@ -57,7 +57,7 @@ def client_with(parsed: OpenAIQuestionDraftResponse | None) -> SimpleNamespace:
 
 def test_generates_draft_using_json_output() -> None:
     client = client_with(api_question())
-    generator = OpenAIQuestionGenerator("openai", client, model="test-model")
+    generator = OpenAICompatibleQuestionGenerator("openai", client, model="test-model")
     request = GenerationRequest(topic="arithmetic", difficulty="beginner")
 
     draft = generator.generate_draft(request)
@@ -71,7 +71,7 @@ def test_generates_draft_using_json_output() -> None:
 
 def test_includes_validation_feedback_in_retry_prompt() -> None:
     client = client_with(api_question())
-    generator = OpenAIQuestionGenerator("openai", client, model="test-model")
+    generator = OpenAICompatibleQuestionGenerator("openai", client, model="test-model")
     feedback = ValidationReport(
         status="invalid",
         actual_answer=25,
@@ -95,7 +95,7 @@ def test_includes_validation_feedback_in_retry_prompt() -> None:
 
 
 def test_reports_missing_parsed_response() -> None:
-    generator = OpenAIQuestionGenerator(
+    generator = OpenAICompatibleQuestionGenerator(
         "openai", client_with(None), model="test-model"
     )
 
@@ -117,5 +117,3 @@ def test_provider_uses_provider_specific_configuration(monkeypatch) -> None:
     assert _base_url("openai") == "https://openai.example/v1"
     assert _api_key("soclaas") == "soclaas-key"
     assert _base_url("soclaas") == "https://soclaas.example/v1"
-    assert _api_key("ollama") == "ollama-key"
-    assert _base_url("ollama") == "http://ollama.example/v1"

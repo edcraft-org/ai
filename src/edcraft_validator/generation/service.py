@@ -94,23 +94,29 @@ class GenerationService:
         request: GenerationRequest,
         feedback: ValidationReport | None,
     ) -> tuple[GeneratedQuestion, ValidationReport, list[str]]:
-        draft: QuestionDraft = self.generator.generate_draft(
-            request, feedback=feedback
-        )
+        draft: QuestionDraft = self.generator.generate_draft(request, feedback=feedback)
         if len(draft.distractors) != request.num_distractors:
-            return self._draft_for_report(draft), self._count_report(
-                request.num_distractors,
-                len(draft.distractors),
-                field="distractors",
-                code="DISTRACTOR_COUNT_MISMATCH",
-            ), draft.distractor_reasons
+            return (
+                self._draft_for_report(draft),
+                self._count_report(
+                    request.num_distractors,
+                    len(draft.distractors),
+                    field="distractors",
+                    code="DISTRACTOR_COUNT_MISMATCH",
+                ),
+                draft.distractor_reasons,
+            )
         if len(draft.distractor_reasons) != len(draft.distractors):
-            return self._draft_for_report(draft), self._count_report(
-                len(draft.distractors),
-                len(draft.distractor_reasons),
-                field="distractor_reasons",
-                code="DISTRACTOR_REASON_COUNT_MISMATCH",
-            ), draft.distractor_reasons
+            return (
+                self._draft_for_report(draft),
+                self._count_report(
+                    len(draft.distractors),
+                    len(draft.distractor_reasons),
+                    field="distractor_reasons",
+                    code="DISTRACTOR_REASON_COUNT_MISMATCH",
+                ),
+                draft.distractor_reasons,
+            )
 
         placeholder = GeneratedQuestion.model_validate(
             {

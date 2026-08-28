@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 
 from edcraft_validator.generation.fake import FakeQuestionGenerator
 from edcraft_validator.generation.models import GenerationRequest
-from edcraft_validator.generation.openai import OpenAIQuestionGenerator
+from edcraft_validator.generation.ollama import OllamaQuestionGenerator
+from edcraft_validator.generation.openai import OpenAICompatibleQuestionGenerator
 from edcraft_validator.generation.service import (
     DEFAULT_ATTEMPT_LOG,
     GenerationService,
@@ -44,11 +45,12 @@ def main() -> int:
         num_distractors=args.num_distractors,
     )
     provider = args.provider
-    generator = (
-        FakeQuestionGenerator(args.examples_dir)
-        if provider == "fake"
-        else OpenAIQuestionGenerator(provider=provider)
-    )
+    if provider == "fake":
+        generator = FakeQuestionGenerator(args.examples_dir)
+    elif provider == "ollama":
+        generator = OllamaQuestionGenerator()
+    else:
+        generator = OpenAICompatibleQuestionGenerator(provider=provider)
     service = GenerationService(
         generator,
         QuestionValidator(),

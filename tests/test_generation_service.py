@@ -90,6 +90,7 @@ class TwoStageGenerator:
             distractor_reasons=["Conceptual misunderstanding"] * len(self.distractors),
         )
 
+
 class AnswerComputingValidator:
     def compute_answer(self, question):
         return ValidationReport(status="valid", actual_answer=16)
@@ -163,9 +164,7 @@ def test_two_stage_pipeline_uses_computed_answer() -> None:
     assert outcome.question is not None
     assert outcome.question.proposed_answer == 16
     assert generator.draft_calls == 1
-    assert outcome.attempts[0].distractor_reasons == [
-        "Conceptual misunderstanding"
-    ] * 3
+    assert outcome.attempts[0].distractor_reasons == ["Conceptual misunderstanding"] * 3
 
 
 def test_two_stage_pipeline_rejects_wrong_distractor_count() -> None:

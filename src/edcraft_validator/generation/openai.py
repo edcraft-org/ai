@@ -1,8 +1,5 @@
-import json
 import os
 from typing import Any, Literal
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 from openai import OpenAI
 from pydantic import BaseModel, ConfigDict
@@ -59,8 +56,8 @@ class OpenAIGenerationError(RuntimeError):
     """Raised when OpenAI does not return a parsed question."""
 
 
-class OpenAIQuestionGenerator:
-    """Generate one candidate using OpenAI Structured Outputs."""
+class OpenAICompatibleQuestionGenerator:
+    """Generate a draft through an OpenAI-compatible chat-completions API."""
 
     def __init__(
         self,
@@ -69,7 +66,7 @@ class OpenAIQuestionGenerator:
         *,
         model: str | None = None,
     ) -> None:
-        if provider not in {"openai", "ollama", "soclaas"}:
+        if provider not in {"openai", "soclaas"}:
             raise ValueError(f"Unsupported provider: {provider}")
         self.provider = provider
         self.client = client or OpenAI(
@@ -118,15 +115,12 @@ class OpenAIQuestionGenerator:
             {"role": "user", "content": user_prompt},
         ]
         try:
-            if self.provider == "ollama":
-                content = self._ollama_request(messages, schema)
-            else:
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    response_format={"type": "json_object"},
-                )
-                content = response.choices[0].message.content
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                response_format={"type": "json_object"},
+            )
+            content = response.choices[0].message.content
             if not content:
                 raise ValueError("empty response")
             return schema.model_validate_json(content)
@@ -135,36 +129,9 @@ class OpenAIQuestionGenerator:
                 f"Model returned invalid question JSON: {exc}"
             ) from exc
 
-    def _ollama_request(
-        self, messages: list[dict[str, str]], schema: type[BaseModel]
-    ) -> str:
-        """Call Ollama's native API so its decoder enforces the JSON schema."""
-        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-        native_url = base_url.removesuffix("/v1").rstrip("/") + "/api/chat"
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "stream": False,
-            "format": schema.model_json_schema(),
-            "options": {"temperature": 0},
-        }
-        request = Request(
-            native_url,
-            data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with urlopen(request, timeout=120) as response:
-                body = json.load(response)
-            return body["message"]["content"]
-        except (HTTPError, URLError, KeyError, json.JSONDecodeError) as exc:
-            raise RuntimeError(f"Ollama request failed: {exc}") from exc
-
 
 def _api_key(provider: str) -> str | None:
     return {
-        "ollama": os.getenv("OLLAMA_API_KEY") or "ollama",
         "soclaas": os.getenv("SOCLAAS_API_KEY"),
         "openai": os.getenv("OPENAI_API_KEY"),
     }[provider]
@@ -172,7 +139,6 @@ def _api_key(provider: str) -> str | None:
 
 def _base_url(provider: str) -> str | None:
     return {
-        "ollama": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
         "soclaas": os.getenv("SOCLAAS_BASE_URL"),
         "openai": os.getenv("OPENAI_BASE_URL"),
     }[provider]
@@ -217,6 +183,7 @@ The generated code must stay within this validator's deliberately small subset:
 The deterministic validator will execute the code and use its return value as
 the final answer. The generated distractors remain subject to validation.
 """
+
 
 def _build_prompt(
     request: GenerationRequest,
