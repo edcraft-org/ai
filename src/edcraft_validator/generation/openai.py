@@ -76,7 +76,6 @@ class OpenAICompatibleQuestionGenerator:
         self.model = (
             model
             or {
-                "ollama": os.getenv("OLLAMA_MODEL"),
                 "soclaas": os.getenv("SOCLAAS_MODEL"),
                 "openai": os.getenv("OPENAI_MODEL"),
             }[provider]

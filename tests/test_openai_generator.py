@@ -110,8 +110,6 @@ def test_provider_uses_provider_specific_configuration(monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_BASE_URL", "https://openai.example/v1")
     monkeypatch.setenv("SOCLAAS_API_KEY", "soclaas-key")
     monkeypatch.setenv("SOCLAAS_BASE_URL", "https://soclaas.example/v1")
-    monkeypatch.setenv("OLLAMA_API_KEY", "ollama-key")
-    monkeypatch.setenv("OLLAMA_BASE_URL", "http://ollama.example/v1")
 
     assert _api_key("openai") == "openai-key"
     assert _base_url("openai") == "https://openai.example/v1"
