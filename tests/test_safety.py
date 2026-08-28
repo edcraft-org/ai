@@ -4,6 +4,7 @@ from edcraft_validator.safety import check_code_safety
 
 
 def test_accepts_simple_function() -> None:
+    # A basic pure function is the minimum supported safe-code case.
     result = check_code_safety("def double(x):\n    return x * 2", "double")
     assert result.is_safe
 
@@ -20,12 +21,14 @@ def test_rejects_import_and_attribute_access() -> None:
 
 
 def test_rejects_missing_entry_function() -> None:
+    # Execution is unsafe when the requested entry point is absent.
     result = check_code_safety("def other():\n    return 1", "main")
     assert not result.is_safe
     assert any("not defined" in error for error in result.errors)
 
 
 def test_rejects_recursion() -> None:
+    # Recursion is blocked to keep generated execution bounded and predictable.
     result = check_code_safety(
         "def countdown(n):\n    return 0 if n == 0 else countdown(n - 1)",
         "countdown",
@@ -68,6 +71,7 @@ def test_rejects_unsupported_constructs(code: str, expected: str) -> None:
 
 
 def test_rejects_decorated_functions() -> None:
+    # Decorators can alter execution semantics and are outside the safe subset.
     result = check_code_safety("@staticmethod\ndef main():\n    return 1", "main")
     assert not result.is_safe
     assert any("Decorators" in error for error in result.errors)

@@ -162,7 +162,11 @@ class DockerExecutor:
             code = "RESOURCE_LIMIT_EXCEEDED"
         elif "no such image" in lowered or "unable to find image" in lowered:
             code = "DOCKER_IMAGE_UNAVAILABLE"
-        elif "docker daemon" in lowered or "error during connect" in lowered:
+        elif (
+            "docker daemon" in lowered
+            or "error during connect" in lowered
+            or "permission denied while trying to connect to the docker api" in lowered
+        ):
             code = "DOCKER_UNAVAILABLE"
         else:
             code = "WORKER_FAILURE"

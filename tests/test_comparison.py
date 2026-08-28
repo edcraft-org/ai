@@ -17,10 +17,12 @@ def test_nested_values_are_compared() -> None:
 
 
 def test_different_nested_values_are_not_equivalent() -> None:
+    # Nested values with a different element must fail equivalence.
     assert not equivalent({"values": [1, 2]}, {"values": [1, 3]})
 
 
 def test_lists_of_different_lengths_are_not_equivalent() -> None:
+    # Lists with different shapes cannot represent the same answer.
     assert not equivalent([1, 2], [1, 2, 3])
 
 
@@ -30,4 +32,5 @@ def test_non_finite_numbers_are_not_equivalent() -> None:
 
 
 def test_different_scalar_types_are_not_equivalent() -> None:
+    # String and numeric answers must not be coerced into equivalence.
     assert not equivalent("16", 16)

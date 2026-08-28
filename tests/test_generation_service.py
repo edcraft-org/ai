@@ -47,18 +47,6 @@ class RecordingGenerator:
         )
 
 
-class WrongDistractorCountGenerator(RecordingGenerator):
-    def generate_draft(
-        self,
-        request: GenerationRequest,
-        *,
-        feedback: ValidationReport | None = None,
-    ) -> QuestionDraft:
-        self.feedback.append(feedback)
-        draft = super().generate_draft(request, feedback=feedback)
-        return draft.model_copy(update={"distractors": [4, 8]})
-
-
 class SequenceValidator:
     def __init__(self, reports: list[ValidationReport]) -> None:
         self.reports = reports
@@ -74,10 +62,12 @@ class SequenceValidator:
 
 
 class TwoStageGenerator:
-    def __init__(self, distractors: list[object]) -> None:
+    def __init__(
+        self, distractors: list[object], reasons: list[str] | None = None
+    ) -> None:
         self.distractors = distractors
+        self.reasons = reasons or ["Conceptual misunderstanding"] * len(distractors)
         self.draft_calls = 0
-        self.distractor_calls = 0
 
     def generate_draft(self, request, *, feedback=None):
         self.draft_calls += 1
@@ -87,7 +77,7 @@ class TwoStageGenerator:
             inputs={"x": 4},
             question="What does square(4) return?",
             distractors=self.distractors,
-            distractor_reasons=["Conceptual misunderstanding"] * len(self.distractors),
+            distractor_reasons=self.reasons,
         )
 
 
@@ -135,6 +125,7 @@ def request() -> GenerationRequest:
 
 
 def test_accepts_first_valid_question() -> None:
+    # A valid first candidate should finish immediately with one attempt.
     generator = RecordingGenerator()
     service = GenerationService(
         generator,
@@ -151,6 +142,7 @@ def test_accepts_first_valid_question() -> None:
 
 
 def test_two_stage_pipeline_uses_computed_answer() -> None:
+    # The executor's answer must replace any model-proposed answer in the result.
     generator = TwoStageGenerator([4, 8, 20])
     service = GenerationService(
         generator,
@@ -168,6 +160,7 @@ def test_two_stage_pipeline_uses_computed_answer() -> None:
 
 
 def test_two_stage_pipeline_rejects_wrong_distractor_count() -> None:
+    # Invalid option counts should be rejected before the executor is called.
     generator = TwoStageGenerator([4, 8])
     service = GenerationService(
         generator,
@@ -185,7 +178,24 @@ def test_two_stage_pipeline_rejects_wrong_distractor_count() -> None:
     )
 
 
+def test_two_stage_pipeline_rejects_wrong_reason_count() -> None:
+    # Every distractor must have review metadata before execution is attempted.
+    generator = TwoStageGenerator([4, 8, 20], reasons=["Only one reason"])
+    validator = AnswerComputingValidator()
+    service = GenerationService(
+        generator, validator, max_attempts=1, attempt_log_path=None
+    )
+
+    outcome = service.generate(request())
+
+    assert outcome.status == "rejected"
+    assert outcome.attempts[0].validation_report.issues[0].code == (
+        "DISTRACTOR_REASON_COUNT_MISMATCH"
+    )
+
+
 def test_retries_invalid_question_with_feedback() -> None:
+    # Deterministic validation failures should trigger a retry with feedback.
     generator = RecordingGenerator()
     first_report = invalid_report()
     service = GenerationService(
@@ -202,6 +212,7 @@ def test_retries_invalid_question_with_feedback() -> None:
 
 
 def test_rejects_after_three_invalid_attempts() -> None:
+    # The service must stop after its configured retry budget is exhausted.
     generator = RecordingGenerator()
     service = GenerationService(
         generator,
@@ -217,6 +228,7 @@ def test_rejects_after_three_invalid_attempts() -> None:
 
 
 def test_does_not_regenerate_after_execution_error() -> None:
+    # Infrastructure or code execution failures should stop generation immediately.
     generator = RecordingGenerator()
     validator = SequenceValidator([execution_error_report()])
     service = GenerationService(generator, validator, attempt_log_path=None)
@@ -228,26 +240,8 @@ def test_does_not_regenerate_after_execution_error() -> None:
     assert len(generator.feedback) == 1
 
 
-def test_rejects_candidate_with_wrong_distractor_count_before_execution() -> None:
-    validator = SequenceValidator([])
-    service = GenerationService(
-        WrongDistractorCountGenerator(),
-        validator,
-        max_attempts=1,
-        attempt_log_path=None,
-    )
-
-    outcome = service.generate(request())
-
-    assert outcome.status == "rejected"
-    assert validator.calls == 0
-    assert (
-        outcome.attempts[0].validation_report.issues[0].code
-        == "DISTRACTOR_COUNT_MISMATCH"
-    )
-
-
 def test_logs_every_attempt_as_jsonl(tmp_path: Path) -> None:
+    # Each generated attempt should be recoverable from the append-only audit log.
     log_path = tmp_path / "attempts.jsonl"
     service = GenerationService(
         RecordingGenerator(),
@@ -265,6 +259,7 @@ def test_logs_every_attempt_as_jsonl(tmp_path: Path) -> None:
 
 
 def test_rejects_invalid_attempt_limit() -> None:
+    # A non-positive retry budget is invalid service configuration.
     with pytest.raises(ValueError, match="greater than zero"):
         GenerationService(
             RecordingGenerator(),

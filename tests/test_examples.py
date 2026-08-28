@@ -55,6 +55,7 @@ def test_valid_examples_pass_end_to_end(example_path: Path) -> None:
 
 
 def test_control_flow_example_produces_trace_evidence() -> None:
+    # Loop and branch counts should reflect the control flow in the fixture.
     path = EXAMPLES_DIR / "valid_accumulated_bonus.json"
     question = GeneratedQuestion.model_validate_json(path.read_text(encoding="utf-8"))
 
@@ -67,6 +68,7 @@ def test_control_flow_example_produces_trace_evidence() -> None:
 
 
 def test_helper_function_calls_are_traced() -> None:
+    # Helper invocations should be included in the execution trace summary.
     path = EXAMPLES_DIR / "valid_weighted_total.json"
     question = GeneratedQuestion.model_validate_json(path.read_text(encoding="utf-8"))
 

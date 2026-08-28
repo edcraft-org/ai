@@ -47,6 +47,7 @@ def validator_with(result: ExecutionResult | None = None) -> QuestionValidator:
 
 @pytest.mark.parametrize("timeout", [0, -1, math.inf, -math.inf, math.nan])
 def test_rejects_invalid_timeout(timeout: float) -> None:
+    # Validator configuration must reject zero, negative, and non-finite timeouts.
     with pytest.raises(ValueError, match="finite and greater than zero"):
         QuestionValidator(timeout_seconds=timeout)
 
@@ -76,12 +77,14 @@ def test_valid_question() -> None:
 
 
 def test_wrong_answer_is_rejected() -> None:
+    # A manually supplied answer that differs from execution must be rejected.
     report = validator_with().validate(make_question(proposed_answer=8))
     assert report.status == "invalid"
     assert "WRONG_PROPOSED_ANSWER" in {issue.code for issue in report.issues}
 
 
 def test_type_incompatible_distractor_is_rejected() -> None:
+    # Distractors must have the same broad value shape as the authoritative answer.
     report = validator_with().validate(
         make_question(proposed_answer=16).model_copy(
             update={"distractors": [[1, 2], [3, 4], [5, 6]]}
@@ -92,18 +95,21 @@ def test_type_incompatible_distractor_is_rejected() -> None:
 
 
 def test_correct_distractor_is_rejected() -> None:
+    # An option equal to the correct answer would make the MCQ ambiguous.
     report = validator_with().validate(make_question(distractors=[4, 16, 20]))
     assert report.status == "invalid"
     assert "DISTRACTOR_EQUALS_ANSWER" in {issue.code for issue in report.issues}
 
 
 def test_duplicate_distractor_is_rejected() -> None:
+    # Repeated options reduce answer quality and must be rejected.
     report = validator_with().validate(make_question(distractors=[4, 4, 20]))
     assert report.status == "invalid"
     assert "DUPLICATE_DISTRACTOR" in {issue.code for issue in report.issues}
 
 
 def test_runtime_error_is_reported() -> None:
+    # Runtime failures should be reported distinctly from content invalidity.
     result = ExecutionResult(
         ok=False,
         error_code="EXECUTION_FAILED",
@@ -115,6 +121,7 @@ def test_runtime_error_is_reported() -> None:
 
 
 def test_timeout_is_reported() -> None:
+    # Executor timeouts must propagate as execution errors.
     result = ExecutionResult(
         ok=False,
         error_code="EXECUTION_TIMEOUT",
@@ -137,6 +144,7 @@ def test_unsafe_code_is_not_executed() -> None:
 
 
 def test_wrong_input_name_is_reported_as_execution_error() -> None:
+    # Invalid invocation inputs must not be mistaken for a valid answer.
     result = ExecutionResult(
         ok=False,
         error_code="EXECUTION_FAILED",
