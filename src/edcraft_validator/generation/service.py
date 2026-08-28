@@ -117,33 +117,18 @@ class GenerationService:
         if answer_report.status != "valid":
             return placeholder, answer_report
 
-        distractor_feedback = None
-        question = None
-        report = answer_report
-        for _ in range(self.max_distractor_attempts):
-            distractors = self.generator.generate_distractors(
-                draft,
-                answer_report.actual_answer,
-                request.num_distractors,
-                feedback=distractor_feedback,
-            )
-            question = GeneratedQuestion.model_validate(
-                {
-                    **draft.model_dump(),
-                    "proposed_answer": answer_report.actual_answer,
-                    "distractors": distractors,
-                }
-            )
-            report = self.validator.validate(
-                question,
-                actual_answer=answer_report.actual_answer,
-                trace_summary=answer_report.trace_summary,
-            )
-            if report.status == "valid":
-                return question, report
-            distractor_feedback = report
-
-        assert question is not None
+        question = GeneratedQuestion.model_validate(
+            {
+                **draft.model_dump(),
+                "proposed_answer": answer_report.actual_answer,
+                "distractors": draft.distractors[: request.num_distractors],
+            }
+        )
+        report = self.validator.validate(
+            question,
+            actual_answer=answer_report.actual_answer,
+            trace_summary=answer_report.trace_summary,
+        )
         return question, report
 
     def _validate_candidate(

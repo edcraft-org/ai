@@ -42,7 +42,7 @@ class OpenAIInput(BaseModel):
 
 
 class OpenAIQuestionDraftResponse(BaseModel):
-    """Schema for the model-generated draft; it deliberately has no answer."""
+    """Schema for the model-generated draft and conceptual distractors."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -50,14 +50,24 @@ class OpenAIQuestionDraftResponse(BaseModel):
     entry_function: str
     inputs: list[OpenAIInput]
     question: str
+    proposed_answer: OpenAIJsonValue
+    distractors: list[OpenAIJsonValue]
+    distractor_reasons: list[str]
     question_type: Literal["mcq"]
 
 
-class OpenAIQuestionResponse(OpenAIQuestionDraftResponse):
+class OpenAIQuestionResponse(BaseModel):
     """Backward-compatible schema for callers using the old one-stage API."""
 
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    entry_function: str
+    inputs: list[OpenAIInput]
+    question: str
     proposed_answer: OpenAIJsonValue
     distractors: list[OpenAIJsonValue]
+    question_type: Literal["mcq"]
 
 
 class OpenAIDistractorResponse(BaseModel):
@@ -140,6 +150,9 @@ class OpenAIQuestionGenerator:
             entry_function=parsed.entry_function,
             inputs={item.name: item.value.to_python() for item in parsed.inputs},
             question=parsed.question,
+            proposed_answer=parsed.proposed_answer.to_python(),
+            distractors=[item.to_python() for item in parsed.distractors],
+            distractor_reasons=parsed.distractor_reasons,
             question_type=parsed.question_type,
         )
 
@@ -229,7 +242,8 @@ def _base_url() -> str | None:
 
 
 _SYSTEM_PROMPT = """\
-Generate exactly one Python multiple-choice return-value question draft.
+Generate exactly one Python multiple-choice return-value question with
+conceptual distractors.
 
 The generated code must stay within this validator's deliberately small subset:
 - Define the entry function at module level and ask what that function returns.
@@ -239,14 +253,20 @@ The generated code must stay within this validator's deliberately small subset:
   another module-level function defined in the generated code.
 - Do not use imports, attributes, classes, decorators, recursion, comprehensions,
   while loops, lambdas, exceptions, file access, networking, input, eval, or exec.
-- Encode every input with the tagged value schema: use kind=scalar with scalar set
+- Encode every input, answer, and distractor with the tagged value schema: use
+  kind=scalar with scalar set
   and empty items/properties; kind=list with items set, scalar=null, and empty
   properties; or kind=object with key/value properties, scalar=null, and empty
   items. Object property values must be scalar.
+- Generate exactly the requested number of distractors together with the draft.
+- Each distractor must represent a distinct conceptual misunderstanding, such as
+  skipping a loop iteration, mishandling a branch, or applying an operation in
+  the wrong order. Do not create arbitrary nearby numbers.
 - Return code as one readable, correctly indented string with newline characters.
 - Respond with a single valid JSON object and no markdown fences or extra text.
 - The JSON object must have exactly these top-level keys: code, entry_function,
-  inputs, question, question_type.
+  inputs, question, proposed_answer, distractors, distractor_reasons,
+  question_type.
 - Use this exact shape (values are illustrative):
   {"code":"def f(x):\\n    return x + 1","entry_function":"f",
    "inputs":[{"name":"x","value":{"kind":"scalar","scalar":2,
@@ -257,19 +277,12 @@ The generated code must stay within this validator's deliberately small subset:
 - Every input must be an object with both name and value keys. The value object
   must always contain scalar, items, and properties; empty collections are []
   (never {}). question_type must be exactly "mcq".
-The deterministic validator will execute the code and compute the answer. Do not
-generate an answer or distractors in this response.
+The deterministic validator will execute the code and replace proposed_answer
+with the independently computed answer. The model answer is only a draft.
 """
 
-_DISTRACTOR_SYSTEM_PROMPT = """\
-Generate plausible but incorrect distractors for a Python return-value
-multiple-choice question.
-The correct answer was computed independently by the deterministic executor.
-Return only one JSON object with exactly one key: distractors.
-Use the tagged value schema for every distractor, with empty collections as [].
-Every distractor must be unique, type-compatible with, and different from the
-correct answer.
-"""
+# Compatibility prompt for callers that still invoke the old distractor method.
+_DISTRACTOR_SYSTEM_PROMPT = _SYSTEM_PROMPT
 
 # Kept for callers that still use the original one-request API.
 _LEGACY_SYSTEM_PROMPT = _SYSTEM_PROMPT
@@ -287,8 +300,8 @@ def _build_prompt(
     prompt = (
         f"Topic: {request.topic}\n"
         f"Difficulty: {request.difficulty} ({difficulty})\n"
-        "Create the code, inputs, and question only. The answer and distractors "
-        "will be generated in later stages."
+        "Create the code, inputs, question, proposed answer, distractors, and "
+        "one misconception reason for each distractor."
     )
     if feedback is not None:
         issues = "; ".join(

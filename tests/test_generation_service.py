@@ -74,15 +74,17 @@ class TwoStageGenerator:
             entry_function="square",
             inputs={"x": 4},
             question="What does square(4) return?",
+            proposed_answer=999,
+            distractors=[4, 8, 20],
+            distractor_reasons=[
+                "Confuses input with output",
+                "Adds instead of multiplying",
+                "Adds four to the square",
+            ],
         )
 
-    def generate_distractors(self, draft, answer, num_distractors, *, feedback=None):
-        self.distractor_calls += 1
-        assert answer == 16
-        return self.distractors[:num_distractors]
-
     def generate(self, request, *, feedback=None):
-        raise AssertionError("two-stage generator should not use generate()")
+        raise AssertionError("co-generation path should not use generate()")
 
 
 class AnswerComputingValidator:
@@ -158,7 +160,6 @@ def test_two_stage_pipeline_uses_computed_answer() -> None:
     assert outcome.question is not None
     assert outcome.question.proposed_answer == 16
     assert generator.draft_calls == 1
-    assert generator.distractor_calls == 1
 
 
 def test_retries_invalid_question_with_feedback() -> None:

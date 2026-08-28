@@ -14,6 +14,7 @@ class GeneratedQuestion(BaseModel):
     question: str = Field(min_length=1)
     proposed_answer: Any
     distractors: list[Any] = Field(min_length=2)
+    distractor_reasons: list[str] = Field(default_factory=list)
     question_type: Literal["mcq"] = "mcq"
 
     @field_validator("code", mode="before", json_schema_input_type=str | list[str])
