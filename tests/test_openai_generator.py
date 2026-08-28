@@ -9,14 +9,13 @@ from edcraft_validator.generation.openai import (
     OpenAIJsonValue,
     OpenAIQuestionDraftResponse,
     OpenAIQuestionGenerator,
-    OpenAIQuestionResponse,
 )
 from edcraft_validator.models import ValidationIssue, ValidationReport
 
 
-def api_question() -> OpenAIQuestionResponse:
-    """Return a parsed response shaped like a real Structured Output."""
-    return OpenAIQuestionResponse(
+def api_question() -> OpenAIQuestionDraftResponse:
+    """Return a parsed response shaped like the co-generation contract."""
+    return OpenAIQuestionDraftResponse(
         code="def square(x):\n    return x * x",
         entry_function="square",
         inputs=[
@@ -27,12 +26,13 @@ def api_question() -> OpenAIQuestionResponse:
         ],
         question="What does square(4) return?",
         proposed_answer=OpenAIJsonValue(
-            kind="scalar", scalar=16, items=[], properties=[]
+            kind="scalar", scalar=999, items=[], properties=[]
         ),
         distractors=[
             OpenAIJsonValue(kind="scalar", scalar=value, items=[], properties=[])
             for value in [4, 8, 20]
         ],
+        distractor_reasons=["Confuses input", "Adds instead", "Adds four"],
         question_type="mcq",
     )
 
@@ -49,7 +49,7 @@ class RecordingCompletions:
         )
 
 
-def client_with(parsed: OpenAIQuestionResponse | None) -> SimpleNamespace:
+def client_with(parsed: OpenAIQuestionDraftResponse | None) -> SimpleNamespace:
     content = parsed.model_dump_json() if parsed is not None else None
     return SimpleNamespace(
         chat=SimpleNamespace(completions=RecordingCompletions(content))
@@ -79,32 +79,19 @@ def draft_response() -> OpenAIQuestionDraftResponse:
     )
 
 
-def test_generates_question_using_json_output() -> None:
+def test_generates_draft_using_json_output() -> None:
     client = client_with(api_question())
     generator = OpenAIQuestionGenerator(client, model="test-model")
     request = GenerationRequest(topic="arithmetic", difficulty="beginner")
 
-    question = generator.generate(request)
+    draft = generator.generate_draft(request)
 
-    assert question.entry_function == "square"
-    assert question.proposed_answer == 16
+    assert draft.entry_function == "square"
+    assert draft.proposed_answer == 999
     assert client.chat.completions.arguments["model"] == "test-model"
     assert client.chat.completions.arguments["response_format"] == {
         "type": "json_object"
     }
-
-
-def test_generates_co_located_draft_and_distractors() -> None:
-    client = client_with(draft_response())
-    generator = OpenAIQuestionGenerator(client, model="test-model")
-
-    draft = generator.generate_draft(
-        GenerationRequest(topic="arithmetic", difficulty="beginner")
-    )
-
-    assert draft.proposed_answer == 999
-    assert draft.distractors == [4, 8, 20]
-    assert len(draft.distractor_reasons) == 3
 
 
 def test_includes_validation_feedback_in_retry_prompt() -> None:
@@ -121,18 +108,20 @@ def test_includes_validation_feedback_in_retry_prompt() -> None:
         ],
     )
 
-    generator.generate(
+    generator.generate_draft(
         GenerationRequest(topic="arithmetic", difficulty="intermediate"),
         feedback=feedback,
     )
 
     user_prompt = client.chat.completions.arguments["messages"][1]["content"]
     assert "WRONG_PROPOSED_ANSWER" in user_prompt
-    assert "25" in user_prompt
+    assert "25" not in user_prompt
 
 
 def test_reports_missing_parsed_response() -> None:
     generator = OpenAIQuestionGenerator(client_with(None), model="test-model")
 
     with pytest.raises(OpenAIGenerationError, match="invalid question JSON"):
-        generator.generate(GenerationRequest(topic="arithmetic", difficulty="beginner"))
+        generator.generate_draft(
+            GenerationRequest(topic="arithmetic", difficulty="beginner")
+        )

@@ -8,7 +8,7 @@ from openai import OpenAI
 from pydantic import BaseModel, ConfigDict
 
 from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
-from edcraft_validator.models import GeneratedQuestion, ValidationReport
+from edcraft_validator.models import ValidationReport
 
 DEFAULT_OPENAI_MODEL = "gpt-5.6-luna"
 
@@ -56,20 +56,6 @@ class OpenAIQuestionDraftResponse(BaseModel):
     question_type: Literal["mcq"]
 
 
-class OpenAIQuestionResponse(BaseModel):
-    """Backward-compatible schema for callers using the old one-stage API."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    code: str
-    entry_function: str
-    inputs: list[OpenAIInput]
-    question: str
-    proposed_answer: OpenAIJsonValue
-    distractors: list[OpenAIJsonValue]
-    question_type: Literal["mcq"]
-
-
 class OpenAIGenerationError(RuntimeError):
     """Raised when OpenAI does not return a parsed question."""
 
@@ -100,31 +86,6 @@ class OpenAIQuestionGenerator:
             or DEFAULT_OPENAI_MODEL
         )
         self.provider = os.getenv("GENERATION_PROVIDER", "soclaas").lower()
-
-    def generate(
-        self,
-        request: GenerationRequest,
-        *,
-        feedback: ValidationReport | None = None,
-    ) -> GeneratedQuestion:
-        # Compatibility path for existing integrations. GenerationService uses
-        # Compatibility path for callers using the original one-request API.
-        parsed = self._request_model(
-            _LEGACY_SYSTEM_PROMPT,
-            _build_legacy_prompt(request, feedback),
-            OpenAIQuestionResponse,
-        )
-        return GeneratedQuestion.model_validate(
-            {
-                "code": parsed.code,
-                "entry_function": parsed.entry_function,
-                "inputs": {item.name: item.value.to_python() for item in parsed.inputs},
-                "question": parsed.question,
-                "proposed_answer": parsed.proposed_answer.to_python(),
-                "distractors": [item.to_python() for item in parsed.distractors],
-                "question_type": parsed.question_type,
-            }
-        )
 
     def generate_draft(
         self,
@@ -256,10 +217,6 @@ The generated code must stay within this validator's deliberately small subset:
 The deterministic validator will execute the code and replace proposed_answer
 with the independently computed answer. The model answer is only a draft.
 """
-
-# Kept for callers that still use the original one-request API.
-_LEGACY_SYSTEM_PROMPT = _SYSTEM_PROMPT
-
 
 def _build_prompt(
     request: GenerationRequest,

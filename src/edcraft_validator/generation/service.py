@@ -51,16 +51,9 @@ class GenerationService:
 
         for attempt_number in range(1, self.max_attempts + 1):
             started = time.perf_counter()
-            if hasattr(self.generator, "generate_draft") and hasattr(
-                self.validator, "compute_answer"
-            ):
-                question, report, distractor_reasons = self._generate_two_stage(
-                    request, feedback
-                )
-            else:
-                question = self.generator.generate(request, feedback=feedback)
-                report = self._validate_candidate(request, question)
-                distractor_reasons = []
+            question, report, distractor_reasons = self._generate_draft(
+                request, feedback
+            )
             attempt = GenerationAttempt(
                 attempt_number=attempt_number,
                 question=question,
@@ -96,7 +89,7 @@ class GenerationService:
             attempts=attempts,
         )
 
-    def _generate_two_stage(
+    def _generate_draft(
         self,
         request: GenerationRequest,
         feedback: ValidationReport | None,
@@ -104,6 +97,21 @@ class GenerationService:
         draft: QuestionDraft = self.generator.generate_draft(
             request, feedback=feedback
         )
+        if len(draft.distractors) != request.num_distractors:
+            return self._draft_for_report(draft), self._count_report(
+                request.num_distractors,
+                len(draft.distractors),
+                field="distractors",
+                code="DISTRACTOR_COUNT_MISMATCH",
+            ), draft.distractor_reasons
+        if len(draft.distractor_reasons) != len(draft.distractors):
+            return self._draft_for_report(draft), self._count_report(
+                len(draft.distractors),
+                len(draft.distractor_reasons),
+                field="distractor_reasons",
+                code="DISTRACTOR_REASON_COUNT_MISMATCH",
+            ), draft.distractor_reasons
+
         placeholder = GeneratedQuestion.model_validate(
             {
                 "code": draft.code,
@@ -130,28 +138,6 @@ class GenerationService:
                 "question_type": draft.question_type,
             }
         )
-        if len(draft.distractors) != request.num_distractors:
-            return (
-                question,
-                self._count_report(
-                    request.num_distractors,
-                    len(draft.distractors),
-                    answer_report,
-                    field="distractors",
-                ),
-                draft.distractor_reasons,
-            )
-        if len(draft.distractor_reasons) != len(draft.distractors):
-            return (
-                question,
-                self._count_report(
-                    len(draft.distractors),
-                    len(draft.distractor_reasons),
-                    answer_report,
-                    field="distractor_reasons",
-                ),
-                draft.distractor_reasons,
-            )
         report = self.validator.validate(
             question,
             actual_answer=answer_report.actual_answer,
@@ -160,43 +146,37 @@ class GenerationService:
         return question, report, draft.distractor_reasons
 
     @staticmethod
+    def _draft_for_report(draft: QuestionDraft) -> GeneratedQuestion:
+        return GeneratedQuestion.model_validate(
+            {
+                "code": draft.code,
+                "entry_function": draft.entry_function,
+                "inputs": draft.inputs,
+                "question": draft.question,
+                "proposed_answer": draft.proposed_answer,
+                "distractors": draft.distractors,
+                "question_type": draft.question_type,
+            }
+        )
+
+    @staticmethod
     def _count_report(
         expected: int,
         received: int,
-        answer_report: ValidationReport,
+        answer_report: ValidationReport | None = None,
         *,
         field: str,
+        code: str = "COUNT_MISMATCH",
     ) -> ValidationReport:
         return ValidationReport(
             status="invalid",
-            actual_answer=answer_report.actual_answer,
+            actual_answer=answer_report.actual_answer if answer_report else None,
             issues=[
                 ValidationIssue(
-                    code="COUNT_MISMATCH",
+                    code=code,
                     message=f"Expected {expected} items, received {received}",
                     field=field,
                 )
             ],
-            trace_summary=answer_report.trace_summary,
+            trace_summary=answer_report.trace_summary if answer_report else None,
         )
-
-    def _validate_candidate(
-        self,
-        request: GenerationRequest,
-        question: GeneratedQuestion,
-    ) -> ValidationReport:
-        if len(question.distractors) != request.num_distractors:
-            return ValidationReport(
-                status="invalid",
-                issues=[
-                    ValidationIssue(
-                        code="DISTRACTOR_COUNT_MISMATCH",
-                        message=(
-                            f"Expected {request.num_distractors} distractors, "
-                            f"received {len(question.distractors)}"
-                        ),
-                        field="distractors",
-                    )
-                ],
-            )
-        return self.validator.validate(question)

@@ -22,29 +22,17 @@ class FakeQuestionGenerator:
     def __init__(self, examples_dir: Path) -> None:
         self.examples_dir = examples_dir
 
-    def generate(
-        self,
-        request: GenerationRequest,
-        *,
-        feedback: ValidationReport | None = None,
-    ) -> GeneratedQuestion:
-        # Difficulty and feedback become meaningful when an AI provider is added.
-        _ = request.difficulty, feedback
-        path = self.examples_dir / DEFAULT_EXAMPLE_FILES[request.topic]
-        question = GeneratedQuestion.model_validate_json(
-            path.read_text(encoding="utf-8")
-        )
-        return question.model_copy(
-            update={"distractors": question.distractors[: request.num_distractors]}
-        )
-
     def generate_draft(
         self,
         request: GenerationRequest,
         *,
         feedback: ValidationReport | None = None,
     ) -> QuestionDraft:
-        question = self.generate(request, feedback=feedback)
+        _ = request.difficulty, feedback
+        path = self.examples_dir / DEFAULT_EXAMPLE_FILES[request.topic]
+        question = GeneratedQuestion.model_validate_json(
+            path.read_text(encoding="utf-8")
+        )
         return QuestionDraft(
             code=question.code,
             entry_function=question.entry_function,

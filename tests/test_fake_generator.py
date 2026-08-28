@@ -23,10 +23,10 @@ def test_selects_example_for_topic(topic: str, entry_function: str) -> None:
         {"topic": topic, "difficulty": "intermediate"}
     )
 
-    question = FakeQuestionGenerator(EXAMPLES_DIR).generate(request)
+    draft = FakeQuestionGenerator(EXAMPLES_DIR).generate_draft(request)
 
-    assert question.entry_function == entry_function
-    assert len(question.distractors) == 3
+    assert draft.entry_function == entry_function
+    assert len(draft.distractors) == 3
 
 
 def test_uses_requested_distractor_count() -> None:
@@ -36,12 +36,12 @@ def test_uses_requested_distractor_count() -> None:
         num_distractors=2,
     )
 
-    question = FakeQuestionGenerator(EXAMPLES_DIR).generate(request)
+    draft = FakeQuestionGenerator(EXAMPLES_DIR).generate_draft(request)
 
-    assert len(question.distractors) == 2
+    assert len(draft.distractors) == 2
 
 
 def test_missing_example_is_reported() -> None:
     request = GenerationRequest(topic="arithmetic", difficulty="beginner")
     with pytest.raises(FileNotFoundError):
-        FakeQuestionGenerator(Path("missing-examples")).generate(request)
+        FakeQuestionGenerator(Path("missing-examples")).generate_draft(request)

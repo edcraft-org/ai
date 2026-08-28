@@ -29,25 +29,35 @@ class RecordingGenerator:
     def __init__(self) -> None:
         self.feedback: list[ValidationReport | None] = []
 
-    def generate(
+    def generate_draft(
         self,
         request: GenerationRequest,
         *,
         feedback: ValidationReport | None = None,
-    ) -> GeneratedQuestion:
+    ) -> QuestionDraft:
         self.feedback.append(feedback)
-        return sample_question()
+        question = sample_question()
+        return QuestionDraft(
+            code=question.code,
+            entry_function=question.entry_function,
+            inputs=question.inputs,
+            question=question.question,
+            proposed_answer=question.proposed_answer,
+            distractors=question.distractors,
+            distractor_reasons=["reason"] * len(question.distractors),
+        )
 
 
 class WrongDistractorCountGenerator(RecordingGenerator):
-    def generate(
+    def generate_draft(
         self,
         request: GenerationRequest,
         *,
         feedback: ValidationReport | None = None,
-    ) -> GeneratedQuestion:
+    ) -> QuestionDraft:
         self.feedback.append(feedback)
-        return sample_question().model_copy(update={"distractors": [4, 8]})
+        draft = super().generate_draft(request, feedback=feedback)
+        return draft.model_copy(update={"distractors": [4, 8]})
 
 
 class SequenceValidator:
@@ -55,10 +65,13 @@ class SequenceValidator:
         self.reports = reports
         self.calls = 0
 
-    def validate(self, question: GeneratedQuestion) -> ValidationReport:
+    def compute_answer(self, question: GeneratedQuestion) -> ValidationReport:
         report = self.reports[self.calls]
         self.calls += 1
         return report
+
+    def validate(self, question, *, actual_answer=None, trace_summary=None):
+        return ValidationReport(status="valid", actual_answer=actual_answer)
 
 
 class TwoStageGenerator:
@@ -78,10 +91,6 @@ class TwoStageGenerator:
             distractors=self.distractors,
             distractor_reasons=["Conceptual misunderstanding"] * len(self.distractors),
         )
-
-    def generate(self, request, *, feedback=None):
-        raise AssertionError("co-generation path should not use generate()")
-
 
 class AnswerComputingValidator:
     def compute_answer(self, question):
@@ -173,7 +182,10 @@ def test_two_stage_pipeline_rejects_wrong_distractor_count() -> None:
     outcome = service.generate(request())
 
     assert outcome.status == "rejected"
-    assert outcome.attempts[0].validation_report.issues[0].code == "COUNT_MISMATCH"
+    assert (
+        outcome.attempts[0].validation_report.issues[0].code
+        == "DISTRACTOR_COUNT_MISMATCH"
+    )
 
 
 def test_retries_invalid_question_with_feedback() -> None:
