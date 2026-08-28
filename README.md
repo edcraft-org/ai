@@ -89,6 +89,7 @@ be exercised using the existing examples:
 
 ```powershell
 uv run python -m edcraft_validator.generation `
+  --provider fake `
   --topic loops `
   --difficulty intermediate `
   --num-distractors 3
@@ -115,6 +116,9 @@ from Git and must never be committed:
 OPENAI_API_KEY=your-key-here
 OPENAI_MODEL=gpt-5.6-luna
 ```
+
+Select the provider explicitly with `--provider`; provider selection is not read
+from `.env`.
 
 Then generate and deterministically validate one question:
 

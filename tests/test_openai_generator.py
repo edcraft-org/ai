@@ -81,7 +81,7 @@ def draft_response() -> OpenAIQuestionDraftResponse:
 
 def test_generates_draft_using_json_output() -> None:
     client = client_with(api_question())
-    generator = OpenAIQuestionGenerator(client, model="test-model")
+    generator = OpenAIQuestionGenerator("openai", client, model="test-model")
     request = GenerationRequest(topic="arithmetic", difficulty="beginner")
 
     draft = generator.generate_draft(request)
@@ -96,7 +96,7 @@ def test_generates_draft_using_json_output() -> None:
 
 def test_includes_validation_feedback_in_retry_prompt() -> None:
     client = client_with(api_question())
-    generator = OpenAIQuestionGenerator(client, model="test-model")
+    generator = OpenAIQuestionGenerator("openai", client, model="test-model")
     feedback = ValidationReport(
         status="invalid",
         actual_answer=25,
@@ -119,7 +119,9 @@ def test_includes_validation_feedback_in_retry_prompt() -> None:
 
 
 def test_reports_missing_parsed_response() -> None:
-    generator = OpenAIQuestionGenerator(client_with(None), model="test-model")
+    generator = OpenAIQuestionGenerator(
+        "openai", client_with(None), model="test-model"
+    )
 
     with pytest.raises(OpenAIGenerationError, match="invalid question JSON"):
         generator.generate_draft(

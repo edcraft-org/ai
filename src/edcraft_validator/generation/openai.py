@@ -65,27 +65,27 @@ class OpenAIQuestionGenerator:
 
     def __init__(
         self,
+        provider: str,
         client: Any | None = None,
         *,
         model: str | None = None,
     ) -> None:
+        if provider not in {"openai", "ollama", "soclaas"}:
+            raise ValueError(f"Unsupported provider: {provider}")
+        self.provider = provider
         self.client = client or OpenAI(
-            api_key=_api_key(),
-            base_url=_base_url(),
+            api_key=_api_key(provider),
+            base_url=_base_url(provider),
         )
         self.model = (
             model
-            or os.getenv("GENERATION_MODEL")
-            or (
-                os.getenv("OLLAMA_MODEL")
-                if os.getenv("GENERATION_PROVIDER", "soclaas").lower() == "ollama"
-                else None
-            )
-            or os.getenv("SOCLAAS_MODEL")
-            or os.getenv("OPENAI_MODEL")
+            or {
+                "ollama": os.getenv("OLLAMA_MODEL"),
+                "soclaas": os.getenv("SOCLAAS_MODEL"),
+                "openai": os.getenv("OPENAI_MODEL"),
+            }[provider]
             or DEFAULT_OPENAI_MODEL
         )
-        self.provider = os.getenv("GENERATION_PROVIDER", "soclaas").lower()
 
     def generate_draft(
         self,
@@ -164,15 +164,13 @@ class OpenAIQuestionGenerator:
             raise RuntimeError(f"Ollama request failed: {exc}") from exc
 
 
-def _api_key() -> str | None:
-    provider = os.getenv("GENERATION_PROVIDER", "soclaas").lower()
+def _api_key(provider: str) -> str | None:
     if provider == "ollama":
         return os.getenv("OLLAMA_API_KEY") or "ollama"
     return os.getenv("SOCLAAS_API_KEY") or os.getenv("OPENAI_API_KEY")
 
 
-def _base_url() -> str | None:
-    provider = os.getenv("GENERATION_PROVIDER", "soclaas").lower()
+def _base_url(provider: str) -> str | None:
     if provider == "ollama":
         return os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
     return os.getenv("SOCLAAS_BASE_URL") or os.getenv("OPENAI_BASE_URL")

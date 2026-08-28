@@ -1,6 +1,5 @@
 import argparse
 import json
-import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -20,7 +19,7 @@ def main() -> int:
     parser.add_argument(
         "--provider",
         choices=["fake", "openai", "ollama", "soclaas"],
-        default=None,
+        required=True,
     )
     parser.add_argument(
         "--topic",
@@ -44,11 +43,11 @@ def main() -> int:
         difficulty=args.difficulty,
         num_distractors=args.num_distractors,
     )
-    provider = args.provider or os.getenv("GENERATION_PROVIDER", "fake")
+    provider = args.provider
     generator = (
         FakeQuestionGenerator(args.examples_dir)
         if provider == "fake"
-        else OpenAIQuestionGenerator()
+        else OpenAIQuestionGenerator(provider=provider)
     )
     service = GenerationService(
         generator,
