@@ -16,17 +16,10 @@ second LLM to judge correctness.
 
 ## Run
 
-```powershell
+```bash
 uv sync
 docker build -f docker/Dockerfile -t edcraft-validator-executor:local .
 uv run python -m edcraft_validator examples/valid_square.json
-uv run pytest
-```
-
-To include the real-container integration test:
-
-```powershell
-$env:EDCRAFT_RUN_DOCKER_TESTS = "1"
 uv run pytest
 ```
 
