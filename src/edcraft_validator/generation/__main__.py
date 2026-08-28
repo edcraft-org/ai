@@ -1,4 +1,5 @@
 import argparse
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -15,7 +16,11 @@ from edcraft_validator.validator import QuestionValidator
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the generation pipeline")
-    parser.add_argument("--provider", choices=["fake", "openai"], default="fake")
+    parser.add_argument(
+        "--provider",
+        choices=["fake", "openai", "ollama", "soclaas"],
+        default=None,
+    )
     parser.add_argument(
         "--topic",
         required=True,
@@ -38,9 +43,10 @@ def main() -> int:
         difficulty=args.difficulty,
         num_distractors=args.num_distractors,
     )
+    provider = args.provider or os.getenv("GENERATION_PROVIDER", "fake")
     generator = (
         FakeQuestionGenerator(args.examples_dir)
-        if args.provider == "fake"
+        if provider == "fake"
         else OpenAIQuestionGenerator()
     )
     service = GenerationService(

@@ -1,4 +1,7 @@
 import os
+import json
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from typing import Any, Literal
 
 from openai import OpenAI
@@ -39,7 +42,7 @@ class OpenAIInput(BaseModel):
 
 
 class OpenAIQuestionResponse(BaseModel):
-    """Concrete schema used for OpenAI Structured Outputs."""
+    """Schema used to validate the model's JSON response locally."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -65,8 +68,23 @@ class OpenAIQuestionGenerator:
         *,
         model: str | None = None,
     ) -> None:
-        self.client = client or OpenAI()
-        self.model = model or os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
+        self.client = client or OpenAI(
+            api_key=_api_key(),
+            base_url=_base_url(),
+        )
+        self.model = (
+            model
+            or os.getenv("GENERATION_MODEL")
+            or (
+                os.getenv("OLLAMA_MODEL")
+                if os.getenv("GENERATION_PROVIDER", "soclaas").lower() == "ollama"
+                else None
+            )
+            or os.getenv("SOCLAAS_MODEL")
+            or os.getenv("OPENAI_MODEL")
+            or DEFAULT_OPENAI_MODEL
+        )
+        self.provider = os.getenv("GENERATION_PROVIDER", "soclaas").lower()
 
     def generate(
         self,
@@ -74,19 +92,27 @@ class OpenAIQuestionGenerator:
         *,
         feedback: ValidationReport | None = None,
     ) -> GeneratedQuestion:
-        response = self.client.responses.parse(
-            model=self.model,
-            input=[
+        try:
+            messages = [
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": _build_prompt(request, feedback)},
-            ],
-            text_format=OpenAIQuestionResponse,
-        )
-        parsed = response.output_parsed
-        if parsed is None:
+            ]
+            if self.provider == "ollama":
+                content = self._ollama_request(messages)
+            else:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    response_format={"type": "json_object"},
+                )
+                content = response.choices[0].message.content
+            if not content:
+                raise ValueError("empty response")
+            parsed = OpenAIQuestionResponse.model_validate_json(content)
+        except (IndexError, AttributeError, TypeError, ValueError, RuntimeError) as exc:
             raise OpenAIGenerationError(
-                "OpenAI returned no parsed question, possibly due to a refusal"
-            )
+                f"Model returned invalid question JSON: {exc}"
+            ) from exc
         return GeneratedQuestion.model_validate(
             {
                 "code": parsed.code,
@@ -98,6 +124,44 @@ class OpenAIQuestionGenerator:
                 "question_type": parsed.question_type,
             }
         )
+
+    def _ollama_request(self, messages: list[dict[str, str]]) -> str:
+        """Call Ollama's native API so its decoder enforces the JSON schema."""
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        native_url = base_url.removesuffix("/v1").rstrip("/") + "/api/chat"
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "stream": False,
+            "format": OpenAIQuestionResponse.model_json_schema(),
+            "options": {"temperature": 0},
+        }
+        request = Request(
+            native_url,
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=120) as response:
+                body = json.load(response)
+            return body["message"]["content"]
+        except (HTTPError, URLError, KeyError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"Ollama request failed: {exc}") from exc
+
+
+def _api_key() -> str | None:
+    provider = os.getenv("GENERATION_PROVIDER", "soclaas").lower()
+    if provider == "ollama":
+        return os.getenv("OLLAMA_API_KEY") or "ollama"
+    return os.getenv("SOCLAAS_API_KEY") or os.getenv("OPENAI_API_KEY")
+
+
+def _base_url() -> str | None:
+    provider = os.getenv("GENERATION_PROVIDER", "soclaas").lower()
+    if provider == "ollama":
+        return os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+    return os.getenv("SOCLAAS_BASE_URL") or os.getenv("OPENAI_BASE_URL")
 
 
 _SYSTEM_PROMPT = """\
@@ -117,6 +181,19 @@ The generated code must stay within this validator's deliberately small subset:
   scalar=null, and empty items. Object property values must be scalar.
 - Make every distractor unique, plausible, and different from the correct answer.
 - Return code as one readable, correctly indented string with newline characters.
+- Respond with a single valid JSON object and no markdown fences or extra text.
+- The JSON object must have exactly these top-level keys: code, entry_function,
+  inputs, question, proposed_answer, distractors, question_type.
+- Use this exact shape (values are illustrative):
+  {"code":"def f(x):\\n    return x + 1","entry_function":"f",
+   "inputs":[{"name":"x","value":{"kind":"scalar","scalar":2,
+   "items":[],"properties":[]}}],"question":"What does f(2) return?",
+   "proposed_answer":{"kind":"scalar","scalar":3,"items":[],
+   "properties":[]},"distractors":[{"kind":"scalar","scalar":2,
+   "items":[],"properties":[]}],"question_type":"mcq"}
+- Every input must be an object with both name and value keys. The value object
+  must always contain scalar, items, and properties; empty collections are []
+  (never {}). question_type must be exactly "mcq".
 The deterministic validator will execute the code and independently check the answer.
 """
 
