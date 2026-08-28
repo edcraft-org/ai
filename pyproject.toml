@@ -26,6 +26,9 @@ step-tracer = { git = "https://github.com/edcraft-org/step-tracer.git", rev = "a
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "docker: tests requiring the Docker executor image",
+]
 
 [tool.ruff]
 target-version = "py312"
@@ -33,4 +36,3 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-

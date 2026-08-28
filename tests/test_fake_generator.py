@@ -22,6 +22,7 @@ EXAMPLES_DIR = Path(__file__).parents[1] / "examples"
     ],
 )
 def test_selects_example_for_topic(topic: str, entry_function: str) -> None:
+    # Each supported topic should map to its documented deterministic fixture.
     request = GenerationRequest.model_validate(
         {"topic": topic, "difficulty": "intermediate"}
     )
@@ -34,6 +35,7 @@ def test_selects_example_for_topic(topic: str, entry_function: str) -> None:
 
 
 def test_uses_requested_distractor_count() -> None:
+    # The deterministic generator must honor the caller's requested option count.
     request = GenerationRequest(
         topic="arithmetic",
         difficulty="beginner",
@@ -47,6 +49,7 @@ def test_uses_requested_distractor_count() -> None:
 
 
 def test_missing_example_is_reported() -> None:
+    # Missing fixture data should fail explicitly instead of silently fabricating it.
     request = GenerationRequest(topic="arithmetic", difficulty="beginner")
     with pytest.raises(FileNotFoundError):
         FakeQuestionGenerator(Path("missing-examples")).generate_draft(request)
@@ -58,6 +61,7 @@ class FixedExampleExecutor:
 
 
 def test_fake_draft_passes_through_authoritative_answer_flow() -> None:
+    # Service output must use the executor answer, even when a fake draft is used.
     request = GenerationRequest(
         topic="loops", difficulty="intermediate", num_distractors=3
     )

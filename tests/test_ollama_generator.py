@@ -6,6 +6,7 @@ from edcraft_validator.generation.openai import OpenAIQuestionDraftResponse
 
 
 def test_ollama_generator_uses_native_schema_endpoint(monkeypatch) -> None:
+    # Ollama must use its native endpoint and pass the Pydantic JSON schema.
     captured: dict[str, object] = {}
     response = OpenAIQuestionDraftResponse(
         code="def square(x):\n    return x * x",

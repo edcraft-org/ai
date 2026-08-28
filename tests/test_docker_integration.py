@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import pytest
@@ -6,14 +5,10 @@ import pytest
 from edcraft_validator.models import GeneratedQuestion
 from edcraft_validator.validator import QuestionValidator
 
-RUN_DOCKER_TESTS = os.environ.get("EDCRAFT_RUN_DOCKER_TESTS") == "1"
 
-
-@pytest.mark.skipif(
-    not RUN_DOCKER_TESTS,
-    reason="Set EDCRAFT_RUN_DOCKER_TESTS=1 after building the executor image",
-)
+@pytest.mark.docker
 def test_valid_example_executes_in_docker() -> None:
+    # The documented fixture should validate through the real Docker boundary.
     example_path = Path(__file__).parents[1] / "examples" / "valid_square.json"
     question = GeneratedQuestion.model_validate_json(
         example_path.read_text(encoding="utf-8")
@@ -25,11 +20,9 @@ def test_valid_example_executes_in_docker() -> None:
     assert report.actual_answer == 16
 
 
-@pytest.mark.skipif(
-    not RUN_DOCKER_TESTS,
-    reason="Set EDCRAFT_RUN_DOCKER_TESTS=1 after building the executor image",
-)
+@pytest.mark.docker
 def test_generated_code_timeout_is_enforced_inside_docker() -> None:
+    # Docker execution must enforce timeouts for expensive generated programs.
     question = GeneratedQuestion.model_validate(
         {
             "code": [

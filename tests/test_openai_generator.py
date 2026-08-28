@@ -56,6 +56,7 @@ def client_with(parsed: OpenAIQuestionDraftResponse | None) -> SimpleNamespace:
 
 
 def test_generates_draft_using_json_output() -> None:
+    # OpenAI-compatible providers must request and parse a JSON object response.
     client = client_with(api_question())
     generator = OpenAICompatibleQuestionGenerator("openai", client, model="test-model")
     request = GenerationRequest(topic="arithmetic", difficulty="beginner")
@@ -70,6 +71,7 @@ def test_generates_draft_using_json_output() -> None:
 
 
 def test_includes_validation_feedback_in_retry_prompt() -> None:
+    # Retry prompts should include actionable issue codes without leaking answers.
     client = client_with(api_question())
     generator = OpenAICompatibleQuestionGenerator("openai", client, model="test-model")
     feedback = ValidationReport(
@@ -95,6 +97,7 @@ def test_includes_validation_feedback_in_retry_prompt() -> None:
 
 
 def test_reports_missing_parsed_response() -> None:
+    # Empty provider content must become a clear generation error.
     generator = OpenAICompatibleQuestionGenerator(
         "openai", client_with(None), model="test-model"
     )
@@ -106,6 +109,7 @@ def test_reports_missing_parsed_response() -> None:
 
 
 def test_provider_uses_provider_specific_configuration(monkeypatch) -> None:
+    # OpenAI and SocLaas must read only their own credentials and base URLs.
     monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://openai.example/v1")
     monkeypatch.setenv("SOCLAAS_API_KEY", "soclaas-key")

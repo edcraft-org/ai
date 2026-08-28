@@ -23,6 +23,7 @@ def successful_process(answer: object = 16) -> subprocess.CompletedProcess[str]:
 
 
 def test_runs_worker_with_container_isolation() -> None:
+    # The Docker command must preserve isolation while passing the request payload.
     executor = DockerExecutor()
     with patch(
         "edcraft_validator.executor.subprocess.run",
@@ -56,6 +57,7 @@ def test_runs_worker_with_container_isolation() -> None:
 
 
 def test_timeout_force_removes_the_named_container() -> None:
+    # A timed-out container must be force-removed so no orphan can remain running.
     executor = DockerExecutor()
     timeout = subprocess.TimeoutExpired(["docker", "run"], 0.1)
     cleanup = subprocess.CompletedProcess([], 0, stdout="", stderr="")
@@ -82,6 +84,7 @@ def test_timeout_force_removes_the_named_container() -> None:
 
 
 def test_missing_docker_executable_is_reported() -> None:
+    # Missing local Docker should become an actionable structured error.
     executor = DockerExecutor()
     with patch(
         "edcraft_validator.executor.subprocess.run",
@@ -103,6 +106,11 @@ def test_missing_docker_executable_is_reported() -> None:
             "error during connect: Docker daemon is not running",
             "DOCKER_UNAVAILABLE",
         ),
+        (
+            1,
+            "permission denied while trying to connect to the Docker API",
+            "DOCKER_UNAVAILABLE",
+        ),
         (137, "Killed", "RESOURCE_LIMIT_EXCEEDED"),
         (1, "Unexpected failure", "WORKER_FAILURE"),
     ],
@@ -110,6 +118,7 @@ def test_missing_docker_executable_is_reported() -> None:
 def test_container_failures_are_classified(
     returncode: int, stderr: str, expected_code: str
 ) -> None:
+    # Common Docker failures need stable error codes for the service and CLI.
     process = subprocess.CompletedProcess([], returncode, stdout="", stderr=stderr)
     with patch("edcraft_validator.executor.subprocess.run", return_value=process):
         result = DockerExecutor().execute(
@@ -128,5 +137,17 @@ def test_container_failures_are_classified(
     ],
 )
 def test_invalid_resource_limits_are_rejected(settings: dict[str, object]) -> None:
+    # Invalid resource limits should fail during configuration, before execution.
     with pytest.raises(ValueError, match="greater than zero"):
         DockerExecutionConfig(**settings)
+
+
+def test_invalid_worker_json_is_reported() -> None:
+    # A successful container process is still invalid if it does not return JSON.
+    process = subprocess.CompletedProcess([], 0, stdout="not-json", stderr="")
+    with patch("edcraft_validator.executor.subprocess.run", return_value=process):
+        result = DockerExecutor().execute(
+            "def main():\n    return 1", "main", {}, timeout_seconds=2
+        )
+
+    assert result.error_code == "INVALID_WORKER_OUTPUT"

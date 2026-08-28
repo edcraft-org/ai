@@ -35,6 +35,7 @@ def test_rejects_too_few_distractors() -> None:
 
 @pytest.mark.parametrize("field", ["code", "question"])
 def test_rejects_blank_required_text(field: str) -> None:
+    # Required text fields must contain meaningful content, not just whitespace.
     data = valid_data()
     data[field] = "   "
     with pytest.raises(ValidationError, match="must not be blank"):
@@ -42,6 +43,7 @@ def test_rejects_blank_required_text(field: str) -> None:
 
 
 def test_rejects_invalid_entry_function_name() -> None:
+    # Entry-function names must be valid identifiers before code is executed.
     data = valid_data()
     data["entry_function"] = "not-valid"
     with pytest.raises(ValidationError, match="string_pattern_mismatch"):
@@ -49,6 +51,7 @@ def test_rejects_invalid_entry_function_name() -> None:
 
 
 def test_rejects_non_mcq_question_type() -> None:
+    # The current public contract only supports multiple-choice questions.
     data = valid_data()
     data["question_type"] = "short_answer"
     with pytest.raises(ValidationError, match="Input should be 'mcq'"):
@@ -56,6 +59,7 @@ def test_rejects_non_mcq_question_type() -> None:
 
 
 def test_joins_readable_code_lines() -> None:
+    # JSON line arrays should normalize to executable source text.
     data = valid_data()
     data["code"] = [
         "def answer():",
@@ -69,6 +73,7 @@ def test_joins_readable_code_lines() -> None:
 
 
 def test_rejects_non_string_code_lines() -> None:
+    # Code line arrays must contain source strings to be safely normalized.
     data = valid_data()
     data["code"] = ["def answer():", 42]
     with pytest.raises(ValidationError, match="valid string"):
