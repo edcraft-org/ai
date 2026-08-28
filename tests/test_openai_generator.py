@@ -50,7 +50,9 @@ class RecordingCompletions:
 
 def client_with(parsed: OpenAIQuestionResponse | None) -> SimpleNamespace:
     content = parsed.model_dump_json() if parsed is not None else None
-    return SimpleNamespace(chat=SimpleNamespace(completions=RecordingCompletions(content)))
+    return SimpleNamespace(
+        chat=SimpleNamespace(completions=RecordingCompletions(content))
+    )
 
 
 def test_generates_question_using_json_output() -> None:
@@ -63,7 +65,9 @@ def test_generates_question_using_json_output() -> None:
     assert question.entry_function == "square"
     assert question.proposed_answer == 16
     assert client.chat.completions.arguments["model"] == "test-model"
-    assert client.chat.completions.arguments["response_format"] == {"type": "json_object"}
+    assert client.chat.completions.arguments["response_format"] == {
+        "type": "json_object"
+    }
 
 
 def test_includes_validation_feedback_in_retry_prompt() -> None:

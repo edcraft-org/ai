@@ -11,6 +11,7 @@ from edcraft_validator.generation.models import (
     GenerationAttempt,
     GenerationOutcome,
     GenerationRequest,
+    QuestionDraft,
 )
 from edcraft_validator.models import (
     GeneratedQuestion,
@@ -30,13 +31,17 @@ class GenerationService:
         validator: QuestionValidationBackend,
         *,
         max_attempts: int = 3,
+        max_distractor_attempts: int = 3,
         attempt_log_path: Path | None = DEFAULT_ATTEMPT_LOG,
     ) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be greater than zero")
+        if max_distractor_attempts < 1:
+            raise ValueError("max_distractor_attempts must be greater than zero")
         self.generator = generator
         self.validator = validator
         self.max_attempts = max_attempts
+        self.max_distractor_attempts = max_distractor_attempts
         self.logger = (
             JsonlAttemptLogger(attempt_log_path)
             if attempt_log_path is not None
@@ -50,8 +55,15 @@ class GenerationService:
 
         for attempt_number in range(1, self.max_attempts + 1):
             started = time.perf_counter()
-            question = self.generator.generate(request, feedback=feedback)
-            report = self._validate_candidate(request, question)
+            if hasattr(self.generator, "generate_draft") and hasattr(
+                self.validator, "compute_answer"
+            ):
+                question, report = self._generate_two_stage(
+                    request, feedback
+                )
+            else:
+                question = self.generator.generate(request, feedback=feedback)
+                report = self._validate_candidate(request, question)
             attempt = GenerationAttempt(
                 attempt_number=attempt_number,
                 question=question,
@@ -85,6 +97,54 @@ class GenerationService:
             request=request,
             attempts=attempts,
         )
+
+    def _generate_two_stage(
+        self,
+        request: GenerationRequest,
+        feedback: ValidationReport | None,
+    ) -> tuple[GeneratedQuestion, ValidationReport]:
+        draft: QuestionDraft = self.generator.generate_draft(
+            request, feedback=feedback
+        )
+        placeholder = GeneratedQuestion.model_validate(
+            {
+                **draft.model_dump(),
+                "proposed_answer": None,
+                "distractors": [None] * request.num_distractors,
+            }
+        )
+        answer_report = self.validator.compute_answer(placeholder)
+        if answer_report.status != "valid":
+            return placeholder, answer_report
+
+        distractor_feedback = None
+        question = None
+        report = answer_report
+        for _ in range(self.max_distractor_attempts):
+            distractors = self.generator.generate_distractors(
+                draft,
+                answer_report.actual_answer,
+                request.num_distractors,
+                feedback=distractor_feedback,
+            )
+            question = GeneratedQuestion.model_validate(
+                {
+                    **draft.model_dump(),
+                    "proposed_answer": answer_report.actual_answer,
+                    "distractors": distractors,
+                }
+            )
+            report = self.validator.validate(
+                question,
+                actual_answer=answer_report.actual_answer,
+                trace_summary=answer_report.trace_summary,
+            )
+            if report.status == "valid":
+                return question, report
+            distractor_feedback = report
+
+        assert question is not None
+        return question, report
 
     def _validate_candidate(
         self,

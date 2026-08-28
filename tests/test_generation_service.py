@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from edcraft_validator.generation.models import GenerationRequest
+from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
 from edcraft_validator.generation.service import GenerationService
 from edcraft_validator.models import (
     GeneratedQuestion,
@@ -61,6 +61,40 @@ class SequenceValidator:
         return report
 
 
+class TwoStageGenerator:
+    def __init__(self, distractors: list[object]) -> None:
+        self.distractors = distractors
+        self.draft_calls = 0
+        self.distractor_calls = 0
+
+    def generate_draft(self, request, *, feedback=None):
+        self.draft_calls += 1
+        return QuestionDraft(
+            code="def square(x):\n    return x * x",
+            entry_function="square",
+            inputs={"x": 4},
+            question="What does square(4) return?",
+        )
+
+    def generate_distractors(self, draft, answer, num_distractors, *, feedback=None):
+        self.distractor_calls += 1
+        assert answer == 16
+        return self.distractors[:num_distractors]
+
+    def generate(self, request, *, feedback=None):
+        raise AssertionError("two-stage generator should not use generate()")
+
+
+class AnswerComputingValidator:
+    def compute_answer(self, question):
+        return ValidationReport(status="valid", actual_answer=16)
+
+    def validate(self, question, *, actual_answer=None, trace_summary=None):
+        assert question.proposed_answer == 16
+        assert actual_answer == 16
+        return ValidationReport(status="valid", actual_answer=actual_answer)
+
+
 def valid_report() -> ValidationReport:
     return ValidationReport(status="valid", actual_answer=16)
 
@@ -108,6 +142,23 @@ def test_accepts_first_valid_question() -> None:
     assert outcome.question is not None
     assert len(outcome.attempts) == 1
     assert generator.feedback == [None]
+
+
+def test_two_stage_pipeline_uses_computed_answer() -> None:
+    generator = TwoStageGenerator([4, 8, 20])
+    service = GenerationService(
+        generator,
+        AnswerComputingValidator(),
+        attempt_log_path=None,
+    )
+
+    outcome = service.generate(request())
+
+    assert outcome.status == "accepted"
+    assert outcome.question is not None
+    assert outcome.question.proposed_answer == 16
+    assert generator.draft_calls == 1
+    assert generator.distractor_calls == 1
 
 
 def test_retries_invalid_question_with_feedback() -> None:

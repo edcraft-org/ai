@@ -81,6 +81,16 @@ def test_wrong_answer_is_rejected() -> None:
     assert "WRONG_PROPOSED_ANSWER" in {issue.code for issue in report.issues}
 
 
+def test_type_incompatible_distractor_is_rejected() -> None:
+    report = validator_with().validate(
+        make_question(proposed_answer=16).model_copy(
+            update={"distractors": [[1, 2], [3, 4], [5, 6]]}
+        )
+    )
+    assert report.status == "invalid"
+    assert report.issues[0].code == "DISTRACTOR_TYPE_MISMATCH"
+
+
 def test_correct_distractor_is_rejected() -> None:
     report = validator_with().validate(make_question(distractors=[4, 16, 20]))
     assert report.status == "invalid"
@@ -162,7 +172,8 @@ def test_boolean_answer_is_not_confused_with_integer_distractor() -> None:
         distractors=[1, False],
     )
     report = validator_with(successful_execution(True)).validate(question)
-    assert report.status == "valid"
+    assert report.status == "invalid"
+    assert "DISTRACTOR_TYPE_MISMATCH" in {issue.code for issue in report.issues}
 
 
 def test_non_json_return_value_is_reported() -> None:

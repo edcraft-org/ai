@@ -22,6 +22,16 @@ class GenerationRequest(BaseModel):
     num_distractors: int = Field(default=3, ge=2, le=3)
 
 
+class QuestionDraft(BaseModel):
+    """Model-generated question data before deterministic answer computation."""
+
+    code: str = Field(min_length=1)
+    entry_function: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
+    inputs: dict[str, object]
+    question: str = Field(min_length=1)
+    question_type: Literal["mcq"] = "mcq"
+
+
 class GenerationAttempt(BaseModel):
     attempt_number: int = Field(ge=1)
     question: GeneratedQuestion
