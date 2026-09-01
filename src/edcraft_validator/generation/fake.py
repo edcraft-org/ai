@@ -19,6 +19,9 @@ DEFAULT_EXAMPLE_FILES: dict[ProgrammingTopic, str] = {
 class FakeQuestionGenerator:
     """Load deterministic examples while the real AI provider is not connected."""
 
+    provider = "fake"
+    model = None
+
     def __init__(self, examples_dir: Path) -> None:
         self.examples_dir = examples_dir
 

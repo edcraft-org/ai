@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from edcraft_validator.generation.models import GenerationAttempt, GenerationRequest
+from edcraft_validator.generation.observability import AttemptTelemetry
 
 
 class JsonlAttemptLogger:
@@ -16,6 +17,7 @@ class JsonlAttemptLogger:
         run_id: str,
         request: GenerationRequest,
         attempt: GenerationAttempt,
+        telemetry: AttemptTelemetry,
     ) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         record = {
@@ -23,6 +25,14 @@ class JsonlAttemptLogger:
             "recorded_at": datetime.now(UTC).isoformat(),
             "request": request.model_dump(mode="json"),
             "attempt": attempt.model_dump(mode="json"),
+            "telemetry": {
+                "provider": telemetry.provider,
+                "model": telemetry.model,
+                "generation_duration_ms": telemetry.generation_duration_ms,
+                "validation_duration_ms": telemetry.validation_duration_ms,
+                "status": telemetry.status,
+                "issue_codes": list(telemetry.issue_codes),
+            },
         }
         with self.path.open("a", encoding="utf-8") as file:
             file.write(json.dumps(record, allow_nan=False) + "\n")

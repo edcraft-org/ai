@@ -4,22 +4,17 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from edcraft_validator.generation.fake import FakeQuestionGenerator
+from edcraft_validator.application import QuestionGenerationApplication
 from edcraft_validator.generation.models import GenerationRequest
-from edcraft_validator.generation.ollama import OllamaQuestionGenerator
-from edcraft_validator.generation.openai import OpenAICompatibleQuestionGenerator
-from edcraft_validator.generation.service import (
-    DEFAULT_ATTEMPT_LOG,
-    GenerationService,
-)
-from edcraft_validator.validator import QuestionValidator
+from edcraft_validator.generation.registry import available_providers
+from edcraft_validator.generation.service import DEFAULT_ATTEMPT_LOG
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the generation pipeline")
     parser.add_argument(
         "--provider",
-        choices=["fake", "openai", "ollama", "soclaas"],
+        choices=available_providers(),
         required=True,
     )
     parser.add_argument(
@@ -44,19 +39,13 @@ def main() -> int:
         difficulty=args.difficulty,
         num_distractors=args.num_distractors,
     )
-    provider = args.provider
-    if provider == "fake":
-        generator = FakeQuestionGenerator(args.examples_dir)
-    elif provider == "ollama":
-        generator = OllamaQuestionGenerator()
-    else:
-        generator = OpenAICompatibleQuestionGenerator(provider=provider)
-    service = GenerationService(
-        generator,
-        QuestionValidator(),
+    application = QuestionGenerationApplication()
+    outcome = application.generate(
+        request,
+        provider=args.provider,
+        examples_dir=args.examples_dir,
         attempt_log_path=None if args.no_log else DEFAULT_ATTEMPT_LOG,
     )
-    outcome = service.generate(request)
     output = outcome.model_dump(mode="json")
     for attempt in output["attempts"]:
         attempt.pop("distractor_reasons", None)

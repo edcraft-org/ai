@@ -1,23 +1,27 @@
 import json
 import os
+from typing import Literal
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
-from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
-from edcraft_validator.generation.openai import (
-    _SYSTEM_PROMPT,
-    OpenAICompatibleQuestionGenerator,
-    OpenAIGenerationError,
-    OpenAIQuestionDraftResponse,
-    _build_prompt,
+from edcraft_validator.domains.code.generation import (
+    OLLAMA_SYSTEM_PROMPT,
+    JsonScalar,
+    QuestionDraftResponse,
+    build_prompt,
+    normalize_plain_response,
 )
+from edcraft_validator.generation.base import GenerationError
+from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
 from edcraft_validator.models import ValidationReport
 
+PlainJsonValue = JsonScalar | list[JsonScalar] | dict[str, JsonScalar]
 
-class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
-    """Generate a draft through Ollama's native schema-constrained API."""
+
+class OllamaQuestionGenerator:
+    """Generate drafts through Ollama while honoring the shared provider contract."""
 
     def __init__(
         self, client: object | None = None, *, model: str | None = None
@@ -27,44 +31,54 @@ class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
         self.model = model or os.getenv("OLLAMA_MODEL") or "qwen2.5"
 
     def generate_draft(
-        self,
-        request: GenerationRequest,
-        *,
-        feedback: ValidationReport | None = None,
+        self, request: GenerationRequest, *, feedback: ValidationReport | None = None
     ) -> QuestionDraft:
+        wire_schema = _ollama_wire_schema(request.num_distractors)
+        user_prompt = build_prompt(request, feedback)
+        if feedback is not None and feedback.actual_answer is not None:
+            user_prompt += (
+                f"\nThe deterministic executor computed the normal return value as "
+                f"{feedback.actual_answer!r}. Do not include that exact value in "
+                "any distractor. Recalculate every distractor before responding."
+            )
         parsed = self._request_model(
-            _SYSTEM_PROMPT,
-            _build_prompt(request, feedback),
-            OpenAIQuestionDraftResponse,
+            OLLAMA_SYSTEM_PROMPT,
+            user_prompt,
+            wire_schema,
         )
-        return QuestionDraft(
-            code=parsed.code,
-            entry_function=parsed.entry_function,
-            inputs={item.name: item.value.to_python() for item in parsed.inputs},
-            question=parsed.question,
-            distractors=[item.to_python() for item in parsed.distractors],
-            distractor_reasons=parsed.distractor_reasons,
-            question_type=parsed.question_type,
-        )
+        try:
+            return parsed.to_draft()
+        except Exception as exc:
+            raise GenerationError(
+                f"ollama returned a draft that failed local validation: {exc}"
+            ) from exc
 
     def _request_model(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        schema: type[BaseModel],
-    ) -> BaseModel:
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
+        self, system_prompt: str, user_prompt: str, schema: type[BaseModel]
+    ) -> QuestionDraftResponse:
         try:
-            content = self._ollama_request(messages, schema)
+            content = self._ollama_request(
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                schema,
+            )
             if not content:
                 raise ValueError("empty response")
-            return schema.model_validate_json(content)
-        except (IndexError, AttributeError, TypeError, ValueError, RuntimeError) as exc:
-            raise OpenAIGenerationError(
-                f"Model returned invalid question JSON: {exc}"
+            wire_response = schema.model_validate(json.loads(content))
+            wire_data = wire_response.model_dump()
+            distractor_pairs = wire_data["distractors"]
+            wire_data["distractors"] = [pair["value"] for pair in distractor_pairs]
+            wire_data["distractor_reasons"] = [
+                pair["reason"] for pair in distractor_pairs
+            ]
+            return QuestionDraftResponse.model_validate(
+                normalize_plain_response(wire_data)
+            )
+        except Exception as exc:
+            raise GenerationError(
+                f"ollama returned invalid question JSON: {exc}"
             ) from exc
 
     def _ollama_request(
@@ -77,7 +91,7 @@ class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
             "messages": messages,
             "stream": False,
             "format": schema.model_json_schema(),
-            "options": {"temperature": 0},
+            "options": {"temperature": float(os.getenv("OLLAMA_TEMPERATURE", "0.2"))},
         }
         request = Request(
             native_url,
@@ -86,8 +100,41 @@ class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
             method="POST",
         )
         try:
-            with urlopen(request, timeout=120) as response:
+            timeout = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "300"))
+            with urlopen(request, timeout=timeout) as response:
                 body = json.load(response)
             return body["message"]["content"]
         except (HTTPError, URLError, KeyError, json.JSONDecodeError) as exc:
             raise RuntimeError(f"Ollama request failed: {exc}") from exc
+
+
+class OllamaWireDistractor(BaseModel):
+    """Pair a distractor value with the misconception that creates it."""
+
+    model_config = ConfigDict(extra="forbid")
+    value: PlainJsonValue
+    reason: str = Field(min_length=1)
+
+
+class OllamaWireResponse(BaseModel):
+    """Flat Ollama wire contract; semantic validation happens locally."""
+
+    model_config = ConfigDict(extra="forbid")
+    code: str
+    entry_function: str
+    inputs: dict[str, PlainJsonValue]
+    question: str
+    distractors: list[OllamaWireDistractor]
+    question_type: Literal["mcq"]
+
+
+def _ollama_wire_schema(num_distractors: int) -> type[OllamaWireResponse]:
+    """Build a concrete native schema with request-specific list lengths."""
+    return create_model(
+        "OllamaWireResponse",
+        __base__=OllamaWireResponse,
+        distractors=(
+            list[OllamaWireDistractor],
+            Field(min_length=num_distractors, max_length=num_distractors),
+        ),
+    )

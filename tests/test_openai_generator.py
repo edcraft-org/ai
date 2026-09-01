@@ -55,8 +55,8 @@ def client_with(parsed: OpenAIQuestionDraftResponse | None) -> SimpleNamespace:
     )
 
 
-def test_generates_draft_using_json_output() -> None:
-    # OpenAI-compatible providers must request and parse a JSON object response.
+def test_generates_draft_using_structured_outputs() -> None:
+    # OpenAI must request strict Structured Outputs for schema adherence.
     client = client_with(api_question())
     generator = OpenAICompatibleQuestionGenerator("openai", client, model="test-model")
     request = GenerationRequest(topic="arithmetic", difficulty="beginner")
@@ -65,9 +65,11 @@ def test_generates_draft_using_json_output() -> None:
 
     assert draft.entry_function == "square"
     assert client.chat.completions.arguments["model"] == "test-model"
-    assert client.chat.completions.arguments["response_format"] == {
-        "type": "json_object"
-    }
+    response_format = client.chat.completions.arguments["response_format"]
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["name"] == "question_draft"
+    assert response_format["json_schema"]["strict"] is True
+    assert response_format["json_schema"]["schema"]["type"] == "object"
 
 
 def test_includes_validation_feedback_in_retry_prompt() -> None:
@@ -106,6 +108,85 @@ def test_reports_missing_parsed_response() -> None:
         generator.generate_draft(
             GenerationRequest(topic="arithmetic", difficulty="beginner")
         )
+
+
+def test_converts_nested_tagged_values_to_python_values() -> None:
+    nested = OpenAIQuestionDraftResponse(
+        code="def total(values):\n    return sum(values)",
+        entry_function="total",
+        inputs=[
+            OpenAIInput(
+                name="values",
+                value=OpenAIJsonValue(
+                    kind="list",
+                    scalar=None,
+                    items=[
+                        OpenAIJsonValue(
+                            kind="scalar", scalar=value, items=[], properties=[]
+                        )
+                        for value in [1, 2, 3]
+                    ],
+                    properties=[],
+                ),
+            )
+        ],
+        question="What does total([1, 2, 3]) return?",
+        distractors=[
+            OpenAIJsonValue(kind="scalar", scalar=value, items=[], properties=[])
+            for value in [3, 5, 7]
+        ],
+        distractor_reasons=["reason"] * 3,
+        question_type="mcq",
+    )
+
+    generator = OpenAICompatibleQuestionGenerator(
+        "openai", client_with(nested), model="test-model"
+    )
+
+    draft = generator.generate_draft(
+        GenerationRequest(topic="lists", difficulty="beginner")
+    )
+
+    assert draft.inputs == {"values": [1, 2, 3]}
+
+
+def test_accepts_tagged_list_form_for_inputs() -> None:
+    response = api_question().model_dump()
+    response["inputs"] = {
+        "kind": "list",
+        "scalar": None,
+        "items": [
+            {
+                "kind": "object",
+                "scalar": None,
+                "items": [],
+                "properties": [
+                    {
+                        "key": "name",
+                        "value": {
+                            "kind": "scalar",
+                            "scalar": "x",
+                            "items": [],
+                            "properties": [],
+                        },
+                    },
+                    {
+                        "key": "value",
+                        "value": {
+                            "kind": "scalar",
+                            "scalar": 4,
+                            "items": [],
+                            "properties": [],
+                        },
+                    },
+                ],
+            }
+        ],
+        "properties": [],
+    }
+    parsed = OpenAIQuestionDraftResponse.model_validate(response)
+
+    assert parsed.to_draft().inputs == {"x": 4}
 
 
 def test_provider_uses_provider_specific_configuration(monkeypatch) -> None:

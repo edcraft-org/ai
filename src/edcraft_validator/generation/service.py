@@ -3,6 +3,7 @@ import uuid
 from pathlib import Path
 
 from edcraft_validator.generation.base import (
+    GenerationError,
     QuestionGenerator,
     QuestionValidationBackend,
 )
@@ -13,8 +14,14 @@ from edcraft_validator.generation.models import (
     GenerationRequest,
     QuestionDraft,
 )
+from edcraft_validator.generation.observability import (
+    AttemptTelemetry,
+    GenerationMetrics,
+    provider_metadata,
+)
 from edcraft_validator.models import (
     GeneratedQuestion,
+    QuestionCandidate,
     ValidationIssue,
     ValidationReport,
 )
@@ -32,12 +39,15 @@ class GenerationService:
         *,
         max_attempts: int = 3,
         attempt_log_path: Path | None = DEFAULT_ATTEMPT_LOG,
+        metrics: GenerationMetrics | None = None,
     ) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be greater than zero")
         self.generator = generator
         self.validator = validator
         self.max_attempts = max_attempts
+        self.metrics = metrics or GenerationMetrics()
+        self.provider, self.model = provider_metadata(generator)
         self.logger = (
             JsonlAttemptLogger(attempt_log_path)
             if attempt_log_path is not None
@@ -51,9 +61,56 @@ class GenerationService:
 
         for attempt_number in range(1, self.max_attempts + 1):
             started = time.perf_counter()
-            question, report, distractor_reasons = self._generate_draft(
-                request, feedback
+            generation_started = time.perf_counter()
+            try:
+                draft = self.generator.generate_draft(request, feedback=feedback)
+            except GenerationError as exc:
+                generation_duration_ms = (
+                    time.perf_counter() - generation_started
+                ) * 1000
+                report = ValidationReport(
+                    status="invalid",
+                    issues=[
+                        ValidationIssue(
+                            code="PROVIDER_GENERATION_ERROR",
+                            message=str(exc),
+                        )
+                    ],
+                )
+                telemetry = AttemptTelemetry(
+                    provider=self.provider,
+                    model=self.model,
+                    generation_duration_ms=generation_duration_ms,
+                    validation_duration_ms=0,
+                    status=report.status,
+                    issue_codes=tuple(issue.code for issue in report.issues),
+                )
+                self.metrics.record_attempt(telemetry)
+                attempt = GenerationAttempt(
+                    attempt_number=attempt_number,
+                    question=None,
+                    distractor_reasons=[],
+                    validation_report=report,
+                    duration_ms=(time.perf_counter() - started) * 1000,
+                )
+                attempts.append(attempt)
+                if self.logger is not None:
+                    self.logger.log(run_id, request, attempt, telemetry)
+                feedback = report
+                continue
+            generation_duration_ms = (time.perf_counter() - generation_started) * 1000
+            validation_started = time.perf_counter()
+            question, report, distractor_reasons = self._validate_draft(request, draft)
+            validation_duration_ms = (time.perf_counter() - validation_started) * 1000
+            telemetry = AttemptTelemetry(
+                provider=self.provider,
+                model=self.model,
+                generation_duration_ms=generation_duration_ms,
+                validation_duration_ms=validation_duration_ms,
+                status=report.status,
+                issue_codes=tuple(issue.code for issue in report.issues),
             )
+            self.metrics.record_attempt(telemetry)
             attempt = GenerationAttempt(
                 attempt_number=attempt_number,
                 question=question,
@@ -63,9 +120,10 @@ class GenerationService:
             )
             attempts.append(attempt)
             if self.logger is not None:
-                self.logger.log(run_id, request, attempt)
+                self.logger.log(run_id, request, attempt, telemetry)
 
             if report.status == "valid":
+                self.metrics.record_outcome("accepted")
                 return GenerationOutcome(
                     run_id=run_id,
                     status="accepted",
@@ -74,6 +132,7 @@ class GenerationService:
                     attempts=attempts,
                 )
             if report.status == "execution_error":
+                self.metrics.record_outcome("execution_error")
                 return GenerationOutcome(
                     run_id=run_id,
                     status="execution_error",
@@ -82,6 +141,7 @@ class GenerationService:
                 )
             feedback = report
 
+        self.metrics.record_outcome("rejected")
         return GenerationOutcome(
             run_id=run_id,
             status="rejected",
@@ -89,15 +149,15 @@ class GenerationService:
             attempts=attempts,
         )
 
-    def _generate_draft(
+    def _validate_draft(
         self,
         request: GenerationRequest,
-        feedback: ValidationReport | None,
+        draft: QuestionDraft,
     ) -> tuple[GeneratedQuestion, ValidationReport, list[str]]:
-        draft: QuestionDraft = self.generator.generate_draft(request, feedback=feedback)
+        candidate = QuestionCandidate.model_validate(draft.model_dump())
         if len(draft.distractors) != request.num_distractors:
             return (
-                self._draft_for_report(draft),
+                candidate.with_answer(None),
                 self._count_report(
                     request.num_distractors,
                     len(draft.distractors),
@@ -108,7 +168,7 @@ class GenerationService:
             )
         if len(draft.distractor_reasons) != len(draft.distractors):
             return (
-                self._draft_for_report(draft),
+                candidate.with_answer(None),
                 self._count_report(
                     len(draft.distractors),
                     len(draft.distractor_reasons),
@@ -118,32 +178,14 @@ class GenerationService:
                 draft.distractor_reasons,
             )
 
-        placeholder = GeneratedQuestion.model_validate(
-            {
-                "code": draft.code,
-                "entry_function": draft.entry_function,
-                "inputs": draft.inputs,
-                "question": draft.question,
-                "proposed_answer": None,
-                "distractors": [None] * request.num_distractors,
-                "question_type": draft.question_type,
-            }
-        )
+        placeholder = candidate.model_copy(
+            update={"distractors": [None] * request.num_distractors}
+        ).with_answer(None)
         answer_report = self.validator.compute_answer(placeholder)
         if answer_report.status != "valid":
             return placeholder, answer_report, draft.distractor_reasons
 
-        question = GeneratedQuestion.model_validate(
-            {
-                "code": draft.code,
-                "entry_function": draft.entry_function,
-                "inputs": draft.inputs,
-                "question": draft.question,
-                "proposed_answer": answer_report.actual_answer,
-                "distractors": draft.distractors,
-                "question_type": draft.question_type,
-            }
-        )
+        question = candidate.with_answer(answer_report.actual_answer)
         report = self.validator.validate(
             question,
             actual_answer=answer_report.actual_answer,
@@ -152,19 +194,6 @@ class GenerationService:
         return question, report, draft.distractor_reasons
 
     @staticmethod
-    def _draft_for_report(draft: QuestionDraft) -> GeneratedQuestion:
-        return GeneratedQuestion.model_validate(
-            {
-                "code": draft.code,
-                "entry_function": draft.entry_function,
-                "inputs": draft.inputs,
-                "question": draft.question,
-                "proposed_answer": None,
-                "distractors": draft.distractors,
-                "question_type": draft.question_type,
-            }
-        )
-
     @staticmethod
     def _count_report(
         expected: int,

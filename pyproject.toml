@@ -28,6 +28,7 @@ step-tracer = { git = "https://github.com/edcraft-org/step-tracer.git", rev = "a
 testpaths = ["tests"]
 markers = [
     "docker: tests requiring the Docker executor image",
+    "openai_live: real OpenAI API test, run explicitly before a PR",
 ]
 
 [tool.ruff]
