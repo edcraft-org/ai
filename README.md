@@ -238,8 +238,19 @@ uv run pytest -m "not docker"
 Run the focused provider tests:
 
 ```bash
-uv run pytest tests/test_openai_generator.py tests/test_ollama_generator.py -q
+uv run pytest tests/test_ollama_generator.py -q
 ```
+
+OpenAI provider tests use mocked clients and run in the normal test suite. The
+real API test is opt-in and should be run before a PR:
+
+```bash
+RUN_OPENAI_LIVE_TESTS=1 uv run pytest -m openai_live -q
+```
+
+The pull-request CI workflow runs the real API test for pull requests from the
+main repository using the `OPENAI_API_KEY` GitHub Actions secret. Forked pull
+requests do not receive this secret and therefore skip that live-test job.
 
 Run the complete suite, including Docker integration tests, after starting the
 Docker daemon:
