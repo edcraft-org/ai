@@ -1,0 +1,21 @@
+{
+  "template_id": "loops.nested",
+  "version": 1,
+  "topic": "loops",
+  "difficulty": "advanced",
+  "code": "def accumulate(n, m):\n    total = 0\n    for i in range(n):\n        for j in range(m):\n            total += i + j\n    return total",
+  "entry_function": "accumulate",
+  "parameters": [
+    {"name": "n", "kind": "integer", "values": [2, 3]},
+    {"name": "m", "kind": "integer", "values": [3, 4]}
+  ],
+  "question_template": "How many total loop-body iterations occur across both loops when accumulate({n}, {m}) runs?",
+  "answer_target": "loop_iterations",
+  "answer_expression": "n + n * m",
+  "distractors": [
+    {"expression": "n * m", "reason_template": "Counts only inner-loop iterations."},
+    {"expression": "n + m", "reason_template": "Adds loop bounds instead of accounting for nesting."},
+    {"expression": "n + n * m + 1", "reason_template": "Counts one final check as an iteration."}
+  ],
+  "question_type": "mcq"
+}

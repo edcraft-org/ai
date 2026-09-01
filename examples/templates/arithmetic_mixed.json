@@ -1,0 +1,31 @@
+{
+  "template_id": "arithmetic.mixed_parameters",
+  "version": 1,
+  "topic": "arithmetic",
+  "difficulty": "intermediate",
+  "code": "def adjust(a, b, use_bonus):\n    total = a * 2 + b\n    if use_bonus:\n        total += 3\n    return total",
+  "entry_function": "adjust",
+  "parameters": [
+    {"name": "a", "kind": "integer", "values": [5, 7]},
+    {"name": "b", "kind": "integer", "values": [1, 2]},
+    {"name": "use_bonus", "kind": "boolean", "values": [false, true]}
+  ],
+  "question_template": "What does adjust({a}, {b}, {use_bonus}) return?",
+  "answer_target": "return_value",
+  "answer_expression": "a * 2 + b + (3 if use_bonus else 0)",
+  "distractors": [
+    {
+      "expression": "a + b + (3 if use_bonus else 0)",
+      "reason_template": "Forgets to double a."
+    },
+    {
+      "expression": "a * 2 - b + (3 if use_bonus else 0)",
+      "reason_template": "Subtracts b instead of adding it."
+    },
+    {
+      "expression": "a * 2 + b + (0 if use_bonus else 3)",
+      "reason_template": "Applies the bonus on the wrong boolean path."
+    }
+  ],
+  "question_type": "mcq"
+}

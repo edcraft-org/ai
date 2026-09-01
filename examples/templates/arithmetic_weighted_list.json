@@ -1,0 +1,30 @@
+{
+  "template_id": "arithmetic.weighted_list",
+  "version": 1,
+  "topic": "arithmetic",
+  "difficulty": "advanced",
+  "code": "def weighted(values, mode):\n    base = sum(values)\n    if mode == \"double\":\n        return base * 2\n    return base - 1",
+  "entry_function": "weighted",
+  "parameters": [
+    {"name": "values", "kind": "integer_list", "values": [[2, 3], [4, 1, 2]]},
+    {"name": "mode", "kind": "string", "values": ["double", "normal"]}
+  ],
+  "question_template": "What does weighted({values}, {mode}) return?",
+  "answer_target": "return_value",
+  "answer_expression": "sum(values) * 2 if mode == \"double\" else sum(values) - 1",
+  "distractors": [
+    {
+      "expression": "sum(values) - 1 if mode == \"double\" else sum(values) * 2",
+      "reason_template": "Reverses the behavior for mode {mode}."
+    },
+    {
+      "expression": "sum(values) + (2 if mode == \"double\" else 1)",
+      "reason_template": "Treats doubling as a small addition."
+    },
+    {
+      "expression": "sum(values) * 3 if mode == \"double\" else sum(values)",
+      "reason_template": "Uses the wrong multiplier or omits the subtraction."
+    }
+  ],
+  "question_type": "mcq"
+}

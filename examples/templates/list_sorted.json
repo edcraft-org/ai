@@ -1,0 +1,20 @@
+{
+  "template_id": "lists.sorted_result",
+  "version": 1,
+  "topic": "lists",
+  "difficulty": "intermediate",
+  "code": "def arrange(values):\n    return sorted(values)",
+  "entry_function": "arrange",
+  "parameters": [
+    {"name": "values", "kind": "integer_list", "values": [[3, 1, 2], [5, 2, 4], [0, -2, 1]]}
+  ],
+  "question_template": "What does arrange({values}) return?",
+  "answer_target": "return_value",
+  "answer_expression": "sorted(values)",
+  "distractors": [
+    {"expression": "values", "reason_template": "Assumes sorted leaves the order unchanged."},
+    {"expression": "sorted(values) + [0]", "reason_template": "Adds an extra zero after sorting."},
+    {"expression": "[0] + sorted(values)", "reason_template": "Adds an extra zero before the sorted values."}
+  ],
+  "question_type": "mcq"
+}

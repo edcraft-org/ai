@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import hashlib
 import itertools
 import json
@@ -23,24 +24,68 @@ from edcraft_validator.models import AnswerTarget, GeneratedQuestion
 from edcraft_validator.safety import check_code_safety
 
 MAX_TEMPLATE_CASES = 64
+MAX_STRING_LENGTH = 40
+MAX_LIST_LENGTH = 8
+ParameterValue = int | bool | str | list[int]
 
 
-class IntegerParameter(BaseModel):
+class FiniteParameter(BaseModel):
     """A finite parameter domain that can be validated exhaustively."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
     name: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
-    values: list[int] = Field(min_length=2, max_length=4)
+    kind: Literal["integer", "boolean", "string", "integer_list"]
+    values: list[ParameterValue] = Field(min_length=2, max_length=4)
 
-    @field_validator("values")
-    @classmethod
-    def validate_values(cls, values: list[int]) -> list[int]:
-        if len(values) != len(set(values)):
+    @model_validator(mode="after")
+    def validate_values(self) -> FiniteParameter:
+        encoded = [
+            json.dumps(value, sort_keys=True, separators=(",", ":"))
+            for value in self.values
+        ]
+        if len(encoded) != len(set(encoded)):
             raise ValueError("parameter values must be unique")
-        if any(abs(value) > 100 for value in values):
-            raise ValueError("parameter values must be between -100 and 100")
-        return values
+        validators = {
+            "integer": self._validate_integer,
+            "boolean": self._validate_boolean,
+            "string": self._validate_string,
+            "integer_list": self._validate_integer_list,
+        }
+        for value in self.values:
+            validators[self.kind](value)
+        return self
+
+    @staticmethod
+    def _validate_integer(value: ParameterValue) -> None:
+        if type(value) is not int or abs(value) > 100:
+            raise ValueError("integer values must be integers from -100 to 100")
+
+    @staticmethod
+    def _validate_boolean(value: ParameterValue) -> None:
+        if type(value) is not bool:
+            raise ValueError("boolean values must be true or false")
+
+    @staticmethod
+    def _validate_string(value: ParameterValue) -> None:
+        if (
+            type(value) is not str
+            or not value
+            or len(value) > MAX_STRING_LENGTH
+            or not value.isprintable()
+        ):
+            raise ValueError(
+                f"string values must be 1 to {MAX_STRING_LENGTH} printable characters"
+            )
+
+    @staticmethod
+    def _validate_integer_list(value: ParameterValue) -> None:
+        if type(value) is not list or len(value) > MAX_LIST_LENGTH:
+            raise ValueError(
+                f"integer-list values must contain at most {MAX_LIST_LENGTH} items"
+            )
+        if any(type(item) is not int or abs(item) > 100 for item in value):
+            raise ValueError("integer-list items must be integers from -100 to 100")
 
 
 class DistractorRecipe(BaseModel):
@@ -63,7 +108,7 @@ class CodeQuestionTemplate(BaseModel):
     difficulty: Difficulty
     code: str = Field(min_length=1)
     entry_function: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
-    parameters: list[IntegerParameter] = Field(min_length=1, max_length=3)
+    parameters: list[FiniteParameter] = Field(min_length=1, max_length=3)
     question_template: str = Field(min_length=1)
     answer_target: AnswerTarget
     answer_expression: str = Field(min_length=1)
@@ -115,7 +160,7 @@ class TemplateQuestionInstance(BaseModel):
     template_version: int
     template_sha256: str
     seed: int
-    parameters: dict[str, int]
+    parameters: dict[str, ParameterValue]
     question: GeneratedQuestion
 
 
@@ -182,7 +227,7 @@ class TemplateValidator:
     def _execute_all(
         self,
         template: CodeQuestionTemplate,
-        inputs: list[dict[str, int]],
+        inputs: list[dict[str, ParameterValue]],
     ) -> list[ExecutionResult]:
         execute_batch = getattr(self.executor, "execute_batch", None)
         if callable(execute_batch):
@@ -233,7 +278,7 @@ class TemplateValidator:
 
     @staticmethod
     def _validate_distractors(
-        inputs: dict[str, int], answer: Any, distractors: list[Any]
+        inputs: dict[str, ParameterValue], answer: Any, distractors: list[Any]
     ) -> None:
         for index, distractor in enumerate(distractors):
             _require_json_value(distractor, f"distractor {index}")
@@ -272,8 +317,8 @@ class TemplateInstanceGenerator:
             )
 
         inputs = {
-            parameter.name: _seeded_choice(
-                parameter.values, digest, seed, parameter.name
+            parameter.name: copy.deepcopy(
+                _seeded_choice(parameter.values, digest, seed, parameter.name)
             )
             for parameter in template.parameters
         }
@@ -329,6 +374,17 @@ class SafeExpression:
         ast.LtE: operator.le,
         ast.Gt: operator.gt,
         ast.GtE: operator.ge,
+        ast.In: lambda item, container: operator.contains(container, item),
+        ast.NotIn: lambda item, container: not operator.contains(container, item),
+    }
+    _safe_functions = {
+        "all": all,
+        "any": any,
+        "len": len,
+        "max": max,
+        "min": min,
+        "sorted": sorted,
+        "sum": sum,
     }
 
     def __init__(self, source: str, names: tuple[str, ...]) -> None:
@@ -342,10 +398,16 @@ class SafeExpression:
             ) from exc
         self._validate(self.expression, depth=0)
 
-    def evaluate(self, values: dict[str, int]) -> Any:
+    def evaluate(self, values: dict[str, ParameterValue]) -> Any:
         try:
             return self._evaluate(self.expression, values)
-        except (ArithmeticError, OverflowError) as exc:
+        except (
+            ArithmeticError,
+            IndexError,
+            OverflowError,
+            TypeError,
+            ValueError,
+        ) as exc:
             raise TemplateValidationError(
                 f"expression {self.source!r} failed for {values}: {exc}"
             ) from exc
@@ -354,12 +416,16 @@ class SafeExpression:
         if depth > 20:
             raise TemplateValidationError("template expression is too deeply nested")
         if isinstance(node, ast.Constant):
-            if type(node.value) not in {int, float, bool}:
+            if type(node.value) not in {int, float, bool, str}:
                 raise TemplateValidationError(
-                    "template expressions support only numeric and boolean constants"
+                    "template expressions support only JSON scalar constants"
                 )
             if isinstance(node.value, (int, float)) and abs(node.value) > 10_000:
                 raise TemplateValidationError("expression constant is too large")
+            if isinstance(node.value, str) and (
+                len(node.value) > MAX_STRING_LENGTH or not node.value.isprintable()
+            ):
+                raise TemplateValidationError("expression string constant is invalid")
             return
         if isinstance(node, ast.Name):
             if node.id not in self.names:
@@ -390,11 +456,30 @@ class SafeExpression:
             for value in node.values:
                 self._validate(value, depth=depth + 1)
             return
+        if isinstance(node, ast.List):
+            if len(node.elts) > MAX_LIST_LENGTH:
+                raise TemplateValidationError("expression list is too long")
+            for element in node.elts:
+                self._validate(element, depth=depth + 1)
+            return
+        if isinstance(node, ast.Subscript) and not isinstance(node.slice, ast.Slice):
+            self._validate(node.value, depth=depth + 1)
+            self._validate(node.slice, depth=depth + 1)
+            return
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in self._safe_functions
+            and len(node.args) == 1
+            and not node.keywords
+        ):
+            self._validate(node.args[0], depth=depth + 1)
+            return
         raise TemplateValidationError(
             f"unsupported expression syntax: {type(node).__name__}"
         )
 
-    def _evaluate(self, node: ast.AST, values: dict[str, int]) -> Any:
+    def _evaluate(self, node: ast.AST, values: dict[str, ParameterValue]) -> Any:
         if isinstance(node, ast.Constant):
             return node.value
         if isinstance(node, ast.Name):
@@ -425,16 +510,21 @@ class SafeExpression:
         if isinstance(node, ast.BoolOp):
             evaluated = [self._evaluate(value, values) for value in node.values]
             return all(evaluated) if isinstance(node.op, ast.And) else any(evaluated)
+        if isinstance(node, ast.List):
+            return [self._evaluate(element, values) for element in node.elts]
+        if isinstance(node, ast.Subscript):
+            value = self._evaluate(node.value, values)
+            index = self._evaluate(node.slice, values)
+            return value[index]
+        if isinstance(node, ast.Call):
+            argument = self._evaluate(node.args[0], values)
+            return self._safe_functions[node.func.id](argument)
         raise AssertionError(f"unvalidated expression node: {type(node).__name__}")
 
 
 def build_template_prompt(request: TemplateAuthoringRequest) -> str:
     target = answer_target_for_topic(request.topic)
-    parameter_guidance = (
-        "Use exactly one integer parameter named n."
-        if request.topic == "loops"
-        else "Use two or three integer parameters with two or three values each."
-    )
+    parameter_guidance = _difficulty_guidance(request.topic, request.difficulty)
     prompt = (
         f"Topic: {request.topic}\n"
         f"Difficulty: {request.difficulty}\n"
@@ -443,14 +533,67 @@ def build_template_prompt(request: TemplateAuthoringRequest) -> str:
         f"{parameter_guidance} "
         "Keep the complete Cartesian product valid."
     )
-    if request.topic == "loops":
-        prompt += (
-            " Give n two or three distinct positive values from 2 through 6. Use "
-            "exactly one for loop written as `for i in range(n)`. Set "
-            "answer_expression to exactly `n`. Suitable distinct distractor "
-            "expressions include `n - 1`, `n + 1`, and `n + 2`."
-        )
     return prompt
+
+
+def _difficulty_guidance(topic: ProgrammingTopic, difficulty: Difficulty) -> str:
+    """Give providers a validator-backed complexity profile for each selection."""
+    guidance = {
+        ("arithmetic", "beginner"): (
+            "Use two integer parameters and one short arithmetic expression."
+        ),
+        ("arithmetic", "intermediate"): (
+            "Combine integer and boolean parameters with one conditional adjustment."
+        ),
+        ("arithmetic", "advanced"): (
+            "Combine an integer_list with a string mode and an allowlisted aggregate."
+        ),
+        ("conditionals", "beginner"): (
+            "Use one boolean parameter and a short nested or early-return branch."
+        ),
+        ("conditionals", "intermediate"): (
+            "Use one string parameter with two sequential early-return conditions."
+        ),
+        ("conditionals", "advanced"): (
+            "Use integer and boolean parameters with nested conditions and early "
+            "returns."
+        ),
+        ("loops", "beginner"): (
+            "Use exactly one integer parameter named n with positive values from 2 "
+            "through 6, exactly one `for i in range(n)` loop, and answer_expression "
+            "exactly `n`."
+        ),
+        ("loops", "intermediate"): (
+            "Use positive integer parameters n and m with two sequential range loops; "
+            "the total loop_iterations expression should be `n + m`."
+        ),
+        ("loops", "advanced"): (
+            "Use positive integer parameters n and m with one nested range loop; the "
+            "total loop_iterations expression should be `n + n * m`."
+        ),
+        ("functions", "beginner"): (
+            "Use one helper called once by the entry function; count both calls."
+        ),
+        ("functions", "intermediate"): (
+            "Call one helper from a range loop and include entry, range, and helper "
+            "calls."
+        ),
+        ("functions", "advanced"): (
+            "Use nested helpers inside a range loop and derive every traced call."
+        ),
+        ("lists", "beginner"): (
+            "Use exactly one integer_list parameter named values and return "
+            "sum(values)."
+        ),
+        ("lists", "intermediate"): (
+            "Use one integer_list parameter with sorted(values) or safe indexing."
+        ),
+        ("lists", "advanced"): (
+            "Use one integer_list parameter and combine indexing with an aggregate or "
+            "arithmetic expression."
+        ),
+    }
+    return guidance[(topic, difficulty)]
 
 
 def answer_target_for_topic(topic: ProgrammingTopic) -> AnswerTarget:
@@ -471,11 +614,14 @@ local application can exhaustively validate every possible question once.
 
 Rules:
 - Define one module-level entry function whose positional arguments exactly match the
-  parameter names and order. The code must work for every parameter combination.
+  parameter names and order. Helper functions are allowed. The code must work for every
+  parameter combination.
 - Use only expressions, assignments, if statements, and for loops. Do not use imports,
   attributes, classes, decorators, recursion, comprehensions, while loops, lambdas,
   exceptions, file access, networking, input, eval, or exec.
-- Each parameter must contain two or three distinct integer values between -100 and 100.
+- Every parameter declares a kind and two to four distinct finite values. Supported
+  kinds are integer (-100 through 100), boolean, string (short printable text), and
+  integer_list (at most eight integers from -100 through 100). Use JSON booleans.
 - question_template must name the entry function and contain exactly one simple
   {parameter_name} placeholder for every parameter.
 - answer_target selects what the question asks: return_value is the entry function's
@@ -485,7 +631,9 @@ Rules:
   including the entry function and safe built-ins. Phrase the question unambiguously.
 - answer_expression must calculate the selected answer_target using parameter names,
   numeric constants, arithmetic, comparisons, boolean operators, or a conditional
-  expression. Do not use function calls.
+  expression. String constants, list literals, indexing, and the one-argument functions
+  len, sum, min, max, sorted, all, and any are also supported. Do not use methods or
+  other function calls.
 - Each distractor expression must represent a specific misconception and must be unique,
   type-compatible, and different from the answer for every parameter combination.
 - reason_template explains its misconception and may use simple parameter placeholders.
@@ -494,7 +642,7 @@ Rules:
 
 
 def render_template(
-    source: str, values: dict[str, int], *, require_all: bool = False
+    source: str, values: dict[str, ParameterValue], *, require_all: bool = False
 ) -> str:
     fields: set[str] = set()
     try:
@@ -570,7 +718,9 @@ def _require_json_value(value: Any, label: str) -> None:
         raise TemplateValidationError(f"{label} is not a finite JSON value") from exc
 
 
-def _seeded_choice(values: list[int], digest: str, seed: int, name: str) -> int:
+def _seeded_choice(
+    values: list[ParameterValue], digest: str, seed: int, name: str
+) -> ParameterValue:
     payload = f"{digest}:{seed}:{name}".encode()
     index = int.from_bytes(hashlib.sha256(payload).digest()[:8], "big") % len(values)
     return values[index]

@@ -1,9 +1,12 @@
+from pathlib import Path
 from typing import Any
 
 import pytest
 
+from edcraft_validator._worker import execute_request
 from edcraft_validator.domains.code.templates import (
     CodeQuestionTemplate,
+    FiniteParameter,
     SafeExpression,
     TemplateInstanceGenerator,
     TemplateValidationError,
@@ -12,6 +15,11 @@ from edcraft_validator.domains.code.templates import (
 )
 from edcraft_validator.executor import ExecutionResult
 from edcraft_validator.generation.models import TemplateAuthoringRequest
+
+TEMPLATE_DIR = Path(__file__).parents[1] / "examples" / "templates"
+TEMPLATE_PATHS = sorted(TEMPLATE_DIR.glob("*.json"))
+SUPPORTED_TOPICS = {"arithmetic", "conditionals", "loops", "functions", "lists"}
+SUPPORTED_DIFFICULTIES = {"beginner", "intermediate", "advanced"}
 
 
 def template(**changes: Any) -> CodeQuestionTemplate:
@@ -23,9 +31,9 @@ def template(**changes: Any) -> CodeQuestionTemplate:
         "code": "def calculate(a, b, c):\n    return a + b - c",
         "entry_function": "calculate",
         "parameters": [
-            {"name": "a", "values": [2, 4]},
-            {"name": "b", "values": [5, 8]},
-            {"name": "c", "values": [1, 3]},
+            {"name": "a", "kind": "integer", "values": [2, 4]},
+            {"name": "b", "kind": "integer", "values": [5, 8]},
+            {"name": "c", "kind": "integer", "values": [1, 3]},
         ],
         "question_template": "What does calculate({a}, {b}, {c}) return?",
         "answer_target": "return_value",
@@ -88,6 +96,32 @@ class ArithmeticExecutor:
         ]
 
 
+class TrustedBatchExecutor:
+    """Exercise fixed repository templates through the real tracer in-process."""
+
+    def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+        results = []
+        for item in inputs:
+            response = execute_request(
+                {
+                    "code": code,
+                    "entry_function": entry_function,
+                    "inputs": item,
+                    "timeout_seconds": timeout_seconds,
+                }
+            )
+            results.append(
+                ExecutionResult(
+                    ok=response["ok"],
+                    answer=response.get("answer"),
+                    trace_summary=response.get("trace_summary"),
+                    error_code=response.get("error_code"),
+                    error_message=response.get("error_message"),
+                )
+            )
+        return results
+
+
 def test_validates_every_case_once_then_generates_without_executor() -> None:
     executor = ArithmeticExecutor()
     approved = TemplateValidator(executor=executor).validate(template())
@@ -122,7 +156,7 @@ def test_supports_loop_iteration_questions() -> None:
                 "    return total"
             ),
             "entry_function": "accumulate",
-            "parameters": [{"name": "n", "values": [2, 4]}],
+            "parameters": [{"name": "n", "kind": "integer", "values": [2, 4]}],
             "question_template": (
                 "How many total loop-body iterations occur when accumulate({n}) runs?"
             ),
@@ -163,7 +197,91 @@ def test_loop_topic_requests_iteration_count_template() -> None:
 
     assert "answer_target=loop_iterations" in prompt
     assert "exactly one integer parameter named n" in prompt
-    assert "answer_expression to exactly `n`" in prompt
+    assert "answer_expression exactly `n`" in prompt
+
+
+def test_every_topic_and_difficulty_has_distinct_authoring_guidance() -> None:
+    prompts = {
+        (topic, difficulty): build_template_prompt(
+            TemplateAuthoringRequest(topic=topic, difficulty=difficulty)
+        )
+        for topic in SUPPORTED_TOPICS
+        for difficulty in SUPPORTED_DIFFICULTIES
+    }
+
+    assert len(set(prompts.values())) == 15
+    assert "two sequential range loops" in prompts[("loops", "intermediate")]
+    assert "one nested range loop" in prompts[("loops", "advanced")]
+    assert "nested helpers" in prompts[("functions", "advanced")]
+
+
+def test_examples_cover_every_topic_and_difficulty() -> None:
+    templates = [
+        CodeQuestionTemplate.model_validate_json(path.read_text())
+        for path in TEMPLATE_PATHS
+    ]
+    actual = {(template.topic, template.difficulty) for template in templates}
+    expected = {
+        (topic, difficulty)
+        for topic in SUPPORTED_TOPICS
+        for difficulty in SUPPORTED_DIFFICULTIES
+    }
+
+    assert len(templates) == len(expected)
+    assert actual == expected
+
+
+@pytest.mark.parametrize("path", TEMPLATE_PATHS, ids=lambda path: path.stem)
+def test_every_example_template_validates_with_the_real_tracer(path: Path) -> None:
+    raw_template = CodeQuestionTemplate.model_validate_json(path.read_text())
+
+    approved = TemplateValidator(executor=TrustedBatchExecutor()).validate(raw_template)
+    instance = TemplateInstanceGenerator().generate(approved, seed=11)
+
+    expected_cases = 1
+    for parameter in raw_template.parameters:
+        expected_cases *= len(parameter.values)
+    assert approved.validation.cases_validated == expected_cases
+    assert instance.question.answer_target == raw_template.answer_target
+
+
+@pytest.mark.parametrize(
+    ("kind", "values"),
+    [
+        ("integer", [False, True]),
+        ("boolean", [0, 1]),
+        ("string", ["valid", ""]),
+        ("integer_list", [[1, 2], [1, True]]),
+    ],
+)
+def test_parameter_kind_rejects_mismatched_values(kind: str, values: list[Any]) -> None:
+    with pytest.raises(ValueError):
+        FiniteParameter.model_validate(
+            {"name": "value", "kind": kind, "values": values}
+        )
+
+
+def test_safe_expression_supports_validated_collection_operations() -> None:
+    values = {"items": [3, 1, 2], "label": "ready", "enabled": True}
+
+    assert SafeExpression("sum(items)", tuple(values)).evaluate(values) == 6
+    assert SafeExpression("items[1]", tuple(values)).evaluate(values) == 1
+    assert SafeExpression("sorted(items)", tuple(values)).evaluate(values) == [1, 2, 3]
+    assert (
+        SafeExpression(
+            'len(items) if enabled and label == "ready" else 0', tuple(values)
+        ).evaluate(values)
+        == 3
+    )
+
+
+def test_list_topic_requests_an_integer_list_template() -> None:
+    prompt = build_template_prompt(
+        TemplateAuthoringRequest(topic="lists", difficulty="beginner")
+    )
+
+    assert "integer_list parameter named values" in prompt
+    assert "sum(values)" in prompt
 
 
 def test_rejects_a_distractor_that_is_correct_for_any_case() -> None:
@@ -176,9 +294,9 @@ def test_rejects_a_distractor_that_is_correct_for_any_case() -> None:
         )
 
 
-def test_rejects_expression_calls() -> None:
+def test_rejects_non_allowlisted_expression_calls() -> None:
     with pytest.raises(TemplateValidationError, match="unsupported expression syntax"):
-        SafeExpression("sum(a)", ("a",))
+        SafeExpression("open(a)", ("a",))
 
 
 def test_refuses_to_expand_a_changed_approved_template() -> None:

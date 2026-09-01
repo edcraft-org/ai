@@ -9,6 +9,10 @@ from edcraft_validator.domains.code.templates import (
 from edcraft_validator.models import GeneratedQuestion
 from edcraft_validator.validator import QuestionValidator
 
+TEMPLATE_PATHS = sorted(
+    (Path(__file__).parents[1] / "examples" / "templates").glob("*.json")
+)
+
 
 @pytest.mark.docker
 def test_valid_example_executes_in_docker() -> None:
@@ -52,16 +56,13 @@ def test_generated_code_timeout_is_enforced_inside_docker() -> None:
 
 
 @pytest.mark.docker
-@pytest.mark.parametrize(
-    ("template_name", "expected_cases"),
-    [("arithmetic_linear.json", 8), ("loop_iterations.json", 3)],
-)
-def test_template_is_exhaustively_approved_in_docker(
-    template_name: str, expected_cases: int
-) -> None:
-    template_path = Path(__file__).parents[1] / "examples" / "templates" / template_name
+@pytest.mark.parametrize("template_path", TEMPLATE_PATHS, ids=lambda path: path.stem)
+def test_template_is_exhaustively_approved_in_docker(template_path: Path) -> None:
     template = CodeQuestionTemplate.model_validate_json(template_path.read_text())
 
     approved = TemplateValidator().validate(template)
 
+    expected_cases = 1
+    for parameter in template.parameters:
+        expected_cases *= len(parameter.values)
     assert approved.validation.cases_validated == expected_cases

@@ -6,7 +6,7 @@
   "code": "def accumulate(n):\n    total = 0\n    for i in range(n):\n        total += i\n    return total",
   "entry_function": "accumulate",
   "parameters": [
-    {"name": "n", "values": [2, 4, 5]}
+    {"name": "n", "kind": "integer", "values": [2, 4, 5]}
   ],
   "question_template": "How many total loop-body iterations occur when accumulate({n}) runs?",
   "answer_target": "loop_iterations",

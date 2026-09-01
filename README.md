@@ -74,7 +74,8 @@ SocLaas is also registered through its OpenAI-compatible endpoint. Configure
 
 ## Validate an existing raw template
 
-The repository includes arithmetic and loop examples:
+The repository includes examples for integers, booleans, strings, and integer
+lists:
 
 ```bash
 uv run python -m edcraft_validator.template validate \
@@ -84,6 +85,18 @@ uv run python -m edcraft_validator.template validate \
 uv run python -m edcraft_validator.template validate \
   examples/templates/loop_iterations.json \
   --output /tmp/approved-loop-template.json
+
+uv run python -m edcraft_validator.template validate \
+  examples/templates/conditional_boolean.json \
+  --output /tmp/approved-boolean-template.json
+
+uv run python -m edcraft_validator.template validate \
+  examples/templates/conditional_string.json \
+  --output /tmp/approved-string-template.json
+
+uv run python -m edcraft_validator.template validate \
+  examples/templates/list_sum.json \
+  --output /tmp/approved-list-template.json
 ```
 
 Approval checks every value in the template's Cartesian product. All cases are
@@ -110,12 +123,15 @@ parameters, code, question, answer target, answer, and distractors.
 - Providers: OpenAI, Ollama, and SocLaas.
 - Topic selections: `arithmetic`, `conditionals`, `loops`, `functions`, and
   `lists`.
-- Difficulties: `beginner`, `intermediate`, and `advanced` as authoring guidance.
-- Template parameters: one to three integer parameters, each with two to four
-  unique values from -100 to 100.
+- Difficulties: `beginner`, `intermediate`, and `advanced`, each with a distinct
+  validator-backed authoring profile per topic.
+- Template parameters: one to three explicitly typed finite parameters. Supported
+  kinds are integers, booleans, bounded printable strings, and bounded integer
+  lists. Each parameter has two to four unique values.
 - Exhaustive approval: at most 64 total parameter combinations.
-- Answers: restricted arithmetic, comparisons, boolean operators, and conditional
-  expressions without function calls.
+- Answers: restricted arithmetic, comparisons, boolean operators, conditional
+  expressions, list literals, indexing, and the allowlisted functions `len`, `sum`,
+  `min`, `max`, `sorted`, `all`, and `any`.
 - Distractors: two or three deterministic expressions, each with a misconception
   reason template.
 - Reproducibility: deterministic seed selection and template tamper detection.
@@ -133,6 +149,23 @@ Topic currently selects the answer target as follows:
 The execution tracer can also represent `loop_executions`, the number of loop
 statements encountered, although the current topic mapping uses total iterations
 for loop templates.
+
+### Code-domain coverage matrix
+
+The repository contains one exhaustively validated template for every supported
+topic and difficulty pair (15 total):
+
+| Topic | Beginner | Intermediate | Advanced |
+| --- | --- | --- | --- |
+| Arithmetic | Short integer expression | Boolean adjustment | List aggregate with string mode |
+| Conditionals | Boolean branch | Sequential string branches | Nested branches and early returns |
+| Loops | One range loop | Sequential loops | Nested loops |
+| Functions | One helper | Helper inside a loop | Nested helpers inside a loop |
+| Lists | Aggregate | Sorting | Indexing and aggregate arithmetic |
+
+The test suite fails if any topic/difficulty pair is missing or duplicated. Every
+template is checked against all finite parameter combinations with the real tracer,
+and the Docker integration suite repeats the same matrix across the sandbox boundary.
 
 Supported generated Python includes basic expressions, assignments, `if`, bounded
 `for` loops, helper functions, and a small allowlist of safe built-ins. The safety
@@ -191,6 +224,12 @@ Run all tests, including Docker integration:
 
 ```bash
 uv run pytest
+```
+
+Run only the complete code-template matrix locally:
+
+```bash
+uv run pytest tests/test_templates.py -q
 ```
 
 The real OpenAI template-authoring test is opt-in locally and runs for same-repo

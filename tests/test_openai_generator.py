@@ -22,8 +22,8 @@ def code_template() -> CodeQuestionTemplate:
             "code": "def calculate(a, b):\n    return a + b",
             "entry_function": "calculate",
             "parameters": [
-                {"name": "a", "values": [1, 2]},
-                {"name": "b", "values": [3, 4]},
+                {"name": "a", "kind": "integer", "values": [1, 2]},
+                {"name": "b", "kind": "integer", "values": [3, 4]},
             ],
             "question_template": "What does calculate({a}, {b}) return?",
             "answer_target": "return_value",

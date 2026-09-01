@@ -1,0 +1,20 @@
+{
+  "template_id": "functions.nested_helpers",
+  "version": 1,
+  "topic": "functions",
+  "difficulty": "advanced",
+  "code": "def double(value):\n    return value * 2\n\ndef pair_total(value):\n    return double(value) + double(value + 1)\n\ndef calculate(n):\n    total = 0\n    for i in range(n):\n        total += pair_total(i)\n    return total",
+  "entry_function": "calculate",
+  "parameters": [
+    {"name": "n", "kind": "integer", "values": [2, 3, 4]}
+  ],
+  "question_template": "How many function calls, including range and helpers, are traced when calculate({n}) runs?",
+  "answer_target": "function_calls",
+  "answer_expression": "3 * n + 2",
+  "distractors": [
+    {"expression": "3 * n + 1", "reason_template": "Omits one entry or range call."},
+    {"expression": "3 * n + 3", "reason_template": "Counts one non-call operation."},
+    {"expression": "n + 2", "reason_template": "Counts pair_total but omits both double calls."}
+  ],
+  "question_type": "mcq"
+}

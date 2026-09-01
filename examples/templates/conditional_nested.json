@@ -1,0 +1,30 @@
+{
+  "template_id": "conditionals.nested_paths",
+  "version": 1,
+  "topic": "conditionals",
+  "difficulty": "advanced",
+  "code": "def classify(score, override):\n    if override:\n        return \"manual\"\n    if score >= 50:\n        if score >= 80:\n            return \"high\"\n        return \"pass\"\n    return \"fail\"",
+  "entry_function": "classify",
+  "parameters": [
+    {"name": "score", "kind": "integer", "values": [40, 70]},
+    {"name": "override", "kind": "boolean", "values": [false, true]}
+  ],
+  "question_template": "How many if conditions are evaluated when classify({score}, {override}) runs?",
+  "answer_target": "branch_executions",
+  "answer_expression": "1 if override else (3 if score >= 50 else 2)",
+  "distractors": [
+    {
+      "expression": "2 if override else (1 if score >= 50 else 3)",
+      "reason_template": "Reverses the early-return paths."
+    },
+    {
+      "expression": "4",
+      "reason_template": "Counts an unevaluated condition."
+    },
+    {
+      "expression": "5",
+      "reason_template": "Counts return statements as conditions."
+    }
+  ],
+  "question_type": "mcq"
+}

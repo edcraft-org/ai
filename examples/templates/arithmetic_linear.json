@@ -6,9 +6,9 @@
   "code": "def calculate(a, b, c):\n    return a + b - c",
   "entry_function": "calculate",
   "parameters": [
-    {"name": "a", "values": [2, 4]},
-    {"name": "b", "values": [5, 8]},
-    {"name": "c", "values": [1, 3]}
+    {"name": "a", "kind": "integer", "values": [2, 4]},
+    {"name": "b", "kind": "integer", "values": [5, 8]},
+    {"name": "c", "kind": "integer", "values": [1, 3]}
   ],
   "question_template": "What does calculate({a}, {b}, {c}) return?",
   "answer_target": "return_value",

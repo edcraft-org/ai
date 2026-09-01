@@ -17,8 +17,8 @@ def test_template_application_authors_once_then_generates_locally() -> None:
             "code": "def add(a, b):\n    return a + b",
             "entry_function": "add",
             "parameters": [
-                {"name": "a", "values": [1, 2]},
-                {"name": "b", "values": [5, 6]},
+                {"name": "a", "kind": "integer", "values": [1, 2]},
+                {"name": "b", "kind": "integer", "values": [5, 6]},
             ],
             "question_template": "What does add({a}, {b}) return?",
             "answer_target": "return_value",

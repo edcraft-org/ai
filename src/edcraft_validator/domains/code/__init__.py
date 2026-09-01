@@ -4,6 +4,8 @@ from edcraft_validator.domains.code.pipeline import PythonValidationPipeline
 from edcraft_validator.domains.code.templates import (
     ApprovedCodeQuestionTemplate,
     CodeQuestionTemplate,
+    FiniteParameter,
+    ParameterValue,
     TemplateInstanceGenerator,
     TemplateValidator,
 )
@@ -18,6 +20,8 @@ __all__ = [
     "ApprovedCodeQuestionTemplate",
     "CodeQuestionTemplate",
     "DistractorConsistencyTool",
+    "FiniteParameter",
+    "ParameterValue",
     "PythonExecutionTool",
     "PythonValidationPipeline",
     "QuestionWordingTool",
