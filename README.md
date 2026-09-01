@@ -121,6 +121,48 @@ implement `generate_draft` and provider metadata, register the factory in
 `generation/registry.py`, define its wire schema/parser, and add adapter tests.
 The CLI routing code does not need to change.
 
+## Validation architecture and future domains
+
+Generated provider output is represented as an untrusted `QuestionCandidate`.
+It is promoted to a `GeneratedQuestion` only after the validation pipeline has
+computed the authoritative answer. Domain-specific code now lives under
+`edcraft_validator/domains`:
+
+```text
+domains/
+  code/
+    pipeline.py
+    tools.py
+  math/       # future
+  physics/    # future
+```
+
+The current code-domain pipeline is composed of focused tools:
+
+```text
+QuestionCandidate
+  -> static_safety
+  -> python_execution (Docker + Step Tracer)
+  -> distractor_consistency
+  -> question_wording
+  -> ValidationRun / ValidationReport
+```
+
+Each tool returns a `ToolResult` containing its status, issues, facts, and
+duration. The pipeline aggregates those results into a `ValidationRun`; the
+existing `QuestionValidator` is a small compatibility facade that converts the
+run into the original `ValidationReport` shape. Tool evidence is available in
+`ValidationReport.tool_results`.
+
+When another domain is added, give it its own module with a candidate schema,
+focused tools, and pipeline. For example, a future math module could contain
+SymPy and Lean adapters, while a physics module could contain unit,
+dimensional-analysis, and numerical-solver adapters. These modules should not
+be added to the Python pipeline. A domain registry or validation profiles can be
+introduced when there are at least two real domain pipelines. Both the CLI and
+a future HTTP frontend should call an application service rather than importing
+provider or tool implementations directly.
+
 ## OpenAI generation pipeline
 
 Paste your replacement API key into the local `.env` file. This file is excluded

@@ -21,6 +21,7 @@ from edcraft_validator.generation.observability import (
 )
 from edcraft_validator.models import (
     GeneratedQuestion,
+    QuestionCandidate,
     ValidationIssue,
     ValidationReport,
 )
@@ -153,9 +154,10 @@ class GenerationService:
         request: GenerationRequest,
         draft: QuestionDraft,
     ) -> tuple[GeneratedQuestion, ValidationReport, list[str]]:
+        candidate = QuestionCandidate.model_validate(draft.model_dump())
         if len(draft.distractors) != request.num_distractors:
             return (
-                self._draft_for_report(draft),
+                candidate.with_answer(None),
                 self._count_report(
                     request.num_distractors,
                     len(draft.distractors),
@@ -166,7 +168,7 @@ class GenerationService:
             )
         if len(draft.distractor_reasons) != len(draft.distractors):
             return (
-                self._draft_for_report(draft),
+                candidate.with_answer(None),
                 self._count_report(
                     len(draft.distractors),
                     len(draft.distractor_reasons),
@@ -176,32 +178,14 @@ class GenerationService:
                 draft.distractor_reasons,
             )
 
-        placeholder = GeneratedQuestion.model_validate(
-            {
-                "code": draft.code,
-                "entry_function": draft.entry_function,
-                "inputs": draft.inputs,
-                "question": draft.question,
-                "proposed_answer": None,
-                "distractors": [None] * request.num_distractors,
-                "question_type": draft.question_type,
-            }
-        )
+        placeholder = candidate.model_copy(
+            update={"distractors": [None] * request.num_distractors}
+        ).with_answer(None)
         answer_report = self.validator.compute_answer(placeholder)
         if answer_report.status != "valid":
             return placeholder, answer_report, draft.distractor_reasons
 
-        question = GeneratedQuestion.model_validate(
-            {
-                "code": draft.code,
-                "entry_function": draft.entry_function,
-                "inputs": draft.inputs,
-                "question": draft.question,
-                "proposed_answer": answer_report.actual_answer,
-                "distractors": draft.distractors,
-                "question_type": draft.question_type,
-            }
-        )
+        question = candidate.with_answer(answer_report.actual_answer)
         report = self.validator.validate(
             question,
             actual_answer=answer_report.actual_answer,
@@ -210,19 +194,6 @@ class GenerationService:
         return question, report, draft.distractor_reasons
 
     @staticmethod
-    def _draft_for_report(draft: QuestionDraft) -> GeneratedQuestion:
-        return GeneratedQuestion.model_validate(
-            {
-                "code": draft.code,
-                "entry_function": draft.entry_function,
-                "inputs": draft.inputs,
-                "question": draft.question,
-                "proposed_answer": None,
-                "distractors": draft.distractors,
-                "question_type": draft.question_type,
-            }
-        )
-
     @staticmethod
     def _count_report(
         expected: int,

@@ -1,141 +1,82 @@
 import math
 
-from edcraft_validator.comparison import equivalent, same_value_shape
-from edcraft_validator.executor import DockerExecutor, ExecutionBackend
+from edcraft_validator.domains.code.pipeline import PythonValidationPipeline
+from edcraft_validator.executor import ExecutionBackend
 from edcraft_validator.models import (
     GeneratedQuestion,
+    QuestionCandidate,
     TraceSummary,
-    ValidationIssue,
     ValidationReport,
 )
-from edcraft_validator.safety import check_code_safety
+from edcraft_validator.validation.contracts import ValidationContext, ValidationRun
+
+_UNSET = object()
 
 
 class QuestionValidator:
+    """Validate code questions through the current Python domain pipeline.
+
+    This small facade preserves the original public API.  The implementation
+    lives in focused tools so future domains can provide different pipelines.
+    """
+
     def __init__(
         self,
         *,
         timeout_seconds: float = 2.0,
         executor: ExecutionBackend | None = None,
+        pipeline: PythonValidationPipeline | None = None,
     ) -> None:
         if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be finite and greater than zero")
+        if pipeline is not None and executor is not None:
+            raise ValueError("provide either pipeline or executor, not both")
         self.timeout_seconds = timeout_seconds
-        self.executor = executor or DockerExecutor()
+        self.pipeline = pipeline or PythonValidationPipeline(
+            timeout_seconds=timeout_seconds,
+            executor=executor,
+        )
 
     def compute_answer(self, question: GeneratedQuestion) -> ValidationReport:
-        safety = check_code_safety(question.code, question.entry_function)
-        if not safety.is_safe:
-            return ValidationReport(
-                status="invalid",
-                issues=[
-                    ValidationIssue(code="UNSAFE_CODE", message=message, field="code")
-                    for message in safety.errors
-                ],
-            )
+        return self.compute_answer_run(question).to_report()
 
-        execution = self.executor.execute(
-            question.code,
-            question.entry_function,
-            question.inputs,
-            timeout_seconds=self.timeout_seconds,
+    def compute_answer_run(self, question: GeneratedQuestion) -> ValidationRun:
+        """Return detailed tool evidence for answer computation."""
+        context = ValidationContext(
+            candidate=question_to_candidate(question),
         )
-        if not execution.ok:
-            return ValidationReport(
-                status="execution_error",
-                issues=[
-                    ValidationIssue(
-                        code=execution.error_code or "EXECUTION_FAILED",
-                        message=execution.error_message or "Execution failed",
-                        field="code",
-                    )
-                ],
-            )
-
-        return ValidationReport(
-            status="valid",
-            actual_answer=execution.answer,
-            trace_summary=(
-                TraceSummary.model_validate(execution.trace_summary)
-                if execution.trace_summary
-                else None
-            ),
-        )
+        return self.pipeline.compute_answer(context)
 
     def validate(
         self,
         question: GeneratedQuestion,
         *,
-        actual_answer: object | None = None,
+        actual_answer: object = _UNSET,
         trace_summary: TraceSummary | None = None,
     ) -> ValidationReport:
-        answer_was_supplied = actual_answer is not None
-        if actual_answer is None:
-            execution_report = self.compute_answer(question)
-            if execution_report.status != "valid":
-                return execution_report
-            actual_answer = execution_report.actual_answer
-            trace_summary = execution_report.trace_summary
-
-        issues: list[ValidationIssue] = []
-        if not answer_was_supplied and not equivalent(
-            question.proposed_answer, actual_answer
-        ):
-            issues.append(
-                ValidationIssue(
-                    code="WRONG_PROPOSED_ANSWER",
-                    message=(
-                        "The proposed answer does not match the traced return value"
-                    ),
-                    field="proposed_answer",
-                )
-            )
-
-        for index, distractor in enumerate(question.distractors):
-            if not same_value_shape(distractor, actual_answer):
-                issues.append(
-                    ValidationIssue(
-                        code="DISTRACTOR_TYPE_MISMATCH",
-                        message="Distractor has a different value type from the answer",
-                        field=f"distractors.{index}",
-                    )
-                )
-            elif equivalent(distractor, actual_answer):
-                issues.append(
-                    ValidationIssue(
-                        code="DISTRACTOR_EQUALS_ANSWER",
-                        message=f"Distractor {index} is also correct",
-                        field=f"distractors.{index}",
-                    )
-                )
-            for previous_index, previous in enumerate(question.distractors[:index]):
-                if equivalent(distractor, previous):
-                    issues.append(
-                        ValidationIssue(
-                            code="DUPLICATE_DISTRACTOR",
-                            message=(
-                                f"Distractor {index} duplicates distractor "
-                                f"{previous_index}"
-                            ),
-                            field=f"distractors.{index}",
-                        )
-                    )
-                    break
-
-        if question.entry_function not in question.question:
-            issues.append(
-                ValidationIssue(
-                    code="QUESTION_MAY_NOT_IDENTIFY_FUNCTION",
-                    message="Question text does not name the entry function",
-                    severity="warning",
-                    field="question",
-                )
-            )
-
-        has_errors = any(issue.severity == "error" for issue in issues)
-        return ValidationReport(
-            status="invalid" if has_errors else "valid",
+        return self.validate_run(
+            question,
             actual_answer=actual_answer,
-            issues=issues,
+            trace_summary=trace_summary,
+        ).to_report()
+
+    def validate_run(
+        self,
+        question: GeneratedQuestion,
+        *,
+        actual_answer: object = _UNSET,
+        trace_summary: TraceSummary | None = None,
+    ) -> ValidationRun:
+        """Return detailed tool evidence for a complete validation run."""
+        context = ValidationContext(
+            candidate=question_to_candidate(question),
+            actual_answer=None if actual_answer is _UNSET else actual_answer,
+            answer_available=actual_answer is not _UNSET,
             trace_summary=trace_summary,
         )
+        return self.pipeline.validate(context)
+
+
+def question_to_candidate(question: GeneratedQuestion) -> QuestionCandidate:
+    """Convert the public question shape to the untrusted pipeline shape."""
+    return QuestionCandidate.from_question(question)
