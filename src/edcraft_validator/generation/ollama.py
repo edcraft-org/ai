@@ -36,9 +36,16 @@ class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
         self, request: GenerationRequest, *, feedback: ValidationReport | None = None
     ) -> QuestionDraft:
         wire_schema = _ollama_wire_schema(request.num_distractors)
+        user_prompt = build_prompt(request, feedback)
+        if feedback is not None and feedback.actual_answer is not None:
+            user_prompt += (
+                f"\nThe deterministic executor computed the normal return value as "
+                f"{feedback.actual_answer!r}. Do not include that exact value in "
+                "any distractor. Recalculate every distractor before responding."
+            )
         parsed = self._request_model(
             _OLLAMA_SYSTEM_PROMPT,
-            build_prompt(request, feedback),
+            user_prompt,
             wire_schema,
         )
         try:
@@ -62,8 +69,14 @@ class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
             if not content:
                 raise ValueError("empty response")
             wire_response = schema.model_validate(json.loads(content))
+            wire_data = wire_response.model_dump()
+            distractor_pairs = wire_data["distractors"]
+            wire_data["distractors"] = [pair["value"] for pair in distractor_pairs]
+            wire_data["distractor_reasons"] = [
+                pair["reason"] for pair in distractor_pairs
+            ]
             return QuestionDraftResponse.model_validate(
-                normalize_plain_response(wire_response.model_dump())
+                normalize_plain_response(wire_data)
             )
         except Exception as exc:
             raise OpenAIGenerationError(
@@ -80,7 +93,7 @@ class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
             "messages": messages,
             "stream": False,
             "format": schema.model_json_schema(),
-            "options": {"temperature": 0},
+            "options": {"temperature": float(os.getenv("OLLAMA_TEMPERATURE", "0.2"))},
         }
         request = Request(
             native_url,
@@ -97,6 +110,14 @@ class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
             raise RuntimeError(f"Ollama request failed: {exc}") from exc
 
 
+class OllamaWireDistractor(BaseModel):
+    """Pair a distractor value with the misconception that creates it."""
+
+    model_config = ConfigDict(extra="forbid")
+    value: PlainJsonValue
+    reason: str = Field(min_length=1)
+
+
 class OllamaWireResponse(BaseModel):
     """Flat Ollama wire contract; semantic validation happens locally."""
 
@@ -105,8 +126,7 @@ class OllamaWireResponse(BaseModel):
     entry_function: str
     inputs: dict[str, PlainJsonValue]
     question: str
-    distractors: list[PlainJsonValue]
-    distractor_reasons: list[str]
+    distractors: list[OllamaWireDistractor]
     question_type: Literal["mcq"]
 
 
@@ -116,11 +136,7 @@ def _ollama_wire_schema(num_distractors: int) -> type[OllamaWireResponse]:
         "OllamaWireResponse",
         __base__=OllamaWireResponse,
         distractors=(
-            list[PlainJsonValue],
-            Field(min_length=num_distractors, max_length=num_distractors),
-        ),
-        distractor_reasons=(
-            list[str],
+            list[OllamaWireDistractor],
             Field(min_length=num_distractors, max_length=num_distractors),
         ),
     )
@@ -139,15 +155,26 @@ The generated code must stay within this validator's deliberately small subset:
 - Do not use imports, attributes, classes, decorators, recursion, comprehensions,
   while loops, lambdas, exceptions, file access, networking, input, eval, or exec.
 - Use plain JSON values. Inputs must be an object mapping function argument names
-  to values. Distractors must be an array of raw JSON values; do not wrap them in
-  objects or tagged kind/scalar/items/properties structures. Lists and objects
-  may contain only scalar values.
+  to values. Distractors must be an array of objects, each with exactly two keys:
+  value (a raw JSON value) and reason (a string). Do not use tagged
+  kind/scalar/items/properties structures. Lists and objects may contain only
+  scalar values.
 - Generate exactly the requested number of distractors. Every distractor must be
   unique, different from the correct answer, and represent a distinct conceptual
   misunderstanding such as skipping a loop iteration, mishandling a branch, or
   applying an operation in the wrong order. Do not create arbitrary nearby numbers.
-- Generate exactly one misconception reason for each distractor, in the same
-  order as the distractors.
+- First calculate the correct return value. Then choose a misconception, calculate
+  the exact value caused by that misconception, and put that value together with
+  its matching explanation in one distractor object. Verify that every distractor
+  value is different from the correct answer and that its reason describes how
+  that exact value was obtained. For numeric distractors, include the mistaken
+  operation and its resulting value in the reason; never use vague explanations
+  such as "calculation error". Never choose a value independently of its reason.
+- Before responding, perform this checklist: (1) execute the function mentally
+  with the supplied inputs, (2) write down the correct return value, (3) compare
+  every distractor value against it and replace any equal value, (4) verify that
+  each reason describes the exact value beside it, and (5) verify that no reason
+  claims the distractor is the correct calculation.
 - Return code as one readable, correctly indented string with newline characters.
 - Respond with a single valid JSON object and no markdown fences or extra text.
 - The JSON object must have exactly these top-level keys: code, entry_function,
@@ -155,8 +182,10 @@ The generated code must stay within this validator's deliberately small subset:
 - Use this exact shape (values are illustrative):
   {"code":"def f(x):\\n    return x + 1","entry_function":"f",
    "inputs":{"x":2},"question":"What does f(2) return?",
-   "distractors":[2,4,0],
-   "distractor_reasons":["does not add one","adds too much","subtracts one"],
+   "distractors":[
+     {"value":2,"reason":"does not add one"},
+     {"value":4,"reason":"adds two instead of one"},
+     {"value":0,"reason":"subtracts one instead of adding one"}],
    "question_type":"mcq"}
 - Do not include a proposed_answer or any other key. The deterministic validator
   will execute the code and independently compute the final answer.

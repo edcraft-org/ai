@@ -298,4 +298,9 @@ def build_prompt(
             "\nThe previous candidate failed deterministic validation. "
             f"Correct these issues: {issues}"
         )
+        if any(issue.code == "DISTRACTOR_EQUALS_ANSWER" for issue in feedback.issues):
+            prompt += (
+                " Recompute the function result before writing distractors; no "
+                "distractor may equal the normal return value."
+            )
     return prompt
