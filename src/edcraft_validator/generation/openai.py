@@ -4,14 +4,15 @@ from typing import Any
 from openai import OpenAI
 from pydantic import BaseModel
 
-from edcraft_validator.generation.base import GenerationError
-from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
-from edcraft_validator.generation.provider import (
+from edcraft_validator.domains.code.generation import (
+    OPENAI_SYSTEM_PROMPT,
     QuestionDraftResponse,
     TaggedInput,
     TaggedJsonValue,
     build_prompt,
 )
+from edcraft_validator.generation.base import GenerationError
+from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
 from edcraft_validator.models import ValidationReport
 
 DEFAULT_OPENAI_MODEL = "gpt-5-mini"
@@ -41,7 +42,9 @@ class OpenAICompatibleQuestionGenerator:
         self, request: GenerationRequest, *, feedback: ValidationReport | None = None
     ) -> QuestionDraft:
         parsed = self._request_model(
-            _SYSTEM_PROMPT, build_prompt(request, feedback), QuestionDraftResponse
+            OPENAI_SYSTEM_PROMPT,
+            build_prompt(request, feedback),
+            QuestionDraftResponse,
         )
         try:
             return parsed.to_draft()
@@ -100,23 +103,8 @@ def _model(provider: str) -> str:
     }[provider]
 
 
-_SYSTEM_PROMPT = """\
-Generate exactly one Python multiple-choice return-value question with
-conceptual distractors.
-Use only the validator's safe subset: module-level functions, expressions, assignments,
-if statements, and for loops. Do not use imports, attributes, classes, decorators,
-recursion, comprehensions, while loops, lambdas, exceptions, file access, networking,
-input, eval, or exec.
-Encode every input and distractor as a tagged value: scalar values use kind=scalar,
-lists use kind=list with tagged items, and objects use kind=object with tagged key/value
-properties. Include scalar, items, and properties in every tagged value; unused fields
-must be null or empty arrays as appropriate. Return exactly the keys code,
-entry_function,
-inputs, question, distractors, distractor_reasons, and question_type. Generate exactly
-the requested number of distinct conceptual distractors and one reason per distractor.
-question_type must be exactly mcq. Return one JSON object with no markdown.
-"""
-
+# Compatibility aliases for callers that imported the old private names.
+_SYSTEM_PROMPT = OPENAI_SYSTEM_PROMPT
 _build_prompt = build_prompt
 
 

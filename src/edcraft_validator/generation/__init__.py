@@ -1,5 +1,7 @@
 """Question-generation interfaces and orchestration."""
 
+from importlib import import_module
+
 from edcraft_validator.generation.base import GenerationError, QuestionGenerator
 from edcraft_validator.generation.fake import FakeQuestionGenerator
 from edcraft_validator.generation.models import (
@@ -7,18 +9,48 @@ from edcraft_validator.generation.models import (
     GenerationOutcome,
     GenerationRequest,
 )
-from edcraft_validator.generation.ollama import OllamaQuestionGenerator
-from edcraft_validator.generation.openai import (
-    OpenAICompatibleQuestionGenerator,
-    OpenAIQuestionGenerator,
-    SocLaasQuestionGenerator,
-)
-from edcraft_validator.generation.registry import (
-    available_providers,
-    create_generator,
-    register_provider,
-)
-from edcraft_validator.generation.service import GenerationService
+
+_LAZY_EXPORTS = {
+    "FakeQuestionGenerator": (
+        "edcraft_validator.generation.fake",
+        "FakeQuestionGenerator",
+    ),
+    "GenerationService": ("edcraft_validator.generation.service", "GenerationService"),
+    "OllamaQuestionGenerator": (
+        "edcraft_validator.generation.ollama",
+        "OllamaQuestionGenerator",
+    ),
+    "OpenAICompatibleQuestionGenerator": (
+        "edcraft_validator.generation.openai",
+        "OpenAICompatibleQuestionGenerator",
+    ),
+    "OpenAIQuestionGenerator": (
+        "edcraft_validator.generation.openai",
+        "OpenAIQuestionGenerator",
+    ),
+    "SocLaasQuestionGenerator": (
+        "edcraft_validator.generation.openai",
+        "SocLaasQuestionGenerator",
+    ),
+    "available_providers": (
+        "edcraft_validator.generation.registry",
+        "available_providers",
+    ),
+    "create_generator": ("edcraft_validator.generation.registry", "create_generator"),
+    "register_provider": ("edcraft_validator.generation.registry", "register_provider"),
+}
+
+
+def __getattr__(name: str):
+    """Load provider modules only when a provider export is requested."""
+    try:
+        module_name, attribute_name = _LAZY_EXPORTS[name]
+    except KeyError as exc:
+        raise AttributeError(name) from exc
+    value = getattr(import_module(module_name), attribute_name)
+    globals()[name] = value
+    return value
+
 
 __all__ = [
     "FakeQuestionGenerator",

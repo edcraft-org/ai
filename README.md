@@ -111,15 +111,18 @@ telemetry.
 ## Provider architecture
 
 The generation service depends on the model-independent `QuestionGenerator`
-protocol. Provider adapters translate their native response format into the
-shared `QuestionDraft`; the deterministic validator then computes the answer and
-decides whether to accept or retry the candidate. Provider failures are recorded
-as retryable attempts with timing and issue codes.
+protocol. Provider adapters handle communication and provider-specific response
+decoding; the code domain owns the Python prompt and candidate schema in
+`domains/code/generation.py`. The deterministic validator then computes the
+answer and decides whether to accept or retry the candidate. Provider failures
+are recorded as retryable attempts with timing and issue codes.
 
-The CLI constructs adapters through the provider registry. To add a model,
-implement `generate_draft` and provider metadata, register the factory in
-`generation/registry.py`, define its wire schema/parser, and add adapter tests.
-The CLI routing code does not need to change.
+The application layer in `application/generate_question.py` owns dependency
+wiring. The CLI and future frontends call that application service instead of
+constructing providers and validators themselves. The CLI constructs adapters
+through the provider registry. To add a model, implement `generate_draft` and
+provider metadata, register the factory in `generation/registry.py`, and add
+adapter tests. The CLI routing code does not need to change.
 
 ## Validation architecture and future domains
 
@@ -131,6 +134,7 @@ computed the authoritative answer. Domain-specific code now lives under
 ```text
 domains/
   code/
+    generation.py
     pipeline.py
     tools.py
   math/       # future
