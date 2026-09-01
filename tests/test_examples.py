@@ -64,6 +64,7 @@ def test_control_flow_example_produces_trace_evidence() -> None:
     # The four input scores produce four iterations and four threshold checks.
     assert report.trace_summary is not None
     assert report.trace_summary.loop_executions == 1
+    assert report.trace_summary.loop_iterations == 4
     assert report.trace_summary.branch_executions == 4
 
 

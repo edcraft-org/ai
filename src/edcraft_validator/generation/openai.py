@@ -1,5 +1,5 @@
 import os
-from typing import Any
+from typing import Any, TypeVar
 
 from openai import OpenAI
 from pydantic import BaseModel
@@ -10,6 +10,11 @@ from edcraft_validator.domains.code.generation import (
     TaggedInput,
     TaggedJsonValue,
     build_prompt,
+)
+from edcraft_validator.domains.code.templates import (
+    CODE_TEMPLATE_SYSTEM_PROMPT,
+    CodeQuestionTemplate,
+    build_template_prompt,
 )
 from edcraft_validator.generation.base import GenerationError
 from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
@@ -22,6 +27,7 @@ OpenAIQuestionDraftResponse = QuestionDraftResponse
 
 
 OpenAIGenerationError = GenerationError
+SchemaT = TypeVar("SchemaT", bound=BaseModel)
 
 
 class OpenAICompatibleQuestionGenerator:
@@ -53,9 +59,23 @@ class OpenAICompatibleQuestionGenerator:
                 f"{self.provider} returned a draft that failed local validation: {exc}"
             ) from exc
 
+    def generate_template(self, request: GenerationRequest) -> CodeQuestionTemplate:
+        """Ask the provider for one reusable code-question template."""
+        return self._request_model(
+            CODE_TEMPLATE_SYSTEM_PROMPT,
+            build_template_prompt(request),
+            CodeQuestionTemplate,
+            schema_name="question_template",
+        )
+
     def _request_model(
-        self, system_prompt: str, user_prompt: str, schema: type[BaseModel]
-    ) -> QuestionDraftResponse:
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        schema: type[SchemaT],
+        *,
+        schema_name: str = "question_draft",
+    ) -> SchemaT:
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -66,7 +86,7 @@ class OpenAICompatibleQuestionGenerator:
                 response_format={
                     "type": "json_schema",
                     "json_schema": {
-                        "name": "question_draft",
+                        "name": schema_name,
                         "strict": True,
                         "schema": schema.model_json_schema(),
                     },

@@ -1,14 +1,14 @@
 # EdCraft AI Question Validator
 
-This prototype validates AI-generated Python return-value MCQs without asking a
-second LLM to judge correctness.
+This prototype validates AI-generated Python execution-trace MCQs without asking
+a second LLM to judge correctness.
 
 ## Current flow
 
 1. Parse the AI-generated draft using a strict Pydantic schema.
 2. Reject unsupported or risky Python syntax using an AST safety gate.
 3. Run EdCraft's `step-tracer` inside a restricted Docker container.
-4. Use the traced return value as the authoritative answer.
+4. Use the selected traced fact as the authoritative answer.
 5. Keep the model-generated distractors and misconception metadata with the
    generation attempt, while excluding the metadata from the final question.
 6. Ensure distractors are unique, type-compatible, and wrong.
@@ -29,12 +29,21 @@ answers. Every `valid_*.json` example is automatically exercised by the test sui
 
 ## Supported scope
 
-- One Python function return-value question per JSON document
+- One Python function execution-trace question per JSON document
 - Python code supplied as a readable array of lines or an escaped string
 - JSON-compatible inputs and answers
 - Basic expressions, assignments, `if`, and `for` loops
 - A small allowlist of safe built-in functions
 - Exact structured comparison and tolerant numeric comparison
+
+`answer_target` selects the authoritative traced fact. Supported targets are:
+
+- `return_value`: the entry function's return value;
+- `loop_iterations`: total loop-body iterations across all loops;
+- `loop_executions`: number of loop statements encountered;
+- `branch_executions`: number of evaluated `if` conditions; and
+- `function_calls`: all traced calls, including the entry function and safe
+  built-ins.
 
 The first version deliberately rejects imports, attributes, classes, recursion,
 comprehensions, `while`, file access, networking, and dynamic execution.
@@ -57,7 +66,9 @@ Python instrumentation engine.
 
 ## Docker execution boundary
 
-The default executor starts one disposable container per question. It applies:
+The default executor starts one disposable container per direct question. During
+template approval, every parameter combination is sent to one disposable
+container as a batch. It applies:
 
 - no network access;
 - a read-only root filesystem;
@@ -266,9 +277,78 @@ uv run ruff format --check src tests
 uv run ruff check src tests
 ```
 
-The OpenAI model only generates candidates. The existing AST safety checks,
-Docker execution, answer comparison, and retry rules remain responsible for
-validation.
+In the direct workflow, the OpenAI model only generates candidates. The existing
+AST safety checks, Docker execution, answer comparison, and retry rules remain
+responsible for validation.
+
+## Reusable template generation
+
+The lower-cost workflow asks OpenAI, Ollama, or another registered provider to
+author one reusable template. The template declares a small finite set of integer
+values, a Python program, an answer target, an equivalent answer expression, and
+deterministic distractor recipes. Template approval executes every possible
+parameter combination in one Docker container and rejects the whole template if
+any answer or distractor is invalid.
+
+After approval, question generation makes no AI, Docker, or validation call. It
+checks the template hash, selects parameter values deterministically from the
+seed, evaluates the restricted expressions, and renders the question. The output
+records the template ID, version, hash, seed, and selected parameters.
+
+Validate the included raw example once:
+
+```bash
+uv run python -m edcraft_validator.template validate \
+  examples/templates/arithmetic_linear.json \
+  --output /tmp/approved-arithmetic-template.json
+```
+
+Validate and generate a loop-iteration question:
+
+```bash
+uv run python -m edcraft_validator.template validate \
+  examples/templates/loop_iterations.json \
+  --output /tmp/approved-loop-template.json
+
+uv run python -m edcraft_validator.template generate \
+  /tmp/approved-loop-template.json --seed 42
+```
+
+Generate any number of reproducible questions locally from the approved file:
+
+```bash
+uv run python -m edcraft_validator.template generate \
+  /tmp/approved-arithmetic-template.json --seed 42
+
+uv run python -m edcraft_validator.template generate \
+  /tmp/approved-arithmetic-template.json --seed 43
+```
+
+Author and approve a new template with exactly one provider call:
+
+```bash
+uv run python -m edcraft_validator.template author \
+  --provider openai \
+  --topic arithmetic \
+  --difficulty beginner \
+  --num-distractors 3 \
+  --output /tmp/approved-openai-template.json
+```
+
+Use `--provider ollama` to author through Ollama with the same template contract.
+Docker is required for `author` and `validate`, but not for `generate`.
+
+The initial topic-to-answer mapping is deterministic: arithmetic and lists ask
+for `return_value`, loops ask for `loop_iterations`, conditionals ask for
+`branch_executions`, and functions ask for `function_calls`. This keeps the human
+input limited to topic and difficulty while still producing different execution-
+trace question types.
+
+The intentionally small first version supports one to three integer parameters,
+two to four values per parameter, and at most 64 total combinations. Answer and
+distractor expressions support arithmetic, comparisons, boolean operators, and
+conditional expressions without function calls. Arbitrary model-generated input
+generator programs are not executed.
 
 ## Reproducibility
 

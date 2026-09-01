@@ -62,6 +62,11 @@ def execute_request(request: dict[str, Any]) -> dict[str, Any]:
             "loop_executions": sum(
                 isinstance(event, LoopExecution) for event in context.execution_trace
             ),
+            "loop_iterations": sum(
+                event.num_iterations
+                for event in context.execution_trace
+                if isinstance(event, LoopExecution)
+            ),
             "branch_executions": sum(
                 isinstance(event, BranchExecution) for event in context.execution_trace
             ),
@@ -85,10 +90,32 @@ def execute_request(request: dict[str, Any]) -> dict[str, Any]:
             signal.setitimer(signal.ITIMER_REAL, 0)
 
 
+def execute_batch_request(request: dict[str, Any]) -> dict[str, Any]:
+    """Execute several input combinations for the same program in one worker."""
+    cases = request["cases"]
+    if not isinstance(cases, list) or not cases:
+        raise ValueError("cases must be a non-empty list")
+    common = {
+        "code": request["code"],
+        "entry_function": request["entry_function"],
+        "timeout_seconds": request.get("timeout_seconds"),
+    }
+    return {
+        "ok": True,
+        "results": [
+            execute_request({**common, "inputs": case["inputs"]}) for case in cases
+        ],
+    }
+
+
 def main() -> None:
     try:
         request = json.loads(sys.stdin.read())
-        response = execute_request(request)
+        response = (
+            execute_batch_request(request)
+            if "cases" in request
+            else execute_request(request)
+        )
     except Exception as exc:
         response = {
             "ok": False,

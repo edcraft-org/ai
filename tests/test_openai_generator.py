@@ -1,7 +1,9 @@
 from types import SimpleNamespace
 
 import pytest
+from pydantic import BaseModel
 
+from edcraft_validator.domains.code.templates import CodeQuestionTemplate
 from edcraft_validator.generation.models import GenerationRequest
 from edcraft_validator.generation.openai import (
     OpenAICompatibleQuestionGenerator,
@@ -48,10 +50,36 @@ class RecordingCompletions:
         )
 
 
-def client_with(parsed: OpenAIQuestionDraftResponse | None) -> SimpleNamespace:
+def client_with(parsed: BaseModel | None) -> SimpleNamespace:
     content = parsed.model_dump_json() if parsed is not None else None
     return SimpleNamespace(
         chat=SimpleNamespace(completions=RecordingCompletions(content))
+    )
+
+
+def code_template() -> CodeQuestionTemplate:
+    return CodeQuestionTemplate.model_validate(
+        {
+            "template_id": "arithmetic.linear_sum",
+            "version": 1,
+            "topic": "arithmetic",
+            "difficulty": "beginner",
+            "code": "def calculate(a, b):\n    return a + b",
+            "entry_function": "calculate",
+            "parameters": [
+                {"name": "a", "values": [1, 2]},
+                {"name": "b", "values": [3, 4]},
+            ],
+            "question_template": "What does calculate({a}, {b}) return?",
+            "answer_target": "return_value",
+            "answer_expression": "a + b",
+            "distractors": [
+                {"expression": "a - b", "reason_template": "Subtracts b."},
+                {"expression": "a * b", "reason_template": "Multiplies."},
+                {"expression": "a + b + 1", "reason_template": "Adds one."},
+            ],
+            "question_type": "mcq",
+        }
     )
 
 
@@ -70,6 +98,26 @@ def test_generates_draft_using_structured_outputs() -> None:
     assert response_format["json_schema"]["name"] == "question_draft"
     assert response_format["json_schema"]["strict"] is True
     assert response_format["json_schema"]["schema"]["type"] == "object"
+
+
+def test_generates_template_using_the_shared_structured_schema() -> None:
+    client = client_with(code_template())
+    generator = OpenAICompatibleQuestionGenerator("openai", client, model="test-model")
+
+    result = generator.generate_template(
+        GenerationRequest(topic="arithmetic", difficulty="beginner")
+    )
+
+    assert result.template_id == "arithmetic.linear_sum"
+    response_format = client.chat.completions.arguments["response_format"]
+    assert response_format["json_schema"]["name"] == "question_template"
+    assert response_format["json_schema"]["strict"] is True
+    schema = response_format["json_schema"]["schema"]
+    assert set(schema["required"]) == set(schema["properties"])
+    system_prompt = client.chat.completions.arguments["messages"][0]["content"]
+    assert "finite Cartesian product" in system_prompt
+    user_prompt = client.chat.completions.arguments["messages"][1]["content"]
+    assert "answer_target=return_value" in user_prompt
 
 
 def test_includes_validation_feedback_in_retry_prompt() -> None:

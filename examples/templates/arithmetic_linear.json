@@ -1,0 +1,31 @@
+{
+  "template_id": "arithmetic.linear_sum",
+  "version": 1,
+  "topic": "arithmetic",
+  "difficulty": "beginner",
+  "code": "def calculate(a, b, c):\n    return a + b - c",
+  "entry_function": "calculate",
+  "parameters": [
+    {"name": "a", "values": [2, 4]},
+    {"name": "b", "values": [5, 8]},
+    {"name": "c", "values": [1, 3]}
+  ],
+  "question_template": "What does calculate({a}, {b}, {c}) return?",
+  "answer_target": "return_value",
+  "answer_expression": "a + b - c",
+  "distractors": [
+    {
+      "expression": "a + b + c",
+      "reason_template": "Adds c instead of subtracting it."
+    },
+    {
+      "expression": "a - b - c",
+      "reason_template": "Subtracts both b and c from a."
+    },
+    {
+      "expression": "a + b",
+      "reason_template": "Omits the final subtraction of c."
+    }
+  ],
+  "question_type": "mcq"
+}

@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
-from edcraft_validator.generation.base import QuestionGenerator
+from edcraft_validator.generation.base import (
+    QuestionGenerator,
+    QuestionTemplateGenerator,
+)
 from edcraft_validator.generation.fake import FakeQuestionGenerator
 from edcraft_validator.generation.ollama import OllamaQuestionGenerator
 from edcraft_validator.generation.openai import (
@@ -50,3 +54,20 @@ def create_generator(
             f"Unsupported provider {provider!r}; choose one of: {supported}"
         ) from exc
     return factory()
+
+
+def available_template_providers() -> tuple[str, ...]:
+    """Return AI providers that can author reusable templates."""
+    return tuple(_PROVIDER_FACTORIES)
+
+
+def create_template_generator(provider: str) -> QuestionTemplateGenerator:
+    """Construct a template author without exposing provider-specific classes."""
+    try:
+        factory = _PROVIDER_FACTORIES[provider]
+    except KeyError as exc:
+        supported = ", ".join(available_template_providers())
+        raise ValueError(
+            f"Unsupported template provider {provider!r}; choose one of: {supported}"
+        ) from exc
+    return cast(QuestionTemplateGenerator, factory())

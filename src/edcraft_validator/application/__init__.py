@@ -3,5 +3,6 @@
 from edcraft_validator.application.generate_question import (
     QuestionGenerationApplication,
 )
+from edcraft_validator.application.generate_template import QuestionTemplateApplication
 
-__all__ = ["QuestionGenerationApplication"]
+__all__ = ["QuestionGenerationApplication", "QuestionTemplateApplication"]

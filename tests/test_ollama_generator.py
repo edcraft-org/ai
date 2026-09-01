@@ -123,3 +123,53 @@ def test_ollama_retry_prompt_includes_computed_answer(monkeypatch) -> None:
     user_prompt = captured["payload"]["messages"][1]["content"]
     assert "normal return value as 16" in user_prompt
     assert "Do not include that exact value" in user_prompt
+
+
+def test_ollama_generates_the_shared_template_contract(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    response = {
+        "template_id": "arithmetic.linear_sum",
+        "version": 1,
+        "topic": "arithmetic",
+        "difficulty": "beginner",
+        "code": "def calculate(a, b):\n    return a + b",
+        "entry_function": "calculate",
+        "parameters": [
+            {"name": "a", "values": [1, 2]},
+            {"name": "b", "values": [3, 4]},
+        ],
+        "question_template": "What does calculate({a}, {b}) return?",
+        "answer_target": "return_value",
+        "answer_expression": "a + b",
+        "distractors": [
+            {"expression": "a - b", "reason_template": "Subtracts b."},
+            {"expression": "a * b", "reason_template": "Multiplies."},
+            {"expression": "a + b + 1", "reason_template": "Adds one."},
+        ],
+        "question_type": "mcq",
+    }
+
+    class ResponseWithJson:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps({"message": {"content": json.dumps(response)}}).encode()
+
+    def fake_urlopen(request, timeout):
+        captured["payload"] = json.loads(request.data)
+        return ResponseWithJson()
+
+    monkeypatch.setattr("edcraft_validator.generation.ollama.urlopen", fake_urlopen)
+
+    result = OllamaQuestionGenerator(model="qwen2.5").generate_template(
+        GenerationRequest(topic="arithmetic", difficulty="beginner")
+    )
+
+    assert result.template_id == "arithmetic.linear_sum"
+    assert captured["payload"]["format"]["properties"]["parameters"]["type"] == "array"
+    assert "finite Cartesian product" in captured["payload"]["messages"][0]["content"]
+    assert "answer_target=return_value" in captured["payload"]["messages"][1]["content"]

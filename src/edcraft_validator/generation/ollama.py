@@ -13,6 +13,11 @@ from edcraft_validator.domains.code.generation import (
     build_prompt,
     normalize_plain_response,
 )
+from edcraft_validator.domains.code.templates import (
+    CODE_TEMPLATE_SYSTEM_PROMPT,
+    CodeQuestionTemplate,
+    build_template_prompt,
+)
 from edcraft_validator.generation.base import GenerationError
 from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
 from edcraft_validator.models import ValidationReport
@@ -51,6 +56,24 @@ class OllamaQuestionGenerator:
         except Exception as exc:
             raise GenerationError(
                 f"ollama returned a draft that failed local validation: {exc}"
+            ) from exc
+
+    def generate_template(self, request: GenerationRequest) -> CodeQuestionTemplate:
+        """Ask Ollama for the same finite template contract as other providers."""
+        try:
+            content = self._ollama_request(
+                [
+                    {"role": "system", "content": CODE_TEMPLATE_SYSTEM_PROMPT},
+                    {"role": "user", "content": build_template_prompt(request)},
+                ],
+                CodeQuestionTemplate,
+            )
+            if not content:
+                raise ValueError("empty response")
+            return CodeQuestionTemplate.model_validate_json(content)
+        except Exception as exc:
+            raise GenerationError(
+                f"ollama returned invalid question template JSON: {exc}"
             ) from exc
 
     def _request_model(

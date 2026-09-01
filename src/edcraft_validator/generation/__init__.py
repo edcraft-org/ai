@@ -2,7 +2,11 @@
 
 from importlib import import_module
 
-from edcraft_validator.generation.base import GenerationError, QuestionGenerator
+from edcraft_validator.generation.base import (
+    GenerationError,
+    QuestionGenerator,
+    QuestionTemplateGenerator,
+)
 from edcraft_validator.generation.fake import FakeQuestionGenerator
 from edcraft_validator.generation.models import (
     GenerationAttempt,
@@ -36,7 +40,15 @@ _LAZY_EXPORTS = {
         "edcraft_validator.generation.registry",
         "available_providers",
     ),
+    "available_template_providers": (
+        "edcraft_validator.generation.registry",
+        "available_template_providers",
+    ),
     "create_generator": ("edcraft_validator.generation.registry", "create_generator"),
+    "create_template_generator": (
+        "edcraft_validator.generation.registry",
+        "create_template_generator",
+    ),
     "register_provider": ("edcraft_validator.generation.registry", "register_provider"),
 }
 
@@ -63,8 +75,11 @@ __all__ = [
     "OpenAIQuestionGenerator",
     "OllamaQuestionGenerator",
     "QuestionGenerator",
+    "QuestionTemplateGenerator",
     "SocLaasQuestionGenerator",
     "available_providers",
+    "available_template_providers",
     "create_generator",
+    "create_template_generator",
     "register_provider",
 ]

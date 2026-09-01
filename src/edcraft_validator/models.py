@@ -2,6 +2,14 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+AnswerTarget = Literal[
+    "return_value",
+    "loop_iterations",
+    "loop_executions",
+    "branch_executions",
+    "function_calls",
+]
+
 
 class QuestionCandidate(BaseModel):
     """Provider-neutral, untrusted question candidate.
@@ -21,6 +29,7 @@ class QuestionCandidate(BaseModel):
     distractors: list[Any] = Field(min_length=2)
     distractor_reasons: list[str] = Field(default_factory=list)
     proposed_answer: Any | None = None
+    answer_target: AnswerTarget = "return_value"
     question_type: Literal["mcq"] = "mcq"
 
     @field_validator("code", mode="before", json_schema_input_type=str | list[str])
@@ -48,6 +57,7 @@ class QuestionCandidate(BaseModel):
             question=question.question,
             distractors=question.distractors,
             proposed_answer=question.proposed_answer,
+            answer_target=question.answer_target,
             question_type=question.question_type,
         )
 
@@ -60,6 +70,7 @@ class QuestionCandidate(BaseModel):
             question=self.question,
             proposed_answer=answer,
             distractors=self.distractors,
+            answer_target=self.answer_target,
             question_type=self.question_type,
         )
 
@@ -75,6 +86,7 @@ class GeneratedQuestion(BaseModel):
     question: str = Field(min_length=1)
     proposed_answer: Any
     distractors: list[Any] = Field(min_length=2)
+    answer_target: AnswerTarget = "return_value"
     question_type: Literal["mcq"] = "mcq"
 
     @field_validator("code", mode="before", json_schema_input_type=str | list[str])
@@ -104,6 +116,7 @@ class TraceSummary(BaseModel):
     entry_function: str
     function_calls: int
     loop_executions: int
+    loop_iterations: int = 0
     branch_executions: int
     variable_snapshots: int
 

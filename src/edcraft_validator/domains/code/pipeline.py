@@ -47,8 +47,12 @@ class PythonValidationPipeline:
             decision = "execution_error"
             return ValidationRun(decision=decision, results=[safety, execution])
 
-        actual_answer = execution.facts.get("actual_answer")
         trace_summary = _trace_summary(execution.facts.get("trace_summary"))
+        actual_answer = _answer_for_target(
+            context.candidate.answer_target,
+            execution.facts.get("actual_answer"),
+            trace_summary,
+        )
         return ValidationRun(
             decision="accepted",
             results=[safety, execution],
@@ -108,3 +112,13 @@ def candidate_from_question(question: GeneratedQuestion) -> QuestionCandidate:
 
 def _trace_summary(value: Any) -> TraceSummary | None:
     return TraceSummary.model_validate(value) if value else None
+
+
+def _answer_for_target(
+    target: str, return_value: Any, trace_summary: TraceSummary | None
+) -> Any:
+    if target == "return_value":
+        return return_value
+    if trace_summary is None:
+        raise ValueError(f"trace summary is required for answer target {target!r}")
+    return getattr(trace_summary, target)
