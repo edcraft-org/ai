@@ -4,6 +4,7 @@ from typing import Any
 from openai import OpenAI
 from pydantic import BaseModel
 
+from edcraft_validator.generation.base import GenerationError
 from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
 from edcraft_validator.generation.provider import (
     QuestionDraftResponse,
@@ -19,8 +20,7 @@ OpenAIInput = TaggedInput
 OpenAIQuestionDraftResponse = QuestionDraftResponse
 
 
-class OpenAIGenerationError(RuntimeError):
-    """Raised when a provider does not return a usable question draft."""
+OpenAIGenerationError = GenerationError
 
 
 class OpenAICompatibleQuestionGenerator:
@@ -118,3 +118,17 @@ question_type must be exactly mcq. Return one JSON object with no markdown.
 """
 
 _build_prompt = build_prompt
+
+
+class OpenAIQuestionGenerator(OpenAICompatibleQuestionGenerator):
+    """Generate drafts through OpenAI's API."""
+
+    def __init__(self, client: Any | None = None, *, model: str | None = None) -> None:
+        super().__init__("openai", client, model=model)
+
+
+class SocLaasQuestionGenerator(OpenAICompatibleQuestionGenerator):
+    """Generate drafts through the SocLaas OpenAI-compatible API."""
+
+    def __init__(self, client: Any | None = None, *, model: str | None = None) -> None:
+        super().__init__("soclaas", client, model=model)

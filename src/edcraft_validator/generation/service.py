@@ -3,6 +3,7 @@ import uuid
 from pathlib import Path
 
 from edcraft_validator.generation.base import (
+    GenerationError,
     QuestionGenerator,
     QuestionValidationBackend,
 )
@@ -60,7 +61,42 @@ class GenerationService:
         for attempt_number in range(1, self.max_attempts + 1):
             started = time.perf_counter()
             generation_started = time.perf_counter()
-            draft = self.generator.generate_draft(request, feedback=feedback)
+            try:
+                draft = self.generator.generate_draft(request, feedback=feedback)
+            except GenerationError as exc:
+                generation_duration_ms = (
+                    time.perf_counter() - generation_started
+                ) * 1000
+                report = ValidationReport(
+                    status="invalid",
+                    issues=[
+                        ValidationIssue(
+                            code="PROVIDER_GENERATION_ERROR",
+                            message=str(exc),
+                        )
+                    ],
+                )
+                telemetry = AttemptTelemetry(
+                    provider=self.provider,
+                    model=self.model,
+                    generation_duration_ms=generation_duration_ms,
+                    validation_duration_ms=0,
+                    status=report.status,
+                    issue_codes=tuple(issue.code for issue in report.issues),
+                )
+                self.metrics.record_attempt(telemetry)
+                attempt = GenerationAttempt(
+                    attempt_number=attempt_number,
+                    question=None,
+                    distractor_reasons=[],
+                    validation_report=report,
+                    duration_ms=(time.perf_counter() - started) * 1000,
+                )
+                attempts.append(attempt)
+                if self.logger is not None:
+                    self.logger.log(run_id, request, attempt, telemetry)
+                feedback = report
+                continue
             generation_duration_ms = (time.perf_counter() - generation_started) * 1000
             validation_started = time.perf_counter()
             question, report, distractor_reasons = self._validate_draft(request, draft)

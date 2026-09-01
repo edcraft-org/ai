@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from edcraft_validator.generation.base import GenerationError
 from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
 from edcraft_validator.generation.service import GenerationService
 from edcraft_validator.models import (
@@ -120,6 +121,14 @@ def execution_error_report() -> ValidationReport:
     )
 
 
+class FailingGenerator:
+    provider = "test-provider"
+    model = "test-model"
+
+    def generate_draft(self, request, *, feedback=None):
+        raise GenerationError("provider response could not be parsed")
+
+
 def request() -> GenerationRequest:
     return GenerationRequest(topic="arithmetic", difficulty="beginner")
 
@@ -140,6 +149,25 @@ def test_accepts_first_valid_question() -> None:
     assert len(outcome.attempts) == 1
     assert generator.feedback == [None]
     assert service.metrics.snapshot()["outcomes"] == {"accepted": 1}
+
+
+def test_provider_errors_are_retryable_and_recorded() -> None:
+    service = GenerationService(
+        FailingGenerator(),
+        SequenceValidator([]),
+        max_attempts=2,
+        attempt_log_path=None,
+    )
+
+    outcome = service.generate(request())
+
+    assert outcome.status == "rejected"
+    assert len(outcome.attempts) == 2
+    assert all(attempt.question is None for attempt in outcome.attempts)
+    assert all(
+        attempt.validation_report.issues[0].code == "PROVIDER_GENERATION_ERROR"
+        for attempt in outcome.attempts
+    )
 
 
 def test_two_stage_pipeline_uses_computed_answer() -> None:

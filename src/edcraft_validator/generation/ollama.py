@@ -6,11 +6,8 @@ from urllib.request import Request, urlopen
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
+from edcraft_validator.generation.base import GenerationError
 from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
-from edcraft_validator.generation.openai import (
-    OpenAICompatibleQuestionGenerator,
-    OpenAIGenerationError,
-)
 from edcraft_validator.generation.provider import (
     JsonScalar,
     QuestionDraftResponse,
@@ -22,7 +19,7 @@ from edcraft_validator.models import ValidationReport
 PlainJsonValue = JsonScalar | list[JsonScalar] | dict[str, JsonScalar]
 
 
-class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
+class OllamaQuestionGenerator:
     """Generate drafts through Ollama while honoring the shared provider contract."""
 
     def __init__(
@@ -51,7 +48,7 @@ class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
         try:
             return parsed.to_draft()
         except Exception as exc:
-            raise OpenAIGenerationError(
+            raise GenerationError(
                 f"ollama returned a draft that failed local validation: {exc}"
             ) from exc
 
@@ -79,7 +76,7 @@ class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
                 normalize_plain_response(wire_data)
             )
         except Exception as exc:
-            raise OpenAIGenerationError(
+            raise GenerationError(
                 f"ollama returned invalid question JSON: {exc}"
             ) from exc
 

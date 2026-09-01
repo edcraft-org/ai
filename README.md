@@ -108,6 +108,19 @@ process-local counters for attempts, outcomes, provider requests, issue codes,
 and total stage durations. Prompts and API credentials are not added to
 telemetry.
 
+## Provider architecture
+
+The generation service depends on the model-independent `QuestionGenerator`
+protocol. Provider adapters translate their native response format into the
+shared `QuestionDraft`; the deterministic validator then computes the answer and
+decides whether to accept or retry the candidate. Provider failures are recorded
+as retryable attempts with timing and issue codes.
+
+The CLI constructs adapters through the provider registry. To add a model,
+implement `generate_draft` and provider metadata, register the factory in
+`generation/registry.py`, define its wire schema/parser, and add adapter tests.
+The CLI routing code does not need to change.
+
 ## OpenAI generation pipeline
 
 Paste your replacement API key into the local `.env` file. This file is excluded
@@ -149,6 +162,7 @@ Ollama, make sure the configured model is available, then run:
 ```bash
 ollama pull qwen2.5-coder:14b
 export OLLAMA_TIMEOUT_SECONDS=300
+export OLLAMA_TEMPERATURE=0.2
 /usr/bin/time -p uv run python -m edcraft_validator.generation --provider ollama --topic loops --difficulty intermediate --num-distractors 3 --no-log > /tmp/ollama-question.json
 jq . /tmp/ollama-question.json
 ```

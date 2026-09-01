@@ -4,6 +4,10 @@ from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
 from edcraft_validator.models import GeneratedQuestion, TraceSummary, ValidationReport
 
 
+class GenerationError(RuntimeError):
+    """Raised when a provider cannot produce a usable draft."""
+
+
 class QuestionGenerator(Protocol):
     """Model-independent contract for producing a question in two stages."""
 
