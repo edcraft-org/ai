@@ -149,9 +149,19 @@ Ollama, make sure the configured model is available, then run:
 ```bash
 ollama pull qwen2.5-coder:14b
 export OLLAMA_TIMEOUT_SECONDS=300
-uv run python -m edcraft_validator.generation --provider ollama --topic loops --difficulty intermediate --num-distractors 3 --no-log > /tmp/ollama-question.json
+/usr/bin/time -p uv run python -m edcraft_validator.generation --provider ollama --topic loops --difficulty intermediate --num-distractors 3 --no-log > /tmp/ollama-question.json
 jq . /tmp/ollama-question.json
 ```
+
+Ollama receives a deliberately simple, non-recursive wire schema: `inputs` is a
+JSON object and `distractors` is a JSON array. The shared adapter converts this
+response into the tagged domain model and performs strict local validation. The
+`time -p` wrapper records the rough wall-clock cost, including failed or timed-out
+runs.
+
+OpenAI uses strict Structured Outputs with the tagged domain schema. This keeps
+schema adherence at the API boundary while allowing Ollama to use a smaller,
+more reliable schema for local constrained decoding.
 
 Provider selection is always explicit through `--provider`; it is not inferred
 from the environment. `OPENAI_MODEL`, `OLLAMA_MODEL`, and `SOCLAAS_MODEL` only

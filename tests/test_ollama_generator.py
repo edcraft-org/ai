@@ -2,24 +2,20 @@ import json
 
 from edcraft_validator.generation.models import GenerationRequest
 from edcraft_validator.generation.ollama import OllamaQuestionGenerator
-from edcraft_validator.generation.openai import OpenAIQuestionDraftResponse
 
 
 def test_ollama_generator_uses_native_schema_endpoint(monkeypatch) -> None:
     # Ollama must use its native endpoint and pass the Pydantic JSON schema.
     captured: dict[str, object] = {}
-    response = OpenAIQuestionDraftResponse(
-        code="def square(x):\n    return x * x",
-        entry_function="square",
-        inputs=[],
-        question="What does square(4) return?",
-        distractors=[
-            {"kind": "scalar", "scalar": value, "items": [], "properties": []}
-            for value in [4, 8, 20]
-        ],
-        distractor_reasons=["reason"] * 3,
-        question_type="mcq",
-    )
+    response = {
+        "code": "def square(x):\n    return x * x",
+        "entry_function": "square",
+        "inputs": {"x": 4},
+        "question": "What does square(4) return?",
+        "distractors": [4, 8, 20],
+        "distractor_reasons": ["reason"] * 3,
+        "question_type": "mcq",
+    }
 
     class ResponseWithJson:
         def __enter__(self):
@@ -29,9 +25,7 @@ def test_ollama_generator_uses_native_schema_endpoint(monkeypatch) -> None:
             return False
 
         def read(self):
-            return json.dumps(
-                {"message": {"content": response.model_dump_json()}}
-            ).encode()
+            return json.dumps({"message": {"content": json.dumps(response)}}).encode()
 
     def fake_urlopen(request, timeout):
         captured["url"] = request.full_url
@@ -52,4 +46,5 @@ def test_ollama_generator_uses_native_schema_endpoint(monkeypatch) -> None:
     assert draft.entry_function == "square"
     assert captured["url"] == "http://localhost:11434/api/chat"
     assert captured["payload"]["format"]["type"] == "object"
+    assert captured["payload"]["format"]["properties"]["inputs"]["type"] == "object"
     assert captured["timeout"] == 300

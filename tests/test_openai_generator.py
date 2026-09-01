@@ -55,8 +55,8 @@ def client_with(parsed: OpenAIQuestionDraftResponse | None) -> SimpleNamespace:
     )
 
 
-def test_generates_draft_using_json_output() -> None:
-    # OpenAI-compatible providers must request and parse a JSON object response.
+def test_generates_draft_using_structured_outputs() -> None:
+    # OpenAI must request strict Structured Outputs for schema adherence.
     client = client_with(api_question())
     generator = OpenAICompatibleQuestionGenerator("openai", client, model="test-model")
     request = GenerationRequest(topic="arithmetic", difficulty="beginner")
@@ -65,9 +65,11 @@ def test_generates_draft_using_json_output() -> None:
 
     assert draft.entry_function == "square"
     assert client.chat.completions.arguments["model"] == "test-model"
-    assert client.chat.completions.arguments["response_format"] == {
-        "type": "json_object"
-    }
+    response_format = client.chat.completions.arguments["response_format"]
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["name"] == "question_draft"
+    assert response_format["json_schema"]["strict"] is True
+    assert response_format["json_schema"]["schema"]["type"] == "object"
 
 
 def test_includes_validation_feedback_in_retry_prompt() -> None:

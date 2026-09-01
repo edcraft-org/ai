@@ -43,7 +43,12 @@ class OpenAICompatibleQuestionGenerator:
         parsed = self._request_model(
             _SYSTEM_PROMPT, build_prompt(request, feedback), QuestionDraftResponse
         )
-        return parsed.to_draft()
+        try:
+            return parsed.to_draft()
+        except Exception as exc:
+            raise OpenAIGenerationError(
+                f"{self.provider} returned a draft that failed local validation: {exc}"
+            ) from exc
 
     def _request_model(
         self, system_prompt: str, user_prompt: str, schema: type[BaseModel]
@@ -55,7 +60,14 @@ class OpenAICompatibleQuestionGenerator:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                response_format={"type": "json_object"},
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "question_draft",
+                        "strict": True,
+                        "schema": schema.model_json_schema(),
+                    },
+                },
             )
             content = response.choices[0].message.content
             if not content:

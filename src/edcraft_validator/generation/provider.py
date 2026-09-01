@@ -6,7 +6,7 @@ import ast
 import json
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
 from edcraft_validator.models import ValidationReport
@@ -61,9 +61,15 @@ class QuestionDraftResponse(BaseModel):
     entry_function: str
     inputs: list[TaggedInput]
     question: str
-    distractors: list[TaggedJsonValue]
-    distractor_reasons: list[str]
+    distractors: list[TaggedJsonValue] = Field(min_length=2)
+    distractor_reasons: list[str] = Field(min_length=2)
     question_type: Literal["mcq"]
+
+    @model_validator(mode="after")
+    def validate_distractor_reasons(self) -> QuestionDraftResponse:
+        if len(self.distractors) != len(self.distractor_reasons):
+            raise ValueError("one distractor reason is required for each distractor")
+        return self
 
     @model_validator(mode="before")
     @classmethod

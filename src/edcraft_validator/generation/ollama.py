@@ -3,7 +3,7 @@ import os
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
 from edcraft_validator.generation.openai import (
@@ -32,11 +32,16 @@ class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
         self, request: GenerationRequest, *, feedback: ValidationReport | None = None
     ) -> QuestionDraft:
         parsed = self._request_model(
-            "Generate a question following the shared response contract.",
+            _OLLAMA_SYSTEM_PROMPT,
             build_prompt(request, feedback),
-            QuestionDraftResponse,
+            OllamaWireResponse,
         )
-        return parsed.to_draft()
+        try:
+            return parsed.to_draft()
+        except Exception as exc:
+            raise OpenAIGenerationError(
+                f"ollama returned a draft that failed local validation: {exc}"
+            ) from exc
 
     def _request_model(
         self, system_prompt: str, user_prompt: str, schema: type[BaseModel]
@@ -51,7 +56,10 @@ class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
             )
             if not content:
                 raise ValueError("empty response")
-            return schema.model_validate(normalize_plain_response(json.loads(content)))
+            wire_response = schema.model_validate(json.loads(content))
+            return QuestionDraftResponse.model_validate(
+                normalize_plain_response(wire_response.model_dump())
+            )
         except Exception as exc:
             raise OpenAIGenerationError(
                 f"ollama returned invalid question JSON: {exc}"
@@ -82,3 +90,31 @@ class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
             return body["message"]["content"]
         except (HTTPError, URLError, KeyError, json.JSONDecodeError) as exc:
             raise RuntimeError(f"Ollama request failed: {exc}") from exc
+
+
+class OllamaWireResponse(BaseModel):
+    """Flat Ollama wire contract; semantic validation happens locally."""
+
+    model_config = ConfigDict(extra="forbid")
+    code: str
+    entry_function: str
+    inputs: dict[str, object]
+    question: str
+    distractors: list[object]
+    distractor_reasons: list[str]
+    question_type: str
+
+
+_OLLAMA_SYSTEM_PROMPT = """\
+Generate exactly one Python multiple-choice return-value question.
+Return one JSON object with exactly these keys: code, entry_function, inputs,
+question, distractors, distractor_reasons, question_type.
+Use plain JSON values: inputs must be an object mapping function argument names to
+their values, and distractors must be an array of raw JSON values. Do not wrap
+values in kind/scalar/items/properties fields. question_type must be mcq.
+Use only module-level functions, expressions, assignments, if statements, and for
+loops. Do not use imports, attributes, classes, decorators, recursion,
+comprehensions, while loops, lambdas, exceptions, file access, networking, input,
+eval, or exec. Generate exactly the requested number of distinct conceptual
+distractors and one reason per distractor. Return no markdown.
+"""
