@@ -1,73 +1,44 @@
-"""Provider registry used by the generation CLI and application code."""
-
-from __future__ import annotations
+"""Template-provider registry used by the CLI and application layer."""
 
 from collections.abc import Callable
-from pathlib import Path
-from typing import cast
 
-from edcraft_validator.generation.base import (
-    QuestionGenerator,
-    QuestionTemplateGenerator,
-)
-from edcraft_validator.generation.fake import FakeQuestionGenerator
-from edcraft_validator.generation.ollama import OllamaQuestionGenerator
+from edcraft_validator.generation.base import QuestionTemplateGenerator
+from edcraft_validator.generation.ollama import OllamaTemplateGenerator
 from edcraft_validator.generation.openai import (
-    OpenAIQuestionGenerator,
-    SocLaasQuestionGenerator,
+    OpenAITemplateGenerator,
+    SocLaasTemplateGenerator,
 )
 
-ProviderFactory = Callable[[], QuestionGenerator]
+TemplateProviderFactory = Callable[[], QuestionTemplateGenerator]
 
-_PROVIDER_FACTORIES: dict[str, ProviderFactory] = {
-    "openai": OpenAIQuestionGenerator,
-    "ollama": OllamaQuestionGenerator,
-    "soclaas": SocLaasQuestionGenerator,
+_TEMPLATE_PROVIDER_FACTORIES: dict[str, TemplateProviderFactory] = {
+    "openai": OpenAITemplateGenerator,
+    "ollama": OllamaTemplateGenerator,
+    "soclaas": SocLaasTemplateGenerator,
 }
 
 
-def register_provider(name: str, factory: ProviderFactory) -> None:
-    """Register a provider without changing CLI routing code."""
+def register_template_provider(name: str, factory: TemplateProviderFactory) -> None:
+    """Register a template provider without changing CLI routing code."""
     if not name or not name.strip():
         raise ValueError("provider name must not be blank")
-    if name in {"fake", "openai", "ollama", "soclaas"}:
+    if name in _TEMPLATE_PROVIDER_FACTORIES:
         raise ValueError(f"provider is already registered: {name}")
-    _PROVIDER_FACTORIES[name] = factory
-
-
-def available_providers() -> tuple[str, ...]:
-    """Return providers supported by the default application configuration."""
-    return ("fake", *_PROVIDER_FACTORIES.keys())
-
-
-def create_generator(
-    provider: str, *, examples_dir: Path = Path("examples")
-) -> QuestionGenerator:
-    """Construct a generator from the provider registry."""
-    if provider == "fake":
-        return FakeQuestionGenerator(examples_dir)
-    try:
-        factory = _PROVIDER_FACTORIES[provider]
-    except KeyError as exc:
-        supported = ", ".join(available_providers())
-        raise ValueError(
-            f"Unsupported provider {provider!r}; choose one of: {supported}"
-        ) from exc
-    return factory()
+    _TEMPLATE_PROVIDER_FACTORIES[name] = factory
 
 
 def available_template_providers() -> tuple[str, ...]:
     """Return AI providers that can author reusable templates."""
-    return tuple(_PROVIDER_FACTORIES)
+    return tuple(_TEMPLATE_PROVIDER_FACTORIES)
 
 
 def create_template_generator(provider: str) -> QuestionTemplateGenerator:
     """Construct a template author without exposing provider-specific classes."""
     try:
-        factory = _PROVIDER_FACTORIES[provider]
+        factory = _TEMPLATE_PROVIDER_FACTORIES[provider]
     except KeyError as exc:
         supported = ", ".join(available_template_providers())
         raise ValueError(
             f"Unsupported template provider {provider!r}; choose one of: {supported}"
         ) from exc
-    return cast(QuestionTemplateGenerator, factory())
+    return factory()

@@ -17,7 +17,7 @@ from edcraft_validator.domains.code.templates import (
     CodeQuestionTemplate,
 )
 from edcraft_validator.generation.base import GenerationError
-from edcraft_validator.generation.models import GenerationRequest
+from edcraft_validator.generation.models import TemplateAuthoringRequest
 from edcraft_validator.generation.registry import available_template_providers
 
 
@@ -62,7 +62,7 @@ def main() -> int:
     application = QuestionTemplateApplication()
     try:
         if args.command == "author":
-            request = GenerationRequest(
+            request = TemplateAuthoringRequest(
                 topic=args.topic,
                 difficulty=args.difficulty,
                 num_distractors=args.num_distractors,

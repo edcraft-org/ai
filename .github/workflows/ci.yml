@@ -28,7 +28,7 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run pytest -m "not docker"
 
-  openai-live:
+  openai-template-live:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository

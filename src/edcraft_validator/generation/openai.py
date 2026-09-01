@@ -1,37 +1,22 @@
 import os
-from typing import Any, TypeVar
+from typing import Any
 
 from openai import OpenAI
-from pydantic import BaseModel
 
-from edcraft_validator.domains.code.generation import (
-    OPENAI_SYSTEM_PROMPT,
-    QuestionDraftResponse,
-    TaggedInput,
-    TaggedJsonValue,
-    build_prompt,
-)
 from edcraft_validator.domains.code.templates import (
     CODE_TEMPLATE_SYSTEM_PROMPT,
     CodeQuestionTemplate,
     build_template_prompt,
 )
 from edcraft_validator.generation.base import GenerationError
-from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
-from edcraft_validator.models import ValidationReport
+from edcraft_validator.generation.models import TemplateAuthoringRequest
 
 DEFAULT_OPENAI_MODEL = "gpt-5-mini"
-OpenAIJsonValue = TaggedJsonValue
-OpenAIInput = TaggedInput
-OpenAIQuestionDraftResponse = QuestionDraftResponse
-
-
 OpenAIGenerationError = GenerationError
-SchemaT = TypeVar("SchemaT", bound=BaseModel)
 
 
-class OpenAICompatibleQuestionGenerator:
-    """Generate a draft through an OpenAI-compatible chat-completions API."""
+class OpenAICompatibleTemplateGenerator:
+    """Author templates through an OpenAI-compatible chat-completions API."""
 
     def __init__(
         self, provider: str, client: Any | None = None, *, model: str | None = None
@@ -44,61 +29,33 @@ class OpenAICompatibleQuestionGenerator:
         )
         self.model = model or _model(provider)
 
-    def generate_draft(
-        self, request: GenerationRequest, *, feedback: ValidationReport | None = None
-    ) -> QuestionDraft:
-        parsed = self._request_model(
-            OPENAI_SYSTEM_PROMPT,
-            build_prompt(request, feedback),
-            QuestionDraftResponse,
-        )
-        try:
-            return parsed.to_draft()
-        except Exception as exc:
-            raise OpenAIGenerationError(
-                f"{self.provider} returned a draft that failed local validation: {exc}"
-            ) from exc
-
-    def generate_template(self, request: GenerationRequest) -> CodeQuestionTemplate:
+    def generate_template(
+        self, request: TemplateAuthoringRequest
+    ) -> CodeQuestionTemplate:
         """Ask the provider for one reusable code-question template."""
-        return self._request_model(
-            CODE_TEMPLATE_SYSTEM_PROMPT,
-            build_template_prompt(request),
-            CodeQuestionTemplate,
-            schema_name="question_template",
-        )
-
-    def _request_model(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        schema: type[SchemaT],
-        *,
-        schema_name: str = "question_draft",
-    ) -> SchemaT:
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
+                    {"role": "system", "content": CODE_TEMPLATE_SYSTEM_PROMPT},
+                    {"role": "user", "content": build_template_prompt(request)},
                 ],
                 response_format={
                     "type": "json_schema",
                     "json_schema": {
-                        "name": schema_name,
+                        "name": "question_template",
                         "strict": True,
-                        "schema": schema.model_json_schema(),
+                        "schema": CodeQuestionTemplate.model_json_schema(),
                     },
                 },
             )
             content = response.choices[0].message.content
             if not content:
                 raise ValueError("empty response")
-            return schema.model_validate_json(content)
+            return CodeQuestionTemplate.model_validate_json(content)
         except Exception as exc:
             raise OpenAIGenerationError(
-                f"{self.provider} returned invalid question JSON: {exc}"
+                f"{self.provider} returned invalid question template JSON: {exc}"
             ) from exc
 
 
@@ -123,20 +80,15 @@ def _model(provider: str) -> str:
     }[provider]
 
 
-# Compatibility aliases for callers that imported the old private names.
-_SYSTEM_PROMPT = OPENAI_SYSTEM_PROMPT
-_build_prompt = build_prompt
-
-
-class OpenAIQuestionGenerator(OpenAICompatibleQuestionGenerator):
-    """Generate drafts through OpenAI's API."""
+class OpenAITemplateGenerator(OpenAICompatibleTemplateGenerator):
+    """Author reusable templates through OpenAI's API."""
 
     def __init__(self, client: Any | None = None, *, model: str | None = None) -> None:
         super().__init__("openai", client, model=model)
 
 
-class SocLaasQuestionGenerator(OpenAICompatibleQuestionGenerator):
-    """Generate drafts through the SocLaas OpenAI-compatible API."""
+class SocLaasTemplateGenerator(OpenAICompatibleTemplateGenerator):
+    """Author templates through the SocLaas OpenAI-compatible API."""
 
     def __init__(self, client: Any | None = None, *, model: str | None = None) -> None:
         super().__init__("soclaas", client, model=model)

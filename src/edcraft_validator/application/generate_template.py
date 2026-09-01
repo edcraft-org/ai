@@ -14,7 +14,7 @@ from edcraft_validator.domains.code.templates import (
     answer_target_for_topic,
 )
 from edcraft_validator.generation.base import QuestionTemplateGenerator
-from edcraft_validator.generation.models import GenerationRequest
+from edcraft_validator.generation.models import TemplateAuthoringRequest
 from edcraft_validator.generation.registry import create_template_generator
 
 TemplateGeneratorFactory = Callable[[str], QuestionTemplateGenerator]
@@ -36,7 +36,7 @@ class QuestionTemplateApplication:
         self.instance_generator = instance_generator or TemplateInstanceGenerator()
 
     def author(
-        self, request: GenerationRequest, *, provider: str
+        self, request: TemplateAuthoringRequest, *, provider: str
     ) -> ApprovedCodeQuestionTemplate:
         template = self.generator_factory(provider).generate_template(request)
         if template.topic != request.topic:

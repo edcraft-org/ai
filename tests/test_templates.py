@@ -11,7 +11,7 @@ from edcraft_validator.domains.code.templates import (
     build_template_prompt,
 )
 from edcraft_validator.executor import ExecutionResult
-from edcraft_validator.generation.models import GenerationRequest
+from edcraft_validator.generation.models import TemplateAuthoringRequest
 
 
 def template(**changes: Any) -> CodeQuestionTemplate:
@@ -158,7 +158,7 @@ def test_supports_loop_iteration_questions() -> None:
 
 def test_loop_topic_requests_iteration_count_template() -> None:
     prompt = build_template_prompt(
-        GenerationRequest(topic="loops", difficulty="beginner")
+        TemplateAuthoringRequest(topic="loops", difficulty="beginner")
     )
 
     assert "answer_target=loop_iterations" in prompt

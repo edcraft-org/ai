@@ -1,63 +1,10 @@
-from pathlib import Path
-
-from edcraft_validator.application import (
-    QuestionGenerationApplication,
-    QuestionTemplateApplication,
-)
+from edcraft_validator.application import QuestionTemplateApplication
 from edcraft_validator.domains.code.templates import (
     CodeQuestionTemplate,
     TemplateValidator,
 )
 from edcraft_validator.executor import ExecutionResult
-from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
-from edcraft_validator.models import ValidationReport
-
-
-class StubGenerator:
-    provider = "stub"
-    model = "stub-model"
-
-    def generate_draft(self, request, *, feedback=None):
-        return QuestionDraft(
-            code="def square(x):\n    return x * x",
-            entry_function="square",
-            inputs={"x": 4},
-            question="What does square(4) return?",
-            distractors=[4, 8, 20],
-            distractor_reasons=["reason"] * 3,
-        )
-
-
-class StubValidator:
-    def compute_answer(self, question):
-        return ValidationReport(status="valid", actual_answer=16)
-
-    def validate(self, question, *, actual_answer=None, trace_summary=None):
-        return ValidationReport(status="valid", actual_answer=actual_answer)
-
-
-def test_application_service_owns_generation_wiring() -> None:
-    calls: list[tuple[str, object]] = []
-
-    def generator_factory(provider, *, examples_dir):
-        calls.append((provider, examples_dir))
-        return StubGenerator()
-
-    application = QuestionGenerationApplication(
-        generator_factory=generator_factory,
-        validator_factory=StubValidator,
-    )
-
-    outcome = application.generate(
-        GenerationRequest(topic="arithmetic", difficulty="beginner"),
-        provider="stub",
-        attempt_log_path=None,
-    )
-
-    assert outcome.status == "accepted"
-    assert outcome.question is not None
-    assert outcome.question.proposed_answer == 16
-    assert calls == [("stub", Path("examples"))]
+from edcraft_validator.generation.models import TemplateAuthoringRequest
 
 
 def test_template_application_authors_once_then_generates_locally() -> None:
@@ -103,7 +50,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
         validator_factory=lambda: TemplateValidator(executor=SumExecutor()),
     )
     approved = application.author(
-        GenerationRequest(topic="arithmetic", difficulty="beginner"),
+        TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner"),
         provider="stub",
     )
     instance = application.generate(approved, seed=7)

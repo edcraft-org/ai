@@ -16,8 +16,8 @@ from edcraft_validator.comparison import equivalent, same_value_shape
 from edcraft_validator.executor import DockerExecutor, ExecutionBackend, ExecutionResult
 from edcraft_validator.generation.models import (
     Difficulty,
-    GenerationRequest,
     ProgrammingTopic,
+    TemplateAuthoringRequest,
 )
 from edcraft_validator.models import AnswerTarget, GeneratedQuestion
 from edcraft_validator.safety import check_code_safety
@@ -428,7 +428,7 @@ class SafeExpression:
         raise AssertionError(f"unvalidated expression node: {type(node).__name__}")
 
 
-def build_template_prompt(request: GenerationRequest) -> str:
+def build_template_prompt(request: TemplateAuthoringRequest) -> str:
     target = answer_target_for_topic(request.topic)
     parameter_guidance = (
         "Use exactly one integer parameter named n."
