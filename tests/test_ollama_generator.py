@@ -52,4 +52,4 @@ def test_ollama_generator_uses_native_schema_endpoint(monkeypatch) -> None:
     assert draft.entry_function == "square"
     assert captured["url"] == "http://localhost:11434/api/chat"
     assert captured["payload"]["format"]["type"] == "object"
-    assert captured["timeout"] == 120
+    assert captured["timeout"] == 300

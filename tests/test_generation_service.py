@@ -139,6 +139,7 @@ def test_accepts_first_valid_question() -> None:
     assert outcome.question is not None
     assert len(outcome.attempts) == 1
     assert generator.feedback == [None]
+    assert service.metrics.snapshot()["outcomes"] == {"accepted": 1}
 
 
 def test_two_stage_pipeline_uses_computed_answer() -> None:
@@ -225,6 +226,7 @@ def test_rejects_after_three_invalid_attempts() -> None:
     assert outcome.status == "rejected"
     assert outcome.question is None
     assert len(outcome.attempts) == 3
+    assert service.metrics.snapshot()["outcomes"] == {"rejected": 1}
 
 
 def test_does_not_regenerate_after_execution_error() -> None:
@@ -238,6 +240,7 @@ def test_does_not_regenerate_after_execution_error() -> None:
     assert outcome.status == "execution_error"
     assert len(outcome.attempts) == 1
     assert len(generator.feedback) == 1
+    assert service.metrics.snapshot()["outcomes"] == {"execution_error": 1}
 
 
 def test_logs_every_attempt_as_jsonl(tmp_path: Path) -> None:
@@ -256,6 +259,11 @@ def test_logs_every_attempt_as_jsonl(tmp_path: Path) -> None:
     assert {record["run_id"] for record in records} == {outcome.run_id}
     assert records[0]["attempt"]["attempt_number"] == 1
     assert records[1]["attempt"]["validation_report"]["status"] == "valid"
+    assert records[0]["telemetry"]["provider"] == "RecordingGenerator"
+    assert records[0]["telemetry"]["status"] == "invalid"
+    assert records[0]["telemetry"]["issue_codes"] == ["WRONG_PROPOSED_ANSWER"]
+    assert records[0]["telemetry"]["generation_duration_ms"] >= 0
+    assert records[0]["telemetry"]["validation_duration_ms"] >= 0
 
 
 def test_rejects_invalid_attempt_limit() -> None:

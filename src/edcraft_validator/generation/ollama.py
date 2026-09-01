@@ -7,17 +7,19 @@ from pydantic import BaseModel
 
 from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
 from edcraft_validator.generation.openai import (
-    _SYSTEM_PROMPT,
     OpenAICompatibleQuestionGenerator,
     OpenAIGenerationError,
-    OpenAIQuestionDraftResponse,
-    _build_prompt,
+)
+from edcraft_validator.generation.provider import (
+    QuestionDraftResponse,
+    build_prompt,
+    normalize_plain_response,
 )
 from edcraft_validator.models import ValidationReport
 
 
 class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
-    """Generate a draft through Ollama's native schema-constrained API."""
+    """Generate drafts through Ollama while honoring the shared provider contract."""
 
     def __init__(
         self, client: object | None = None, *, model: str | None = None
@@ -27,44 +29,32 @@ class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
         self.model = model or os.getenv("OLLAMA_MODEL") or "qwen2.5"
 
     def generate_draft(
-        self,
-        request: GenerationRequest,
-        *,
-        feedback: ValidationReport | None = None,
+        self, request: GenerationRequest, *, feedback: ValidationReport | None = None
     ) -> QuestionDraft:
         parsed = self._request_model(
-            _SYSTEM_PROMPT,
-            _build_prompt(request, feedback),
-            OpenAIQuestionDraftResponse,
+            "Generate a question following the shared response contract.",
+            build_prompt(request, feedback),
+            QuestionDraftResponse,
         )
-        return QuestionDraft(
-            code=parsed.code,
-            entry_function=parsed.entry_function,
-            inputs={item.name: item.value.to_python() for item in parsed.inputs},
-            question=parsed.question,
-            distractors=[item.to_python() for item in parsed.distractors],
-            distractor_reasons=parsed.distractor_reasons,
-            question_type=parsed.question_type,
-        )
+        return parsed.to_draft()
 
     def _request_model(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        schema: type[BaseModel],
-    ) -> BaseModel:
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
+        self, system_prompt: str, user_prompt: str, schema: type[BaseModel]
+    ) -> QuestionDraftResponse:
         try:
-            content = self._ollama_request(messages, schema)
+            content = self._ollama_request(
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                schema,
+            )
             if not content:
                 raise ValueError("empty response")
-            return schema.model_validate_json(content)
-        except (IndexError, AttributeError, TypeError, ValueError, RuntimeError) as exc:
+            return schema.model_validate(normalize_plain_response(json.loads(content)))
+        except Exception as exc:
             raise OpenAIGenerationError(
-                f"Model returned invalid question JSON: {exc}"
+                f"ollama returned invalid question JSON: {exc}"
             ) from exc
 
     def _ollama_request(
@@ -86,7 +76,8 @@ class OllamaQuestionGenerator(OpenAICompatibleQuestionGenerator):
             method="POST",
         )
         try:
-            with urlopen(request, timeout=120) as response:
+            timeout = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "300"))
+            with urlopen(request, timeout=timeout) as response:
                 body = json.load(response)
             return body["message"]["content"]
         except (HTTPError, URLError, KeyError, json.JSONDecodeError) as exc:

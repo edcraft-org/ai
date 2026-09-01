@@ -100,6 +100,14 @@ are retained in attempt logs but are not part of the final question payload.
 Attempts are appended to
 `.artifacts/generation_attempts.jsonl`, which is excluded from Git.
 
+## Generation observability
+
+Each attempt log record includes the provider, model, generation and validation
+durations, outcome status, and validation issue codes. The service also keeps
+process-local counters for attempts, outcomes, provider requests, issue codes,
+and total stage durations. Prompts and API credentials are not added to
+telemetry.
+
 ## OpenAI generation pipeline
 
 Paste your replacement API key into the local `.env` file. This file is excluded
@@ -107,20 +115,74 @@ from Git and must never be committed:
 
 ```dotenv
 OPENAI_API_KEY=your-key-here
-OPENAI_MODEL=gpt-5.6-luna
+OPENAI_MODEL=gpt-5-mini
 ```
 
 Select the provider explicitly with `--provider`; provider selection is not read
 from `.env`.
 
-Then generate and deterministically validate one question:
+Generate and deterministically validate one question with OpenAI:
 
-```powershell
-uv run python -m edcraft_validator.generation `
-  --provider openai `
-  --topic loops `
-  --difficulty intermediate `
+```bash
+cd ai
+uv run python -m edcraft_validator.generation \
+  --provider openai \
+  --topic loops \
+  --difficulty intermediate \
   --num-distractors 3
+```
+
+```bash
+uv run python -m edcraft_validator.generation --provider openai --topic loops --difficulty intermediate --num-distractors 3
+```
+
+The command prints the generated question as JSON. To save and inspect it:
+
+```bash
+uv run python -m edcraft_validator.generation --provider openai --topic loops --difficulty intermediate --num-distractors 3 --no-log > /tmp/openai-question.json
+jq . /tmp/openai-question.json
+```
+
+Ollama uses the same model-independent request and validation pipeline. Start
+Ollama, make sure the configured model is available, then run:
+
+```bash
+ollama pull qwen2.5-coder:14b
+export OLLAMA_TIMEOUT_SECONDS=300
+uv run python -m edcraft_validator.generation --provider ollama --topic loops --difficulty intermediate --num-distractors 3 --no-log > /tmp/ollama-question.json
+jq . /tmp/ollama-question.json
+```
+
+Provider selection is always explicit through `--provider`; it is not inferred
+from the environment. `OPENAI_MODEL`, `OLLAMA_MODEL`, and `SOCLAAS_MODEL` only
+select the model for the explicitly selected provider.
+
+## Tests
+
+Run the fast suite without requiring Docker:
+
+```bash
+uv run pytest -m "not docker"
+```
+
+Run the focused provider tests:
+
+```bash
+uv run pytest tests/test_openai_generator.py tests/test_ollama_generator.py -q
+```
+
+Run the complete suite, including Docker integration tests, after starting the
+Docker daemon:
+
+```bash
+uv run pytest
+```
+
+Formatting and lint checks:
+
+```bash
+uv run ruff format --check src tests
+uv run ruff check src tests
 ```
 
 The OpenAI model only generates candidates. The existing AST safety checks,

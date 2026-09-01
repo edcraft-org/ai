@@ -13,6 +13,11 @@ from edcraft_validator.generation.models import (
     GenerationRequest,
     QuestionDraft,
 )
+from edcraft_validator.generation.observability import (
+    AttemptTelemetry,
+    GenerationMetrics,
+    provider_metadata,
+)
 from edcraft_validator.models import (
     GeneratedQuestion,
     ValidationIssue,
@@ -32,12 +37,15 @@ class GenerationService:
         *,
         max_attempts: int = 3,
         attempt_log_path: Path | None = DEFAULT_ATTEMPT_LOG,
+        metrics: GenerationMetrics | None = None,
     ) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be greater than zero")
         self.generator = generator
         self.validator = validator
         self.max_attempts = max_attempts
+        self.metrics = metrics or GenerationMetrics()
+        self.provider, self.model = provider_metadata(generator)
         self.logger = (
             JsonlAttemptLogger(attempt_log_path)
             if attempt_log_path is not None
@@ -51,9 +59,21 @@ class GenerationService:
 
         for attempt_number in range(1, self.max_attempts + 1):
             started = time.perf_counter()
-            question, report, distractor_reasons = self._generate_draft(
-                request, feedback
+            generation_started = time.perf_counter()
+            draft = self.generator.generate_draft(request, feedback=feedback)
+            generation_duration_ms = (time.perf_counter() - generation_started) * 1000
+            validation_started = time.perf_counter()
+            question, report, distractor_reasons = self._validate_draft(request, draft)
+            validation_duration_ms = (time.perf_counter() - validation_started) * 1000
+            telemetry = AttemptTelemetry(
+                provider=self.provider,
+                model=self.model,
+                generation_duration_ms=generation_duration_ms,
+                validation_duration_ms=validation_duration_ms,
+                status=report.status,
+                issue_codes=tuple(issue.code for issue in report.issues),
             )
+            self.metrics.record_attempt(telemetry)
             attempt = GenerationAttempt(
                 attempt_number=attempt_number,
                 question=question,
@@ -63,9 +83,10 @@ class GenerationService:
             )
             attempts.append(attempt)
             if self.logger is not None:
-                self.logger.log(run_id, request, attempt)
+                self.logger.log(run_id, request, attempt, telemetry)
 
             if report.status == "valid":
+                self.metrics.record_outcome("accepted")
                 return GenerationOutcome(
                     run_id=run_id,
                     status="accepted",
@@ -74,6 +95,7 @@ class GenerationService:
                     attempts=attempts,
                 )
             if report.status == "execution_error":
+                self.metrics.record_outcome("execution_error")
                 return GenerationOutcome(
                     run_id=run_id,
                     status="execution_error",
@@ -82,6 +104,7 @@ class GenerationService:
                 )
             feedback = report
 
+        self.metrics.record_outcome("rejected")
         return GenerationOutcome(
             run_id=run_id,
             status="rejected",
@@ -89,12 +112,11 @@ class GenerationService:
             attempts=attempts,
         )
 
-    def _generate_draft(
+    def _validate_draft(
         self,
         request: GenerationRequest,
-        feedback: ValidationReport | None,
+        draft: QuestionDraft,
     ) -> tuple[GeneratedQuestion, ValidationReport, list[str]]:
-        draft: QuestionDraft = self.generator.generate_draft(request, feedback=feedback)
         if len(draft.distractors) != request.num_distractors:
             return (
                 self._draft_for_report(draft),

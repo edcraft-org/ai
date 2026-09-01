@@ -108,6 +108,85 @@ def test_reports_missing_parsed_response() -> None:
         )
 
 
+def test_converts_nested_tagged_values_to_python_values() -> None:
+    nested = OpenAIQuestionDraftResponse(
+        code="def total(values):\n    return sum(values)",
+        entry_function="total",
+        inputs=[
+            OpenAIInput(
+                name="values",
+                value=OpenAIJsonValue(
+                    kind="list",
+                    scalar=None,
+                    items=[
+                        OpenAIJsonValue(
+                            kind="scalar", scalar=value, items=[], properties=[]
+                        )
+                        for value in [1, 2, 3]
+                    ],
+                    properties=[],
+                ),
+            )
+        ],
+        question="What does total([1, 2, 3]) return?",
+        distractors=[
+            OpenAIJsonValue(kind="scalar", scalar=value, items=[], properties=[])
+            for value in [3, 5, 7]
+        ],
+        distractor_reasons=["reason"] * 3,
+        question_type="mcq",
+    )
+
+    generator = OpenAICompatibleQuestionGenerator(
+        "openai", client_with(nested), model="test-model"
+    )
+
+    draft = generator.generate_draft(
+        GenerationRequest(topic="lists", difficulty="beginner")
+    )
+
+    assert draft.inputs == {"values": [1, 2, 3]}
+
+
+def test_accepts_tagged_list_form_for_inputs() -> None:
+    response = api_question().model_dump()
+    response["inputs"] = {
+        "kind": "list",
+        "scalar": None,
+        "items": [
+            {
+                "kind": "object",
+                "scalar": None,
+                "items": [],
+                "properties": [
+                    {
+                        "key": "name",
+                        "value": {
+                            "kind": "scalar",
+                            "scalar": "x",
+                            "items": [],
+                            "properties": [],
+                        },
+                    },
+                    {
+                        "key": "value",
+                        "value": {
+                            "kind": "scalar",
+                            "scalar": 4,
+                            "items": [],
+                            "properties": [],
+                        },
+                    },
+                ],
+            }
+        ],
+        "properties": [],
+    }
+    parsed = OpenAIQuestionDraftResponse.model_validate(response)
+
+    assert parsed.to_draft().inputs == {"x": 4}
+
+
 def test_provider_uses_provider_specific_configuration(monkeypatch) -> None:
     # OpenAI and SocLaas must read only their own credentials and base URLs.
     monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
