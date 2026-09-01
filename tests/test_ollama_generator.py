@@ -47,4 +47,12 @@ def test_ollama_generator_uses_native_schema_endpoint(monkeypatch) -> None:
     assert captured["url"] == "http://localhost:11434/api/chat"
     assert captured["payload"]["format"]["type"] == "object"
     assert captured["payload"]["format"]["properties"]["inputs"]["type"] == "object"
+    assert captured["payload"]["format"]["properties"]["distractors"]["minItems"] == 3
+    assert captured["payload"]["format"]["properties"]["distractors"]["maxItems"] == 3
+    assert captured["payload"]["format"]["properties"]["distractors"]["items"] != {}
+    assert "Direct calls may use only" in captured["payload"]["messages"][0]["content"]
+    assert (
+        "misconception reason for each distractor"
+        in captured["payload"]["messages"][0]["content"]
+    )
     assert captured["timeout"] == 300
