@@ -1,0 +1,29 @@
+{
+  "template_id": "conditionals.boolean_branch_count",
+  "version": 1,
+  "topic": "conditionals",
+  "difficulty": "beginner",
+  "code": "def decide(enabled):\n    if enabled:\n        if 3 > 2:\n            return 1\n    return 0",
+  "entry_function": "decide",
+  "parameters": [
+    {"name": "enabled", "kind": "boolean", "values": [false, true]}
+  ],
+  "question_template": "How many if conditions are evaluated when decide({enabled}) runs?",
+  "answer_target": "branch_executions",
+  "answer_expression": "2 if enabled else 1",
+  "distractors": [
+    {
+      "expression": "1 if enabled else 2",
+      "reason_template": "Reverses the paths for enabled={enabled}."
+    },
+    {
+      "expression": "3",
+      "reason_template": "Counts the final return as another condition."
+    },
+    {
+      "expression": "4",
+      "reason_template": "Counts assignments and returns as conditions."
+    }
+  ],
+  "question_type": "mcq"
+}

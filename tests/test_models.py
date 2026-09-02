@@ -58,6 +58,14 @@ def test_rejects_non_mcq_question_type() -> None:
         GeneratedQuestion.model_validate(data)
 
 
+def test_rejects_unknown_answer_target() -> None:
+    data = valid_data()
+    data["answer_target"] = "line_executions"
+
+    with pytest.raises(ValidationError, match="Input should be"):
+        GeneratedQuestion.model_validate(data)
+
+
 def test_joins_readable_code_lines() -> None:
     # JSON line arrays should normalize to executable source text.
     data = valid_data()

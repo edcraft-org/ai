@@ -1,0 +1,29 @@
+{
+  "template_id": "loops.iteration_count",
+  "version": 1,
+  "topic": "loops",
+  "difficulty": "beginner",
+  "code": "def accumulate(n):\n    total = 0\n    for i in range(n):\n        total += i\n    return total",
+  "entry_function": "accumulate",
+  "parameters": [
+    {"name": "n", "kind": "integer", "values": [2, 4, 5]}
+  ],
+  "question_template": "How many total loop-body iterations occur when accumulate({n}) runs?",
+  "answer_target": "loop_iterations",
+  "answer_expression": "n",
+  "distractors": [
+    {
+      "expression": "n - 1",
+      "reason_template": "Stops counting one iteration too early."
+    },
+    {
+      "expression": "n + 1",
+      "reason_template": "Counts the final loop check as an iteration."
+    },
+    {
+      "expression": "n + 2",
+      "reason_template": "Counts both setup and the final check as iterations."
+    }
+  ],
+  "question_type": "mcq"
+}

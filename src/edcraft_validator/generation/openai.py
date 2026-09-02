@@ -2,30 +2,22 @@ import os
 from typing import Any
 
 from openai import OpenAI
-from pydantic import BaseModel
 
-from edcraft_validator.domains.code.generation import (
-    OPENAI_SYSTEM_PROMPT,
-    QuestionDraftResponse,
-    TaggedInput,
-    TaggedJsonValue,
-    build_prompt,
+from edcraft_validator.domains.code.templates import (
+    CODE_TEMPLATE_SYSTEM_PROMPT,
+    CodeQuestionTemplate,
+    build_template_prompt,
+    parse_code_question_template,
 )
 from edcraft_validator.generation.base import GenerationError
-from edcraft_validator.generation.models import GenerationRequest, QuestionDraft
-from edcraft_validator.models import ValidationReport
+from edcraft_validator.generation.models import TemplateAuthoringRequest
 
 DEFAULT_OPENAI_MODEL = "gpt-5-mini"
-OpenAIJsonValue = TaggedJsonValue
-OpenAIInput = TaggedInput
-OpenAIQuestionDraftResponse = QuestionDraftResponse
-
-
 OpenAIGenerationError = GenerationError
 
 
-class OpenAICompatibleQuestionGenerator:
-    """Generate a draft through an OpenAI-compatible chat-completions API."""
+class OpenAICompatibleTemplateGenerator:
+    """Author templates through an OpenAI-compatible chat-completions API."""
 
     def __init__(
         self, provider: str, client: Any | None = None, *, model: str | None = None
@@ -33,90 +25,93 @@ class OpenAICompatibleQuestionGenerator:
         if provider not in {"openai", "soclaas"}:
             raise ValueError(f"Unsupported provider: {provider}")
         self.provider = provider
-        self.client = client or OpenAI(
-            api_key=_api_key(provider), base_url=_base_url(provider)
-        )
+        if client is None:
+            api_key = _api_key(provider)
+            if api_key is None:
+                variable = _api_key_variable(provider)
+                raise OpenAIGenerationError(f"{variable} is not configured")
+            client = OpenAI(api_key=api_key, base_url=_base_url(provider))
+        self.client = client
         self.model = model or _model(provider)
 
-    def generate_draft(
-        self, request: GenerationRequest, *, feedback: ValidationReport | None = None
-    ) -> QuestionDraft:
-        parsed = self._request_model(
-            OPENAI_SYSTEM_PROMPT,
-            build_prompt(request, feedback),
-            QuestionDraftResponse,
-        )
-        try:
-            return parsed.to_draft()
-        except Exception as exc:
-            raise OpenAIGenerationError(
-                f"{self.provider} returned a draft that failed local validation: {exc}"
-            ) from exc
-
-    def _request_model(
-        self, system_prompt: str, user_prompt: str, schema: type[BaseModel]
-    ) -> QuestionDraftResponse:
+    def generate_template(
+        self, request: TemplateAuthoringRequest
+    ) -> CodeQuestionTemplate:
+        """Ask the provider for one reusable code-question template."""
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
+                    {"role": "system", "content": CODE_TEMPLATE_SYSTEM_PROMPT},
+                    {"role": "user", "content": build_template_prompt(request)},
                 ],
                 response_format={
                     "type": "json_schema",
                     "json_schema": {
-                        "name": "question_draft",
+                        "name": "question_template",
                         "strict": True,
-                        "schema": schema.model_json_schema(),
+                        "schema": CodeQuestionTemplate.model_json_schema(),
                     },
                 },
             )
             content = response.choices[0].message.content
             if not content:
                 raise ValueError("empty response")
-            return schema.model_validate_json(content)
+            return parse_code_question_template(content)
         except Exception as exc:
             raise OpenAIGenerationError(
-                f"{self.provider} returned invalid question JSON: {exc}"
+                f"{self.provider} failed to generate a question template: {exc}"
             ) from exc
 
 
 def _api_key(provider: str) -> str | None:
+    variable = _api_key_variable(provider)
+    raw_value = os.getenv(variable)
+    if raw_value is None:
+        return None
+
+    value = raw_value.strip()
+    if not value:
+        return None
+    if not value.isascii() or any(character.isspace() for character in value):
+        raise OpenAIGenerationError(
+            f"{variable} contains invalid whitespace or non-ASCII characters"
+        )
+    return value
+
+
+def _api_key_variable(provider: str) -> str:
     return {
-        "soclaas": os.getenv("SOCLAAS_API_KEY"),
-        "openai": os.getenv("OPENAI_API_KEY"),
+        "soclaas": "SOCLAAS_API_KEY",
+        "openai": "OPENAI_API_KEY",
     }[provider]
 
 
 def _base_url(provider: str) -> str | None:
-    return {
+    value = {
         "soclaas": os.getenv("SOCLAAS_BASE_URL"),
         "openai": os.getenv("OPENAI_BASE_URL"),
     }[provider]
+    return value.strip() if value else None
 
 
 def _model(provider: str) -> str:
-    return {
-        "soclaas": os.getenv("SOCLAAS_MODEL") or DEFAULT_OPENAI_MODEL,
-        "openai": os.getenv("OPENAI_MODEL") or DEFAULT_OPENAI_MODEL,
+    variable = {
+        "soclaas": "SOCLAAS_MODEL",
+        "openai": "OPENAI_MODEL",
     }[provider]
+    return os.getenv(variable, "").strip() or DEFAULT_OPENAI_MODEL
 
 
-# Compatibility aliases for callers that imported the old private names.
-_SYSTEM_PROMPT = OPENAI_SYSTEM_PROMPT
-_build_prompt = build_prompt
-
-
-class OpenAIQuestionGenerator(OpenAICompatibleQuestionGenerator):
-    """Generate drafts through OpenAI's API."""
+class OpenAITemplateGenerator(OpenAICompatibleTemplateGenerator):
+    """Author reusable templates through OpenAI's API."""
 
     def __init__(self, client: Any | None = None, *, model: str | None = None) -> None:
         super().__init__("openai", client, model=model)
 
 
-class SocLaasQuestionGenerator(OpenAICompatibleQuestionGenerator):
-    """Generate drafts through the SocLaas OpenAI-compatible API."""
+class SocLaasTemplateGenerator(OpenAICompatibleTemplateGenerator):
+    """Author templates through the SocLaas OpenAI-compatible API."""
 
     def __init__(self, client: Any | None = None, *, model: str | None = None) -> None:
         super().__init__("soclaas", client, model=model)

@@ -1,43 +1,39 @@
-"""Question-generation interfaces and orchestration."""
+"""AI provider interfaces for reusable question-template authoring."""
 
 from importlib import import_module
 
-from edcraft_validator.generation.base import GenerationError, QuestionGenerator
-from edcraft_validator.generation.fake import FakeQuestionGenerator
-from edcraft_validator.generation.models import (
-    GenerationAttempt,
-    GenerationOutcome,
-    GenerationRequest,
-)
+from edcraft_validator.generation.base import GenerationError, QuestionTemplateGenerator
+from edcraft_validator.generation.models import TemplateAuthoringRequest
 
 _LAZY_EXPORTS = {
-    "FakeQuestionGenerator": (
-        "edcraft_validator.generation.fake",
-        "FakeQuestionGenerator",
-    ),
-    "GenerationService": ("edcraft_validator.generation.service", "GenerationService"),
-    "OllamaQuestionGenerator": (
+    "OllamaTemplateGenerator": (
         "edcraft_validator.generation.ollama",
-        "OllamaQuestionGenerator",
+        "OllamaTemplateGenerator",
     ),
-    "OpenAICompatibleQuestionGenerator": (
+    "OpenAICompatibleTemplateGenerator": (
         "edcraft_validator.generation.openai",
-        "OpenAICompatibleQuestionGenerator",
+        "OpenAICompatibleTemplateGenerator",
     ),
-    "OpenAIQuestionGenerator": (
+    "OpenAITemplateGenerator": (
         "edcraft_validator.generation.openai",
-        "OpenAIQuestionGenerator",
+        "OpenAITemplateGenerator",
     ),
-    "SocLaasQuestionGenerator": (
+    "SocLaasTemplateGenerator": (
         "edcraft_validator.generation.openai",
-        "SocLaasQuestionGenerator",
+        "SocLaasTemplateGenerator",
     ),
-    "available_providers": (
+    "available_template_providers": (
         "edcraft_validator.generation.registry",
-        "available_providers",
+        "available_template_providers",
     ),
-    "create_generator": ("edcraft_validator.generation.registry", "create_generator"),
-    "register_provider": ("edcraft_validator.generation.registry", "register_provider"),
+    "create_template_generator": (
+        "edcraft_validator.generation.registry",
+        "create_template_generator",
+    ),
+    "register_template_provider": (
+        "edcraft_validator.generation.registry",
+        "register_template_provider",
+    ),
 }
 
 
@@ -53,18 +49,14 @@ def __getattr__(name: str):
 
 
 __all__ = [
-    "FakeQuestionGenerator",
-    "GenerationAttempt",
-    "GenerationOutcome",
-    "GenerationRequest",
-    "GenerationService",
     "GenerationError",
-    "OpenAICompatibleQuestionGenerator",
-    "OpenAIQuestionGenerator",
-    "OllamaQuestionGenerator",
-    "QuestionGenerator",
-    "SocLaasQuestionGenerator",
-    "available_providers",
-    "create_generator",
-    "register_provider",
+    "OllamaTemplateGenerator",
+    "OpenAICompatibleTemplateGenerator",
+    "OpenAITemplateGenerator",
+    "QuestionTemplateGenerator",
+    "SocLaasTemplateGenerator",
+    "TemplateAuthoringRequest",
+    "available_template_providers",
+    "create_template_generator",
+    "register_template_provider",
 ]

@@ -1,33 +1,29 @@
-from pathlib import Path
-
 import pytest
 
-from edcraft_validator.generation.fake import FakeQuestionGenerator
 from edcraft_validator.generation.registry import (
-    available_providers,
-    create_generator,
-    register_provider,
+    available_template_providers,
+    create_template_generator,
+    register_template_provider,
 )
 
 
-def test_registry_creates_builtin_fake_provider() -> None:
-    generator = create_generator("fake", examples_dir=Path("examples"))
-
-    assert isinstance(generator, FakeQuestionGenerator)
-    assert "openai" in available_providers()
-    assert "ollama" in available_providers()
+def test_registry_exposes_builtin_template_providers() -> None:
+    assert available_template_providers()[:3] == ("openai", "ollama", "soclaas")
+    assert create_template_generator("ollama").provider == "ollama"
 
 
-def test_registry_supports_extension_without_cli_changes() -> None:
-    class CustomGenerator:
+def test_registry_supports_template_provider_extensions() -> None:
+    class CustomTemplateGenerator:
         provider = "custom"
-        model = "custom-model"
 
-    register_provider("custom", CustomGenerator)
+        def generate_template(self, request):
+            raise NotImplementedError
 
-    assert isinstance(create_generator("custom"), CustomGenerator)
+    register_template_provider("custom", CustomTemplateGenerator)
+
+    assert isinstance(create_template_generator("custom"), CustomTemplateGenerator)
 
 
-def test_registry_rejects_unknown_provider() -> None:
-    with pytest.raises(ValueError, match="Unsupported provider"):
-        create_generator("missing")
+def test_registry_rejects_unknown_template_provider() -> None:
+    with pytest.raises(ValueError, match="Unsupported template provider"):
+        create_template_generator("missing")

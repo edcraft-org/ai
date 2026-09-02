@@ -1,0 +1,20 @@
+{
+  "template_id": "lists.weighted_edges",
+  "version": 1,
+  "topic": "lists",
+  "difficulty": "advanced",
+  "code": "def weighted_edges(values):\n    return values[0] * 2 + values[-1]",
+  "entry_function": "weighted_edges",
+  "parameters": [
+    {"name": "values", "kind": "integer_list", "values": [[2, 3, 4], [5, 2, 3], [3, 4, 2, 1]]}
+  ],
+  "question_template": "What does weighted_edges({values}) return?",
+  "answer_target": "return_value",
+  "answer_expression": "values[0] * 2 + values[-1]",
+  "distractors": [
+    {"expression": "values[0] + values[-1]", "reason_template": "Does not double the first element."},
+    {"expression": "values[0] * 2 - values[-1]", "reason_template": "Subtracts the final element."},
+    {"expression": "sum(values)", "reason_template": "Sums every element instead of using the edges."}
+  ],
+  "question_type": "mcq"
+}

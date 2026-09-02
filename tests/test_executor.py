@@ -15,6 +15,7 @@ def successful_process(answer: object = 16) -> subprocess.CompletedProcess[str]:
             "entry_function": "square",
             "function_calls": 1,
             "loop_executions": 0,
+            "loop_iterations": 0,
             "branch_executions": 0,
             "variable_snapshots": 1,
         },
@@ -54,6 +55,35 @@ def test_runs_worker_with_container_isolation() -> None:
     assert payload["timeout_seconds"] == 2
     assert run.call_args.kwargs["timeout"] == 12
     assert "def square" not in command
+
+
+def test_runs_batch_in_one_container() -> None:
+    output = {
+        "ok": True,
+        "results": [
+            {"ok": True, "answer": 4, "trace_summary": {}},
+            {"ok": True, "answer": 9, "trace_summary": {}},
+        ],
+    }
+    process = subprocess.CompletedProcess([], 0, stdout=json.dumps(output), stderr="")
+    with patch(
+        "edcraft_validator.executor.subprocess.run", return_value=process
+    ) as run:
+        results = DockerExecutor().execute_batch(
+            "def square(x):\n    return x * x",
+            "square",
+            [{"x": 2}, {"x": 3}],
+            timeout_seconds=2,
+        )
+
+    payload = json.loads(run.call_args.kwargs["input"])
+    assert run.call_count == 1
+    assert payload["cases"] == [
+        {"inputs": {"x": 2}},
+        {"inputs": {"x": 3}},
+    ]
+    assert run.call_args.kwargs["timeout"] == 14
+    assert [result.answer for result in results] == [4, 9]
 
 
 def test_timeout_force_removes_the_named_container() -> None:

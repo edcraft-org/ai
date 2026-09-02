@@ -1,0 +1,20 @@
+{
+  "template_id": "functions.single_helper",
+  "version": 1,
+  "topic": "functions",
+  "difficulty": "beginner",
+  "code": "def increment(value):\n    return value + 1\n\ndef calculate(value):\n    return increment(value)",
+  "entry_function": "calculate",
+  "parameters": [
+    {"name": "value", "kind": "integer", "values": [2, 5]}
+  ],
+  "question_template": "How many function calls are traced when calculate({value}) runs?",
+  "answer_target": "function_calls",
+  "answer_expression": "2",
+  "distractors": [
+    {"expression": "1", "reason_template": "Counts only the entry function."},
+    {"expression": "3", "reason_template": "Counts the return as a call."},
+    {"expression": "4", "reason_template": "Counts assignments and returns as calls."}
+  ],
+  "question_type": "mcq"
+}

@@ -1,13 +1,14 @@
-"""Validation tools for programming questions."""
+"""Template and validation tools for programming questions."""
 
-from edcraft_validator.domains.code.generation import (
-    OLLAMA_SYSTEM_PROMPT,
-    OPENAI_SYSTEM_PROMPT,
-    QuestionDraftResponse,
-    build_prompt,
-    normalize_plain_response,
-)
 from edcraft_validator.domains.code.pipeline import PythonValidationPipeline
+from edcraft_validator.domains.code.templates import (
+    ApprovedCodeQuestionTemplate,
+    CodeQuestionTemplate,
+    FiniteParameter,
+    ParameterValue,
+    TemplateInstanceGenerator,
+    TemplateValidator,
+)
 from edcraft_validator.domains.code.tools import (
     DistractorConsistencyTool,
     PythonExecutionTool,
@@ -16,14 +17,15 @@ from edcraft_validator.domains.code.tools import (
 )
 
 __all__ = [
+    "ApprovedCodeQuestionTemplate",
+    "CodeQuestionTemplate",
     "DistractorConsistencyTool",
-    "OPENAI_SYSTEM_PROMPT",
-    "OLLAMA_SYSTEM_PROMPT",
+    "FiniteParameter",
+    "ParameterValue",
     "PythonExecutionTool",
     "PythonValidationPipeline",
-    "QuestionDraftResponse",
     "QuestionWordingTool",
     "StaticSafetyTool",
-    "build_prompt",
-    "normalize_plain_response",
+    "TemplateInstanceGenerator",
+    "TemplateValidator",
 ]

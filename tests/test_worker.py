@@ -1,4 +1,4 @@
-from edcraft_validator._worker import execute_request
+from edcraft_validator._worker import execute_batch_request, execute_request
 
 
 def test_executes_request_and_returns_trace_summary() -> None:
@@ -16,6 +16,38 @@ def test_executes_request_and_returns_trace_summary() -> None:
     assert response["answer"] == 5
     assert response["trace_summary"]["entry_function"] == "total"
     assert response["trace_summary"]["function_calls"] >= 1
+
+
+def test_reports_total_loop_iterations() -> None:
+    response = execute_request(
+        {
+            "code": (
+                "def total(n):\n"
+                "    result = 0\n"
+                "    for i in range(n):\n"
+                "        result += i\n"
+                "    return result"
+            ),
+            "entry_function": "total",
+            "inputs": {"n": 4},
+        }
+    )
+
+    assert response["trace_summary"]["loop_executions"] == 1
+    assert response["trace_summary"]["loop_iterations"] == 4
+
+
+def test_executes_a_batch_of_inputs() -> None:
+    response = execute_batch_request(
+        {
+            "code": "def square(x):\n    return x * x",
+            "entry_function": "square",
+            "cases": [{"inputs": {"x": 2}}, {"inputs": {"x": 3}}],
+        }
+    )
+
+    assert response["ok"] is True
+    assert [result["answer"] for result in response["results"]] == [4, 9]
 
 
 def test_reports_runtime_failures_without_raising() -> None:
@@ -63,6 +95,37 @@ def test_reports_execution_timeout() -> None:
     assert response["ok"] is False
     assert response["error_code"] == "EXECUTION_TIMEOUT"
     assert "0.01 seconds" in response["error_message"]
+
+
+def test_reports_trace_limit_before_memory_exhaustion() -> None:
+    # Traced programs must stop at a deterministic event budget instead of using OOM.
+    response = execute_request(
+        {
+            "code": "def wait():\n    while True:\n        pass",
+            "entry_function": "wait",
+            "inputs": {},
+            "timeout_seconds": 10,
+            "trace_event_limit": 100,
+        }
+    )
+
+    assert response["ok"] is False
+    assert response["error_code"] == "TRACE_LIMIT_EXCEEDED"
+    assert "100 trace-event limit" in response["error_message"]
+
+
+def test_rejects_invalid_trace_limit() -> None:
+    response = execute_request(
+        {
+            "code": "def answer():\n    return 1",
+            "entry_function": "answer",
+            "inputs": {},
+            "trace_event_limit": 0,
+        }
+    )
+
+    assert response["ok"] is False
+    assert response["error_code"] == "INVALID_REQUEST"
 
 
 def test_rejects_non_finite_return_values() -> None:

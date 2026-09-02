@@ -1,0 +1,21 @@
+{
+  "template_id": "loops.sequential",
+  "version": 1,
+  "topic": "loops",
+  "difficulty": "intermediate",
+  "code": "def accumulate(n, m):\n    total = 0\n    for i in range(n):\n        total += i\n    for j in range(m):\n        total += j\n    return total",
+  "entry_function": "accumulate",
+  "parameters": [
+    {"name": "n", "kind": "integer", "values": [2, 3]},
+    {"name": "m", "kind": "integer", "values": [3, 4]}
+  ],
+  "question_template": "How many total loop-body iterations occur when accumulate({n}, {m}) runs?",
+  "answer_target": "loop_iterations",
+  "answer_expression": "n + m",
+  "distractors": [
+    {"expression": "n + m - 1", "reason_template": "Misses one iteration."},
+    {"expression": "n + m + 1", "reason_template": "Counts one extra iteration."},
+    {"expression": "n + m + 2", "reason_template": "Counts both final loop checks."}
+  ],
+  "question_type": "mcq"
+}

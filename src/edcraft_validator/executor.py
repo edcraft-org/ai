@@ -27,6 +27,17 @@ class ExecutionBackend(Protocol):
     ) -> ExecutionResult: ...
 
 
+class BatchExecutionBackend(ExecutionBackend, Protocol):
+    def execute_batch(
+        self,
+        code: str,
+        entry_function: str,
+        inputs: list[dict[str, Any]],
+        *,
+        timeout_seconds: float,
+    ) -> list[ExecutionResult]: ...
+
+
 @dataclass(frozen=True)
 class DockerExecutionConfig:
     image: str = DEFAULT_EXECUTOR_IMAGE
@@ -60,25 +71,70 @@ class DockerExecutor:
         *,
         timeout_seconds: float,
     ) -> ExecutionResult:
-        payload = json.dumps(
+        response = self._invoke_worker(
             {
                 "code": code,
                 "entry_function": entry_function,
                 "inputs": inputs,
                 "timeout_seconds": timeout_seconds,
             },
-            allow_nan=False,
+            host_timeout=timeout_seconds + self.config.startup_grace_seconds,
         )
+        if isinstance(response, ExecutionResult):
+            return response
+        return self._to_execution_result(response)
+
+    def execute_batch(
+        self,
+        code: str,
+        entry_function: str,
+        inputs: list[dict[str, Any]],
+        *,
+        timeout_seconds: float,
+    ) -> list[ExecutionResult]:
+        """Execute all inputs in one disposable container."""
+        if not inputs:
+            return []
+        response = self._invoke_worker(
+            {
+                "code": code,
+                "entry_function": entry_function,
+                "cases": [{"inputs": value} for value in inputs],
+                "timeout_seconds": timeout_seconds,
+            },
+            host_timeout=(
+                timeout_seconds * len(inputs) + self.config.startup_grace_seconds
+            ),
+        )
+        if isinstance(response, ExecutionResult):
+            return [self._copy_result(response) for _ in inputs]
+        results = response.get("results")
+        if response.get("ok") is not True or not isinstance(results, list):
+            failure = self._to_execution_result(response)
+            return [self._copy_result(failure) for _ in inputs]
+        if len(results) != len(inputs):
+            failure = ExecutionResult(
+                ok=False,
+                error_code="INVALID_WORKER_OUTPUT",
+                error_message="Execution container returned the wrong result count",
+            )
+            return [self._copy_result(failure) for _ in inputs]
+        return [self._to_execution_result(result) for result in results]
+
+    def _invoke_worker(
+        self, payload: dict[str, Any], *, host_timeout: float
+    ) -> dict[str, Any] | ExecutionResult:
+        serialized = json.dumps(payload, allow_nan=False)
         container_name = f"edcraft-validator-{uuid.uuid4().hex}"
         command = self._build_command(container_name)
 
         try:
             process = subprocess.run(
                 command,
-                input=payload,
+                input=serialized,
                 capture_output=True,
                 text=True,
-                timeout=timeout_seconds + self.config.startup_grace_seconds,
+                timeout=host_timeout,
                 check=False,
             )
         except subprocess.TimeoutExpired:
@@ -109,13 +165,36 @@ class DockerExecutor:
                 error_code="INVALID_WORKER_OUTPUT",
                 error_message="Execution container returned invalid JSON",
             )
+        if not isinstance(result, dict):
+            return ExecutionResult(
+                ok=False,
+                error_code="INVALID_WORKER_OUTPUT",
+                error_message="Execution container returned a non-object result",
+            )
+        return result
 
+    @staticmethod
+    def _to_execution_result(result: dict[str, Any]) -> ExecutionResult:
         return ExecutionResult(
-            ok=result["ok"],
+            ok=result.get("ok") is True,
             answer=result.get("answer"),
             trace_summary=result.get("trace_summary"),
-            error_code=result.get("error_code"),
-            error_message=result.get("error_message"),
+            error_code=(
+                result.get("error_code") if result.get("ok") is not True else None
+            ),
+            error_message=(
+                result.get("error_message") if result.get("ok") is not True else None
+            ),
+        )
+
+    @staticmethod
+    def _copy_result(result: ExecutionResult) -> ExecutionResult:
+        return ExecutionResult(
+            ok=result.ok,
+            answer=result.answer,
+            trace_summary=result.trace_summary,
+            error_code=result.error_code,
+            error_message=result.error_message,
         )
 
     def _build_command(self, container_name: str) -> list[str]:

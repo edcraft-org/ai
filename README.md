@@ -1,275 +1,244 @@
-# EdCraft AI Question Validator
+# EdCraft AI Question Templates
 
-This prototype validates AI-generated Python return-value MCQs without asking a
-second LLM to judge correctness.
+EdCraft uses an AI model once to author a reusable Python question template. It
+then validates the template's complete finite input domain and generates concrete
+questions deterministically without further AI calls.
 
-## Current flow
+Direct AI-to-question generation is intentionally not supported. This keeps API
+cost proportional to the number of templates rather than the number of questions.
 
-1. Parse the AI-generated draft using a strict Pydantic schema.
-2. Reject unsupported or risky Python syntax using an AST safety gate.
-3. Run EdCraft's `step-tracer` inside a restricted Docker container.
-4. Use the traced return value as the authoritative answer.
-5. Keep the model-generated distractors and misconception metadata with the
-   generation attempt, while excluding the metadata from the final question.
-6. Ensure distractors are unique, type-compatible, and wrong.
-7. Return an explainable `valid`, `invalid`, or `execution_error` report.
+## Current workflow
 
-## Run
+```text
+topic + difficulty + provider
+  -> AI authors one finite template
+  -> AST safety checks
+  -> all parameter combinations run in one Docker batch
+  -> answers and distractor recipes checked for every combination
+  -> approved template + validation hash
+  -> deterministic questions generated locally from seeds
+```
+
+Template authoring makes one provider request. Template approval uses Docker once.
+Generating a question from an approved template uses no AI, Docker, or per-question
+validation call.
+
+## Setup
 
 ```bash
 uv sync
 docker build -f docker/Dockerfile -t edcraft-validator-executor:local .
-uv run python -m edcraft_validator examples/valid_square.json
-uv run pytest
 ```
 
-The `examples` directory also contains end-to-end cases for loops and branches,
-floating-point calculations, helper-function calls, and structured dictionary
-answers. Every `valid_*.json` example is automatically exercised by the test suite.
-
-## Supported scope
-
-- One Python function return-value question per JSON document
-- Python code supplied as a readable array of lines or an escaped string
-- JSON-compatible inputs and answers
-- Basic expressions, assignments, `if`, and `for` loops
-- A small allowlist of safe built-in functions
-- Exact structured comparison and tolerant numeric comparison
-
-The first version deliberately rejects imports, attributes, classes, recursion,
-comprehensions, `while`, file access, networking, and dynamic execution.
-
-## Where EdCraft's tracer is sufficient
-
-It supplies the execution trace, function arguments, return value, loop events,
-branch events, and variable snapshots. Reusing it avoids implementing another
-Python instrumentation engine.
-
-## Where the tracer is insufficient
-
-- It executes transformed code with in-process `exec()` and is not a sandbox.
-- It has no timeout, CPU limit, memory limit, filesystem restriction, or network
-  restriction.
-- Calls inside lambdas and comprehensions and walrus assignments are not traced.
-- Class and instance state tracking is incomplete.
-- It does not decide whether an AI answer or distractor is correct.
-- It does not check whether natural-language wording matches the code semantics.
-
-## Docker execution boundary
-
-The default executor starts one disposable container per question. It applies:
-
-- no network access;
-- a read-only root filesystem;
-- 128 MB memory and swap limits;
-- half of one CPU and a 64-process limit;
-- all Linux capabilities dropped;
-- `no-new-privileges` and an unprivileged user;
-- 16 MB of temporary storage; and
-- an in-container code timeout, plus a separate Docker startup allowance and
-  host-enforced cleanup fallback.
-
-If the host fallback is reached, validation reports `CONTAINER_TIMEOUT` rather
-than incorrectly attributing Docker startup delay to the generated program.
-
-The image uses a pinned Step Tracer commit. Build the image again when that pinned
-version or the worker implementation changes.
-
-## Fake generation pipeline
-
-Before connecting an AI provider, the model-independent generation pipeline can
-be exercised using the existing examples:
-
-```powershell
-uv run python -m edcraft_validator.generation `
-  --provider fake `
-  --topic loops `
-  --difficulty intermediate `
-  --num-distractors 3
-```
-
-Supported topics are `arithmetic`, `conditionals`, `loops`, `functions`, and
-`lists`. Difficulties are `beginner`, `intermediate`, and `advanced`. The fake
-generator selects a fixed example by topic; difficulty will be used by the future
-AI implementation.
-
-The service makes at most three complete generation attempts. Invalid drafts are
-sent back as feedback for another attempt, while infrastructure or execution
-errors stop the run without wasting another generation. Misconception reasons
-are retained in attempt logs but are not part of the final question payload.
-Attempts are appended to
-`.artifacts/generation_attempts.jsonl`, which is excluded from Git.
-
-## Generation observability
-
-Each attempt log record includes the provider, model, generation and validation
-durations, outcome status, and validation issue codes. The service also keeps
-process-local counters for attempts, outcomes, provider requests, issue codes,
-and total stage durations. Prompts and API credentials are not added to
-telemetry.
-
-## Provider architecture
-
-The generation service depends on the model-independent `QuestionGenerator`
-protocol. Provider adapters handle communication and provider-specific response
-decoding; the code domain owns the Python prompt and candidate schema in
-`domains/code/generation.py`. The deterministic validator then computes the
-answer and decides whether to accept or retry the candidate. Provider failures
-are recorded as retryable attempts with timing and issue codes.
-
-The application layer in `application/generate_question.py` owns dependency
-wiring. The CLI and future frontends call that application service instead of
-constructing providers and validators themselves. The CLI constructs adapters
-through the provider registry. To add a model, implement `generate_draft` and
-provider metadata, register the factory in `generation/registry.py`, and add
-adapter tests. The CLI routing code does not need to change.
-
-## Validation architecture and future domains
-
-Generated provider output is represented as an untrusted `QuestionCandidate`.
-It is promoted to a `GeneratedQuestion` only after the validation pipeline has
-computed the authoritative answer. Domain-specific code now lives under
-`edcraft_validator/domains`:
-
-```text
-domains/
-  code/
-    generation.py
-    pipeline.py
-    tools.py
-  math/       # future
-  physics/    # future
-```
-
-The current code-domain pipeline is composed of focused tools:
-
-```text
-QuestionCandidate
-  -> static_safety
-  -> python_execution (Docker + Step Tracer)
-  -> distractor_consistency
-  -> question_wording
-  -> ValidationRun / ValidationReport
-```
-
-Each tool returns a `ToolResult` containing its status, issues, facts, and
-duration. The pipeline aggregates those results into a `ValidationRun`; the
-existing `QuestionValidator` is a small compatibility facade that converts the
-run into the original `ValidationReport` shape. Tool evidence is available in
-`ValidationReport.tool_results`.
-
-When another domain is added, give it its own module with a candidate schema,
-focused tools, and pipeline. For example, a future math module could contain
-SymPy and Lean adapters, while a physics module could contain unit,
-dimensional-analysis, and numerical-solver adapters. These modules should not
-be added to the Python pipeline. A domain registry or validation profiles can be
-introduced when there are at least two real domain pipelines. Both the CLI and
-a future HTTP frontend should call an application service rather than importing
-provider or tool implementations directly.
-
-## OpenAI generation pipeline
-
-Paste your replacement API key into the local `.env` file. This file is excluded
-from Git and must never be committed:
+Configure only the provider you intend to select:
 
 ```dotenv
 OPENAI_API_KEY=your-key-here
 OPENAI_MODEL=gpt-5-mini
+
+OLLAMA_MODEL=qwen2.5-coder:14b
+OLLAMA_TIMEOUT_SECONDS=300
+OLLAMA_TEMPERATURE=0.2
 ```
 
-Select the provider explicitly with `--provider`; provider selection is not read
-from `.env`.
+Provider selection is always explicit through `--provider`.
 
-Generate and deterministically validate one question with OpenAI:
+## Author and approve a template
+
+OpenAI uses strict Structured Outputs:
 
 ```bash
-cd ai
-uv run python -m edcraft_validator.generation \
+uv run python -m edcraft_validator.template author \
   --provider openai \
+  --topic arithmetic \
+  --difficulty beginner \
+  --num-distractors 3 \
+  --output /tmp/approved-template.json
+```
+
+Ollama uses its native structured schema endpoint and the same local template
+contract:
+
+```bash
+/usr/bin/time -p uv run python -m edcraft_validator.template author \
+  --provider ollama \
   --topic loops \
-  --difficulty intermediate \
-  --num-distractors 3
+  --difficulty beginner \
+  --num-distractors 3 \
+  --output /tmp/approved-loop-template.json
 ```
+
+SocLaas is also registered through its OpenAI-compatible endpoint. Configure
+`SOCLAAS_API_KEY`, `SOCLAAS_BASE_URL`, and `SOCLAAS_MODEL`, then select
+`--provider soclaas`.
+
+## Validate an existing raw template
+
+The repository includes examples for integers, booleans, strings, and integer
+lists:
 
 ```bash
-uv run python -m edcraft_validator.generation --provider openai --topic loops --difficulty intermediate --num-distractors 3
+uv run python -m edcraft_validator.template validate \
+  examples/templates/arithmetic_linear.json \
+  --output /tmp/approved-arithmetic-template.json
+
+uv run python -m edcraft_validator.template validate \
+  examples/templates/loop_iterations.json \
+  --output /tmp/approved-loop-template.json
+
+uv run python -m edcraft_validator.template validate \
+  examples/templates/conditional_boolean.json \
+  --output /tmp/approved-boolean-template.json
+
+uv run python -m edcraft_validator.template validate \
+  examples/templates/conditional_string.json \
+  --output /tmp/approved-string-template.json
+
+uv run python -m edcraft_validator.template validate \
+  examples/templates/list_sum.json \
+  --output /tmp/approved-list-template.json
 ```
 
-The command prints the generated question as JSON. To save and inspect it:
+Approval checks every value in the template's Cartesian product. All cases are
+sent to one disposable Docker container to avoid repeated startup costs.
+
+## Generate concrete questions locally
+
+The same seed and approved template always produce the same output:
 
 ```bash
-uv run python -m edcraft_validator.generation --provider openai --topic loops --difficulty intermediate --num-distractors 3 --no-log > /tmp/openai-question.json
-jq . /tmp/openai-question.json
+uv run python -m edcraft_validator.template generate \
+  /tmp/approved-arithmetic-template.json --seed 42
+
+uv run python -m edcraft_validator.template generate \
+  /tmp/approved-arithmetic-template.json --seed 43
 ```
 
-Ollama uses the same model-independent request and validation pipeline. Start
-Ollama, make sure the configured model is available, then run:
+Each output records the template ID, version, SHA-256 hash, seed, selected
+parameters, code, question, answer target, answer, and distractors.
+
+## Currently supported
+
+- Domain: Python code execution-trace MCQs.
+- Providers: OpenAI, Ollama, and SocLaas.
+- Topic selections: `arithmetic`, `conditionals`, `loops`, `functions`, and
+  `lists`.
+- Difficulties: `beginner`, `intermediate`, and `advanced`, each with a distinct
+  validator-backed authoring profile per topic.
+- Template parameters: one to three explicitly typed finite parameters. Supported
+  kinds are integers, booleans, bounded printable strings, and bounded integer
+  lists. Each parameter has two to four unique values.
+- Exhaustive approval: at most 64 total parameter combinations.
+- Answers: restricted arithmetic, comparisons, boolean operators, conditional
+  expressions, list literals, indexing, and the allowlisted functions `len`, `sum`,
+  `min`, `max`, `sorted`, `all`, and `any`.
+- Distractors: two or three deterministic expressions, each with a misconception
+  reason template.
+- Reproducibility: deterministic seed selection and template tamper detection.
+
+Topic currently selects the answer target as follows:
+
+| Topic | Answer target |
+| --- | --- |
+| `arithmetic` | Entry-function return value |
+| `conditionals` | Number of evaluated `if` conditions |
+| `loops` | Total loop-body iterations |
+| `functions` | Traced function calls, including the entry call and safe built-ins |
+| `lists` | Entry-function return value |
+
+The execution tracer can also represent `loop_executions`, the number of loop
+statements encountered, although the current topic mapping uses total iterations
+for loop templates.
+
+### Code-domain coverage matrix
+
+The repository contains one exhaustively validated template for every supported
+topic and difficulty pair (15 total):
+
+| Topic | Beginner | Intermediate | Advanced |
+| --- | --- | --- | --- |
+| Arithmetic | Short integer expression | Boolean adjustment | List aggregate with string mode |
+| Conditionals | Boolean branch | Sequential string branches | Nested branches and early returns |
+| Loops | One range loop | Sequential loops | Nested loops |
+| Functions | One helper | Helper inside a loop | Nested helpers inside a loop |
+| Lists | Aggregate | Sorting | Indexing and aggregate arithmetic |
+
+The test suite fails if any topic/difficulty pair is missing or duplicated. Every
+template is checked against all finite parameter combinations with the real tracer,
+and the Docker integration suite repeats the same matrix across the sandbox boundary.
+
+Supported generated Python includes basic expressions, assignments, `if`, bounded
+`for` loops, helper functions, and a small allowlist of safe built-ins. The safety
+gate rejects imports, attributes, classes, decorators, recursion, comprehensions,
+`while`, file access, networking, and dynamic execution.
+
+## Validation boundary
+
+Docker execution applies no network access, a read-only root filesystem, memory
+and CPU limits, dropped Linux capabilities, `no-new-privileges`, an unprivileged
+user, host/in-container timeouts, and a 100,000 user-code trace-event limit. The
+event limit stops trace data growth deterministically before the container reaches
+its memory ceiling. EdCraft's pinned `step-tracer` supplies return values and
+execution counts; it is not treated as a sandbox outside this Docker boundary.
+
+The standalone concrete-question validator remains available for debugging,
+examples, and future validation tools:
 
 ```bash
-ollama pull qwen2.5-coder:14b
-export OLLAMA_TIMEOUT_SECONDS=300
-export OLLAMA_TEMPERATURE=0.2
-/usr/bin/time -p uv run python -m edcraft_validator.generation --provider ollama --topic loops --difficulty intermediate --num-distractors 3 --no-log > /tmp/ollama-question.json
-jq . /tmp/ollama-question.json
+uv run python -m edcraft_validator examples/valid_square.json
 ```
 
-Ollama receives a deliberately simple, non-recursive wire schema: `inputs` is a
-JSON object and `distractors` is a JSON array. The shared adapter converts this
-response into the tagged domain model and performs strict local validation. The
-`time -p` wrapper records the rough wall-clock cost, including failed or timed-out
-runs.
+It is not part of normal template-based question expansion.
 
-OpenAI uses strict Structured Outputs with the tagged domain schema. This keeps
-schema adherence at the API boundary while allowing Ollama to use a smaller,
-more reliable schema for local constrained decoding.
+## Architecture
 
-Provider selection is always explicit through `--provider`; it is not inferred
-from the environment. `OPENAI_MODEL`, `OLLAMA_MODEL`, and `SOCLAAS_MODEL` only
-select the model for the explicitly selected provider.
+```text
+application/generate_template.py   frontend-facing use case
+domains/code/templates.py          code template schema, prompt, approval, expansion
+generation/base.py                 provider-neutral template protocol
+generation/registry.py             explicit provider selection and extension point
+generation/openai.py               OpenAI and SocLaas adapters
+generation/ollama.py               Ollama adapter
+executor.py + _worker.py            batched Docker execution
+domains/code/pipeline.py           standalone concrete-question validation pipeline
+```
+
+To add another model, implement `QuestionTemplateGenerator.generate_template`,
+register its factory with `register_template_provider`, and add an adapter test.
+The application and CLI do not need provider-specific branches.
+
+Future math and physics domains should have their own template schema, approval
+tools, and instance generator under `domains/`. SymPy or Lean should not be added
+to the Python-specific pipeline.
 
 ## Tests
 
-Run the fast suite without requiring Docker:
+Mocked provider tests run by default and make no paid API calls:
 
 ```bash
 uv run pytest -m "not docker"
+uv run ruff check .
+uv run ruff format --check .
 ```
 
-Run the focused provider tests:
+Run all tests, including Docker integration:
 
 ```bash
-uv run pytest tests/test_ollama_generator.py -q
+uv run pytest
 ```
 
-OpenAI provider tests use mocked clients and run in the normal test suite. The
-real API test is opt-in and should be run before a PR:
+Run only the complete code-template matrix locally:
+
+```bash
+uv run pytest tests/test_templates.py -q
+```
+
+The real OpenAI template-authoring test is opt-in locally and runs for same-repo
+pull requests. CI fails clearly if the `OPENAI_API_KEY` GitHub secret is missing:
 
 ```bash
 RUN_OPENAI_LIVE_TESTS=1 uv run pytest -m openai_live -q
 ```
 
-The pull-request CI workflow runs the real API test for pull requests from the
-main repository using the `OPENAI_API_KEY` GitHub Actions secret. Forked pull
-requests do not receive this secret and therefore skip that live-test job.
-
-Run the complete suite, including Docker integration tests, after starting the
-Docker daemon:
-
-```bash
-uv run pytest
-```
-
-Formatting and lint checks:
-
-```bash
-uv run ruff format --check src tests
-uv run ruff check src tests
-```
-
-The OpenAI model only generates candidates. The existing AST safety checks,
-Docker execution, answer comparison, and retry rules remain responsible for
-validation.
-
-## Reproducibility
-
-See [REPRODUCIBILITY.md](REPRODUCIBILITY.md) for pinned dependencies, environment setup, and verification commands.
+See [REPRODUCIBILITY.md](REPRODUCIBILITY.md) for pinned dependencies and
+environment details.

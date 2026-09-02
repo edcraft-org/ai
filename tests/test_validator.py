@@ -35,6 +35,7 @@ def successful_execution(answer: Any = 16) -> ExecutionResult:
             "entry_function": "square",
             "function_calls": 1,
             "loop_executions": 0,
+            "loop_iterations": 0,
             "branch_executions": 0,
             "variable_snapshots": 1,
         },
@@ -74,6 +75,23 @@ def test_valid_question() -> None:
     assert report.actual_answer == 16
     assert report.trace_summary is not None
     assert report.trace_summary.entry_function == "square"
+
+
+def test_trace_metric_can_be_the_authoritative_answer() -> None:
+    execution = successful_execution(answer=6)
+    execution.trace_summary["loop_executions"] = 1
+    execution.trace_summary["loop_iterations"] = 4
+    question = make_question(
+        question="How many total loop-body iterations occur in square(4)?",
+        proposed_answer=4,
+        distractors=[3, 5, 6],
+        answer_target="loop_iterations",
+    )
+
+    report = validator_with(execution).validate(question)
+
+    assert report.status == "valid"
+    assert report.actual_answer == 4
 
 
 def test_wrong_answer_is_rejected() -> None:

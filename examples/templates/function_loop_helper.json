@@ -1,0 +1,20 @@
+{
+  "template_id": "functions.loop_helper",
+  "version": 1,
+  "topic": "functions",
+  "difficulty": "intermediate",
+  "code": "def increment(value):\n    return value + 1\n\ndef calculate(n):\n    total = 0\n    for i in range(n):\n        total += increment(i)\n    return total",
+  "entry_function": "calculate",
+  "parameters": [
+    {"name": "n", "kind": "integer", "values": [2, 3, 4]}
+  ],
+  "question_template": "How many function calls, including range, are traced when calculate({n}) runs?",
+  "answer_target": "function_calls",
+  "answer_expression": "n + 2",
+  "distractors": [
+    {"expression": "n + 1", "reason_template": "Omits either calculate or range."},
+    {"expression": "n + 3", "reason_template": "Counts one non-call operation."},
+    {"expression": "2 * n + 2", "reason_template": "Double-counts each helper call."}
+  ],
+  "question_type": "mcq"
+}

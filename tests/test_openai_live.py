@@ -2,22 +2,25 @@ import os
 
 import pytest
 
-from edcraft_validator.generation.models import GenerationRequest
-from edcraft_validator.generation.openai import OpenAIQuestionGenerator
+from edcraft_validator.generation.models import TemplateAuthoringRequest
+from edcraft_validator.generation.openai import OpenAITemplateGenerator
 
 pytestmark = pytest.mark.openai_live
 
 
-def test_real_openai_generation() -> None:
+def test_real_openai_template_authoring() -> None:
     """Exercise the configured OpenAI model before submitting a PR."""
     if not os.getenv("OPENAI_API_KEY"):
         pytest.skip("OPENAI_API_KEY is not configured")
 
-    draft = OpenAIQuestionGenerator().generate_draft(
-        GenerationRequest(topic="arithmetic", difficulty="beginner")
+    template = OpenAITemplateGenerator().generate_template(
+        TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
     )
 
-    assert draft.code
-    assert draft.entry_function
-    assert len(draft.distractors) == 3
-    assert len(draft.distractor_reasons) == 3
+    assert template.topic == "arithmetic"
+    assert template.difficulty == "beginner"
+    assert template.code
+    assert template.answer_expression
+    assert len(template.distractors) == 3
+    assert [parameter.name for parameter in template.parameters] == ["a", "b"]
+    assert all(parameter.kind == "integer" for parameter in template.parameters)

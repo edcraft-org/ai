@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "edcraft-validator"
 version = "0.1.0"
-description = "Deterministic validation for AI-generated EdCraft questions"
+description = "Reusable, deterministically validated EdCraft question templates"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -28,7 +28,7 @@ step-tracer = { git = "https://github.com/edcraft-org/step-tracer.git", rev = "a
 testpaths = ["tests"]
 markers = [
     "docker: tests requiring the Docker executor image",
-    "openai_live: real OpenAI API test, run explicitly before a PR",
+    "openai_live: real OpenAI template-authoring API test, run before a PR",
 ]
 
 [tool.ruff]

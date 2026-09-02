@@ -1,0 +1,33 @@
+{
+  "template_id": "lists.integer_sum",
+  "version": 1,
+  "topic": "lists",
+  "difficulty": "beginner",
+  "code": "def total(values):\n    return sum(values)",
+  "entry_function": "total",
+  "parameters": [
+    {
+      "name": "values",
+      "kind": "integer_list",
+      "values": [[2, 3], [4, 1], [2, 2, 3]]
+    }
+  ],
+  "question_template": "What does total({values}) return?",
+  "answer_target": "return_value",
+  "answer_expression": "sum(values)",
+  "distractors": [
+    {
+      "expression": "len(values)",
+      "reason_template": "Returns the list length instead of its sum."
+    },
+    {
+      "expression": "sum(values) + 1",
+      "reason_template": "Adds one extra to the sum."
+    },
+    {
+      "expression": "sum(values) - 1",
+      "reason_template": "Omits one from the sum."
+    }
+  ],
+  "question_type": "mcq"
+}

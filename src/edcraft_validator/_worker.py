@@ -5,8 +5,14 @@ from typing import Any
 
 from step_tracer import BranchExecution, FunctionCall, LoopExecution, StepTracer
 
+DEFAULT_TRACE_EVENT_LIMIT = 100_000
+
 
 class ExecutionTimedOutError(TimeoutError):
+    pass
+
+
+class TraceLimitExceededError(RuntimeError):
     pass
 
 
@@ -14,9 +20,44 @@ def _raise_execution_timeout(signum: int, frame: Any) -> None:
     raise ExecutionTimedOutError
 
 
+def _execute_with_trace_limit(
+    tracer: StepTracer, transformed_code: str, trace_event_limit: int
+) -> Any:
+    """Execute transformed user code with a bounded number of Python line events."""
+    events = 0
+
+    def count_user_code_events(frame: Any, event: str, _arg: Any) -> Any:
+        nonlocal events
+        if frame.f_code.co_filename != "<string>":
+            return None
+        if event == "line":
+            events += 1
+            if events > trace_event_limit:
+                raise TraceLimitExceededError
+        return count_user_code_events
+
+    previous_trace = sys.gettrace()
+    sys.settrace(count_user_code_events)
+    try:
+        return tracer.execute_transformed_code(transformed_code)
+    finally:
+        sys.settrace(previous_trace)
+
+
 def execute_request(request: dict[str, Any]) -> dict[str, Any]:
     """Execute one trusted request; production callers must use the container."""
     timeout_seconds = request.get("timeout_seconds")
+    trace_event_limit = request.get("trace_event_limit", DEFAULT_TRACE_EVENT_LIMIT)
+    if (
+        not isinstance(trace_event_limit, int)
+        or isinstance(trace_event_limit, bool)
+        or trace_event_limit <= 0
+    ):
+        return {
+            "ok": False,
+            "error_code": "INVALID_REQUEST",
+            "error_message": "trace_event_limit must be a positive integer",
+        }
     timer_enabled = timeout_seconds is not None and hasattr(signal, "setitimer")
     try:
         if timer_enabled:
@@ -28,7 +69,7 @@ def execute_request(request: dict[str, Any]) -> dict[str, Any]:
 
         tracer = StepTracer()
         transformed = tracer.transform_code(request["code"] + invocation)
-        context = tracer.execute_transformed_code(transformed)
+        context = _execute_with_trace_limit(tracer, transformed, trace_event_limit)
 
         entry_calls = [
             event
@@ -62,6 +103,11 @@ def execute_request(request: dict[str, Any]) -> dict[str, Any]:
             "loop_executions": sum(
                 isinstance(event, LoopExecution) for event in context.execution_trace
             ),
+            "loop_iterations": sum(
+                event.num_iterations
+                for event in context.execution_trace
+                if isinstance(event, LoopExecution)
+            ),
             "branch_executions": sum(
                 isinstance(event, BranchExecution) for event in context.execution_trace
             ),
@@ -74,6 +120,14 @@ def execute_request(request: dict[str, Any]) -> dict[str, Any]:
             "error_code": "EXECUTION_TIMEOUT",
             "error_message": f"Execution exceeded {timeout_seconds:g} seconds",
         }
+    except TraceLimitExceededError:
+        return {
+            "ok": False,
+            "error_code": "TRACE_LIMIT_EXCEEDED",
+            "error_message": (
+                f"Execution exceeded the {trace_event_limit} trace-event limit"
+            ),
+        }
     except Exception as exc:
         return {
             "ok": False,
@@ -85,10 +139,32 @@ def execute_request(request: dict[str, Any]) -> dict[str, Any]:
             signal.setitimer(signal.ITIMER_REAL, 0)
 
 
+def execute_batch_request(request: dict[str, Any]) -> dict[str, Any]:
+    """Execute several input combinations for the same program in one worker."""
+    cases = request["cases"]
+    if not isinstance(cases, list) or not cases:
+        raise ValueError("cases must be a non-empty list")
+    common = {
+        "code": request["code"],
+        "entry_function": request["entry_function"],
+        "timeout_seconds": request.get("timeout_seconds"),
+    }
+    return {
+        "ok": True,
+        "results": [
+            execute_request({**common, "inputs": case["inputs"]}) for case in cases
+        ],
+    }
+
+
 def main() -> None:
     try:
         request = json.loads(sys.stdin.read())
-        response = execute_request(request)
+        response = (
+            execute_batch_request(request)
+            if "cases" in request
+            else execute_request(request)
+        )
     except Exception as exc:
         response = {
             "ok": False,
