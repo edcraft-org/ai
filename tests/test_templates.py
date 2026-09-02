@@ -218,16 +218,40 @@ def test_beginner_arithmetic_prompt_forbids_operator_parameter() -> None:
     assert "Do not create a parameter for the operator" in prompt
 
 
-def test_prompt_requests_extra_distractor_candidates_in_the_same_call() -> None:
+def test_prompt_requests_only_the_needed_model_distractors() -> None:
     prompt = build_template_prompt(
         TemplateAuthoringRequest(
             topic="arithmetic", difficulty="beginner", num_distractors=2
         )
     )
 
-    assert "exactly 4 distractor candidates" in prompt
+    assert "exactly 2 distractor candidates" in prompt
     assert "will select 2" in prompt
     assert "local application adds mechanical fallback candidates" in prompt
+
+
+def test_two_model_distractors_are_enough_when_two_are_requested() -> None:
+    canonical = template()
+    payload = canonical.model_dump(
+        include={
+            "code",
+            "entry_function",
+            "parameters",
+            "answer_expression",
+            "distractors",
+        }
+    )
+    payload["distractors"] = payload["distractors"][:2]
+    proposal = CodeTemplateProposal.model_validate(payload)
+
+    normalized = normalize_code_template_proposal(
+        TemplateAuthoringRequest(
+            topic="arithmetic", difficulty="beginner", num_distractors=2
+        ),
+        proposal,
+    )
+
+    assert len(normalized.distractors) == 5
 
 
 def test_prompt_serializes_the_exact_capability_contract() -> None:

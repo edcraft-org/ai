@@ -71,7 +71,7 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     messages = payload["messages"]
     assert "finite Cartesian product" in messages[0]["content"]
     assert "answer_target=return_value" in messages[1]["content"]
-    assert "exactly 5 distractor candidates" in messages[1]["content"]
+    assert "exactly 3 distractor candidates" in messages[1]["content"]
     assert captured["timeout"] == 300
 
 
@@ -187,7 +187,7 @@ def test_ollama_prompt_metadata_is_stable_and_wire_specific() -> None:
     second = generator.prompt_metadata(request)
 
     assert first == second
-    assert first.version == "code-template-v7+ollama-wire-v1"
+    assert first.version == "code-template-v8+ollama-wire-v1"
     assert len(first.sha256) == 64
     assert (
         first.sha256

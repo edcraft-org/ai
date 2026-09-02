@@ -40,7 +40,7 @@ MAX_EXPRESSION_FLOAT_ABS = 1_000_000_000.0
 MAX_EXPRESSION_SEQUENCE_LENGTH = 100
 MAX_EXPRESSION_VALUE_SIZE = 1_000
 MAX_EXPRESSION_VALUE_DEPTH = 20
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v7"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v8"
 ParameterValue = int | bool | str | list[int]
 
 
@@ -121,7 +121,7 @@ class CodeTemplateProposal(BaseModel):
     entry_function: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     parameters: list[FiniteParameter] = Field(min_length=1, max_length=3)
     answer_expression: str = Field(min_length=1)
-    distractors: list[DistractorRecipe] = Field(min_length=3, max_length=5)
+    distractors: list[DistractorRecipe] = Field(min_length=2, max_length=5)
 
     @field_validator("code", "answer_expression")
     @classmethod
@@ -1050,7 +1050,7 @@ class SafeExpression:
 
 def build_template_prompt(request: TemplateAuthoringRequest) -> str:
     profile = code_template_profile(request.topic, request.difficulty)
-    candidate_count = min(request.num_distractors + 2, 5)
+    candidate_count = request.num_distractors
     shapes = [
         {
             "kinds": list(shape.kinds),

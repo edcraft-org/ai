@@ -76,7 +76,7 @@ def test_generates_template_using_strict_structured_outputs() -> None:
     messages = client.chat.completions.arguments["messages"]
     assert "finite Cartesian product" in messages[0]["content"]
     assert "answer_target=return_value" in messages[1]["content"]
-    assert "exactly 5 distractor candidates" in messages[1]["content"]
+    assert "exactly 3 distractor candidates" in messages[1]["content"]
 
 
 def test_reports_empty_template_response() -> None:
@@ -138,7 +138,7 @@ def test_openai_prompt_metadata_is_stable() -> None:
     second = generator.prompt_metadata(request)
 
     assert first == second
-    assert first.version == "code-template-v7"
+    assert first.version == "code-template-v8"
     assert len(first.sha256) == 64
     assert (
         first.sha256

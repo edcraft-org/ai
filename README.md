@@ -21,7 +21,8 @@ topic + difficulty + provider
   -> deterministic questions generated locally from seeds
 ```
 
-Template authoring makes one provider request, including extra distractor candidates.
+Template authoring makes one provider request for the requested misconception
+candidates. Local normalization adds mechanical fallbacks without another AI call.
 Template approval uses Docker once.
 Generating a question from an approved template uses no AI, Docker, or per-question
 validation call.
@@ -148,7 +149,7 @@ Rendered misconception reasons are preserved alongside their selected distractor
 - Expression safety: at most 500 source characters and 100 syntax nodes; numeric
   intermediates are bounded to magnitude 1 billion, individual sequences to 100
   items, and complete nested values to a cumulative logical size of 1,000.
-- Distractors: the provider proposes up to two extra misconception candidates in the
+- Distractors: the provider proposes the requested misconception candidates in the
   same call. Local normalization appends type-compatible deterministic fallbacks, and
   the finite-domain validator searches candidate subsets to retain the requested two
   or three globally unique expressions with reason templates.

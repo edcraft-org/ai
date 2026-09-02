@@ -77,7 +77,7 @@ class OllamaProposalWire(BaseModel):
         min_length=1,
         description="Expression over parameter names for the selected trace target",
     )
-    distractors: list[OllamaDistractorWire] = Field(min_length=3, max_length=5)
+    distractors: list[OllamaDistractorWire] = Field(min_length=2, max_length=5)
 
 
 class OllamaTemplateGenerator:
