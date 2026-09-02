@@ -417,51 +417,46 @@ class TemplateValidator:
             for values in itertools.product(*value_domains)
         ]
         expected_answers = [answer.evaluate(inputs) for inputs in inputs_cases]
-        selected: list[DistractorRecipe] = []
-        selected_values = [[] for _ in inputs_cases]
         failures: list[str] = []
 
-        for candidate_index, recipe in enumerate(template.distractors):
+        for candidate_indexes in itertools.combinations(
+            range(len(template.distractors)), num_distractors
+        ):
+            recipes = [template.distractors[index] for index in candidate_indexes]
             try:
-                expression = SafeExpression(recipe.expression, names)
-                candidate_values = []
-                for case_index, (inputs, expected_answer) in enumerate(
-                    zip(inputs_cases, expected_answers, strict=True)
+                expressions = [
+                    SafeExpression(recipe.expression, names) for recipe in recipes
+                ]
+                for inputs, expected_answer in zip(
+                    inputs_cases, expected_answers, strict=True
                 ):
-                    candidate = expression.evaluate(inputs)
+                    candidate_values = [
+                        expression.evaluate(inputs) for expression in expressions
+                    ]
                     cls._validate_distractors(
                         inputs,
                         expected_answer,
-                        [*selected_values[case_index], candidate],
+                        candidate_values,
                     )
-                    render_template(recipe.reason_template, inputs)
-                    candidate_values.append(candidate)
+                    for recipe in recipes:
+                        render_template(recipe.reason_template, inputs)
             except (
                 TemplateValidationError,
                 ArithmeticError,
                 TypeError,
                 ValueError,
             ) as exc:
-                failures.append(f"candidate {candidate_index}: {exc}")
+                rendered_indexes = ",".join(str(index) for index in candidate_indexes)
+                failures.append(f"candidates {rendered_indexes}: {exc}")
                 continue
+            return template.model_copy(update={"distractors": recipes}, deep=True)
 
-            selected.append(recipe)
-            for values, candidate in zip(
-                selected_values, candidate_values, strict=True
-            ):
-                values.append(candidate)
-            if len(selected) == num_distractors:
-                break
-
-        if len(selected) < num_distractors:
-            detail = "; ".join(failures[:3]) or "not enough candidates"
-            raise TemplateValidationError(
-                f"only {len(selected)} of {num_distractors} required distractors are "
-                f"globally valid: {detail}",
-                code="DISTRACTOR_SELECTION_FAILED",
-                field="distractors",
-            )
-        return template.model_copy(update={"distractors": selected}, deep=True)
+        detail = "; ".join(failures[:3]) or "not enough candidates"
+        raise TemplateValidationError(
+            f"no set of {num_distractors} distractors is globally valid: {detail}",
+            code="DISTRACTOR_SELECTION_FAILED",
+            field="distractors",
+        )
 
     def _execute_all(
         self,

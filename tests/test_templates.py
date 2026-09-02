@@ -519,13 +519,46 @@ def test_rejects_a_distractor_that_is_correct_for_any_case() -> None:
     assert error.value.inputs is not None
 
 
+def test_distractor_selection_is_not_dependent_on_greedy_candidate_order() -> None:
+    value = template().model_dump(mode="json")
+    value["parameters"] = [
+        {"name": "a", "kind": "integer", "values": [1, 2]},
+        {"name": "b", "kind": "integer", "values": [3, 4]},
+    ]
+    value["code"] = "def calculate(a, b):\n    return a + b + 10"
+    value["question_template"] = "What does calculate({a}, {b}) return?"
+    value["answer_expression"] = "a + b + 10"
+    value["distractors"] = [
+        {"expression": "0", "reason_template": "Uses zero."},
+        {"expression": "a - 1", "reason_template": "Subtracts one."},
+        {"expression": "2 - a", "reason_template": "Reverses subtraction."},
+    ]
+    item = CodeQuestionTemplate.model_validate(value)
+
+    class AddTenExecutor:
+        def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+            return [
+                ExecutionResult(ok=True, answer=case["a"] + case["b"] + 10)
+                for case in inputs
+            ]
+
+    approved = TemplateValidator(executor=AddTenExecutor()).validate(
+        item, num_distractors=2
+    )
+
+    assert [recipe.expression for recipe in approved.template.distractors] == [
+        "a - 1",
+        "2 - a",
+    ]
+
+
 def test_candidate_selection_reports_when_too_few_are_globally_valid() -> None:
     data = template().model_dump()
     for distractor in data["distractors"]:
         distractor["expression"] = "a + b - c"
     item = CodeQuestionTemplate.model_validate(data)
 
-    with pytest.raises(TemplateValidationError, match="only 0 of 3") as error:
+    with pytest.raises(TemplateValidationError, match="no set of 3") as error:
         TemplateValidator(executor=ArithmeticExecutor()).validate(
             item, num_distractors=3
         )
