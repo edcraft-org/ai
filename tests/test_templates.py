@@ -477,10 +477,14 @@ def test_rejects_a_distractor_that_is_correct_for_any_case() -> None:
     value = template().model_dump()
     value["distractors"][0]["expression"] = "a + b - c"
 
-    with pytest.raises(TemplateValidationError, match="equals the answer"):
+    with pytest.raises(TemplateValidationError, match="equals the answer") as error:
         TemplateValidator(executor=ArithmeticExecutor()).validate(
             CodeQuestionTemplate.model_validate(value)
         )
+
+    assert error.value.code == "DISTRACTOR_EQUALS_ANSWER"
+    assert error.value.field == "distractors.0"
+    assert error.value.inputs is not None
 
 
 def test_candidate_selection_reports_when_too_few_are_globally_valid() -> None:
@@ -489,10 +493,13 @@ def test_candidate_selection_reports_when_too_few_are_globally_valid() -> None:
         distractor["expression"] = "a + b - c"
     item = CodeQuestionTemplate.model_validate(data)
 
-    with pytest.raises(TemplateValidationError, match="only 0 of 3"):
+    with pytest.raises(TemplateValidationError, match="only 0 of 3") as error:
         TemplateValidator(executor=ArithmeticExecutor()).validate(
             item, num_distractors=3
         )
+
+    assert error.value.code == "DISTRACTOR_SELECTION_FAILED"
+    assert error.value.field == "distractors"
 
 
 def test_rejects_profile_answer_target_mismatch_before_execution() -> None:
@@ -519,8 +526,19 @@ def test_rejects_profile_parameter_shape_mismatch_before_execution() -> None:
 def test_rejects_missing_profile_code_feature_before_execution() -> None:
     item = template(code="def calculate(a, b, c):\n    return a")
 
-    with pytest.raises(TemplateValidationError, match="missing required features"):
+    with pytest.raises(
+        TemplateValidationError, match="missing required features"
+    ) as error:
         TemplateValidator(executor=ArithmeticExecutor()).validate(item)
+
+    assert error.value.as_dict() == {
+        "code": "PROFILE_MISMATCH",
+        "message": (
+            "arithmetic/beginner code is missing required features: arithmetic"
+        ),
+        "field": "code",
+        "inputs": None,
+    }
 
 
 def test_rejects_non_positive_profile_integer_domain_before_execution() -> None:
@@ -537,6 +555,19 @@ def test_rejects_non_positive_profile_integer_domain_before_execution() -> None:
 def test_rejects_non_allowlisted_expression_calls() -> None:
     with pytest.raises(TemplateValidationError, match="unsupported expression syntax"):
         SafeExpression("open(a)", ("a",))
+
+
+def test_answer_mismatch_reports_the_failing_inputs() -> None:
+    item = template(answer_expression="a + b + c")
+
+    with pytest.raises(
+        TemplateValidationError, match="does not match the execution target"
+    ) as error:
+        TemplateValidator(executor=ArithmeticExecutor()).validate(item)
+
+    assert error.value.code == "ANSWER_MISMATCH"
+    assert error.value.field == "answer_expression"
+    assert error.value.inputs == {"a": 2, "b": 5, "c": 1}
 
 
 def test_refuses_to_expand_a_changed_approved_template() -> None:

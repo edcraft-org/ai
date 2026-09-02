@@ -213,6 +213,27 @@ class TemplateQuestionInstance(BaseModel):
 class TemplateValidationError(ValueError):
     """Raised when any possible instance fails template approval."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "TEMPLATE_INVALID",
+        field: str | None = None,
+        inputs: dict[str, ParameterValue] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.field = field
+        self.inputs = copy.deepcopy(inputs)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "code": self.code,
+            "message": str(self),
+            "field": self.field,
+            "inputs": self.inputs,
+        }
+
 
 def parse_code_question_template(content: str) -> CodeQuestionTemplate:
     """Parse provider JSON after removing redundant finite-domain values."""
@@ -235,7 +256,9 @@ def normalize_code_template_proposal(
     if len(proposal.distractors) < request.num_distractors:
         raise TemplateValidationError(
             f"expected at least {request.num_distractors} distractor candidates, "
-            f"received {len(proposal.distractors)}"
+            f"received {len(proposal.distractors)}",
+            code="DISTRACTOR_COUNT_INVALID",
+            field="distractors",
         )
     profile = code_template_profile(request.topic, request.difficulty)
     identity_payload = json.dumps(
@@ -349,14 +372,20 @@ class TemplateValidator:
             if not execution.ok:
                 detail = execution.error_message or execution.error_code or "unknown"
                 raise TemplateValidationError(
-                    f"template execution failed for inputs {inputs}: {detail}"
+                    f"template execution failed for inputs {inputs}: {detail}",
+                    code="EXECUTION_FAILED",
+                    field="code",
+                    inputs=inputs,
                 )
             actual_answer = _execution_answer(execution, template.answer_target)
             if not equivalent(actual_answer, expected_answer):
                 raise TemplateValidationError(
                     "answer_expression does not match the execution target for "
                     f"inputs {inputs}: expression={expected_answer!r}, "
-                    f"execution={actual_answer!r}"
+                    f"execution={actual_answer!r}",
+                    code="ANSWER_MISMATCH",
+                    field="answer_expression",
+                    inputs=inputs,
                 )
 
             generated_distractors = [item.evaluate(inputs) for item in distractors]
@@ -428,7 +457,9 @@ class TemplateValidator:
             detail = "; ".join(failures[:3]) or "not enough candidates"
             raise TemplateValidationError(
                 f"only {len(selected)} of {num_distractors} required distractors are "
-                f"globally valid: {detail}"
+                f"globally valid: {detail}",
+                code="DISTRACTOR_SELECTION_FAILED",
+                field="distractors",
             )
         return template.model_copy(update={"distractors": selected}, deep=True)
 
@@ -457,7 +488,9 @@ class TemplateValidator:
             ]
         if len(results) != len(inputs):
             raise TemplateValidationError(
-                "executor returned the wrong number of batch results"
+                "executor returned the wrong number of batch results",
+                code="EXECUTOR_PROTOCOL_ERROR",
+                field="code",
             )
         return results
 
@@ -467,17 +500,23 @@ class TemplateValidator:
     ) -> None:
         safety = check_code_safety(template.code, template.entry_function)
         if not safety.is_safe:
-            raise TemplateValidationError("; ".join(safety.errors))
+            raise TemplateValidationError(
+                "; ".join(safety.errors), code="UNSAFE_CODE", field="code"
+            )
         TemplateValidator._validate_profile(template)
         arguments = _entry_function_arguments(template.code, template.entry_function)
         if arguments != names:
             raise TemplateValidationError(
                 "entry function arguments must exactly match parameter order: "
-                f"expected {names}, received {arguments}"
+                f"expected {names}, received {arguments}",
+                code="ENTRY_FUNCTION_MISMATCH",
+                field="entry_function",
             )
         if template.entry_function not in template.question_template:
             raise TemplateValidationError(
-                "question_template must name the entry function"
+                "question_template must name the entry function",
+                code="QUESTION_TEMPLATE_INVALID",
+                field="question_template",
             )
         render_template(
             template.question_template,
@@ -491,7 +530,9 @@ class TemplateValidator:
         if template.answer_target != profile.answer_target:
             raise TemplateValidationError(
                 f"{template.topic}/{template.difficulty} requires answer_target="
-                f"{profile.answer_target}"
+                f"{profile.answer_target}",
+                code="PROFILE_MISMATCH",
+                field="answer_target",
             )
 
         actual_kinds = tuple(parameter.kind for parameter in template.parameters)
@@ -506,7 +547,9 @@ class TemplateValidator:
             )
             raise TemplateValidationError(
                 f"{template.topic}/{template.difficulty} parameter profile requires "
-                f"{expected}; received {actual_names} with kinds {actual_kinds}"
+                f"{expected}; received {actual_names} with kinds {actual_kinds}",
+                code="PROFILE_MISMATCH",
+                field="parameters",
             )
 
         if profile.require_positive_integers and any(
@@ -517,7 +560,9 @@ class TemplateValidator:
         ):
             raise TemplateValidationError(
                 f"{template.topic}/{template.difficulty} requires positive integer "
-                "parameter values"
+                "parameter values",
+                code="PROFILE_MISMATCH",
+                field="parameters",
             )
 
         actual_features = extract_code_features(template.code, template.entry_function)
@@ -525,7 +570,9 @@ class TemplateValidator:
         if missing:
             raise TemplateValidationError(
                 f"{template.topic}/{template.difficulty} code is missing required "
-                f"features: {', '.join(sorted(missing))}"
+                f"features: {', '.join(sorted(missing))}",
+                code="PROFILE_MISMATCH",
+                field="code",
             )
 
     @staticmethod
@@ -536,17 +583,26 @@ class TemplateValidator:
             _require_json_value(distractor, f"distractor {index}")
             if not same_value_shape(distractor, answer):
                 raise TemplateValidationError(
-                    f"distractor {index} has the wrong type for inputs {inputs}"
+                    f"distractor {index} has the wrong type for inputs {inputs}",
+                    code="DISTRACTOR_TYPE_MISMATCH",
+                    field=f"distractors.{index}",
+                    inputs=inputs,
                 )
             if equivalent(distractor, answer):
                 raise TemplateValidationError(
-                    f"distractor {index} equals the answer for inputs {inputs}"
+                    f"distractor {index} equals the answer for inputs {inputs}",
+                    code="DISTRACTOR_EQUALS_ANSWER",
+                    field=f"distractors.{index}",
+                    inputs=inputs,
                 )
             if any(
                 equivalent(distractor, previous) for previous in distractors[:index]
             ):
                 raise TemplateValidationError(
-                    f"distractor {index} is duplicated for inputs {inputs}"
+                    f"distractor {index} is duplicated for inputs {inputs}",
+                    code="DISTRACTOR_DUPLICATE",
+                    field=f"distractors.{index}",
+                    inputs=inputs,
                 )
 
 

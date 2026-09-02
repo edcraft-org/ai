@@ -109,6 +109,8 @@ uv run python -m edcraft_validator.template validate \
 
 Approval checks every value in the template's Cartesian product. All cases are
 sent to one disposable Docker container to avoid repeated startup costs.
+Rejected templates raise structured diagnostics with a stable code, relevant
+field, and failing parameter values when available; messages remain human-readable.
 
 ## Generate concrete questions locally
 
