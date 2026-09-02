@@ -113,3 +113,29 @@ The code-domain milestone is complete when:
 - Adding mathematics or physics before the code-domain contract is dependable.
 - Trusting generated templates without deterministic validation.
 - Reintroducing the costly workflow where AI generates every concrete question.
+
+## Code-Domain Milestone Evidence
+
+As of 2 September 2026, the code-domain architecture satisfies the success
+criteria above:
+
+- All 15 topic/difficulty profiles have machine-readable parameter, answer-kind,
+  AST-feature, and exact semantic contracts backed by positive and negative tests.
+- Approved templates exhaustively validate at most 64 combinations in one Docker
+  batch, then generate seeded questions locally without AI, Docker, or per-question
+  validation.
+- OpenAI and Ollama normalize provider-specific responses into the same proposal and
+  approved-template types; provider and model selection are explicit configuration.
+- Evaluation records provider, resolved model, prompt hash/version, request, timing,
+  failure stage/code, and approved output. JSONL attempts are flushed incrementally.
+- The final automated baseline passes 190 non-live tests and 19 Docker integration
+  tests. Real OpenAI evaluations produced approved templates for every profile while
+  the profile contracts were tightened.
+- A complete Ollama `qwen2.5-coder:14b` v8 matrix approved 10 of 15 profiles (66.7%)
+  in 26.2–63.8 seconds per attempt, with no timeout or transport failure. The five
+  unsuitable proposals were rejected for schema, safety, answer-kind, or answer
+  mismatch errors, demonstrating the intended untrusted-draft boundary.
+
+Provider pass rate is an evaluation signal, not a reason to weaken validation.
+Improving the remaining Ollama generation quality or choosing a stronger local model
+is follow-up model work; correctness continues to depend on deterministic approval.
