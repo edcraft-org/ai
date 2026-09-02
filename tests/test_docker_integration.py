@@ -29,14 +29,14 @@ def test_valid_example_executes_in_docker() -> None:
 
 
 @pytest.mark.docker
-def test_generated_code_timeout_is_enforced_inside_docker() -> None:
-    # Docker execution must enforce timeouts for expensive generated programs.
+def test_generated_code_is_bounded_inside_docker() -> None:
+    # Either deterministic worker guard may win, but Docker OOM must not win.
     question = GeneratedQuestion.model_validate(
         {
             "code": [
                 "def slow(value):",
                 "    for _ in range(1000000000):",
-                "        value += 1",
+                "        pass",
                 "    return value",
             ],
             "entry_function": "slow",
@@ -48,11 +48,36 @@ def test_generated_code_timeout_is_enforced_inside_docker() -> None:
         }
     )
 
-    # Stop quickly enough that trace records cannot reach the memory limit first.
+    # Require a worker-level guard to stop execution before Docker's memory ceiling.
     report = QuestionValidator(timeout_seconds=0.01).validate(question)
 
     assert report.status == "execution_error"
-    assert report.issues[0].code == "EXECUTION_TIMEOUT"
+    assert report.issues[0].code in {"EXECUTION_TIMEOUT", "TRACE_LIMIT_EXCEEDED"}
+
+
+@pytest.mark.docker
+def test_generated_code_trace_limit_is_enforced_inside_docker() -> None:
+    question = GeneratedQuestion.model_validate(
+        {
+            "code": [
+                "def expensive(value):",
+                "    for _ in range(1000000000):",
+                "        value += 1",
+                "    return value",
+            ],
+            "entry_function": "expensive",
+            "inputs": {"value": 1},
+            "question": "What value does expensive(1) return?",
+            "proposed_answer": 1,
+            "distractors": [2, 3],
+            "question_type": "mcq",
+        }
+    )
+
+    report = QuestionValidator(timeout_seconds=10).validate(question)
+
+    assert report.status == "execution_error"
+    assert report.issues[0].code == "TRACE_LIMIT_EXCEEDED"
 
 
 @pytest.mark.docker

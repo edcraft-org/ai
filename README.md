@@ -176,9 +176,10 @@ gate rejects imports, attributes, classes, decorators, recursion, comprehensions
 
 Docker execution applies no network access, a read-only root filesystem, memory
 and CPU limits, dropped Linux capabilities, `no-new-privileges`, an unprivileged
-user, and host/in-container timeouts. EdCraft's pinned `step-tracer` supplies return
-values and execution counts; it is not treated as a sandbox outside this Docker
-boundary.
+user, host/in-container timeouts, and a 100,000 user-code trace-event limit. The
+event limit stops trace data growth deterministically before the container reaches
+its memory ceiling. EdCraft's pinned `step-tracer` supplies return values and
+execution counts; it is not treated as a sandbox outside this Docker boundary.
 
 The standalone concrete-question validator remains available for debugging,
 examples, and future validation tools:
@@ -233,7 +234,7 @@ uv run pytest tests/test_templates.py -q
 ```
 
 The real OpenAI template-authoring test is opt-in locally and runs for same-repo
-pull requests when the GitHub secret is available:
+pull requests. CI fails clearly if the `OPENAI_API_KEY` GitHub secret is missing:
 
 ```bash
 RUN_OPENAI_LIVE_TESTS=1 uv run pytest -m openai_live -q

@@ -97,6 +97,37 @@ def test_reports_execution_timeout() -> None:
     assert "0.01 seconds" in response["error_message"]
 
 
+def test_reports_trace_limit_before_memory_exhaustion() -> None:
+    # Traced programs must stop at a deterministic event budget instead of using OOM.
+    response = execute_request(
+        {
+            "code": "def wait():\n    while True:\n        pass",
+            "entry_function": "wait",
+            "inputs": {},
+            "timeout_seconds": 10,
+            "trace_event_limit": 100,
+        }
+    )
+
+    assert response["ok"] is False
+    assert response["error_code"] == "TRACE_LIMIT_EXCEEDED"
+    assert "100 trace-event limit" in response["error_message"]
+
+
+def test_rejects_invalid_trace_limit() -> None:
+    response = execute_request(
+        {
+            "code": "def answer():\n    return 1",
+            "entry_function": "answer",
+            "inputs": {},
+            "trace_event_limit": 0,
+        }
+    )
+
+    assert response["ok"] is False
+    assert response["error_code"] == "INVALID_REQUEST"
+
+
 def test_rejects_non_finite_return_values() -> None:
     # NaN and infinity are rejected because they are not valid JSON answers.
     response = execute_request(
