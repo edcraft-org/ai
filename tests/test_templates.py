@@ -13,13 +13,16 @@ from edcraft_validator.domains.code.capabilities import (
 )
 from edcraft_validator.domains.code.templates import (
     CodeQuestionTemplate,
+    CodeTemplateProposal,
     FiniteParameter,
     SafeExpression,
     TemplateInstanceGenerator,
     TemplateValidationError,
     TemplateValidator,
     build_template_prompt,
+    normalize_code_template_proposal,
     parse_code_question_template,
+    parse_code_template_proposal,
 )
 from edcraft_validator.executor import ExecutionResult
 from edcraft_validator.generation.models import TemplateAuthoringRequest
@@ -230,6 +233,66 @@ def test_provider_template_parser_does_not_invent_missing_domain_values() -> Non
 
     with pytest.raises(ValueError, match="at least 2 items"):
         parse_code_question_template(json.dumps(payload))
+
+
+def test_proposal_normalization_derives_stable_local_fields() -> None:
+    canonical = template()
+    proposal = CodeTemplateProposal.model_validate(
+        canonical.model_dump(
+            include={
+                "code",
+                "entry_function",
+                "parameters",
+                "answer_expression",
+                "distractors",
+            }
+        )
+    )
+    request = TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
+
+    first = normalize_code_template_proposal(request, proposal)
+    second = normalize_code_template_proposal(request, proposal)
+
+    assert first == second
+    assert first.template_id.startswith("arithmetic.beginner.")
+    assert first.version == 1
+    assert first.answer_target == "return_value"
+    assert first.question_type == "mcq"
+    assert first.question_template == (
+        "What value does calculate({a}, {b}, {c}) return?"
+    )
+
+
+def test_proposal_normalization_derives_target_aware_loop_wording() -> None:
+    canonical = CodeQuestionTemplate.model_validate_json(
+        (TEMPLATE_DIR / "loop_iterations.json").read_text()
+    )
+    proposal = CodeTemplateProposal.model_validate(
+        canonical.model_dump(
+            include={
+                "code",
+                "entry_function",
+                "parameters",
+                "answer_expression",
+                "distractors",
+            }
+        )
+    )
+
+    result = normalize_code_template_proposal(
+        TemplateAuthoringRequest(topic="loops", difficulty="beginner"), proposal
+    )
+
+    assert result.question_template == (
+        "How many total loop-body iterations occur when accumulate({n}) runs?"
+    )
+
+
+def test_proposal_parser_rejects_locally_owned_fields() -> None:
+    canonical = template().model_dump(mode="json")
+
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+        parse_code_template_proposal(json.dumps(canonical))
 
 
 def test_every_topic_and_difficulty_has_distinct_authoring_guidance() -> None:

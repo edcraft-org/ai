@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Protocol
 from edcraft_validator.generation.models import TemplateAuthoringRequest
 
 if TYPE_CHECKING:
-    from edcraft_validator.domains.code.templates import CodeQuestionTemplate
+    from edcraft_validator.domains.code.templates import CodeTemplateProposal
 
 
 class GenerationError(RuntimeError):
@@ -15,6 +15,6 @@ class GenerationError(RuntimeError):
 class QuestionTemplateGenerator(Protocol):
     """Provider contract for authoring one reusable question template."""
 
-    def generate_template(
+    def generate_proposal(
         self, request: TemplateAuthoringRequest
-    ) -> CodeQuestionTemplate: ...
+    ) -> CodeTemplateProposal: ...

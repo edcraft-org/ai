@@ -16,7 +16,7 @@ def test_registry_supports_template_provider_extensions() -> None:
     class CustomTemplateGenerator:
         provider = "custom"
 
-        def generate_template(self, request):
+        def generate_proposal(self, request):
             raise NotImplementedError
 
     register_template_provider("custom", CustomTemplateGenerator)

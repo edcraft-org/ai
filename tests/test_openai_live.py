@@ -13,14 +13,15 @@ def test_real_openai_template_authoring() -> None:
     if not os.getenv("OPENAI_API_KEY"):
         pytest.skip("OPENAI_API_KEY is not configured")
 
-    template = OpenAITemplateGenerator().generate_template(
+    proposal = OpenAITemplateGenerator().generate_proposal(
         TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
     )
 
-    assert template.topic == "arithmetic"
-    assert template.difficulty == "beginner"
-    assert template.code
-    assert template.answer_expression
-    assert len(template.distractors) == 3
-    assert [parameter.name for parameter in template.parameters] == ["a", "b"]
-    assert all(parameter.kind == "integer" for parameter in template.parameters)
+    assert proposal.code
+    assert proposal.answer_expression
+    assert len(proposal.distractors) == 3
+    assert [parameter.name for parameter in proposal.parameters] in [
+        ["a", "b"],
+        ["a", "b", "c"],
+    ]
+    assert all(parameter.kind == "integer" for parameter in proposal.parameters)

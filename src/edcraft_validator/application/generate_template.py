@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from edcraft_validator.domains.code.capabilities import answer_target_for_topic
 from edcraft_validator.domains.code.templates import (
     ApprovedCodeQuestionTemplate,
     CodeQuestionTemplate,
     TemplateInstanceGenerator,
     TemplateQuestionInstance,
-    TemplateValidationError,
     TemplateValidator,
+    normalize_code_template_proposal,
 )
 from edcraft_validator.generation.base import QuestionTemplateGenerator
 from edcraft_validator.generation.models import TemplateAuthoringRequest
@@ -38,26 +37,8 @@ class QuestionTemplateApplication:
     def author(
         self, request: TemplateAuthoringRequest, *, provider: str
     ) -> ApprovedCodeQuestionTemplate:
-        template = self.generator_factory(provider).generate_template(request)
-        if template.topic != request.topic:
-            raise TemplateValidationError(
-                f"template topic {template.topic!r} does not match {request.topic!r}"
-            )
-        if template.difficulty != request.difficulty:
-            raise TemplateValidationError(
-                "template difficulty does not match the authoring request"
-            )
-        expected_target = answer_target_for_topic(request.topic)
-        if template.answer_target != expected_target:
-            raise TemplateValidationError(
-                f"template answer_target {template.answer_target!r} does not match "
-                f"the {request.topic!r} topic target {expected_target!r}"
-            )
-        if len(template.distractors) != request.num_distractors:
-            raise TemplateValidationError(
-                f"expected {request.num_distractors} distractor recipes, received "
-                f"{len(template.distractors)}"
-            )
+        proposal = self.generator_factory(provider).generate_proposal(request)
+        template = normalize_code_template_proposal(request, proposal)
         return self.approve(template)
 
     def approve(self, template: CodeQuestionTemplate) -> ApprovedCodeQuestionTemplate:

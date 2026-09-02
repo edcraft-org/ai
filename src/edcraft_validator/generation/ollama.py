@@ -7,9 +7,9 @@ from pydantic import BaseModel
 
 from edcraft_validator.domains.code.templates import (
     CODE_TEMPLATE_SYSTEM_PROMPT,
-    CodeQuestionTemplate,
+    CodeTemplateProposal,
     build_template_prompt,
-    parse_code_question_template,
+    parse_code_template_proposal,
 )
 from edcraft_validator.generation.base import GenerationError
 from edcraft_validator.generation.models import TemplateAuthoringRequest
@@ -25,20 +25,20 @@ class OllamaTemplateGenerator:
         self.client = client
         self.model = model or os.getenv("OLLAMA_MODEL") or "qwen2.5"
 
-    def generate_template(
+    def generate_proposal(
         self, request: TemplateAuthoringRequest
-    ) -> CodeQuestionTemplate:
+    ) -> CodeTemplateProposal:
         try:
             content = self._ollama_request(
                 [
                     {"role": "system", "content": CODE_TEMPLATE_SYSTEM_PROMPT},
                     {"role": "user", "content": build_template_prompt(request)},
                 ],
-                CodeQuestionTemplate,
+                CodeTemplateProposal,
             )
             if not content:
                 raise ValueError("empty response")
-            return parse_code_question_template(content)
+            return parse_code_template_proposal(content)
         except Exception as exc:
             raise GenerationError(
                 f"ollama returned invalid question template JSON: {exc}"

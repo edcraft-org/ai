@@ -204,7 +204,7 @@ executor.py + _worker.py            batched Docker execution
 domains/code/pipeline.py           standalone concrete-question validation pipeline
 ```
 
-To add another model, implement `QuestionTemplateGenerator.generate_template`,
+To add another model, implement `QuestionTemplateGenerator.generate_proposal`,
 register its factory with `register_template_provider`, and add an adapter test.
 The application and CLI do not need provider-specific branches.
 

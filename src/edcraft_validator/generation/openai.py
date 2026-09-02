@@ -5,9 +5,9 @@ from openai import OpenAI
 
 from edcraft_validator.domains.code.templates import (
     CODE_TEMPLATE_SYSTEM_PROMPT,
-    CodeQuestionTemplate,
+    CodeTemplateProposal,
     build_template_prompt,
-    parse_code_question_template,
+    parse_code_template_proposal,
 )
 from edcraft_validator.generation.base import GenerationError
 from edcraft_validator.generation.models import TemplateAuthoringRequest
@@ -34,10 +34,10 @@ class OpenAICompatibleTemplateGenerator:
         self.client = client
         self.model = model or _model(provider)
 
-    def generate_template(
+    def generate_proposal(
         self, request: TemplateAuthoringRequest
-    ) -> CodeQuestionTemplate:
-        """Ask the provider for one reusable code-question template."""
+    ) -> CodeTemplateProposal:
+        """Ask the provider for the judgment-bearing template fields."""
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -50,14 +50,14 @@ class OpenAICompatibleTemplateGenerator:
                     "json_schema": {
                         "name": "question_template",
                         "strict": True,
-                        "schema": CodeQuestionTemplate.model_json_schema(),
+                        "schema": CodeTemplateProposal.model_json_schema(),
                     },
                 },
             )
             content = response.choices[0].message.content
             if not content:
                 raise ValueError("empty response")
-            return parse_code_question_template(content)
+            return parse_code_template_proposal(content)
         except Exception as exc:
             raise OpenAIGenerationError(
                 f"{self.provider} failed to generate a question template: {exc}"

@@ -2,10 +2,13 @@ from pathlib import Path
 
 import pytest
 
+from edcraft_validator.application import QuestionTemplateApplication
 from edcraft_validator.domains.code.templates import (
     CodeQuestionTemplate,
+    CodeTemplateProposal,
     TemplateValidator,
 )
+from edcraft_validator.generation.models import TemplateAuthoringRequest
 from edcraft_validator.models import GeneratedQuestion
 from edcraft_validator.validator import QuestionValidator
 
@@ -89,5 +92,44 @@ def test_template_is_exhaustively_approved_in_docker(template_path: Path) -> Non
 
     expected_cases = 1
     for parameter in template.parameters:
+        expected_cases *= len(parameter.values)
+    assert approved.validation.cases_validated == expected_cases
+
+
+@pytest.mark.docker
+def test_model_proposal_is_normalized_then_approved_in_docker() -> None:
+    path = (
+        Path(__file__).parents[1] / "examples" / "templates" / "arithmetic_linear.json"
+    )
+    canonical = CodeQuestionTemplate.model_validate_json(path.read_text())
+    proposal = CodeTemplateProposal.model_validate(
+        canonical.model_dump(
+            include={
+                "code",
+                "entry_function",
+                "parameters",
+                "answer_expression",
+                "distractors",
+            }
+        )
+    )
+
+    class StubGenerator:
+        def generate_proposal(self, request):
+            return proposal
+
+    application = QuestionTemplateApplication(
+        generator_factory=lambda provider: StubGenerator()
+    )
+    approved = application.author(
+        TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner"),
+        provider="stub",
+    )
+
+    assert approved.template.question_template == (
+        "What value does calculate({a}, {b}, {c}) return?"
+    )
+    expected_cases = 1
+    for parameter in proposal.parameters:
         expected_cases *= len(parameter.values)
     assert approved.validation.cases_validated == expected_cases

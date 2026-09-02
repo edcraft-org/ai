@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from edcraft_validator.domains.code.templates import CodeQuestionTemplate
+from edcraft_validator.domains.code.templates import CodeTemplateProposal
 from edcraft_validator.generation.models import TemplateAuthoringRequest
 from edcraft_validator.generation.openai import (
     OpenAICompatibleTemplateGenerator,
@@ -12,28 +12,21 @@ from edcraft_validator.generation.openai import (
 )
 
 
-def code_template() -> CodeQuestionTemplate:
-    return CodeQuestionTemplate.model_validate(
+def code_proposal() -> CodeTemplateProposal:
+    return CodeTemplateProposal.model_validate(
         {
-            "template_id": "arithmetic.linear_sum",
-            "version": 1,
-            "topic": "arithmetic",
-            "difficulty": "beginner",
             "code": "def calculate(a, b):\n    return a + b",
             "entry_function": "calculate",
             "parameters": [
                 {"name": "a", "kind": "integer", "values": [1, 2]},
                 {"name": "b", "kind": "integer", "values": [3, 4]},
             ],
-            "question_template": "What does calculate({a}, {b}) return?",
-            "answer_target": "return_value",
             "answer_expression": "a + b",
             "distractors": [
                 {"expression": "a - b", "reason_template": "Subtracts b."},
                 {"expression": "a * b", "reason_template": "Multiplies."},
                 {"expression": "a + b + 1", "reason_template": "Adds one."},
             ],
-            "question_type": "mcq",
         }
     )
 
@@ -50,22 +43,22 @@ class RecordingCompletions:
         )
 
 
-def client_with(template: CodeQuestionTemplate | None) -> SimpleNamespace:
-    content = template.model_dump_json() if template is not None else None
+def client_with(proposal: CodeTemplateProposal | None) -> SimpleNamespace:
+    content = proposal.model_dump_json() if proposal is not None else None
     return SimpleNamespace(
         chat=SimpleNamespace(completions=RecordingCompletions(content))
     )
 
 
 def test_generates_template_using_strict_structured_outputs() -> None:
-    client = client_with(code_template())
+    client = client_with(code_proposal())
     generator = OpenAICompatibleTemplateGenerator("openai", client, model="test-model")
 
-    result = generator.generate_template(
+    result = generator.generate_proposal(
         TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
     )
 
-    assert result.template_id == "arithmetic.linear_sum"
+    assert result.entry_function == "calculate"
     assert client.chat.completions.arguments["model"] == "test-model"
     response_format = client.chat.completions.arguments["response_format"]
     assert response_format["type"] == "json_schema"
@@ -73,6 +66,8 @@ def test_generates_template_using_strict_structured_outputs() -> None:
     assert response_format["json_schema"]["strict"] is True
     schema = response_format["json_schema"]["schema"]
     assert set(schema["required"]) == set(schema["properties"])
+    assert "topic" not in schema["properties"]
+    assert "question_template" not in schema["properties"]
     messages = client.chat.completions.arguments["messages"]
     assert "finite Cartesian product" in messages[0]["content"]
     assert "answer_target=return_value" in messages[1]["content"]
@@ -84,7 +79,7 @@ def test_reports_empty_template_response() -> None:
     )
 
     with pytest.raises(OpenAIGenerationError, match="failed to generate"):
-        generator.generate_template(
+        generator.generate_proposal(
             TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
         )
 

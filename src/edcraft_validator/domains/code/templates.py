@@ -7,6 +7,7 @@ import copy
 import hashlib
 import itertools
 import json
+import math
 import operator
 from string import Formatter
 from typing import Any, Literal
@@ -99,6 +100,37 @@ class DistractorRecipe(BaseModel):
     reason_template: str = Field(min_length=1)
 
 
+class CodeTemplateProposal(BaseModel):
+    """Model-authored fields that require generative judgment."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    code: str = Field(min_length=1)
+    entry_function: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
+    parameters: list[FiniteParameter] = Field(min_length=1, max_length=3)
+    answer_expression: str = Field(min_length=1)
+    distractors: list[DistractorRecipe] = Field(min_length=2, max_length=3)
+
+    @field_validator("code", "answer_expression")
+    @classmethod
+    def reject_blank_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @model_validator(mode="after")
+    def validate_parameter_domain(self) -> CodeTemplateProposal:
+        names = [parameter.name for parameter in self.parameters]
+        if len(names) != len(set(names)):
+            raise ValueError("parameter names must be unique")
+        combinations = math.prod(len(parameter.values) for parameter in self.parameters)
+        if combinations > MAX_TEMPLATE_CASES:
+            raise ValueError(
+                f"template has {combinations} cases; maximum is {MAX_TEMPLATE_CASES}"
+            )
+        return self
+
+
 class CodeQuestionTemplate(BaseModel):
     """Provider-neutral template contract for the first code-domain version."""
 
@@ -173,21 +205,96 @@ class TemplateValidationError(ValueError):
 def parse_code_question_template(content: str) -> CodeQuestionTemplate:
     """Parse provider JSON after removing redundant finite-domain values."""
     payload = json.loads(content)
-    if isinstance(payload, dict) and isinstance(payload.get("parameters"), list):
-        for parameter in payload["parameters"]:
-            if not isinstance(parameter, dict) or not isinstance(
-                parameter.get("values"), list
-            ):
-                continue
-            unique_values = []
-            seen = set()
-            for value in parameter["values"]:
-                encoded = json.dumps(value, sort_keys=True, separators=(",", ":"))
-                if encoded not in seen:
-                    seen.add(encoded)
-                    unique_values.append(value)
-            parameter["values"] = unique_values
+    _deduplicate_parameter_values(payload)
     return CodeQuestionTemplate.model_validate(payload)
+
+
+def parse_code_template_proposal(content: str) -> CodeTemplateProposal:
+    """Parse a provider proposal after removing duplicate finite values."""
+    payload = json.loads(content)
+    _deduplicate_parameter_values(payload)
+    return CodeTemplateProposal.model_validate(payload)
+
+
+def normalize_code_template_proposal(
+    request: TemplateAuthoringRequest, proposal: CodeTemplateProposal
+) -> CodeQuestionTemplate:
+    """Derive non-judgment fields locally and produce the canonical template."""
+    if len(proposal.distractors) != request.num_distractors:
+        raise TemplateValidationError(
+            f"expected {request.num_distractors} distractor recipes, received "
+            f"{len(proposal.distractors)}"
+        )
+    profile = code_template_profile(request.topic, request.difficulty)
+    identity_payload = json.dumps(
+        {
+            "request": request.model_dump(mode="json"),
+            "proposal": proposal.model_dump(mode="json"),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    digest = hashlib.sha256(identity_payload).hexdigest()[:12]
+    return CodeQuestionTemplate(
+        template_id=f"{request.topic}.{request.difficulty}.{digest}",
+        version=1,
+        topic=request.topic,
+        difficulty=request.difficulty,
+        code=proposal.code,
+        entry_function=proposal.entry_function,
+        parameters=proposal.parameters,
+        question_template=_question_template(
+            profile.answer_target,
+            proposal.entry_function,
+            tuple(parameter.name for parameter in proposal.parameters),
+        ),
+        answer_target=profile.answer_target,
+        answer_expression=proposal.answer_expression,
+        distractors=proposal.distractors,
+        question_type="mcq",
+    )
+
+
+def _deduplicate_parameter_values(payload: Any) -> None:
+    if not isinstance(payload, dict) or not isinstance(payload.get("parameters"), list):
+        return
+    for parameter in payload["parameters"]:
+        if not isinstance(parameter, dict) or not isinstance(
+            parameter.get("values"), list
+        ):
+            continue
+        unique_values = []
+        seen = set()
+        for value in parameter["values"]:
+            encoded = json.dumps(value, sort_keys=True, separators=(",", ":"))
+            if encoded not in seen:
+                seen.add(encoded)
+                unique_values.append(value)
+        parameter["values"] = unique_values
+
+
+def _question_template(
+    target: AnswerTarget, entry_function: str, parameter_names: tuple[str, ...]
+) -> str:
+    arguments = ", ".join(f"{{{name}}}" for name in parameter_names)
+    invocation = f"{entry_function}({arguments})"
+    wording = {
+        "return_value": f"What value does {invocation} return?",
+        "loop_iterations": (
+            f"How many total loop-body iterations occur when {invocation} runs?"
+        ),
+        "loop_executions": (
+            f"How many loop statements are encountered when {invocation} runs?"
+        ),
+        "branch_executions": (
+            f"How many if conditions are evaluated when {invocation} runs?"
+        ),
+        "function_calls": (
+            f"How many traced function calls occur when {invocation} runs, including "
+            "the entry function and safe built-ins?"
+        ),
+    }
+    return wording[target]
 
 
 class TemplateValidator:
@@ -602,9 +709,12 @@ def build_template_prompt(request: TemplateAuthoringRequest) -> str:
 
 
 CODE_TEMPLATE_SYSTEM_PROMPT = """\
-Generate one reusable Python execution-trace MCQ template, not one concrete question.
-The template must use a finite Cartesian product of typed finite parameter values so the
-local application can exhaustively validate every possible question once.
+Generate the judgment-bearing fields for one reusable Python execution-trace MCQ
+template, not one concrete question. The local application derives identity, topic,
+difficulty, answer target, question wording, version, and question type.
+
+The proposal must use a finite Cartesian product of typed finite parameter values so
+the local application can exhaustively validate every possible question once.
 
 Rules:
 - Define one module-level entry function whose positional arguments exactly match the
@@ -616,14 +726,8 @@ Rules:
 - Every parameter declares a kind and two to four distinct finite values. Supported
   kinds are integer (-100 through 100), boolean, string (short printable text), and
   integer_list (at most eight integers from -100 through 100). Use JSON booleans.
-- question_template must name the entry function and contain exactly one simple
-  {parameter_name} placeholder for every parameter.
-- answer_target selects what the question asks: return_value is the entry function's
-  return value; loop_iterations is the total number of loop-body iterations across all
-  loops; loop_executions is the number of loop statements encountered; branch_executions
-  is the number of evaluated if conditions; and function_calls is all traced calls,
-  including the entry function and safe built-ins. Phrase the question unambiguously.
-- answer_expression must calculate the selected answer_target using parameter names,
+- The user prompt states the selected answer target. answer_expression must calculate
+  that target using parameter names,
   numeric constants, arithmetic, comparisons, boolean operators, or a conditional
   expression. String constants, list literals, indexing, and the one-argument functions
   len, sum, min, max, sorted, all, and any are also supported. Do not use methods or
@@ -631,7 +735,8 @@ Rules:
 - Each distractor expression must represent a specific misconception and must be unique,
   type-compatible, and different from the answer for every parameter combination.
 - reason_template explains its misconception and may use simple parameter placeholders.
-- Return only the schema fields and no markdown.
+- Return only the proposal schema fields and no markdown. Do not add locally derived
+  fields.
 """
 
 
