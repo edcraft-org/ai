@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from edcraft_validator.application import QuestionTemplateApplication
+from edcraft_validator.application import QuestionTemplateApplication, TemplateEvaluator
 from edcraft_validator.domains.code.templates import (
     CodeQuestionTemplate,
     CodeTemplateProposal,
@@ -142,3 +142,15 @@ def test_model_proposal_is_normalized_then_approved_in_docker() -> None:
     for parameter in proposal.parameters:
         expected_cases *= len(parameter.values)
     assert approved.validation.cases_validated == expected_cases
+
+    report = TemplateEvaluator(
+        generator_factory=lambda selection: StubGenerator()
+    ).evaluate(
+        provider="stub",
+        model="stub-model",
+        topics=("arithmetic",),
+        difficulties=("beginner",),
+        repetitions=1,
+    )
+    assert report.summary.approved == 1
+    assert report.attempts[0].approved_template is not None

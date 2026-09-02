@@ -262,3 +262,25 @@ RUN_OPENAI_LIVE_TESTS=1 uv run pytest -m openai_live -q
 
 See [REPRODUCIBILITY.md](REPRODUCIBILITY.md) for pinned dependencies and
 environment details.
+
+## Evaluate a real provider
+
+The evaluation command runs the complete authoring and Docker approval workflow,
+writes one JSONL record per attempt (including successful approved templates), and
+prints pass rate, failure codes, and latency grouped by provider, resolved model,
+topic, and difficulty:
+
+```bash
+uv run python -m edcraft_validator.template evaluate \
+  --provider ollama \
+  --model qwen2.5-coder:14b \
+  --topic arithmetic \
+  --difficulty beginner \
+  --repetitions 5 \
+  --output .artifacts/ollama-arithmetic-beginner.jsonl
+```
+
+Use `--topic all --difficulty all` for the complete 15-profile matrix. Each
+repetition makes one real provider call per selected profile, so review the call
+count before running a paid provider. The JSONL artifact and summary are written
+even when attempts fail; the command exits non-zero if any attempt fails.
