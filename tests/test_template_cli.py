@@ -61,12 +61,24 @@ def test_evaluate_cli_writes_attempts_and_prints_summary(
     class Report:
         summary = Summary()
 
-        def write_jsonl(self, path):
-            captured["output"] = path
+    class Attempt:
+        attempt = 1
+        status = "approved"
+        total_duration_ms = 1250.0
+
+        class Request:
+            topic = "loops"
+            difficulty = "beginner"
+
+        request = Request()
+
+        def model_dump_json(self):
+            return json.dumps({"attempt": 1, "status": "approved"})
 
     class StubEvaluator:
         def evaluate(self, **kwargs):
             captured.update(kwargs)
+            kwargs["on_attempt"](Attempt())
             return Report()
 
     monkeypatch.setattr(template_cli, "TemplateEvaluator", StubEvaluator)
@@ -99,8 +111,10 @@ def test_evaluate_cli_writes_attempts_and_prints_summary(
     assert captured["topics"] == ("loops",)
     assert captured["difficulties"] == ("beginner",)
     assert captured["repetitions"] == 2
-    assert captured["output"] == output
-    assert json.loads(capsys.readouterr().out) == {
+    assert json.loads(output.read_text()) == {"attempt": 1, "status": "approved"}
+    captured_output = capsys.readouterr()
+    assert "[1] loops/beginner: approved (1.2s)" in captured_output.err
+    assert json.loads(captured_output.out) == {
         "attempts": 2,
         "approved": 2,
         "failed": 0,

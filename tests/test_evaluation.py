@@ -85,6 +85,26 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
     assert records[1]["failure_code"] == "PROFILE_MISMATCH"
 
 
+def test_evaluation_notifies_after_each_completed_attempt() -> None:
+    observed = []
+    evaluator = TemplateEvaluator(
+        generator_factory=lambda selection: StubGenerator(proposal()),
+        validator_factory=lambda: TemplateValidator(executor=SumExecutor()),
+    )
+
+    report = evaluator.evaluate(
+        provider="stub",
+        model="stub-model",
+        topics=("arithmetic",),
+        difficulties=("beginner",),
+        repetitions=2,
+        on_attempt=observed.append,
+    )
+
+    assert observed == report.attempts
+    assert [attempt.attempt for attempt in observed] == [1, 2]
+
+
 def test_evaluation_classifies_provider_setup_failure() -> None:
     def unavailable(selection):
         raise GenerationError("provider is not configured")

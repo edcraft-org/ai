@@ -273,9 +273,9 @@ environment details.
 ## Evaluate a real provider
 
 The evaluation command runs the complete authoring and Docker approval workflow,
-writes one JSONL record per attempt (including successful approved templates), and
-prints pass rate, failure codes, and latency grouped by provider, resolved model,
-topic, and difficulty:
+writes and flushes one JSONL record after each attempt (so completed work survives
+an interruption), reports progress on stderr, and prints pass rate, failure codes,
+and latency grouped by provider, resolved model, topic, and difficulty:
 
 ```bash
 uv run python -m edcraft_validator.template evaluate \

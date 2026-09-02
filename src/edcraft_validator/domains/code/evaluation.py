@@ -27,6 +27,7 @@ from edcraft_validator.generation.registry import create_template_generator
 
 GeneratorFactory = Callable[[TemplateProviderSelection], QuestionTemplateGenerator]
 ValidatorFactory = Callable[[], TemplateValidator]
+AttemptObserver = Callable[["TemplateEvaluationAttempt"], None]
 
 
 class TemplateEvaluationAttempt(BaseModel):
@@ -117,6 +118,7 @@ class TemplateEvaluator:
         difficulties: Sequence[Difficulty],
         repetitions: int,
         num_distractors: int = 3,
+        on_attempt: AttemptObserver | None = None,
     ) -> TemplateEvaluationReport:
         if repetitions < 1:
             raise ValueError("repetitions must be at least 1")
@@ -135,13 +137,14 @@ class TemplateEvaluator:
                 )
                 for _ in range(repetitions):
                     attempt_number += 1
-                    attempts.append(
-                        self._evaluate_once(
-                            attempt_number,
-                            TemplateProviderSelection(provider=provider, model=model),
-                            request,
-                        )
+                    attempt = self._evaluate_once(
+                        attempt_number,
+                        TemplateProviderSelection(provider=provider, model=model),
+                        request,
                     )
+                    attempts.append(attempt)
+                    if on_attempt is not None:
+                        on_attempt(attempt)
         return TemplateEvaluationReport(
             attempts=attempts,
             summary=_summarize(attempts),
