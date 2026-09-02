@@ -9,6 +9,7 @@ from edcraft_validator.generation.openai import (
     OpenAIGenerationError,
     _api_key,
     _base_url,
+    _model,
 )
 
 
@@ -114,3 +115,10 @@ def test_provider_configuration_rejects_internal_whitespace(monkeypatch) -> None
 
     with pytest.raises(OpenAIGenerationError, match="invalid whitespace"):
         _api_key("openai")
+
+
+def test_soclaas_requires_its_own_model(monkeypatch) -> None:
+    monkeypatch.delenv("SOCLAAS_MODEL", raising=False)
+
+    with pytest.raises(OpenAIGenerationError, match="SOCLAAS_MODEL is not configured"):
+        _model("soclaas")

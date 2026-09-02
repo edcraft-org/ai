@@ -14,10 +14,15 @@ from edcraft_validator.domains.code.templates import (
     answer_target_for_topic,
 )
 from edcraft_validator.generation.base import QuestionTemplateGenerator
-from edcraft_validator.generation.models import TemplateAuthoringRequest
+from edcraft_validator.generation.models import (
+    TemplateAuthoringRequest,
+    TemplateProviderSelection,
+)
 from edcraft_validator.generation.registry import create_template_generator
 
-TemplateGeneratorFactory = Callable[[str], QuestionTemplateGenerator]
+TemplateGeneratorFactory = Callable[
+    [TemplateProviderSelection], QuestionTemplateGenerator
+]
 TemplateValidatorFactory = Callable[[], TemplateValidator]
 
 
@@ -36,9 +41,14 @@ class QuestionTemplateApplication:
         self.instance_generator = instance_generator or TemplateInstanceGenerator()
 
     def author(
-        self, request: TemplateAuthoringRequest, *, provider: str
+        self,
+        request: TemplateAuthoringRequest,
+        *,
+        provider: str,
+        model: str | None = None,
     ) -> ApprovedCodeQuestionTemplate:
-        template = self.generator_factory(provider).generate_template(request)
+        selection = TemplateProviderSelection(provider=provider, model=model)
+        template = self.generator_factory(selection).generate_template(request)
         if template.topic != request.topic:
             raise TemplateValidationError(
                 f"template topic {template.topic!r} does not match {request.topic!r}"

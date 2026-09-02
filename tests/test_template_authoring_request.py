@@ -1,7 +1,10 @@
 import pytest
 from pydantic import ValidationError
 
-from edcraft_validator.generation.models import TemplateAuthoringRequest
+from edcraft_validator.generation.models import (
+    TemplateAuthoringRequest,
+    TemplateProviderSelection,
+)
 
 
 def test_template_request_defaults_to_three_distractors() -> None:
@@ -23,3 +26,21 @@ def test_template_request_rejects_unknown_topic() -> None:
         TemplateAuthoringRequest.model_validate(
             {"topic": "graphs", "difficulty": "beginner"}
         )
+
+
+def test_provider_selection_strips_explicit_values() -> None:
+    selection = TemplateProviderSelection(
+        provider=" ollama ", model=" qwen2.5-coder:14b "
+    )
+
+    assert selection.provider == "ollama"
+    assert selection.model == "qwen2.5-coder:14b"
+
+
+@pytest.mark.parametrize("field", ["provider", "model"])
+def test_provider_selection_rejects_blank_values(field: str) -> None:
+    values = {"provider": "ollama", "model": "qwen"}
+    values[field] = "  "
+
+    with pytest.raises(ValidationError):
+        TemplateProviderSelection.model_validate(values)
