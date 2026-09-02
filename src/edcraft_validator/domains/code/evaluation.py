@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from edcraft_validator.application.generate_template import QuestionTemplateApplication
+from edcraft_validator.domains.code.application import QuestionTemplateApplication
 from edcraft_validator.domains.code.capabilities import Difficulty, ProgrammingTopic
 from edcraft_validator.domains.code.templates import (
     ApprovedCodeQuestionTemplate,

@@ -1,4 +1,4 @@
-"""Application use cases for authoring and expanding question templates."""
+"""Code-domain use cases for authoring and expanding question templates."""
 
 from __future__ import annotations
 

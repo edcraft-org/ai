@@ -211,7 +211,9 @@ It is not part of normal template-based question expansion.
 ## Architecture
 
 ```text
-application/generate_template.py   frontend-facing use case
+application/__init__.py            stable frontend-facing application facade
+domains/code/application.py        code authoring, approval, and expansion use cases
+domains/code/evaluation.py         real-provider code-template evaluation
 domains/code/templates.py          code template schema, prompt, approval, expansion
 domains/code/capabilities.py       supported profiles and their machine-readable rules
 generation/base.py                 provider-neutral template protocol

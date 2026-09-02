@@ -1,6 +1,6 @@
 import json
 
-from edcraft_validator.application.evaluate_templates import TemplateEvaluator
+from edcraft_validator.application import TemplateEvaluator
 from edcraft_validator.domains.code.templates import (
     CodeTemplateProposal,
     TemplateValidator,
