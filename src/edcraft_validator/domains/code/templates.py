@@ -609,7 +609,7 @@ def answer_target_for_topic(topic: ProgrammingTopic) -> AnswerTarget:
 
 CODE_TEMPLATE_SYSTEM_PROMPT = """\
 Generate one reusable Python execution-trace MCQ template, not one concrete question.
-The template must use a finite Cartesian product of integer parameter values so the
+The template must use a finite Cartesian product of typed finite parameter values so the
 local application can exhaustively validate every possible question once.
 
 Rules:
