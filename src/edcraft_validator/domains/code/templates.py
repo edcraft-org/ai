@@ -39,7 +39,7 @@ MAX_EXPRESSION_FLOAT_ABS = 1_000_000_000.0
 MAX_EXPRESSION_SEQUENCE_LENGTH = 100
 MAX_EXPRESSION_VALUE_SIZE = 1_000
 MAX_EXPRESSION_VALUE_DEPTH = 20
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v4"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v5"
 ParameterValue = int | bool | str | list[int]
 
 
@@ -1037,6 +1037,7 @@ def build_template_prompt(request: TemplateAuthoringRequest) -> str:
             "accepted_parameter_shapes": shapes,
             "required_code_features": sorted(profile.required_features),
             "positive_integer_values_required": profile.require_positive_integers,
+            "authoring_requirements": profile.guidance,
         },
         indent=2,
         sort_keys=True,
@@ -1054,7 +1055,6 @@ def build_template_prompt(request: TemplateAuthoringRequest) -> str:
         "candidates; do not add generic answer-plus-constant fallbacks yourself. In "
         "reason_template, use only plain placeholders such as "
         "`{n}`; never put expressions such as `{n-1}` inside braces. "
-        f"{profile.guidance} "
         "Keep the complete Cartesian product valid."
     )
     return prompt

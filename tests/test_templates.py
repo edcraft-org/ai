@@ -427,7 +427,9 @@ def test_every_topic_and_difficulty_has_distinct_authoring_guidance() -> None:
     assert len(set(prompts.values())) == 15
     assert "two sequential range loops" in prompts[("loops", "intermediate")]
     assert "one nested range loop" in prompts[("loops", "advanced")]
-    assert "one helper calls another" in prompts[("functions", "advanced")]
+    assert "middle helper calls the leaf" in prompts[("functions", "advanced")]
+    assert "`3 * n + 2`" in prompts[("functions", "advanced")]
+    assert "body must be exactly `return sum(values)`" in prompts[("lists", "beginner")]
 
 
 def test_examples_cover_every_topic_and_difficulty() -> None:

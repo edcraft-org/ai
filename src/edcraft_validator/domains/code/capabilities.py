@@ -97,7 +97,8 @@ _PROFILES = (
         "return_value",
         (_shape("integer_list", "string"),),
         frozenset({"arithmetic", "conditional", "list_aggregate"}),
-        "Combine an integer_list with a string mode and an allowlisted aggregate.",
+        "Use exactly an integer_list and a string mode. Call an allowlisted aggregate "
+        "such as sum in code; the aggregate must not be a third parameter.",
         "number",
     ),
     CodeTemplateProfile(
@@ -167,7 +168,9 @@ _PROFILES = (
         "function_calls",
         (_shape("integer"),),
         frozenset({"helper_function"}),
-        "Use one helper called once by the entry function; count both calls.",
+        "Define exactly one module-level helper and call it once from the entry "
+        "function. Make no other calls. answer_expression must be exactly `2` for "
+        "the entry call plus the helper call.",
         "integer",
     ),
     CodeTemplateProfile(
@@ -176,7 +179,10 @@ _PROFILES = (
         "function_calls",
         (_shape("integer", names=("n",)),),
         frozenset({"helper_function", "loop"}),
-        "Call one helper from a range loop and include entry, range, and helper calls.",
+        "Define exactly one module-level helper. The entry function must call "
+        "range(n) once and call the helper exactly once per loop iteration. Make no "
+        "other calls. answer_expression must be exactly `n + 2` for the entry, "
+        "range, and n helper calls.",
         "integer",
         require_positive_integers=True,
     ),
@@ -186,9 +192,11 @@ _PROFILES = (
         "function_calls",
         (_shape("integer", names=("n",)),),
         frozenset({"helper_function", "loop", "nested_helper"}),
-        "Define module-level helpers where one helper calls another inside a range "
-        "loop, and derive every traced call. Do not define a function inside another "
-        "function.",
+        "Define exactly two module-level helpers: a middle helper calls the leaf "
+        "helper exactly twice, and the entry calls range(n) once and the middle "
+        "helper once per iteration. Make no other calls and do not define a function "
+        "inside another function. answer_expression must be exactly `3 * n + 2` for "
+        "the entry, range, n middle, and 2*n leaf calls.",
         "integer",
         require_positive_integers=True,
     ),
@@ -198,7 +206,9 @@ _PROFILES = (
         "return_value",
         (_shape("integer_list", names=("values",)),),
         frozenset({"list_aggregate"}),
-        "Use exactly one integer_list parameter named values and return sum(values).",
+        "Use exactly one integer_list parameter named values. The entry-function "
+        "body must be exactly `return sum(values)`, and answer_expression must be "
+        "exactly `sum(values)`.",
         "integer",
     ),
     CodeTemplateProfile(
