@@ -218,6 +218,17 @@ def test_beginner_arithmetic_prompt_forbids_operator_parameter() -> None:
     assert "Do not create a parameter for the operator" in prompt
 
 
+def test_prompt_requests_extra_distractor_candidates_in_the_same_call() -> None:
+    prompt = build_template_prompt(
+        TemplateAuthoringRequest(
+            topic="arithmetic", difficulty="beginner", num_distractors=2
+        )
+    )
+
+    assert "exactly 4 distractor candidates" in prompt
+    assert "will select 2" in prompt
+
+
 def test_provider_template_parser_removes_duplicate_parameter_values() -> None:
     payload = template().model_dump(mode="json")
     payload["parameters"][0]["values"] = [2, 2, 4]
@@ -416,6 +427,18 @@ def test_rejects_a_distractor_that_is_correct_for_any_case() -> None:
     with pytest.raises(TemplateValidationError, match="equals the answer"):
         TemplateValidator(executor=ArithmeticExecutor()).validate(
             CodeQuestionTemplate.model_validate(value)
+        )
+
+
+def test_candidate_selection_reports_when_too_few_are_globally_valid() -> None:
+    data = template().model_dump()
+    for distractor in data["distractors"]:
+        distractor["expression"] = "a + b - c"
+    item = CodeQuestionTemplate.model_validate(data)
+
+    with pytest.raises(TemplateValidationError, match="only 0 of 3"):
+        TemplateValidator(executor=ArithmeticExecutor()).validate(
+            item, num_distractors=3
         )
 
 

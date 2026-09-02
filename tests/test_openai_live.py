@@ -19,7 +19,7 @@ def test_real_openai_template_authoring() -> None:
 
     assert proposal.code
     assert proposal.answer_expression
-    assert len(proposal.distractors) == 3
+    assert len(proposal.distractors) == 5
     assert [parameter.name for parameter in proposal.parameters] in [
         ["a", "b"],
         ["a", "b", "c"],

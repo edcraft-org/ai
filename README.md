@@ -11,15 +11,18 @@ cost proportional to the number of templates rather than the number of questions
 
 ```text
 topic + difficulty + provider
-  -> AI authors one finite template
+  -> AI proposes code, parameters, answer logic, and distractor candidates
+  -> application derives identity, target, wording, version, and question type
   -> AST safety checks
   -> all parameter combinations run in one Docker batch
-  -> answers and distractor recipes checked for every combination
+  -> globally valid distractor recipes selected from the candidates
+  -> answers and selected distractors checked for every combination
   -> approved template + validation hash
   -> deterministic questions generated locally from seeds
 ```
 
-Template authoring makes one provider request. Template approval uses Docker once.
+Template authoring makes one provider request, including extra distractor candidates.
+Template approval uses Docker once.
 Generating a question from an approved template uses no AI, Docker, or per-question
 validation call.
 
@@ -132,8 +135,9 @@ parameters, code, question, answer target, answer, and distractors.
 - Answers: restricted arithmetic, comparisons, boolean operators, conditional
   expressions, list literals, indexing, and the allowlisted functions `len`, `sum`,
   `min`, `max`, `sorted`, `all`, and `any`.
-- Distractors: two or three deterministic expressions, each with a misconception
-  reason template.
+- Distractors: the provider proposes up to two extra candidates in the same call.
+  The finite-domain validator retains the requested two or three deterministic,
+  globally unique expressions, each with a misconception reason template.
 - Reproducibility: deterministic seed selection and template tamper detection.
 
 Topic currently selects the answer target as follows:

@@ -109,7 +109,7 @@ class CodeTemplateProposal(BaseModel):
     entry_function: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     parameters: list[FiniteParameter] = Field(min_length=1, max_length=3)
     answer_expression: str = Field(min_length=1)
-    distractors: list[DistractorRecipe] = Field(min_length=2, max_length=3)
+    distractors: list[DistractorRecipe] = Field(min_length=3, max_length=5)
 
     @field_validator("code", "answer_expression")
     @classmethod
@@ -146,7 +146,7 @@ class CodeQuestionTemplate(BaseModel):
     question_template: str = Field(min_length=1)
     answer_target: AnswerTarget
     answer_expression: str = Field(min_length=1)
-    distractors: list[DistractorRecipe] = Field(min_length=2, max_length=3)
+    distractors: list[DistractorRecipe] = Field(min_length=2, max_length=5)
     question_type: Literal["mcq"]
 
     @field_validator("code", "question_template", "answer_expression")
@@ -220,10 +220,10 @@ def normalize_code_template_proposal(
     request: TemplateAuthoringRequest, proposal: CodeTemplateProposal
 ) -> CodeQuestionTemplate:
     """Derive non-judgment fields locally and produce the canonical template."""
-    if len(proposal.distractors) != request.num_distractors:
+    if len(proposal.distractors) < request.num_distractors:
         raise TemplateValidationError(
-            f"expected {request.num_distractors} distractor recipes, received "
-            f"{len(proposal.distractors)}"
+            f"expected at least {request.num_distractors} distractor candidates, "
+            f"received {len(proposal.distractors)}"
         )
     profile = code_template_profile(request.topic, request.difficulty)
     identity_payload = json.dumps(
@@ -309,9 +309,17 @@ class TemplateValidator:
         self.executor = executor or DockerExecutor()
         self.timeout_seconds = timeout_seconds
 
-    def validate(self, template: CodeQuestionTemplate) -> ApprovedCodeQuestionTemplate:
+    def validate(
+        self, template: CodeQuestionTemplate, *, num_distractors: int | None = None
+    ) -> ApprovedCodeQuestionTemplate:
         names = tuple(parameter.name for parameter in template.parameters)
         self._validate_structure(template, names)
+        if num_distractors is not None:
+            if not 2 <= num_distractors <= 3:
+                raise ValueError("num_distractors must be 2 or 3")
+            template = self._select_distractors(
+                template, names, num_distractors=num_distractors
+            )
         answer = SafeExpression(template.answer_expression, names)
         distractors = [
             SafeExpression(recipe.expression, names) for recipe in template.distractors
@@ -352,6 +360,65 @@ class TemplateValidator:
                 template_sha256=template_sha256(template),
             ),
         )
+
+    @classmethod
+    def _select_distractors(
+        cls,
+        template: CodeQuestionTemplate,
+        names: tuple[str, ...],
+        *,
+        num_distractors: int,
+    ) -> CodeQuestionTemplate:
+        answer = SafeExpression(template.answer_expression, names)
+        value_domains = [parameter.values for parameter in template.parameters]
+        inputs_cases = [
+            dict(zip(names, values, strict=True))
+            for values in itertools.product(*value_domains)
+        ]
+        expected_answers = [answer.evaluate(inputs) for inputs in inputs_cases]
+        selected: list[DistractorRecipe] = []
+        selected_values = [[] for _ in inputs_cases]
+        failures: list[str] = []
+
+        for candidate_index, recipe in enumerate(template.distractors):
+            try:
+                expression = SafeExpression(recipe.expression, names)
+                candidate_values = []
+                for case_index, (inputs, expected_answer) in enumerate(
+                    zip(inputs_cases, expected_answers, strict=True)
+                ):
+                    candidate = expression.evaluate(inputs)
+                    cls._validate_distractors(
+                        inputs,
+                        expected_answer,
+                        [*selected_values[case_index], candidate],
+                    )
+                    render_template(recipe.reason_template, inputs)
+                    candidate_values.append(candidate)
+            except (
+                TemplateValidationError,
+                ArithmeticError,
+                TypeError,
+                ValueError,
+            ) as exc:
+                failures.append(f"candidate {candidate_index}: {exc}")
+                continue
+
+            selected.append(recipe)
+            for values, candidate in zip(
+                selected_values, candidate_values, strict=True
+            ):
+                values.append(candidate)
+            if len(selected) == num_distractors:
+                break
+
+        if len(selected) < num_distractors:
+            detail = "; ".join(failures[:3]) or "not enough candidates"
+            raise TemplateValidationError(
+                f"only {len(selected)} of {num_distractors} required distractors are "
+                f"globally valid: {detail}"
+            )
+        return template.model_copy(update={"distractors": selected}, deep=True)
 
     def _execute_all(
         self,
@@ -697,11 +764,13 @@ class SafeExpression:
 
 def build_template_prompt(request: TemplateAuthoringRequest) -> str:
     profile = code_template_profile(request.topic, request.difficulty)
+    candidate_count = min(request.num_distractors + 2, 5)
     prompt = (
         f"Topic: {request.topic}\n"
         f"Difficulty: {request.difficulty}\n"
         f"Use answer_target={profile.answer_target}. "
-        f"Create exactly {request.num_distractors} distractor recipes. "
+        f"Create exactly {candidate_count} distractor candidates; the local validator "
+        f"will select {request.num_distractors}. "
         f"{profile.guidance} "
         "Keep the complete Cartesian product valid."
     )
@@ -732,8 +801,9 @@ Rules:
   expression. String constants, list literals, indexing, and the one-argument functions
   len, sum, min, max, sorted, all, and any are also supported. Do not use methods or
   other function calls.
-- Each distractor expression must represent a specific misconception and must be unique,
-  type-compatible, and different from the answer for every parameter combination.
+- Each distractor candidate must represent a specific misconception. The local validator
+  selects candidates that are unique, type-compatible, and different from the answer
+  for every parameter combination.
 - reason_template explains its misconception and may use simple parameter placeholders.
 - Return only the proposal schema fields and no markdown. Do not add locally derived
   fields.

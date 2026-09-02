@@ -18,6 +18,8 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
             {"expression": "a - b", "reason_template": "Subtracts b."},
             {"expression": "a * b", "reason_template": "Multiplies."},
             {"expression": "a + b + 1", "reason_template": "Adds one."},
+            {"expression": "a + b - 1", "reason_template": "Subtracts one."},
+            {"expression": "a + b + 2", "reason_template": "Adds two."},
         ],
     }
 
@@ -53,4 +55,5 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     messages = captured["payload"]["messages"]
     assert "finite Cartesian product" in messages[0]["content"]
     assert "answer_target=return_value" in messages[1]["content"]
+    assert "exactly 5 distractor candidates" in messages[1]["content"]
     assert captured["timeout"] == 300

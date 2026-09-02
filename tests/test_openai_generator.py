@@ -26,6 +26,8 @@ def code_proposal() -> CodeTemplateProposal:
                 {"expression": "a - b", "reason_template": "Subtracts b."},
                 {"expression": "a * b", "reason_template": "Multiplies."},
                 {"expression": "a + b + 1", "reason_template": "Adds one."},
+                {"expression": "a + b - 1", "reason_template": "Subtracts one."},
+                {"expression": "a + b + 2", "reason_template": "Adds two."},
             ],
         }
     )
@@ -71,6 +73,7 @@ def test_generates_template_using_strict_structured_outputs() -> None:
     messages = client.chat.completions.arguments["messages"]
     assert "finite Cartesian product" in messages[0]["content"]
     assert "answer_target=return_value" in messages[1]["content"]
+    assert "exactly 5 distractor candidates" in messages[1]["content"]
 
 
 def test_reports_empty_template_response() -> None:

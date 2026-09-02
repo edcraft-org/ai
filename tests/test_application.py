@@ -18,9 +18,11 @@ def test_template_application_authors_once_then_generates_locally() -> None:
             ],
             "answer_expression": "a + b",
             "distractors": [
+                {"expression": "a + b", "reason_template": "Repeats answer."},
                 {"expression": "a - b", "reason_template": "Subtracts."},
                 {"expression": "a + b + 1", "reason_template": "Adds one."},
                 {"expression": "a + b - 1", "reason_template": "Subtracts one."},
+                {"expression": "a + b + 2", "reason_template": "Adds two."},
             ],
         }
     )
@@ -57,4 +59,9 @@ def test_template_application_authors_once_then_generates_locally() -> None:
         approved.template.question_template == "What value does add({a}, {b}) return?"
     )
     assert approved.template.question_type == "mcq"
+    assert [item.expression for item in approved.template.distractors] == [
+        "a - b",
+        "a + b + 1",
+        "a + b - 1",
+    ]
     assert instance.question.proposed_answer == sum(instance.parameters.values())

@@ -39,7 +39,9 @@ class QuestionTemplateApplication:
     ) -> ApprovedCodeQuestionTemplate:
         proposal = self.generator_factory(provider).generate_proposal(request)
         template = normalize_code_template_proposal(request, proposal)
-        return self.approve(template)
+        return self.validator_factory().validate(
+            template, num_distractors=request.num_distractors
+        )
 
     def approve(self, template: CodeQuestionTemplate) -> ApprovedCodeQuestionTemplate:
         return self.validator_factory().validate(template)
