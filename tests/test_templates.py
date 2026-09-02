@@ -411,6 +411,59 @@ def test_safe_expression_supports_validated_collection_operations() -> None:
     )
 
 
+def test_safe_expression_preserves_python_short_circuit_semantics() -> None:
+    assert SafeExpression("0 and (1 / 0)", ()).evaluate({}) == 0
+    assert SafeExpression("'ready' or (1 / 0)", ()).evaluate({}) == "ready"
+
+
+def test_safe_expression_rejects_large_integer_intermediates() -> None:
+    with pytest.raises(TemplateValidationError, match="integer result exceeds"):
+        SafeExpression("(10_000 ** 8) ** 2", ()).evaluate({})
+
+
+def test_safe_expression_integer_limit_has_an_explicit_boundary() -> None:
+    assert SafeExpression("10_000 * 10_000 * 10", ()).evaluate({}) == 1_000_000_000
+
+    with pytest.raises(TemplateValidationError, match="integer result exceeds"):
+        SafeExpression("10_000 * 10_000 * 10 + 1", ()).evaluate({})
+
+
+def test_safe_expression_rejects_large_sequence_before_allocation() -> None:
+    expression = SafeExpression("label * count", ("label", "count"))
+
+    with pytest.raises(TemplateValidationError, match="sequence result exceeds"):
+        expression.evaluate({"label": "x", "count": 1_000_000_000})
+
+
+def test_safe_expression_sequence_limit_has_an_explicit_boundary() -> None:
+    result = SafeExpression("label * 100", ("label",)).evaluate({"label": "x"})
+    assert len(result) == 100
+
+    with pytest.raises(TemplateValidationError, match="sequence result exceeds"):
+        SafeExpression("label * 101", ("label",)).evaluate({"label": "x"})
+
+
+def test_safe_expression_rejects_nested_sequence_amplification() -> None:
+    expression = SafeExpression("[[[0] * 10] * 10] * 10", ())
+
+    with pytest.raises(TemplateValidationError, match="cumulative size limit"):
+        expression.evaluate({})
+
+
+def test_safe_expression_rejects_string_formatting_before_allocation() -> None:
+    with pytest.raises(TemplateValidationError, match="string formatting"):
+        SafeExpression("'%1000000000s' % label", ("label",)).evaluate({"label": "x"})
+
+
+def test_safe_expression_rejects_oversized_source_and_ast() -> None:
+    with pytest.raises(TemplateValidationError, match="exceeds 500 characters"):
+        SafeExpression("1" * 501, ())
+
+    many_nodes = " + ".join("1" for _ in range(51))
+    with pytest.raises(TemplateValidationError, match="exceeds 100 syntax nodes"):
+        SafeExpression(many_nodes, ())
+
+
 def test_list_topic_requests_an_integer_list_template() -> None:
     prompt = build_template_prompt(
         TemplateAuthoringRequest(topic="lists", difficulty="beginner")

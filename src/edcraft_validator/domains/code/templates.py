@@ -29,6 +29,13 @@ from edcraft_validator.safety import check_code_safety
 MAX_TEMPLATE_CASES = 64
 MAX_STRING_LENGTH = 40
 MAX_LIST_LENGTH = 8
+MAX_EXPRESSION_LENGTH = 500
+MAX_EXPRESSION_NODES = 100
+MAX_EXPRESSION_INTEGER_ABS = 1_000_000_000
+MAX_EXPRESSION_FLOAT_ABS = 1_000_000_000.0
+MAX_EXPRESSION_SEQUENCE_LENGTH = 100
+MAX_EXPRESSION_VALUE_SIZE = 1_000
+MAX_EXPRESSION_VALUE_DEPTH = 20
 ParameterValue = int | bool | str | list[int]
 
 
@@ -630,17 +637,25 @@ class SafeExpression:
     def __init__(self, source: str, names: tuple[str, ...]) -> None:
         self.source = source
         self.names = frozenset(names)
+        if len(source) > MAX_EXPRESSION_LENGTH:
+            raise TemplateValidationError(
+                f"template expression exceeds {MAX_EXPRESSION_LENGTH} characters"
+            )
         try:
             self.expression = ast.parse(source, mode="eval").body
         except SyntaxError as exc:
             raise TemplateValidationError(
                 f"invalid template expression {source!r}: {exc.msg}"
             ) from exc
+        if sum(1 for _ in ast.walk(self.expression)) > MAX_EXPRESSION_NODES:
+            raise TemplateValidationError(
+                f"template expression exceeds {MAX_EXPRESSION_NODES} syntax nodes"
+            )
         self._validate(self.expression, depth=0)
 
     def evaluate(self, values: dict[str, ParameterValue]) -> Any:
         try:
-            return self._evaluate(self.expression, values)
+            return self._bounded(self._evaluate(self.expression, values))
         except (
             ArithmeticError,
             IndexError,
@@ -725,41 +740,154 @@ class SafeExpression:
         if isinstance(node, ast.Name):
             return values[node.id]
         if isinstance(node, ast.BinOp):
-            left = self._evaluate(node.left, values)
-            right = self._evaluate(node.right, values)
+            left = self._bounded(self._evaluate(node.left, values))
+            right = self._bounded(self._evaluate(node.right, values))
             if isinstance(node.op, ast.Pow) and (
                 type(right) is not int or not 0 <= right <= 8
             ):
                 raise TemplateValidationError("exponents must be integers from 0 to 8")
-            return self._binary_operators[type(node.op)](left, right)
+            if isinstance(node.op, ast.Mod) and isinstance(left, str):
+                raise TemplateValidationError(
+                    "string formatting is not supported in template expressions"
+                )
+            if isinstance(node.op, ast.Mult):
+                self._check_sequence_repetition(left, right)
+            return self._bounded(self._binary_operators[type(node.op)](left, right))
         if isinstance(node, ast.UnaryOp):
-            return self._unary_operators[type(node.op)](
-                self._evaluate(node.operand, values)
+            return self._bounded(
+                self._unary_operators[type(node.op)](
+                    self._bounded(self._evaluate(node.operand, values))
+                )
             )
         if isinstance(node, ast.IfExp):
-            branch = node.body if self._evaluate(node.test, values) else node.orelse
+            test = self._bounded(self._evaluate(node.test, values))
+            branch = node.body if test else node.orelse
             return self._evaluate(branch, values)
         if isinstance(node, ast.Compare):
-            left = self._evaluate(node.left, values)
+            left = self._bounded(self._evaluate(node.left, values))
             for operation, comparator in zip(node.ops, node.comparators, strict=True):
-                right = self._evaluate(comparator, values)
+                right = self._bounded(self._evaluate(comparator, values))
                 if not self._comparison_operators[type(operation)](left, right):
                     return False
                 left = right
             return True
         if isinstance(node, ast.BoolOp):
-            evaluated = [self._evaluate(value, values) for value in node.values]
-            return all(evaluated) if isinstance(node.op, ast.And) else any(evaluated)
+            result = self._bounded(self._evaluate(node.values[0], values))
+            for value in node.values[1:]:
+                if isinstance(node.op, ast.And) and not result:
+                    return result
+                if isinstance(node.op, ast.Or) and result:
+                    return result
+                result = self._bounded(self._evaluate(value, values))
+            return result
         if isinstance(node, ast.List):
-            return [self._evaluate(element, values) for element in node.elts]
+            return self._bounded(
+                [
+                    self._bounded(self._evaluate(element, values))
+                    for element in node.elts
+                ]
+            )
         if isinstance(node, ast.Subscript):
-            value = self._evaluate(node.value, values)
-            index = self._evaluate(node.slice, values)
+            value = self._bounded(self._evaluate(node.value, values))
+            index = self._bounded(self._evaluate(node.slice, values))
             return value[index]
         if isinstance(node, ast.Call):
-            argument = self._evaluate(node.args[0], values)
-            return self._safe_functions[node.func.id](argument)
+            argument = self._bounded(self._evaluate(node.args[0], values))
+            return self._bounded(self._safe_functions[node.func.id](argument))
         raise AssertionError(f"unvalidated expression node: {type(node).__name__}")
+
+    @classmethod
+    def _check_sequence_repetition(cls, left: Any, right: Any) -> None:
+        sequence: str | list[Any] | None = None
+        count: int | None = None
+        if isinstance(left, (str, list)) and type(right) is int:
+            sequence, count = left, right
+        elif type(left) is int and isinstance(right, (str, list)):
+            sequence, count = right, left
+        if sequence is None or count is None:
+            return
+        repetitions = max(count, 0)
+        resulting_length = len(sequence) * repetitions
+        if resulting_length > MAX_EXPRESSION_SEQUENCE_LENGTH:
+            raise TemplateValidationError(
+                "expression sequence result exceeds "
+                f"{MAX_EXPRESSION_SEQUENCE_LENGTH} items"
+            )
+        if isinstance(sequence, list):
+            payload_size = sum(cls._value_size(item) for item in sequence)
+            if 1 + payload_size * repetitions > MAX_EXPRESSION_VALUE_SIZE:
+                raise TemplateValidationError(
+                    "expression value exceeds cumulative size limit of "
+                    f"{MAX_EXPRESSION_VALUE_SIZE}"
+                )
+
+    @classmethod
+    def _bounded(cls, value: Any) -> Any:
+        remaining = [MAX_EXPRESSION_VALUE_SIZE]
+        cls._validate_bounded_value(value, remaining=remaining, depth=0)
+        return value
+
+    @classmethod
+    def _validate_bounded_value(
+        cls, value: Any, *, remaining: list[int], depth: int
+    ) -> None:
+        if depth > MAX_EXPRESSION_VALUE_DEPTH:
+            raise TemplateValidationError(
+                f"expression value exceeds nesting depth {MAX_EXPRESSION_VALUE_DEPTH}"
+            )
+        if type(value) is bool:
+            cls._spend_value_budget(remaining, 1)
+            return
+        if type(value) is int:
+            if abs(value) > MAX_EXPRESSION_INTEGER_ABS:
+                raise TemplateValidationError(
+                    f"expression integer result exceeds {MAX_EXPRESSION_INTEGER_ABS}"
+                )
+            cls._spend_value_budget(remaining, 1)
+            return
+        if type(value) is float:
+            if not math.isfinite(value) or abs(value) > MAX_EXPRESSION_FLOAT_ABS:
+                raise TemplateValidationError(
+                    "expression float result is non-finite or exceeds "
+                    f"{MAX_EXPRESSION_FLOAT_ABS:g}"
+                )
+            cls._spend_value_budget(remaining, 1)
+            return
+        if isinstance(value, (str, list)):
+            if len(value) > MAX_EXPRESSION_SEQUENCE_LENGTH:
+                raise TemplateValidationError(
+                    "expression sequence result exceeds "
+                    f"{MAX_EXPRESSION_SEQUENCE_LENGTH} items"
+                )
+            cls._spend_value_budget(
+                remaining, 1 + len(value) if isinstance(value, str) else 1
+            )
+            if isinstance(value, list):
+                for item in value:
+                    cls._validate_bounded_value(
+                        item, remaining=remaining, depth=depth + 1
+                    )
+            return
+        raise TemplateValidationError(
+            f"expression produced unsupported value type {type(value).__name__}"
+        )
+
+    @staticmethod
+    def _spend_value_budget(remaining: list[int], amount: int) -> None:
+        remaining[0] -= amount
+        if remaining[0] < 0:
+            raise TemplateValidationError(
+                "expression value exceeds cumulative size limit of "
+                f"{MAX_EXPRESSION_VALUE_SIZE}"
+            )
+
+    @classmethod
+    def _value_size(cls, value: Any) -> int:
+        if isinstance(value, str):
+            return 1 + len(value)
+        if isinstance(value, list):
+            return 1 + sum(cls._value_size(item) for item in value)
+        return 1
 
 
 def build_template_prompt(request: TemplateAuthoringRequest) -> str:
