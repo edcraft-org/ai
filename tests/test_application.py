@@ -26,7 +26,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
             ],
         }
     )
-    provider_calls: list[str] = []
+    provider_calls: list[tuple[str, str | None]] = []
 
     class StubTemplateGenerator:
         def generate_proposal(self, request):
@@ -36,8 +36,8 @@ def test_template_application_authors_once_then_generates_locally() -> None:
         def execute(self, code, entry_function, inputs, *, timeout_seconds):
             return ExecutionResult(ok=True, answer=inputs["a"] + inputs["b"])
 
-    def generator_factory(provider):
-        provider_calls.append(provider)
+    def generator_factory(selection):
+        provider_calls.append((selection.provider, selection.model))
         return StubTemplateGenerator()
 
     application = QuestionTemplateApplication(
@@ -47,10 +47,11 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     approved = application.author(
         TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner"),
         provider="stub",
+        model="stub-model",
     )
     instance = application.generate(approved, seed=7)
 
-    assert provider_calls == ["stub"]
+    assert provider_calls == [("stub", "stub-model")]
     assert approved.validation.cases_validated == 4
     assert approved.template.topic == "arithmetic"
     assert approved.template.difficulty == "beginner"

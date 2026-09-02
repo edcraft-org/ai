@@ -100,7 +100,12 @@ def _model(provider: str) -> str:
         "soclaas": "SOCLAAS_MODEL",
         "openai": "OPENAI_MODEL",
     }[provider]
-    return os.getenv(variable, "").strip() or DEFAULT_OPENAI_MODEL
+    configured = os.getenv(variable, "").strip()
+    if configured:
+        return configured
+    if provider == "openai":
+        return DEFAULT_OPENAI_MODEL
+    raise OpenAIGenerationError(f"{variable} is not configured")
 
 
 class OpenAITemplateGenerator(OpenAICompatibleTemplateGenerator):

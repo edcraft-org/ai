@@ -45,6 +45,8 @@ OLLAMA_TEMPERATURE=0
 ```
 
 Provider selection is always explicit through `--provider`.
+Model selection can also be explicit through `--model`; when it is omitted, the
+selected provider's environment setting is used.
 
 ## Author and approve a template
 
@@ -53,6 +55,7 @@ OpenAI uses strict Structured Outputs:
 ```bash
 uv run python -m edcraft_validator.template author \
   --provider openai \
+  --model gpt-5-mini \
   --topic arithmetic \
   --difficulty beginner \
   --num-distractors 3 \
@@ -66,6 +69,7 @@ contract used by OpenAI:
 ```bash
 /usr/bin/time -p uv run python -m edcraft_validator.template author \
   --provider ollama \
+  --model qwen2.5-coder:14b \
   --topic loops \
   --difficulty beginner \
   --num-distractors 3 \
@@ -209,9 +213,11 @@ executor.py + _worker.py            batched Docker execution
 domains/code/pipeline.py           standalone concrete-question validation pipeline
 ```
 
-To add another model, implement `QuestionTemplateGenerator.generate_proposal`,
-register its factory with `register_template_provider`, and add an adapter test.
-The application and CLI do not need provider-specific branches.
+To use another model from an existing provider, pass `--model`; no domain code
+changes are required. To add another provider, implement
+`QuestionTemplateGenerator.generate_proposal`, register its factory with
+`register_template_provider`, and add an adapter test. The application and CLI do
+not need provider-specific branches.
 
 Future math and physics domains should have their own template schema, approval
 tools, and instance generator under `domains/`. SymPy or Lean should not be added

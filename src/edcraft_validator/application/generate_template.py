@@ -13,10 +13,15 @@ from edcraft_validator.domains.code.templates import (
     normalize_code_template_proposal,
 )
 from edcraft_validator.generation.base import QuestionTemplateGenerator
-from edcraft_validator.generation.models import TemplateAuthoringRequest
+from edcraft_validator.generation.models import (
+    TemplateAuthoringRequest,
+    TemplateProviderSelection,
+)
 from edcraft_validator.generation.registry import create_template_generator
 
-TemplateGeneratorFactory = Callable[[str], QuestionTemplateGenerator]
+TemplateGeneratorFactory = Callable[
+    [TemplateProviderSelection], QuestionTemplateGenerator
+]
 TemplateValidatorFactory = Callable[[], TemplateValidator]
 
 
@@ -35,9 +40,14 @@ class QuestionTemplateApplication:
         self.instance_generator = instance_generator or TemplateInstanceGenerator()
 
     def author(
-        self, request: TemplateAuthoringRequest, *, provider: str
+        self,
+        request: TemplateAuthoringRequest,
+        *,
+        provider: str,
+        model: str | None = None,
     ) -> ApprovedCodeQuestionTemplate:
-        proposal = self.generator_factory(provider).generate_proposal(request)
+        selection = TemplateProviderSelection(provider=provider, model=model)
+        proposal = self.generator_factory(selection).generate_proposal(request)
         template = normalize_code_template_proposal(request, proposal)
         return self.validator_factory().validate(
             template, num_distractors=request.num_distractors

@@ -33,6 +33,10 @@ def main() -> int:
         "--provider", choices=available_template_providers(), required=True
     )
     author.add_argument(
+        "--model",
+        help="provider model name (defaults to the provider environment setting)",
+    )
+    author.add_argument(
         "--topic",
         choices=CODE_TOPICS,
         required=True,
@@ -68,7 +72,9 @@ def main() -> int:
                 difficulty=args.difficulty,
                 num_distractors=args.num_distractors,
             )
-            result = application.author(request, provider=args.provider)
+            result = application.author(
+                request, provider=args.provider, model=args.model
+            )
         elif args.command == "validate":
             template = CodeQuestionTemplate.model_validate_json(
                 args.template.read_text()
