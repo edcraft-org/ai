@@ -447,6 +447,42 @@ def test_list_profile_enforces_the_literal_beginner_operation() -> None:
     assert "return sum(values)" in str(error.value)
 
 
+def test_conditional_profile_enforces_its_teaching_values() -> None:
+    data = json.loads((TEMPLATE_DIR / "conditional_string.json").read_text())
+    data["parameters"][0]["values"] = ["first", "second", "other"]
+    value = CodeQuestionTemplate.model_validate(data)
+
+    with pytest.raises(TemplateValidationError) as error:
+        TemplateValidator(executor=TrustedBatchExecutor()).validate(value)
+
+    assert error.value.code == "PROFILE_MISMATCH"
+    assert error.value.field == "parameters"
+    assert "express" in str(error.value)
+
+
+def test_conditional_profile_enforces_sequential_comparisons() -> None:
+    value = CodeQuestionTemplate.model_validate_json(
+        (TEMPLATE_DIR / "conditional_string.json").read_text()
+    ).model_copy(
+        update={
+            "code": (
+                "def route(mode):\n"
+                "    if mode == 'standard':\n"
+                "        return 2\n"
+                "    if mode == 'express':\n"
+                "        return 1\n"
+                "    return 3"
+            )
+        }
+    )
+
+    with pytest.raises(TemplateValidationError) as error:
+        TemplateValidator(executor=TrustedBatchExecutor()).validate(value)
+
+    assert error.value.code == "PROFILE_MISMATCH"
+    assert error.value.field == "code"
+
+
 def test_proposal_normalization_derives_target_aware_loop_wording() -> None:
     canonical = CodeQuestionTemplate.model_validate_json(
         (TEMPLATE_DIR / "loop_iterations.json").read_text()
@@ -494,7 +530,10 @@ def test_every_topic_and_difficulty_has_distinct_authoring_guidance() -> None:
     assert "middle helper calls the leaf" in prompts[("functions", "advanced")]
     assert "`3 * n + 2`" in prompts[("functions", "advanced")]
     assert "body must be exactly `return sum(values)`" in prompts[("lists", "beginner")]
-    assert "non-empty values" in prompts[("conditionals", "intermediate")]
+    assert '"required_parameter_values"' in prompts[("conditionals", "intermediate")]
+    assert (
+        '1 if mode == \\"express\\" else 2' in prompts[("conditionals", "intermediate")]
+    )
     assert "1 if override else" in prompts[("conditionals", "advanced")]
     assert (
         "body must be exactly `return sorted(values)`"

@@ -138,7 +138,7 @@ def test_openai_prompt_metadata_is_stable() -> None:
     second = generator.prompt_metadata(request)
 
     assert first == second
-    assert first.version == "code-template-v6"
+    assert first.version == "code-template-v7"
     assert len(first.sha256) == 64
     assert (
         first.sha256

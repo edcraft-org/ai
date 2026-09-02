@@ -58,6 +58,7 @@ class CodeTemplateProfile:
     guidance: str
     answer_kind: AnswerKind
     require_positive_integers: bool = False
+    required_parameter_values: tuple[tuple[object, ...], ...] | None = None
 
 
 def _shape(
@@ -116,9 +117,12 @@ _PROFILES = (
         "branch_executions",
         (_shape("string", names=("mode",)),),
         frozenset({"conditional", "early_return", "sequential_conditionals"}),
-        "Use exactly one string parameter named mode with non-empty values and two "
-        "sequential early-return conditions.",
+        "Use exactly one string parameter named mode with values `express`, "
+        "`standard`, and `economy`. Test express first and return early, then test "
+        "standard and return early. answer_expression must be exactly "
+        '`1 if mode == "express" else 2`.',
         "integer",
+        required_parameter_values=(("express", "standard", "economy"),),
     ),
     CodeTemplateProfile(
         "conditionals",
@@ -347,6 +351,7 @@ def profile_semantic_violation(
 
     expected_expressions = {
         ("conditionals", "advanced"): ("1 if override else (3 if score >= 50 else 2)"),
+        ("conditionals", "intermediate"): '1 if mode == "express" else 2',
         ("loops", "beginner"): "n",
         ("loops", "intermediate"): "n + m",
         ("loops", "advanced"): "n + n * m",
@@ -366,7 +371,9 @@ def profile_semantic_violation(
             f"equivalent to `{expected_expression}`",
         )
 
-    if profile.topic == "loops":
+    if key == ("conditionals", "intermediate"):
+        error = _intermediate_conditional_error(entry)
+    elif profile.topic == "loops":
         error = _loop_profile_error(entry, profile.difficulty)
     elif profile.topic == "functions":
         error = _function_profile_error(functions, entry, profile.difficulty)
@@ -377,6 +384,43 @@ def profile_semantic_violation(
     else:
         error = None
     return ("code", error) if error is not None else None
+
+
+def _intermediate_conditional_error(entry: ast.FunctionDef) -> str | None:
+    if len(entry.body) != 3:
+        return "conditionals/intermediate requires two sequential ifs and one return"
+    first, second, final = entry.body
+    if not (
+        isinstance(first, ast.If)
+        and isinstance(second, ast.If)
+        and isinstance(final, ast.Return)
+        and _string_equality(first.test, "mode", "express")
+        and _string_equality(second.test, "mode", "standard")
+        and len(first.body) == 1
+        and isinstance(first.body[0], ast.Return)
+        and not first.orelse
+        and len(second.body) == 1
+        and isinstance(second.body[0], ast.Return)
+        and not second.orelse
+    ):
+        return (
+            'conditionals/intermediate requires sequential `mode == "express"` '
+            'and `mode == "standard"` early-return conditions'
+        )
+    return None
+
+
+def _string_equality(node: ast.AST, name: str, value: str) -> bool:
+    return (
+        isinstance(node, ast.Compare)
+        and isinstance(node.left, ast.Name)
+        and node.left.id == name
+        and len(node.ops) == 1
+        and isinstance(node.ops[0], ast.Eq)
+        and len(node.comparators) == 1
+        and isinstance(node.comparators[0], ast.Constant)
+        and node.comparators[0].value == value
+    )
 
 
 def _same_expression(actual: str, expected: str) -> bool:

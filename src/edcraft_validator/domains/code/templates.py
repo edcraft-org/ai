@@ -40,7 +40,7 @@ MAX_EXPRESSION_FLOAT_ABS = 1_000_000_000.0
 MAX_EXPRESSION_SEQUENCE_LENGTH = 100
 MAX_EXPRESSION_VALUE_SIZE = 1_000
 MAX_EXPRESSION_VALUE_DEPTH = 20
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v6"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v7"
 ParameterValue = int | bool | str | list[int]
 
 
@@ -606,6 +606,19 @@ class TemplateValidator:
                 field="parameters",
             )
 
+        if profile.required_parameter_values is not None:
+            actual_values = tuple(
+                tuple(parameter.values) for parameter in template.parameters
+            )
+            if actual_values != profile.required_parameter_values:
+                raise TemplateValidationError(
+                    f"{template.topic}/{template.difficulty} requires parameter "
+                    f"values {profile.required_parameter_values}; received "
+                    f"{actual_values}",
+                    code="PROFILE_MISMATCH",
+                    field="parameters",
+                )
+
         actual_features = extract_code_features(template.code, template.entry_function)
         missing = profile.required_features - actual_features
         if missing:
@@ -1054,6 +1067,7 @@ def build_template_prompt(request: TemplateAuthoringRequest) -> str:
             "accepted_parameter_shapes": shapes,
             "required_code_features": sorted(profile.required_features),
             "positive_integer_values_required": profile.require_positive_integers,
+            "required_parameter_values": profile.required_parameter_values,
             "authoring_requirements": profile.guidance,
         },
         indent=2,
