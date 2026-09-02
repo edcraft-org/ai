@@ -39,7 +39,7 @@ MAX_EXPRESSION_FLOAT_ABS = 1_000_000_000.0
 MAX_EXPRESSION_SEQUENCE_LENGTH = 100
 MAX_EXPRESSION_VALUE_SIZE = 1_000
 MAX_EXPRESSION_VALUE_DEPTH = 20
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v2"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v3"
 ParameterValue = int | bool | str | list[int]
 
 
@@ -959,12 +959,53 @@ class SafeExpression:
 def build_template_prompt(request: TemplateAuthoringRequest) -> str:
     profile = code_template_profile(request.topic, request.difficulty)
     candidate_count = min(request.num_distractors + 2, 5)
+    shapes = [
+        {
+            "kinds": list(shape.kinds),
+            "names": list(shape.names) if shape.names is not None else None,
+        }
+        for shape in profile.parameter_shapes
+    ]
+    contract = json.dumps(
+        {
+            "topic": profile.topic,
+            "difficulty": profile.difficulty,
+            "answer_target": profile.answer_target,
+            "accepted_parameter_shapes": shapes,
+            "required_code_features": sorted(profile.required_features),
+            "positive_integer_values_required": profile.require_positive_integers,
+        },
+        indent=2,
+        sort_keys=True,
+    )
+    if (
+        profile.answer_target == "return_value"
+        and request.topic == "lists"
+        and request.difficulty == "intermediate"
+    ):
+        fallback_guidance = (
+            "Because the answer is a list, make the final three fallback candidates "
+            "`sorted(values) + [0]`, `sorted(values) + [1]`, and "
+            "`sorted(values) + [2]`."
+        )
+    else:
+        fallback_guidance = (
+            "Because this profile has a numeric answer, make the final three fallback "
+            "candidates `(<answer_expression>) + 1`, `(<answer_expression>) + 2`, "
+            "and `(<answer_expression>) + 3`."
+        )
     prompt = (
-        f"Topic: {request.topic}\n"
-        f"Difficulty: {request.difficulty}\n"
+        "Follow this exact capability contract. Choose exactly one accepted parameter "
+        "shape. A null names value means choose valid names but preserve the exact "
+        "number, order, and kinds. Do not add parameters.\n"
+        f"{contract}\n"
         f"Use answer_target={profile.answer_target}. "
         f"Create exactly {candidate_count} distractor candidates; the local validator "
-        f"will select {request.num_distractors}. "
+        f"will select {request.num_distractors}. The first candidates should model "
+        "real misconceptions. Every candidate must differ from the answer and every "
+        "other selected candidate for every value in the complete Cartesian product. "
+        f"{fallback_guidance} In reason_template, use only plain placeholders such as "
+        "`{n}`; never put expressions such as `{n-1}` inside braces. "
         f"{profile.guidance} "
         "Keep the complete Cartesian product valid."
     )
@@ -1000,10 +1041,14 @@ Rules:
   expression. String constants, list literals, indexing, and the one-argument functions
   len, sum, min, max, sorted, all, and any are also supported. Do not use methods or
   other function calls.
-- Each distractor candidate must represent a specific misconception. The local validator
-  selects candidates that are unique, type-compatible, and different from the answer
-  for every parameter combination.
-- reason_template explains its misconception and may use simple parameter placeholders.
+- Each distractor candidate must represent a specific misconception. The local
+  validator selects candidates that are unique, type-compatible, and different from
+  the answer for every parameter combination. The user prompt provides required
+  fallback candidates; include them after the misconception-based candidates exactly
+  as requested.
+- reason_template explains its misconception and may use only a bare parameter
+  placeholder such as `{n}`. Do not place arithmetic or any other expression inside
+  braces.
 - Return only the proposal schema fields and no markdown. Do not add locally derived
   fields.
 """

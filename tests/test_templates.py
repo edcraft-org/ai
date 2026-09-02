@@ -227,6 +227,38 @@ def test_prompt_requests_extra_distractor_candidates_in_the_same_call() -> None:
 
     assert "exactly 4 distractor candidates" in prompt
     assert "will select 2" in prompt
+    assert "final three fallback candidates" in prompt
+
+
+def test_prompt_serializes_the_exact_capability_contract() -> None:
+    prompt = build_template_prompt(
+        TemplateAuthoringRequest(topic="conditionals", difficulty="advanced")
+    )
+
+    assert '"accepted_parameter_shapes"' in prompt
+    assert '"kinds": [' in prompt
+    assert '"integer"' in prompt
+    assert '"boolean"' in prompt
+    assert '"required_code_features"' in prompt
+    assert '"nested_conditional"' in prompt
+    assert "Do not add parameters" in prompt
+
+
+def test_list_result_prompt_uses_type_compatible_fallbacks() -> None:
+    prompt = build_template_prompt(
+        TemplateAuthoringRequest(topic="lists", difficulty="intermediate")
+    )
+
+    assert "`sorted(values) + [0]`" in prompt
+    assert "numeric answer" not in prompt
+
+
+def test_reason_placeholders_forbid_embedded_expressions() -> None:
+    prompt = build_template_prompt(
+        TemplateAuthoringRequest(topic="loops", difficulty="beginner")
+    )
+
+    assert "never put expressions such as `{n-1}` inside braces" in prompt
 
 
 def test_provider_template_parser_removes_duplicate_parameter_values() -> None:
@@ -318,7 +350,7 @@ def test_every_topic_and_difficulty_has_distinct_authoring_guidance() -> None:
     assert len(set(prompts.values())) == 15
     assert "two sequential range loops" in prompts[("loops", "intermediate")]
     assert "one nested range loop" in prompts[("loops", "advanced")]
-    assert "nested helpers" in prompts[("functions", "advanced")]
+    assert "one helper calls another" in prompts[("functions", "advanced")]
 
 
 def test_examples_cover_every_topic_and_difficulty() -> None:

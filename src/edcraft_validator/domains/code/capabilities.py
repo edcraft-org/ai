@@ -173,7 +173,9 @@ _PROFILES = (
         "function_calls",
         (_shape("integer", names=("n",)),),
         frozenset({"helper_function", "loop", "nested_helper"}),
-        "Use nested helpers inside a range loop and derive every traced call.",
+        "Define module-level helpers where one helper calls another inside a range "
+        "loop, and derive every traced call. Do not define a function inside another "
+        "function.",
         require_positive_integers=True,
     ),
     CodeTemplateProfile(
