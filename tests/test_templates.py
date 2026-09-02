@@ -345,6 +345,19 @@ def test_profile_rejects_the_wrong_answer_kind() -> None:
     assert error.value.inputs is not None
 
 
+def test_answer_kind_error_precedes_distractor_selection() -> None:
+    value = CodeQuestionTemplate.model_validate_json(
+        (TEMPLATE_DIR / "list_sorted.json").read_text()
+    ).model_copy(update={"answer_expression": "len(values)"})
+
+    with pytest.raises(TemplateValidationError) as error:
+        TemplateValidator(executor=TrustedBatchExecutor()).validate(
+            value, num_distractors=3
+        )
+
+    assert error.value.code == "ANSWER_KIND_MISMATCH"
+
+
 def test_profile_features_must_be_reachable_from_the_entry_function() -> None:
     value = CodeQuestionTemplate.model_validate_json(
         (TEMPLATE_DIR / "list_sum.json").read_text()

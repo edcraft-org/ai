@@ -450,6 +450,8 @@ class TemplateValidator:
             for values in itertools.product(*value_domains)
         ]
         expected_answers = [answer.evaluate(inputs) for inputs in inputs_cases]
+        for inputs, expected_answer in zip(inputs_cases, expected_answers, strict=True):
+            cls._validate_answer_kind(template, inputs, expected_answer)
         failures: list[str] = []
 
         for candidate_indexes in itertools.combinations(
