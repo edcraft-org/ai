@@ -24,9 +24,13 @@ class OpenAICompatibleTemplateGenerator:
         if provider not in {"openai", "soclaas"}:
             raise ValueError(f"Unsupported provider: {provider}")
         self.provider = provider
-        self.client = client or OpenAI(
-            api_key=_api_key(provider), base_url=_base_url(provider)
-        )
+        if client is None:
+            api_key = _api_key(provider)
+            if api_key is None:
+                variable = _api_key_variable(provider)
+                raise OpenAIGenerationError(f"{variable} is not configured")
+            client = OpenAI(api_key=api_key, base_url=_base_url(provider))
+        self.client = client
         self.model = model or _model(provider)
 
     def generate_template(
@@ -55,29 +59,47 @@ class OpenAICompatibleTemplateGenerator:
             return CodeQuestionTemplate.model_validate_json(content)
         except Exception as exc:
             raise OpenAIGenerationError(
-                f"{self.provider} returned invalid question template JSON: {exc}"
+                f"{self.provider} failed to generate a question template: {exc}"
             ) from exc
 
 
 def _api_key(provider: str) -> str | None:
+    variable = _api_key_variable(provider)
+    raw_value = os.getenv(variable)
+    if raw_value is None:
+        return None
+
+    value = raw_value.strip()
+    if not value:
+        return None
+    if not value.isascii() or any(character.isspace() for character in value):
+        raise OpenAIGenerationError(
+            f"{variable} contains invalid whitespace or non-ASCII characters"
+        )
+    return value
+
+
+def _api_key_variable(provider: str) -> str:
     return {
-        "soclaas": os.getenv("SOCLAAS_API_KEY"),
-        "openai": os.getenv("OPENAI_API_KEY"),
+        "soclaas": "SOCLAAS_API_KEY",
+        "openai": "OPENAI_API_KEY",
     }[provider]
 
 
 def _base_url(provider: str) -> str | None:
-    return {
+    value = {
         "soclaas": os.getenv("SOCLAAS_BASE_URL"),
         "openai": os.getenv("OPENAI_BASE_URL"),
     }[provider]
+    return value.strip() if value else None
 
 
 def _model(provider: str) -> str:
-    return {
-        "soclaas": os.getenv("SOCLAAS_MODEL") or DEFAULT_OPENAI_MODEL,
-        "openai": os.getenv("OPENAI_MODEL") or DEFAULT_OPENAI_MODEL,
+    variable = {
+        "soclaas": "SOCLAAS_MODEL",
+        "openai": "OPENAI_MODEL",
     }[provider]
+    return os.getenv(variable, "").strip() or DEFAULT_OPENAI_MODEL
 
 
 class OpenAITemplateGenerator(OpenAICompatibleTemplateGenerator):

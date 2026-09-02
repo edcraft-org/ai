@@ -83,7 +83,7 @@ def test_reports_empty_template_response() -> None:
         "openai", client_with(None), model="test-model"
     )
 
-    with pytest.raises(OpenAIGenerationError, match="invalid question template JSON"):
+    with pytest.raises(OpenAIGenerationError, match="failed to generate"):
         generator.generate_template(
             TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
         )
@@ -99,3 +99,18 @@ def test_provider_uses_provider_specific_configuration(monkeypatch) -> None:
     assert _base_url("openai") == "https://openai.example/v1"
     assert _api_key("soclaas") == "soclaas-key"
     assert _base_url("soclaas") == "https://soclaas.example/v1"
+
+
+def test_provider_configuration_strips_surrounding_whitespace(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "  openai-key\n")
+    monkeypatch.setenv("OPENAI_BASE_URL", " https://openai.example/v1/ \n")
+
+    assert _api_key("openai") == "openai-key"
+    assert _base_url("openai") == "https://openai.example/v1/"
+
+
+def test_provider_configuration_rejects_internal_whitespace(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-key\nsecond-line")
+
+    with pytest.raises(OpenAIGenerationError, match="invalid whitespace"):
+        _api_key("openai")
