@@ -58,7 +58,7 @@ def test_candidate_is_promoted_only_with_authoritative_answer() -> None:
 
     assert isinstance(question, GeneratedQuestion)
     assert question.proposed_answer == 16
-    assert not hasattr(question, "distractor_reasons")
+    assert question.distractor_reasons == ["reason", "reason", "reason"]
 
 
 def test_python_pipeline_skips_execution_after_safety_failure() -> None:

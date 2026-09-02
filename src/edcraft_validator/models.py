@@ -56,6 +56,7 @@ class QuestionCandidate(BaseModel):
             inputs=question.inputs,
             question=question.question,
             distractors=question.distractors,
+            distractor_reasons=question.distractor_reasons,
             proposed_answer=question.proposed_answer,
             answer_target=question.answer_target,
             question_type=question.question_type,
@@ -70,6 +71,7 @@ class QuestionCandidate(BaseModel):
             question=self.question,
             proposed_answer=answer,
             distractors=self.distractors,
+            distractor_reasons=self.distractor_reasons,
             answer_target=self.answer_target,
             question_type=self.question_type,
         )
@@ -86,6 +88,7 @@ class GeneratedQuestion(BaseModel):
     question: str = Field(min_length=1)
     proposed_answer: Any
     distractors: list[Any] = Field(min_length=2)
+    distractor_reasons: list[str] = Field(default_factory=list)
     answer_target: AnswerTarget = "return_value"
     question_type: Literal["mcq"] = "mcq"
 

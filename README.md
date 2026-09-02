@@ -126,6 +126,7 @@ uv run python -m edcraft_validator.template generate \
 
 Each output records the template ID, version, SHA-256 hash, seed, selected
 parameters, code, question, answer target, answer, and distractors.
+Rendered misconception reasons are preserved alongside their selected distractors.
 
 ## Currently supported
 

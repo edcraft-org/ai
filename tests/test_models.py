@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from edcraft_validator.models import GeneratedQuestion
+from edcraft_validator.models import GeneratedQuestion, QuestionCandidate
 
 
 def valid_data() -> dict[str, object]:
@@ -86,3 +86,14 @@ def test_rejects_non_string_code_lines() -> None:
     data["code"] = ["def answer():", 42]
     with pytest.raises(ValidationError, match="valid string"):
         GeneratedQuestion.model_validate(data)
+
+
+def test_candidate_round_trip_preserves_distractor_reasons() -> None:
+    data = valid_data()
+    data["distractor_reasons"] = ["Subtracts two.", "Adds two."]
+    question = GeneratedQuestion.model_validate(data)
+
+    candidate = QuestionCandidate.from_question(question)
+    restored = candidate.with_answer(42)
+
+    assert restored.distractor_reasons == question.distractor_reasons

@@ -82,3 +82,8 @@ def test_template_application_authors_once_then_generates_locally() -> None:
         "a + b - 1",
     ]
     assert instance.question.proposed_answer == sum(instance.parameters.values())
+    assert instance.question.distractor_reasons == [
+        "Subtracts.",
+        "Adds one.",
+        "Subtracts one.",
+    ]

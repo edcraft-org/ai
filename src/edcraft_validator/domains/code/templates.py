@@ -636,6 +636,10 @@ class TemplateInstanceGenerator:
             SafeExpression(recipe.expression, names).evaluate(inputs)
             for recipe in template.distractors
         ]
+        distractor_reasons = [
+            render_template(recipe.reason_template, inputs)
+            for recipe in template.distractors
+        ]
         question = GeneratedQuestion(
             code=template.code,
             entry_function=template.entry_function,
@@ -645,6 +649,7 @@ class TemplateInstanceGenerator:
             ),
             proposed_answer=answer,
             distractors=distractors,
+            distractor_reasons=distractor_reasons,
             answer_target=template.answer_target,
             question_type=template.question_type,
         )
