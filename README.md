@@ -195,6 +195,7 @@ It is not part of normal template-based question expansion.
 ```text
 application/generate_template.py   frontend-facing use case
 domains/code/templates.py          code template schema, prompt, approval, expansion
+domains/code/capabilities.py       supported profiles and their machine-readable rules
 generation/base.py                 provider-neutral template protocol
 generation/registry.py             explicit provider selection and extension point
 generation/openai.py               OpenAI and SocLaas adapters

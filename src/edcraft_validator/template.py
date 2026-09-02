@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from pydantic import ValidationError
 
 from edcraft_validator.application import QuestionTemplateApplication
+from edcraft_validator.domains.code.capabilities import CODE_DIFFICULTIES, CODE_TOPICS
 from edcraft_validator.domains.code.templates import (
     ApprovedCodeQuestionTemplate,
     CodeQuestionTemplate,
@@ -33,12 +34,12 @@ def main() -> int:
     )
     author.add_argument(
         "--topic",
-        choices=["arithmetic", "conditionals", "loops", "functions", "lists"],
+        choices=CODE_TOPICS,
         required=True,
     )
     author.add_argument(
         "--difficulty",
-        choices=["beginner", "intermediate", "advanced"],
+        choices=CODE_DIFFICULTIES,
         required=True,
     )
     author.add_argument("--num-distractors", type=int, default=3)

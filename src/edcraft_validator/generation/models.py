@@ -1,15 +1,6 @@
-from typing import Literal
-
 from pydantic import BaseModel, ConfigDict, Field
 
-ProgrammingTopic = Literal[
-    "arithmetic",
-    "conditionals",
-    "loops",
-    "functions",
-    "lists",
-]
-Difficulty = Literal["beginner", "intermediate", "advanced"]
+from edcraft_validator.domains.code.capabilities import Difficulty, ProgrammingTopic
 
 
 class TemplateAuthoringRequest(BaseModel):

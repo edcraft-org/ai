@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from edcraft_validator.domains.code.capabilities import answer_target_for_topic
 from edcraft_validator.domains.code.templates import (
     ApprovedCodeQuestionTemplate,
     CodeQuestionTemplate,
@@ -11,7 +12,6 @@ from edcraft_validator.domains.code.templates import (
     TemplateQuestionInstance,
     TemplateValidationError,
     TemplateValidator,
-    answer_target_for_topic,
 )
 from edcraft_validator.generation.base import QuestionTemplateGenerator
 from edcraft_validator.generation.models import TemplateAuthoringRequest

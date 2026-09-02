@@ -5,6 +5,12 @@ from typing import Any
 import pytest
 
 from edcraft_validator._worker import execute_request
+from edcraft_validator.domains.code.capabilities import (
+    CODE_DIFFICULTIES,
+    CODE_TEMPLATE_PROFILES,
+    CODE_TOPICS,
+    code_template_profile,
+)
 from edcraft_validator.domains.code.templates import (
     CodeQuestionTemplate,
     FiniteParameter,
@@ -20,8 +26,6 @@ from edcraft_validator.generation.models import TemplateAuthoringRequest
 
 TEMPLATE_DIR = Path(__file__).parents[1] / "examples" / "templates"
 TEMPLATE_PATHS = sorted(TEMPLATE_DIR.glob("*.json"))
-SUPPORTED_TOPICS = {"arithmetic", "conditionals", "loops", "functions", "lists"}
-SUPPORTED_DIFFICULTIES = {"beginner", "intermediate", "advanced"}
 
 
 def template(**changes: Any) -> CodeQuestionTemplate:
@@ -207,8 +211,8 @@ def test_beginner_arithmetic_prompt_forbids_operator_parameter() -> None:
         TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
     )
 
-    assert "exactly two integer parameters named a and b" in prompt
-    assert "Do not create a parameter for the arithmetic operator" in prompt
+    assert "two or three integer parameters named a, b, and optionally c" in prompt
+    assert "Do not create a parameter for the operator" in prompt
 
 
 def test_provider_template_parser_removes_duplicate_parameter_values() -> None:
@@ -233,8 +237,8 @@ def test_every_topic_and_difficulty_has_distinct_authoring_guidance() -> None:
         (topic, difficulty): build_template_prompt(
             TemplateAuthoringRequest(topic=topic, difficulty=difficulty)
         )
-        for topic in SUPPORTED_TOPICS
-        for difficulty in SUPPORTED_DIFFICULTIES
+        for topic in CODE_TOPICS
+        for difficulty in CODE_DIFFICULTIES
     }
 
     assert len(set(prompts.values())) == 15
@@ -250,13 +254,43 @@ def test_examples_cover_every_topic_and_difficulty() -> None:
     ]
     actual = {(template.topic, template.difficulty) for template in templates}
     expected = {
-        (topic, difficulty)
-        for topic in SUPPORTED_TOPICS
-        for difficulty in SUPPORTED_DIFFICULTIES
+        (topic, difficulty) for topic in CODE_TOPICS for difficulty in CODE_DIFFICULTIES
     }
 
     assert len(templates) == len(expected)
     assert actual == expected
+
+
+def test_example_templates_match_their_capability_profiles() -> None:
+    for path in TEMPLATE_PATHS:
+        item = CodeQuestionTemplate.model_validate_json(path.read_text())
+        profile = code_template_profile(item.topic, item.difficulty)
+        actual_kinds = tuple(parameter.kind for parameter in item.parameters)
+        actual_names = tuple(parameter.name for parameter in item.parameters)
+
+        assert item.answer_target == profile.answer_target
+        assert any(
+            actual_kinds == shape.kinds
+            and (shape.names is None or actual_names == shape.names)
+            for shape in profile.parameter_shapes
+        ), item.template_id
+        if profile.require_positive_integers:
+            assert all(
+                value > 0
+                for parameter in item.parameters
+                if parameter.kind == "integer"
+                for value in parameter.values
+            ), item.template_id
+
+
+def test_capability_catalog_covers_each_profile_once() -> None:
+    assert len(CODE_TEMPLATE_PROFILES) == 15
+    for topic in CODE_TOPICS:
+        targets = {
+            code_template_profile(topic, difficulty).answer_target
+            for difficulty in CODE_DIFFICULTIES
+        }
+        assert len(targets) == 1
 
 
 @pytest.mark.parametrize("path", TEMPLATE_PATHS, ids=lambda path: path.stem)

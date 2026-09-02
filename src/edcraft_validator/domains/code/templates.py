@@ -14,12 +14,13 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from edcraft_validator.comparison import equivalent, same_value_shape
-from edcraft_validator.executor import DockerExecutor, ExecutionBackend, ExecutionResult
-from edcraft_validator.generation.models import (
+from edcraft_validator.domains.code.capabilities import (
     Difficulty,
     ProgrammingTopic,
-    TemplateAuthoringRequest,
+    code_template_profile,
 )
+from edcraft_validator.executor import DockerExecutor, ExecutionBackend, ExecutionResult
+from edcraft_validator.generation.models import TemplateAuthoringRequest
 from edcraft_validator.models import AnswerTarget, GeneratedQuestion
 from edcraft_validator.safety import check_code_safety
 
@@ -543,90 +544,16 @@ class SafeExpression:
 
 
 def build_template_prompt(request: TemplateAuthoringRequest) -> str:
-    target = answer_target_for_topic(request.topic)
-    parameter_guidance = _difficulty_guidance(request.topic, request.difficulty)
+    profile = code_template_profile(request.topic, request.difficulty)
     prompt = (
         f"Topic: {request.topic}\n"
         f"Difficulty: {request.difficulty}\n"
-        f"Use answer_target={target}. "
+        f"Use answer_target={profile.answer_target}. "
         f"Create exactly {request.num_distractors} distractor recipes. "
-        f"{parameter_guidance} "
+        f"{profile.guidance} "
         "Keep the complete Cartesian product valid."
     )
     return prompt
-
-
-def _difficulty_guidance(topic: ProgrammingTopic, difficulty: Difficulty) -> str:
-    """Give providers a validator-backed complexity profile for each selection."""
-    guidance = {
-        ("arithmetic", "beginner"): (
-            "Use exactly two integer parameters named a and b, in that order, and one "
-            "short arithmetic expression. Give each parameter two to four distinct "
-            "integer values. Do not create a parameter for the arithmetic operator."
-        ),
-        ("arithmetic", "intermediate"): (
-            "Combine integer and boolean parameters with one conditional adjustment."
-        ),
-        ("arithmetic", "advanced"): (
-            "Combine an integer_list with a string mode and an allowlisted aggregate."
-        ),
-        ("conditionals", "beginner"): (
-            "Use one boolean parameter and a short nested or early-return branch."
-        ),
-        ("conditionals", "intermediate"): (
-            "Use one string parameter with two sequential early-return conditions."
-        ),
-        ("conditionals", "advanced"): (
-            "Use integer and boolean parameters with nested conditions and early "
-            "returns."
-        ),
-        ("loops", "beginner"): (
-            "Use exactly one integer parameter named n with positive values from 2 "
-            "through 6, exactly one `for i in range(n)` loop, and answer_expression "
-            "exactly `n`."
-        ),
-        ("loops", "intermediate"): (
-            "Use positive integer parameters n and m with two sequential range loops; "
-            "the total loop_iterations expression should be `n + m`."
-        ),
-        ("loops", "advanced"): (
-            "Use positive integer parameters n and m with one nested range loop; the "
-            "total loop_iterations expression should be `n + n * m`."
-        ),
-        ("functions", "beginner"): (
-            "Use one helper called once by the entry function; count both calls."
-        ),
-        ("functions", "intermediate"): (
-            "Call one helper from a range loop and include entry, range, and helper "
-            "calls."
-        ),
-        ("functions", "advanced"): (
-            "Use nested helpers inside a range loop and derive every traced call."
-        ),
-        ("lists", "beginner"): (
-            "Use exactly one integer_list parameter named values and return "
-            "sum(values)."
-        ),
-        ("lists", "intermediate"): (
-            "Use one integer_list parameter with sorted(values) or safe indexing."
-        ),
-        ("lists", "advanced"): (
-            "Use one integer_list parameter and combine indexing with an aggregate or "
-            "arithmetic expression."
-        ),
-    }
-    return guidance[(topic, difficulty)]
-
-
-def answer_target_for_topic(topic: ProgrammingTopic) -> AnswerTarget:
-    """Choose the initial trace question supported for each programming topic."""
-    return {
-        "arithmetic": "return_value",
-        "conditionals": "branch_executions",
-        "loops": "loop_iterations",
-        "functions": "function_calls",
-        "lists": "return_value",
-    }[topic]
 
 
 CODE_TEMPLATE_SYSTEM_PROMPT = """\
