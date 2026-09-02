@@ -17,6 +17,7 @@ ProgrammingTopic = Literal[
 ]
 Difficulty = Literal["beginner", "intermediate", "advanced"]
 ParameterKind = Literal["integer", "boolean", "string", "integer_list"]
+AnswerKind = Literal["number", "integer", "integer_list"]
 CodeFeature = Literal[
     "arithmetic",
     "conditional",
@@ -55,6 +56,7 @@ class CodeTemplateProfile:
     parameter_shapes: tuple[ParameterShape, ...]
     required_features: frozenset[CodeFeature]
     guidance: str
+    answer_kind: AnswerKind
     require_positive_integers: bool = False
 
 
@@ -77,6 +79,7 @@ _PROFILES = (
         "Use two or three integer parameters named a, b, and optionally c, in that "
         "order, with one short arithmetic expression. Give each parameter two to "
         "four distinct values. Do not create a parameter for the operator.",
+        "number",
     ),
     CodeTemplateProfile(
         "arithmetic",
@@ -86,6 +89,7 @@ _PROFILES = (
         frozenset({"arithmetic", "conditional"}),
         "Combine two integer parameters and one boolean parameter with one "
         "conditional adjustment.",
+        "number",
     ),
     CodeTemplateProfile(
         "arithmetic",
@@ -94,6 +98,7 @@ _PROFILES = (
         (_shape("integer_list", "string"),),
         frozenset({"arithmetic", "conditional", "list_aggregate"}),
         "Combine an integer_list with a string mode and an allowlisted aggregate.",
+        "number",
     ),
     CodeTemplateProfile(
         "conditionals",
@@ -102,6 +107,7 @@ _PROFILES = (
         (_shape("boolean"),),
         frozenset({"conditional"}),
         "Use one boolean parameter and a short nested or early-return branch.",
+        "integer",
     ),
     CodeTemplateProfile(
         "conditionals",
@@ -110,6 +116,7 @@ _PROFILES = (
         (_shape("string"),),
         frozenset({"conditional", "early_return", "sequential_conditionals"}),
         "Use one string parameter with two sequential early-return conditions.",
+        "integer",
     ),
     CodeTemplateProfile(
         "conditionals",
@@ -118,6 +125,7 @@ _PROFILES = (
         (_shape("integer", "boolean"),),
         frozenset({"conditional", "early_return", "nested_conditional"}),
         "Use integer and boolean parameters with nested conditions and early returns.",
+        "integer",
     ),
     CodeTemplateProfile(
         "loops",
@@ -128,6 +136,7 @@ _PROFILES = (
         "Use exactly one integer parameter named n with positive values from 2 "
         "through 6, exactly one `for i in range(n)` loop, and answer_expression "
         "exactly `n`.",
+        "integer",
         require_positive_integers=True,
     ),
     CodeTemplateProfile(
@@ -138,6 +147,7 @@ _PROFILES = (
         frozenset({"loop", "sequential_loops"}),
         "Use positive integer parameters n and m with two sequential range loops; "
         "the total loop_iterations expression should be `n + m`.",
+        "integer",
         require_positive_integers=True,
     ),
     CodeTemplateProfile(
@@ -148,6 +158,7 @@ _PROFILES = (
         frozenset({"loop", "nested_loop"}),
         "Use positive integer parameters n and m with one nested range loop; the "
         "total loop_iterations expression should be `n + n * m`.",
+        "integer",
         require_positive_integers=True,
     ),
     CodeTemplateProfile(
@@ -157,6 +168,7 @@ _PROFILES = (
         (_shape("integer"),),
         frozenset({"helper_function"}),
         "Use one helper called once by the entry function; count both calls.",
+        "integer",
     ),
     CodeTemplateProfile(
         "functions",
@@ -165,6 +177,7 @@ _PROFILES = (
         (_shape("integer", names=("n",)),),
         frozenset({"helper_function", "loop"}),
         "Call one helper from a range loop and include entry, range, and helper calls.",
+        "integer",
         require_positive_integers=True,
     ),
     CodeTemplateProfile(
@@ -176,6 +189,7 @@ _PROFILES = (
         "Define module-level helpers where one helper calls another inside a range "
         "loop, and derive every traced call. Do not define a function inside another "
         "function.",
+        "integer",
         require_positive_integers=True,
     ),
     CodeTemplateProfile(
@@ -185,6 +199,7 @@ _PROFILES = (
         (_shape("integer_list", names=("values",)),),
         frozenset({"list_aggregate"}),
         "Use exactly one integer_list parameter named values and return sum(values).",
+        "integer",
     ),
     CodeTemplateProfile(
         "lists",
@@ -193,6 +208,7 @@ _PROFILES = (
         (_shape("integer_list", names=("values",)),),
         frozenset({"list_sort"}),
         "Use one integer_list parameter named values with sorted(values).",
+        "integer_list",
     ),
     CodeTemplateProfile(
         "lists",
@@ -202,6 +218,7 @@ _PROFILES = (
         frozenset({"arithmetic", "list_index"}),
         "Use one integer_list parameter named values and combine indexing with an "
         "aggregate or arithmetic expression.",
+        "integer",
     ),
 )
 

@@ -39,7 +39,7 @@ MAX_EXPRESSION_FLOAT_ABS = 1_000_000_000.0
 MAX_EXPRESSION_SEQUENCE_LENGTH = 100
 MAX_EXPRESSION_VALUE_SIZE = 1_000
 MAX_EXPRESSION_VALUE_DEPTH = 20
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v3"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v4"
 ParameterValue = int | bool | str | list[int]
 
 
@@ -157,7 +157,7 @@ class CodeQuestionTemplate(BaseModel):
     question_template: str = Field(min_length=1)
     answer_target: AnswerTarget
     answer_expression: str = Field(min_length=1)
-    distractors: list[DistractorRecipe] = Field(min_length=2, max_length=5)
+    distractors: list[DistractorRecipe] = Field(min_length=2, max_length=8)
     question_type: Literal["mcq"]
 
     @field_validator("code", "question_template", "answer_expression")
@@ -285,9 +285,41 @@ def normalize_code_template_proposal(
         ),
         answer_target=profile.answer_target,
         answer_expression=proposal.answer_expression,
-        distractors=proposal.distractors,
+        distractors=_with_deterministic_fallbacks(
+            proposal.distractors,
+            answer_expression=proposal.answer_expression,
+            answer_kind=profile.answer_kind,
+        ),
         question_type="mcq",
     )
+
+
+def _with_deterministic_fallbacks(
+    model_candidates: list[DistractorRecipe],
+    *,
+    answer_expression: str,
+    answer_kind: str,
+) -> list[DistractorRecipe]:
+    if answer_kind == "integer_list":
+        fallback_expressions = [
+            f"({answer_expression}) + [{offset}]" for offset in range(3)
+        ]
+        reason = "Appends an extra value to the result list."
+    else:
+        fallback_expressions = [
+            f"({answer_expression}) + {offset}" for offset in range(1, 4)
+        ]
+        reason = "Applies an off-by-one-style adjustment to the correct result."
+
+    result = list(model_candidates)
+    existing = {candidate.expression for candidate in result}
+    for expression in fallback_expressions:
+        if expression not in existing:
+            result.append(
+                DistractorRecipe(expression=expression, reason_template=reason)
+            )
+            existing.add(expression)
+    return result
 
 
 def _deduplicate_parameter_values(payload: Any) -> None:
@@ -369,6 +401,7 @@ class TemplateValidator:
         for inputs, execution in zip(inputs_cases, executions, strict=True):
             expected_answer = answer.evaluate(inputs)
             _require_json_value(expected_answer, "answer")
+            self._validate_answer_kind(template, inputs, expected_answer)
             if not execution.ok:
                 detail = execution.error_message or execution.error_code or "unknown"
                 raise TemplateValidationError(
@@ -568,6 +601,30 @@ class TemplateValidator:
                 f"features: {', '.join(sorted(missing))}",
                 code="PROFILE_MISMATCH",
                 field="code",
+            )
+
+    @staticmethod
+    def _validate_answer_kind(
+        template: CodeQuestionTemplate,
+        inputs: dict[str, ParameterValue],
+        answer: Any,
+    ) -> None:
+        answer_kind = code_template_profile(
+            template.topic, template.difficulty
+        ).answer_kind
+        valid = {
+            "number": type(answer) in {int, float},
+            "integer": type(answer) is int,
+            "integer_list": type(answer) is list
+            and all(type(item) is int for item in answer),
+        }[answer_kind]
+        if not valid:
+            raise TemplateValidationError(
+                f"{template.topic}/{template.difficulty} requires answer kind "
+                f"{answer_kind}; received {type(answer).__name__} for inputs {inputs}",
+                code="ANSWER_KIND_MISMATCH",
+                field="answer_expression",
+                inputs=inputs,
             )
 
     @staticmethod
@@ -966,6 +1023,7 @@ def build_template_prompt(request: TemplateAuthoringRequest) -> str:
             "topic": profile.topic,
             "difficulty": profile.difficulty,
             "answer_target": profile.answer_target,
+            "answer_kind": profile.answer_kind,
             "accepted_parameter_shapes": shapes,
             "required_code_features": sorted(profile.required_features),
             "positive_integer_values_required": profile.require_positive_integers,
@@ -973,22 +1031,6 @@ def build_template_prompt(request: TemplateAuthoringRequest) -> str:
         indent=2,
         sort_keys=True,
     )
-    if (
-        profile.answer_target == "return_value"
-        and request.topic == "lists"
-        and request.difficulty == "intermediate"
-    ):
-        fallback_guidance = (
-            "Because the answer is a list, make the final three fallback candidates "
-            "`sorted(values) + [0]`, `sorted(values) + [1]`, and "
-            "`sorted(values) + [2]`."
-        )
-    else:
-        fallback_guidance = (
-            "Because this profile has a numeric answer, make the final three fallback "
-            "candidates `(<answer_expression>) + 1`, `(<answer_expression>) + 2`, "
-            "and `(<answer_expression>) + 3`."
-        )
     prompt = (
         "Follow this exact capability contract. Choose exactly one accepted parameter "
         "shape. A null names value means choose valid names but preserve the exact "
@@ -996,10 +1038,11 @@ def build_template_prompt(request: TemplateAuthoringRequest) -> str:
         f"{contract}\n"
         f"Use answer_target={profile.answer_target}. "
         f"Create exactly {candidate_count} distractor candidates; the local validator "
-        f"will select {request.num_distractors}. The first candidates should model "
-        "real misconceptions. Every candidate must differ from the answer and every "
-        "other selected candidate for every value in the complete Cartesian product. "
-        f"{fallback_guidance} In reason_template, use only plain placeholders such as "
+        f"will select {request.num_distractors}. Every candidate should model a real "
+        "misconception and should differ from the answer and other candidates for the "
+        "complete Cartesian product. The local application adds mechanical fallback "
+        "candidates; do not add generic answer-plus-constant fallbacks yourself. In "
+        "reason_template, use only plain placeholders such as "
         "`{n}`; never put expressions such as `{n-1}` inside braces. "
         f"{profile.guidance} "
         "Keep the complete Cartesian product valid."
@@ -1038,9 +1081,8 @@ Rules:
   other function calls.
 - Each distractor candidate must represent a specific misconception. The local
   validator selects candidates that are unique, type-compatible, and different from
-  the answer for every parameter combination. The user prompt provides required
-  fallback candidates; include them after the misconception-based candidates exactly
-  as requested.
+  the answer for every parameter combination. The local application adds mechanical
+  fallback candidates after the provider response.
 - reason_template explains its misconception and may use only a bare parameter
   placeholder such as `{n}`. Do not place arithmetic or any other expression inside
   braces.

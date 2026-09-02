@@ -148,9 +148,10 @@ Rendered misconception reasons are preserved alongside their selected distractor
 - Expression safety: at most 500 source characters and 100 syntax nodes; numeric
   intermediates are bounded to magnitude 1 billion, individual sequences to 100
   items, and complete nested values to a cumulative logical size of 1,000.
-- Distractors: the provider proposes up to two extra candidates in the same call.
-  The finite-domain validator retains the requested two or three deterministic,
-  globally unique expressions, each with a misconception reason template.
+- Distractors: the provider proposes up to two extra misconception candidates in the
+  same call. Local normalization appends type-compatible deterministic fallbacks, and
+  the finite-domain validator searches candidate subsets to retain the requested two
+  or three globally unique expressions with reason templates.
 - Reproducibility: deterministic seed selection and template tamper detection.
   AI-approved artifacts also record the resolved provider and model, authoring
   request, prompt version and SHA-256 hash, generation time, validation time, and

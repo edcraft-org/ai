@@ -227,7 +227,7 @@ def test_prompt_requests_extra_distractor_candidates_in_the_same_call() -> None:
 
     assert "exactly 4 distractor candidates" in prompt
     assert "will select 2" in prompt
-    assert "final three fallback candidates" in prompt
+    assert "local application adds mechanical fallback candidates" in prompt
 
 
 def test_prompt_serializes_the_exact_capability_contract() -> None:
@@ -240,17 +240,17 @@ def test_prompt_serializes_the_exact_capability_contract() -> None:
     assert '"integer"' in prompt
     assert '"boolean"' in prompt
     assert '"required_code_features"' in prompt
+    assert '"answer_kind": "integer"' in prompt
     assert '"nested_conditional"' in prompt
     assert "Do not add parameters" in prompt
 
 
-def test_list_result_prompt_uses_type_compatible_fallbacks() -> None:
+def test_list_result_prompt_declares_the_answer_kind() -> None:
     prompt = build_template_prompt(
         TemplateAuthoringRequest(topic="lists", difficulty="intermediate")
     )
 
-    assert "`sorted(values) + [0]`" in prompt
-    assert "numeric answer" not in prompt
+    assert '"answer_kind": "integer_list"' in prompt
 
 
 def test_reason_placeholders_forbid_embedded_expressions() -> None:
@@ -304,6 +304,45 @@ def test_proposal_normalization_derives_stable_local_fields() -> None:
     assert first.question_template == (
         "What value does calculate({a}, {b}, {c}) return?"
     )
+    assert len(first.distractors) == 6
+    assert first.distractors[-1].expression == "(a + b - c) + 3"
+
+
+def test_list_proposal_normalization_adds_list_shaped_fallbacks() -> None:
+    canonical = CodeQuestionTemplate.model_validate_json(
+        (TEMPLATE_DIR / "list_sorted.json").read_text()
+    )
+    proposal = CodeTemplateProposal.model_validate(
+        canonical.model_dump(
+            include={
+                "code",
+                "entry_function",
+                "parameters",
+                "answer_expression",
+                "distractors",
+            }
+        )
+    )
+
+    result = normalize_code_template_proposal(
+        TemplateAuthoringRequest(topic="lists", difficulty="intermediate"), proposal
+    )
+
+    assert result.distractors[-3].expression == "(sorted(values)) + [0]"
+    assert result.distractors[-1].expression == "(sorted(values)) + [2]"
+
+
+def test_profile_rejects_the_wrong_answer_kind() -> None:
+    value = CodeQuestionTemplate.model_validate_json(
+        (TEMPLATE_DIR / "list_sorted.json").read_text()
+    ).model_copy(update={"answer_expression": "len(values)"})
+
+    with pytest.raises(TemplateValidationError) as error:
+        TemplateValidator(executor=TrustedBatchExecutor()).validate(value)
+
+    assert error.value.code == "ANSWER_KIND_MISMATCH"
+    assert error.value.field == "answer_expression"
+    assert error.value.inputs is not None
 
 
 def test_proposal_normalization_derives_target_aware_loop_wording() -> None:
