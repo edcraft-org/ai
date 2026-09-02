@@ -18,6 +18,7 @@ from edcraft_validator.domains.code.capabilities import (
     Difficulty,
     ProgrammingTopic,
     code_template_profile,
+    extract_code_features,
 )
 from edcraft_validator.executor import DockerExecutor, ExecutionBackend, ExecutionResult
 from edcraft_validator.generation.models import TemplateAuthoringRequest
@@ -281,6 +282,7 @@ class TemplateValidator:
         safety = check_code_safety(template.code, template.entry_function)
         if not safety.is_safe:
             raise TemplateValidationError("; ".join(safety.errors))
+        TemplateValidator._validate_profile(template)
         arguments = _entry_function_arguments(template.code, template.entry_function)
         if arguments != names:
             raise TemplateValidationError(
@@ -296,6 +298,49 @@ class TemplateValidator:
             {name: 0 for name in names},
             require_all=True,
         )
+
+    @staticmethod
+    def _validate_profile(template: CodeQuestionTemplate) -> None:
+        profile = code_template_profile(template.topic, template.difficulty)
+        if template.answer_target != profile.answer_target:
+            raise TemplateValidationError(
+                f"{template.topic}/{template.difficulty} requires answer_target="
+                f"{profile.answer_target}"
+            )
+
+        actual_kinds = tuple(parameter.kind for parameter in template.parameters)
+        actual_names = tuple(parameter.name for parameter in template.parameters)
+        if not any(
+            actual_kinds == shape.kinds
+            and (shape.names is None or actual_names == shape.names)
+            for shape in profile.parameter_shapes
+        ):
+            expected = " or ".join(
+                repr(shape.names or shape.kinds) for shape in profile.parameter_shapes
+            )
+            raise TemplateValidationError(
+                f"{template.topic}/{template.difficulty} parameter profile requires "
+                f"{expected}; received {actual_names} with kinds {actual_kinds}"
+            )
+
+        if profile.require_positive_integers and any(
+            value <= 0
+            for parameter in template.parameters
+            if parameter.kind == "integer"
+            for value in parameter.values
+        ):
+            raise TemplateValidationError(
+                f"{template.topic}/{template.difficulty} requires positive integer "
+                "parameter values"
+            )
+
+        actual_features = extract_code_features(template.code, template.entry_function)
+        missing = profile.required_features - actual_features
+        if missing:
+            raise TemplateValidationError(
+                f"{template.topic}/{template.difficulty} code is missing required "
+                f"features: {', '.join(sorted(missing))}"
+            )
 
     @staticmethod
     def _validate_distractors(

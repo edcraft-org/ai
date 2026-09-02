@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
 from typing import Literal, get_args
 
@@ -28,6 +29,7 @@ CodeFeature = Literal[
     "nested_conditional",
     "nested_helper",
     "nested_loop",
+    "sequential_conditionals",
     "sequential_loops",
 ]
 
@@ -106,7 +108,7 @@ _PROFILES = (
         "intermediate",
         "branch_executions",
         (_shape("string"),),
-        frozenset({"conditional", "early_return"}),
+        frozenset({"conditional", "early_return", "sequential_conditionals"}),
         "Use one string parameter with two sequential early-return conditions.",
     ),
     CodeTemplateProfile(
@@ -226,3 +228,98 @@ def answer_target_for_topic(topic: ProgrammingTopic) -> AnswerTarget:
     if len(targets) != 1:
         raise RuntimeError(f"topic {topic!r} must have exactly one answer target")
     return targets.pop()
+
+
+def extract_code_features(code: str, entry_function: str) -> frozenset[CodeFeature]:
+    """Extract the structural features used by code capability profiles."""
+    tree = ast.parse(code)
+    parents = {
+        child: parent
+        for parent in ast.walk(tree)
+        for child in ast.iter_child_nodes(parent)
+    }
+    functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)]
+    helper_names = {node.name for node in functions if node.name != entry_function}
+    features: set[CodeFeature] = set()
+
+    if helper_names:
+        features.add("helper_function")
+    if any(isinstance(node, ast.BinOp) for node in ast.walk(tree)):
+        features.add("arithmetic")
+    if any(isinstance(node, ast.If) for node in ast.walk(tree)):
+        features.add("conditional")
+    if any(isinstance(node, ast.For) for node in ast.walk(tree)):
+        features.add("loop")
+    if any(isinstance(node, ast.Subscript) for node in ast.walk(tree)):
+        features.add("list_index")
+
+    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
+    called_names = {node.func.id for node in calls if isinstance(node.func, ast.Name)}
+    if called_names & {"all", "any", "max", "min", "sum"}:
+        features.add("list_aggregate")
+    if "sorted" in called_names:
+        features.add("list_sort")
+
+    if_nodes = [node for node in ast.walk(tree) if isinstance(node, ast.If)]
+    if any(_has_ancestor(node, ast.If, parents) for node in if_nodes):
+        features.add("nested_conditional")
+    if any(
+        isinstance(node, ast.Return) and _has_ancestor(node, ast.If, parents)
+        for node in ast.walk(tree)
+    ):
+        features.add("early_return")
+    if _has_sequential_nodes(functions, ast.If, parents):
+        features.add("sequential_conditionals")
+
+    for_nodes = [node for node in ast.walk(tree) if isinstance(node, ast.For)]
+    if any(_has_ancestor(node, ast.For, parents) for node in for_nodes):
+        features.add("nested_loop")
+    if _has_sequential_nodes(functions, ast.For, parents):
+        features.add("sequential_loops")
+
+    if any(
+        isinstance(node.func, ast.Name)
+        and node.func.id in helper_names
+        and (_nearest_function(node, parents) or "") in helper_names
+        for node in calls
+    ):
+        features.add("nested_helper")
+    return frozenset(features)
+
+
+def _has_ancestor(
+    node: ast.AST, kind: type[ast.AST], parents: dict[ast.AST, ast.AST]
+) -> bool:
+    current = parents.get(node)
+    while current is not None:
+        if isinstance(current, kind):
+            return True
+        current = parents.get(current)
+    return False
+
+
+def _nearest_function(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> str | None:
+    current = parents.get(node)
+    while current is not None:
+        if isinstance(current, ast.FunctionDef):
+            return current.name
+        current = parents.get(current)
+    return None
+
+
+def _has_sequential_nodes(
+    functions: list[ast.FunctionDef],
+    kind: type[ast.If] | type[ast.For],
+    parents: dict[ast.AST, ast.AST],
+) -> bool:
+    for function in functions:
+        top_level = [
+            node
+            for node in ast.walk(function)
+            if isinstance(node, kind)
+            and _nearest_function(node, parents) == function.name
+            and not _has_ancestor(node, kind, parents)
+        ]
+        if len(top_level) >= 2:
+            return True
+    return False

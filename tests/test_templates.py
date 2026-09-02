@@ -356,6 +356,45 @@ def test_rejects_a_distractor_that_is_correct_for_any_case() -> None:
         )
 
 
+def test_rejects_profile_answer_target_mismatch_before_execution() -> None:
+    item = template(answer_target="loop_iterations")
+
+    with pytest.raises(TemplateValidationError, match="requires answer_target"):
+        TemplateValidator(executor=ArithmeticExecutor()).validate(item)
+
+
+def test_rejects_profile_parameter_shape_mismatch_before_execution() -> None:
+    data = template().model_dump()
+    data["parameters"][2] = {
+        "name": "c",
+        "kind": "boolean",
+        "values": [False, True],
+    }
+
+    with pytest.raises(TemplateValidationError, match="parameter profile requires"):
+        TemplateValidator(executor=ArithmeticExecutor()).validate(
+            CodeQuestionTemplate.model_validate(data)
+        )
+
+
+def test_rejects_missing_profile_code_feature_before_execution() -> None:
+    item = template(code="def calculate(a, b, c):\n    return a")
+
+    with pytest.raises(TemplateValidationError, match="missing required features"):
+        TemplateValidator(executor=ArithmeticExecutor()).validate(item)
+
+
+def test_rejects_non_positive_profile_integer_domain_before_execution() -> None:
+    path = TEMPLATE_DIR / "loop_iterations.json"
+    data = json.loads(path.read_text())
+    data["parameters"][0]["values"] = [0, 2]
+
+    with pytest.raises(TemplateValidationError, match="requires positive integer"):
+        TemplateValidator(executor=TrustedBatchExecutor()).validate(
+            CodeQuestionTemplate.model_validate(data)
+        )
+
+
 def test_rejects_non_allowlisted_expression_calls() -> None:
     with pytest.raises(TemplateValidationError, match="unsupported expression syntax"):
         SafeExpression("open(a)", ("a",))
