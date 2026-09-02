@@ -253,8 +253,10 @@ Run only the complete code-template matrix locally:
 uv run pytest tests/test_templates.py -q
 ```
 
-The real OpenAI template-authoring test is opt-in locally and runs for same-repo
-pull requests. CI fails clearly if the `OPENAI_API_KEY` GitHub secret is missing:
+The real OpenAI template-authoring test is opt-in locally and performs full Docker
+approval. Build the executor image first. For same-repository pull requests, CI
+runs the equivalent evaluation command, fails clearly if the `OPENAI_API_KEY`
+secret is missing, and uploads the JSONL attempt record:
 
 ```bash
 RUN_OPENAI_LIVE_TESTS=1 uv run pytest -m openai_live -q

@@ -35,13 +35,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      RUN_OPENAI_LIVE_TESTS: "1"
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_MODEL: gpt-5-mini
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          tags: edcraft-validator-executor:local
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -53,7 +62,22 @@ jobs:
             echo "::error::OPENAI_API_KEY repository secret is not configured"
             exit 1
           fi
-      - run: uv run pytest -m openai_live -q
+      - name: Evaluate live OpenAI template approval
+        run: >-
+          uv run python -m edcraft_validator.template evaluate
+          --provider openai
+          --model "$OPENAI_MODEL"
+          --topic arithmetic
+          --difficulty beginner
+          --repetitions 1
+          --output .artifacts/openai-pr-smoke.jsonl
+      - name: Upload live evaluation record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openai-template-evaluation
+          path: .artifacts/openai-pr-smoke.jsonl
+          if-no-files-found: warn
 
   docker-integration:
     runs-on: ubuntu-latest
