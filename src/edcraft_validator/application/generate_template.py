@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 
 from edcraft_validator.domains.code.templates import (
@@ -14,6 +15,7 @@ from edcraft_validator.domains.code.templates import (
 )
 from edcraft_validator.generation.base import QuestionTemplateGenerator
 from edcraft_validator.generation.models import (
+    TemplateAuthoringProvenance,
     TemplateAuthoringRequest,
     TemplateProviderSelection,
 )
@@ -47,11 +49,26 @@ class QuestionTemplateApplication:
         model: str | None = None,
     ) -> ApprovedCodeQuestionTemplate:
         selection = TemplateProviderSelection(provider=provider, model=model)
-        proposal = self.generator_factory(selection).generate_proposal(request)
+        generator = self.generator_factory(selection)
+        prompt = generator.prompt_metadata(request)
+        generation_started = time.perf_counter()
+        proposal = generator.generate_proposal(request)
+        generation_duration_ms = (time.perf_counter() - generation_started) * 1000
         template = normalize_code_template_proposal(request, proposal)
-        return self.validator_factory().validate(
+        validation_started = time.perf_counter()
+        approved = self.validator_factory().validate(
             template, num_distractors=request.num_distractors
         )
+        validation_duration_ms = (time.perf_counter() - validation_started) * 1000
+        authoring = TemplateAuthoringProvenance(
+            provider=generator.provider,
+            model=generator.model,
+            prompt=prompt,
+            request=request,
+            generation_duration_ms=generation_duration_ms,
+            validation_duration_ms=validation_duration_ms,
+        )
+        return approved.model_copy(update={"authoring": authoring})
 
     def approve(self, template: CodeQuestionTemplate) -> ApprovedCodeQuestionTemplate:
         return self.validator_factory().validate(template)

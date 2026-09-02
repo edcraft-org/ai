@@ -8,7 +8,10 @@ from edcraft_validator.domains.code.templates import (
     CodeTemplateProposal,
     TemplateValidator,
 )
-from edcraft_validator.generation.models import TemplateAuthoringRequest
+from edcraft_validator.generation.models import (
+    TemplateAuthoringRequest,
+    TemplatePromptMetadata,
+)
 from edcraft_validator.models import GeneratedQuestion
 from edcraft_validator.validator import QuestionValidator
 
@@ -115,6 +118,12 @@ def test_model_proposal_is_normalized_then_approved_in_docker() -> None:
     )
 
     class StubGenerator:
+        provider = "stub"
+        model = "stub-model"
+
+        def prompt_metadata(self, request):
+            return TemplatePromptMetadata(version="test-v1", sha256="b" * 64)
+
         def generate_proposal(self, request):
             return proposal
 

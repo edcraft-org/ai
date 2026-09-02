@@ -4,13 +4,17 @@ from typing import Any
 from openai import OpenAI
 
 from edcraft_validator.domains.code.templates import (
+    CODE_TEMPLATE_PROMPT_VERSION,
     CODE_TEMPLATE_SYSTEM_PROMPT,
     CodeTemplateProposal,
     build_template_prompt,
     parse_code_template_proposal,
 )
-from edcraft_validator.generation.base import GenerationError
-from edcraft_validator.generation.models import TemplateAuthoringRequest
+from edcraft_validator.generation.base import GenerationError, build_prompt_metadata
+from edcraft_validator.generation.models import (
+    TemplateAuthoringRequest,
+    TemplatePromptMetadata,
+)
 
 DEFAULT_OPENAI_MODEL = "gpt-5-mini"
 OpenAIGenerationError = GenerationError
@@ -41,10 +45,7 @@ class OpenAICompatibleTemplateGenerator:
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": CODE_TEMPLATE_SYSTEM_PROMPT},
-                    {"role": "user", "content": build_template_prompt(request)},
-                ],
+                messages=self._messages(request),
                 response_format={
                     "type": "json_schema",
                     "json_schema": {
@@ -62,6 +63,20 @@ class OpenAICompatibleTemplateGenerator:
             raise OpenAIGenerationError(
                 f"{self.provider} failed to generate a question template: {exc}"
             ) from exc
+
+    def prompt_metadata(
+        self, request: TemplateAuthoringRequest
+    ) -> TemplatePromptMetadata:
+        return build_prompt_metadata(
+            CODE_TEMPLATE_PROMPT_VERSION, self._messages(request)
+        )
+
+    @staticmethod
+    def _messages(request: TemplateAuthoringRequest) -> list[dict[str, str]]:
+        return [
+            {"role": "system", "content": CODE_TEMPLATE_SYSTEM_PROMPT},
+            {"role": "user", "content": build_template_prompt(request)},
+        ]
 
 
 def _api_key(provider: str) -> str | None:

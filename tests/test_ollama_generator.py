@@ -164,3 +164,21 @@ def test_ollama_reports_timeout_separately(monkeypatch) -> None:
         OllamaTemplateGenerator().generate_proposal(
             TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
         )
+
+
+def test_ollama_prompt_metadata_is_stable_and_wire_specific() -> None:
+    generator = OllamaTemplateGenerator(model="qwen-test")
+    request = TemplateAuthoringRequest(topic="loops", difficulty="advanced")
+
+    first = generator.prompt_metadata(request)
+    second = generator.prompt_metadata(request)
+
+    assert first == second
+    assert first.version == "code-template-v2+ollama-wire-v1"
+    assert len(first.sha256) == 64
+    assert (
+        first.sha256
+        != generator.prompt_metadata(
+            TemplateAuthoringRequest(topic="loops", difficulty="beginner")
+        ).sha256
+    )

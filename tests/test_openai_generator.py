@@ -120,3 +120,23 @@ def test_soclaas_requires_its_own_model(monkeypatch) -> None:
 
     with pytest.raises(OpenAIGenerationError, match="SOCLAAS_MODEL is not configured"):
         _model("soclaas")
+
+
+def test_openai_prompt_metadata_is_stable() -> None:
+    generator = OpenAICompatibleTemplateGenerator(
+        "openai", client_with(code_proposal()), model="test-model"
+    )
+    request = TemplateAuthoringRequest(topic="functions", difficulty="intermediate")
+
+    first = generator.prompt_metadata(request)
+    second = generator.prompt_metadata(request)
+
+    assert first == second
+    assert first.version == "code-template-v2"
+    assert len(first.sha256) == 64
+    assert (
+        first.sha256
+        != generator.prompt_metadata(
+            TemplateAuthoringRequest(topic="functions", difficulty="advanced")
+        ).sha256
+    )

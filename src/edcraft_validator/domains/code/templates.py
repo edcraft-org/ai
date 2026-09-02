@@ -22,7 +22,10 @@ from edcraft_validator.domains.code.capabilities import (
     extract_code_features,
 )
 from edcraft_validator.executor import DockerExecutor, ExecutionBackend, ExecutionResult
-from edcraft_validator.generation.models import TemplateAuthoringRequest
+from edcraft_validator.generation.models import (
+    TemplateAuthoringProvenance,
+    TemplateAuthoringRequest,
+)
 from edcraft_validator.models import AnswerTarget, GeneratedQuestion
 from edcraft_validator.safety import check_code_safety
 
@@ -36,6 +39,7 @@ MAX_EXPRESSION_FLOAT_ABS = 1_000_000_000.0
 MAX_EXPRESSION_SEQUENCE_LENGTH = 100
 MAX_EXPRESSION_VALUE_SIZE = 1_000
 MAX_EXPRESSION_VALUE_DEPTH = 20
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v2"
 ParameterValue = int | bool | str | list[int]
 
 
@@ -190,6 +194,7 @@ class ApprovedCodeQuestionTemplate(BaseModel):
 
     template: CodeQuestionTemplate
     validation: TemplateValidationSummary
+    authoring: TemplateAuthoringProvenance | None = None
 
 
 class TemplateQuestionInstance(BaseModel):

@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from edcraft_validator.domains.code.capabilities import ParameterKind
 from edcraft_validator.domains.code.templates import (
+    CODE_TEMPLATE_PROMPT_VERSION,
     CODE_TEMPLATE_SYSTEM_PROMPT,
     CodeTemplateProposal,
     build_template_prompt,
@@ -19,8 +20,12 @@ from edcraft_validator.generation.base import (
     GenerationSchemaError,
     GenerationTimeoutError,
     GenerationTransportError,
+    build_prompt_metadata,
 )
-from edcraft_validator.generation.models import TemplateAuthoringRequest
+from edcraft_validator.generation.models import (
+    TemplateAuthoringRequest,
+    TemplatePromptMetadata,
+)
 
 OLLAMA_WIRE_GUIDANCE = """\
 Use the Ollama wire format for parameter values. Every item in `values` must be a
@@ -90,15 +95,7 @@ class OllamaTemplateGenerator:
     ) -> CodeTemplateProposal:
         try:
             content = self._ollama_request(
-                [
-                    {"role": "system", "content": CODE_TEMPLATE_SYSTEM_PROMPT},
-                    {
-                        "role": "user",
-                        "content": (
-                            f"{build_template_prompt(request)}\n{OLLAMA_WIRE_GUIDANCE}"
-                        ),
-                    },
-                ],
+                self._messages(request),
                 OllamaProposalWire,
             )
             if not content:
@@ -114,6 +111,24 @@ class OllamaTemplateGenerator:
             raise GenerationSchemaError(
                 f"Ollama proposal failed local schema validation: {exc}"
             ) from exc
+
+    def prompt_metadata(
+        self, request: TemplateAuthoringRequest
+    ) -> TemplatePromptMetadata:
+        return build_prompt_metadata(
+            f"{CODE_TEMPLATE_PROMPT_VERSION}+ollama-wire-v1",
+            self._messages(request),
+        )
+
+    @staticmethod
+    def _messages(request: TemplateAuthoringRequest) -> list[dict[str, str]]:
+        return [
+            {"role": "system", "content": CODE_TEMPLATE_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": f"{build_template_prompt(request)}\n{OLLAMA_WIRE_GUIDANCE}",
+            },
+        ]
 
     def _ollama_request(
         self, messages: list[dict[str, str]], schema: type[BaseModel]

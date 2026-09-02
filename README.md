@@ -147,6 +147,9 @@ parameters, code, question, answer target, answer, and distractors.
   The finite-domain validator retains the requested two or three deterministic,
   globally unique expressions, each with a misconception reason template.
 - Reproducibility: deterministic seed selection and template tamper detection.
+  AI-approved artifacts also record the resolved provider and model, authoring
+  request, prompt version and SHA-256 hash, generation time, validation time, and
+  approval status. API keys and other secrets are never stored.
 
 Topic currently selects the answer target as follows:
 

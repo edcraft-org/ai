@@ -4,7 +4,10 @@ from edcraft_validator.domains.code.templates import (
     TemplateValidator,
 )
 from edcraft_validator.executor import ExecutionResult
-from edcraft_validator.generation.models import TemplateAuthoringRequest
+from edcraft_validator.generation.models import (
+    TemplateAuthoringRequest,
+    TemplatePromptMetadata,
+)
 
 
 def test_template_application_authors_once_then_generates_locally() -> None:
@@ -29,6 +32,12 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     provider_calls: list[tuple[str, str | None]] = []
 
     class StubTemplateGenerator:
+        provider = "stub"
+        model = "stub-model"
+
+        def prompt_metadata(self, request):
+            return TemplatePromptMetadata(version="test-v1", sha256="a" * 64)
+
         def generate_proposal(self, request):
             return proposal
 
@@ -60,6 +69,13 @@ def test_template_application_authors_once_then_generates_locally() -> None:
         approved.template.question_template == "What value does add({a}, {b}) return?"
     )
     assert approved.template.question_type == "mcq"
+    assert approved.authoring is not None
+    assert approved.authoring.provider == "stub"
+    assert approved.authoring.model == "stub-model"
+    assert approved.authoring.prompt.version == "test-v1"
+    assert approved.authoring.request.topic == "arithmetic"
+    assert approved.authoring.generation_duration_ms >= 0
+    assert approved.authoring.validation_duration_ms >= 0
     assert [item.expression for item in approved.template.distractors] == [
         "a - b",
         "a + b + 1",
