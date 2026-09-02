@@ -40,7 +40,7 @@ MAX_EXPRESSION_FLOAT_ABS = 1_000_000_000.0
 MAX_EXPRESSION_SEQUENCE_LENGTH = 100
 MAX_EXPRESSION_VALUE_SIZE = 1_000
 MAX_EXPRESSION_VALUE_DEPTH = 20
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v5"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v6"
 ParameterValue = int | bool | str | list[int]
 
 
@@ -1098,7 +1098,8 @@ Rules:
   attributes, classes, decorators, recursion, comprehensions, while loops, lambdas,
   exceptions, file access, networking, input, eval, or exec.
 - Every parameter declares a kind and two to four distinct finite values. Supported
-  kinds are integer (-100 through 100), boolean, string (short printable text), and
+  kinds are integer (-100 through 100), boolean, string (non-empty short printable
+  text), and
   integer_list (at most eight integers from -100 through 100). Use JSON booleans.
 - The user prompt states the selected answer target. answer_expression must calculate
   that target using parameter names,

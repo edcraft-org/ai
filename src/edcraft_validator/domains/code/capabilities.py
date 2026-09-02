@@ -114,18 +114,22 @@ _PROFILES = (
         "conditionals",
         "intermediate",
         "branch_executions",
-        (_shape("string"),),
+        (_shape("string", names=("mode",)),),
         frozenset({"conditional", "early_return", "sequential_conditionals"}),
-        "Use one string parameter with two sequential early-return conditions.",
+        "Use exactly one string parameter named mode with non-empty values and two "
+        "sequential early-return conditions.",
         "integer",
     ),
     CodeTemplateProfile(
         "conditionals",
         "advanced",
         "branch_executions",
-        (_shape("integer", "boolean"),),
+        (_shape("integer", "boolean", names=("score", "override")),),
         frozenset({"conditional", "early_return", "nested_conditional"}),
-        "Use integer and boolean parameters with nested conditions and early returns.",
+        "Use integer score and boolean override parameters. First test override and "
+        "return early. Then test score >= 50, with a nested score >= 80 test. "
+        "answer_expression must be exactly `1 if override else (3 if score >= 50 "
+        "else 2)`.",
         "integer",
     ),
     CodeTemplateProfile(
@@ -217,7 +221,9 @@ _PROFILES = (
         "return_value",
         (_shape("integer_list", names=("values",)),),
         frozenset({"list_sort"}),
-        "Use one integer_list parameter named values with sorted(values).",
+        "Use exactly one integer_list parameter named values. The entry-function "
+        "body must be exactly `return sorted(values)`, and answer_expression must be "
+        "exactly `sorted(values)`.",
         "integer_list",
     ),
     CodeTemplateProfile(
@@ -340,6 +346,7 @@ def profile_semantic_violation(
     key = (profile.topic, profile.difficulty)
 
     expected_expressions = {
+        ("conditionals", "advanced"): ("1 if override else (3 if score >= 50 else 2)"),
         ("loops", "beginner"): "n",
         ("loops", "intermediate"): "n + m",
         ("loops", "advanced"): "n + n * m",

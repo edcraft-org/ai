@@ -494,6 +494,12 @@ def test_every_topic_and_difficulty_has_distinct_authoring_guidance() -> None:
     assert "middle helper calls the leaf" in prompts[("functions", "advanced")]
     assert "`3 * n + 2`" in prompts[("functions", "advanced")]
     assert "body must be exactly `return sum(values)`" in prompts[("lists", "beginner")]
+    assert "non-empty values" in prompts[("conditionals", "intermediate")]
+    assert "1 if override else" in prompts[("conditionals", "advanced")]
+    assert (
+        "body must be exactly `return sorted(values)`"
+        in prompts[("lists", "intermediate")]
+    )
 
 
 def test_examples_cover_every_topic_and_difficulty() -> None:

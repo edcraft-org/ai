@@ -187,7 +187,7 @@ def test_ollama_prompt_metadata_is_stable_and_wire_specific() -> None:
     second = generator.prompt_metadata(request)
 
     assert first == second
-    assert first.version == "code-template-v5+ollama-wire-v1"
+    assert first.version == "code-template-v6+ollama-wire-v1"
     assert len(first.sha256) == 64
     assert (
         first.sha256
