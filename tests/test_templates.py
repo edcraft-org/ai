@@ -345,6 +345,44 @@ def test_profile_rejects_the_wrong_answer_kind() -> None:
     assert error.value.inputs is not None
 
 
+def test_profile_features_must_be_reachable_from_the_entry_function() -> None:
+    value = CodeQuestionTemplate.model_validate_json(
+        (TEMPLATE_DIR / "list_sum.json").read_text()
+    ).model_copy(
+        update={
+            "code": (
+                "def unused(values):\n"
+                "    return sum(values)\n\n"
+                "def total(values):\n"
+                "    result = 0\n"
+                "    for value in values:\n"
+                "        result += value\n"
+                "    return result"
+            )
+        }
+    )
+
+    with pytest.raises(TemplateValidationError) as error:
+        TemplateValidator(executor=TrustedBatchExecutor()).validate(value)
+
+    assert error.value.code == "PROFILE_MISMATCH"
+    assert "list_aggregate" in str(error.value)
+
+
+def test_rejects_an_unused_entry_parameter_before_execution() -> None:
+    value = template(
+        code="def calculate(a, b, c):\n    return a + b",
+        answer_expression="a + b",
+    )
+
+    with pytest.raises(TemplateValidationError) as error:
+        TemplateValidator(executor=ArithmeticExecutor()).validate(value)
+
+    assert error.value.code == "UNUSED_PARAMETER"
+    assert error.value.field == "parameters"
+    assert "c" in str(error.value)
+
+
 def test_proposal_normalization_derives_target_aware_loop_wording() -> None:
     canonical = CodeQuestionTemplate.model_validate_json(
         (TEMPLATE_DIR / "loop_iterations.json").read_text()
