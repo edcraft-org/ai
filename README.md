@@ -132,6 +132,9 @@ parameters, code, question, answer target, answer, and distractors.
 - Answers: restricted arithmetic, comparisons, boolean operators, conditional
   expressions, list literals, indexing, and the allowlisted functions `len`, `sum`,
   `min`, `max`, `sorted`, `all`, and `any`.
+- Expression safety: at most 500 source characters and 100 syntax nodes; numeric
+  intermediates are bounded to magnitude 1 billion, individual sequences to 100
+  items, and complete nested values to a cumulative logical size of 1,000.
 - Distractors: two or three deterministic expressions, each with a misconception
   reason template.
 - Reproducibility: deterministic seed selection and template tamper detection.
