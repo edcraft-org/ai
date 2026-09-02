@@ -1,7 +1,10 @@
+import json
+import math
 import os
 from typing import Any
 
-from openai import OpenAI
+from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
+from pydantic import ValidationError
 
 from edcraft_validator.domains.code.templates import (
     CODE_TEMPLATE_PROMPT_VERSION,
@@ -10,7 +13,14 @@ from edcraft_validator.domains.code.templates import (
     build_template_prompt,
     parse_code_template_proposal,
 )
-from edcraft_validator.generation.base import GenerationError, build_prompt_metadata
+from edcraft_validator.generation.base import (
+    GenerationError,
+    GenerationResponseError,
+    GenerationSchemaError,
+    GenerationTimeoutError,
+    GenerationTransportError,
+    build_prompt_metadata,
+)
 from edcraft_validator.generation.models import (
     TemplateAuthoringRequest,
     TemplatePromptMetadata,
@@ -34,7 +44,12 @@ class OpenAICompatibleTemplateGenerator:
             if api_key is None:
                 variable = _api_key_variable(provider)
                 raise OpenAIGenerationError(f"{variable} is not configured")
-            client = OpenAI(api_key=api_key, base_url=_base_url(provider))
+            client = OpenAI(
+                api_key=api_key,
+                base_url=_base_url(provider),
+                timeout=_timeout_seconds(provider),
+                max_retries=_max_retries(provider),
+            )
         self.client = client
         self.model = model or _model(provider)
 
@@ -57,8 +72,26 @@ class OpenAICompatibleTemplateGenerator:
             )
             content = response.choices[0].message.content
             if not content:
-                raise ValueError("empty response")
+                raise GenerationResponseError(
+                    f"{self.provider} returned an empty response"
+                )
             return parse_code_template_proposal(content)
+        except GenerationError:
+            raise
+        except APITimeoutError as exc:
+            raise GenerationTimeoutError(f"{self.provider} request timed out") from exc
+        except APIConnectionError as exc:
+            raise GenerationTransportError(
+                f"{self.provider} connection failed: {exc}"
+            ) from exc
+        except APIStatusError as exc:
+            raise GenerationTransportError(
+                f"{self.provider} HTTP request failed with status {exc.status_code}"
+            ) from exc
+        except (json.JSONDecodeError, ValidationError) as exc:
+            raise GenerationSchemaError(
+                f"{self.provider} response failed local schema validation: {exc}"
+            ) from exc
         except Exception as exc:
             raise OpenAIGenerationError(
                 f"{self.provider} failed to generate a question template: {exc}"
@@ -121,6 +154,36 @@ def _model(provider: str) -> str:
     if provider == "openai":
         return DEFAULT_OPENAI_MODEL
     raise OpenAIGenerationError(f"{variable} is not configured")
+
+
+def _timeout_seconds(provider: str) -> float:
+    variable = {
+        "soclaas": "SOCLAAS_TIMEOUT_SECONDS",
+        "openai": "OPENAI_TIMEOUT_SECONDS",
+    }[provider]
+    raw_value = os.getenv(variable, "120").strip()
+    try:
+        value = float(raw_value)
+    except ValueError as exc:
+        raise OpenAIGenerationError(f"{variable} must be a number") from exc
+    if not math.isfinite(value) or value <= 0:
+        raise OpenAIGenerationError(f"{variable} must be greater than zero")
+    return value
+
+
+def _max_retries(provider: str) -> int:
+    variable = {
+        "soclaas": "SOCLAAS_MAX_RETRIES",
+        "openai": "OPENAI_MAX_RETRIES",
+    }[provider]
+    raw_value = os.getenv(variable, "1").strip()
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise OpenAIGenerationError(f"{variable} must be an integer") from exc
+    if not 0 <= value <= 5:
+        raise OpenAIGenerationError(f"{variable} must be between 0 and 5")
+    return value
 
 
 class OpenAITemplateGenerator(OpenAICompatibleTemplateGenerator):

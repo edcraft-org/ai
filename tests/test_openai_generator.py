@@ -9,7 +9,9 @@ from edcraft_validator.generation.openai import (
     OpenAIGenerationError,
     _api_key,
     _base_url,
+    _max_retries,
     _model,
+    _timeout_seconds,
 )
 
 
@@ -82,10 +84,14 @@ def test_reports_empty_template_response() -> None:
         "openai", client_with(None), model="test-model"
     )
 
-    with pytest.raises(OpenAIGenerationError, match="failed to generate"):
+    with pytest.raises(
+        OpenAIGenerationError, match="returned an empty response"
+    ) as error:
         generator.generate_proposal(
             TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
         )
+
+    assert error.value.category == "invalid_response"
 
 
 def test_provider_uses_provider_specific_configuration(monkeypatch) -> None:
@@ -140,3 +146,40 @@ def test_openai_prompt_metadata_is_stable() -> None:
             TemplateAuthoringRequest(topic="functions", difficulty="advanced")
         ).sha256
     )
+
+
+def test_openai_client_uses_bounded_timeout_and_retries(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class RecordingOpenAI:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr("edcraft_validator.generation.openai.OpenAI", RecordingOpenAI)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_TIMEOUT_SECONDS", "45")
+    monkeypatch.setenv("OPENAI_MAX_RETRIES", "0")
+
+    generator = OpenAICompatibleTemplateGenerator("openai")
+
+    assert generator.model
+    assert captured["timeout"] == 45
+    assert captured["max_retries"] == 0
+
+
+@pytest.mark.parametrize(
+    ("variable", "value", "reader", "message"),
+    [
+        ("OPENAI_TIMEOUT_SECONDS", "0", _timeout_seconds, "greater than zero"),
+        ("OPENAI_TIMEOUT_SECONDS", "slow", _timeout_seconds, "must be a number"),
+        ("OPENAI_MAX_RETRIES", "-1", _max_retries, "between 0 and 5"),
+        ("OPENAI_MAX_RETRIES", "many", _max_retries, "must be an integer"),
+    ],
+)
+def test_openai_rejects_invalid_request_bounds(
+    monkeypatch, variable, value, reader, message
+) -> None:
+    monkeypatch.setenv(variable, value)
+
+    with pytest.raises(OpenAIGenerationError, match=message):
+        reader("openai")

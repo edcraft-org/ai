@@ -38,6 +38,8 @@ Configure only the provider you intend to select:
 ```dotenv
 OPENAI_API_KEY=your-key-here
 OPENAI_MODEL=gpt-5-mini
+OPENAI_TIMEOUT_SECONDS=120
+OPENAI_MAX_RETRIES=1
 
 OLLAMA_MODEL=qwen2.5-coder:14b
 OLLAMA_TIMEOUT_SECONDS=300

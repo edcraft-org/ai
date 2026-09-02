@@ -37,6 +37,8 @@ jobs:
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OPENAI_MODEL: gpt-5-mini
+      OPENAI_TIMEOUT_SECONDS: "120"
+      OPENAI_MAX_RETRIES: "0"
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
