@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,7 @@ from edcraft_validator.domains.code.templates import (
     TemplateValidationError,
     TemplateValidator,
     build_template_prompt,
+    parse_code_question_template,
 )
 from edcraft_validator.executor import ExecutionResult
 from edcraft_validator.generation.models import TemplateAuthoringRequest
@@ -198,6 +200,32 @@ def test_loop_topic_requests_iteration_count_template() -> None:
     assert "answer_target=loop_iterations" in prompt
     assert "exactly one integer parameter named n" in prompt
     assert "answer_expression exactly `n`" in prompt
+
+
+def test_beginner_arithmetic_prompt_forbids_operator_parameter() -> None:
+    prompt = build_template_prompt(
+        TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
+    )
+
+    assert "exactly two integer parameters named a and b" in prompt
+    assert "Do not create a parameter for the arithmetic operator" in prompt
+
+
+def test_provider_template_parser_removes_duplicate_parameter_values() -> None:
+    payload = template().model_dump(mode="json")
+    payload["parameters"][0]["values"] = [2, 2, 4]
+
+    parsed = parse_code_question_template(json.dumps(payload))
+
+    assert parsed.parameters[0].values == [2, 4]
+
+
+def test_provider_template_parser_does_not_invent_missing_domain_values() -> None:
+    payload = template().model_dump(mode="json")
+    payload["parameters"][0]["values"] = [2, 2]
+
+    with pytest.raises(ValueError, match="at least 2 items"):
+        parse_code_question_template(json.dumps(payload))
 
 
 def test_every_topic_and_difficulty_has_distinct_authoring_guidance() -> None:

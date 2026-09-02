@@ -7,6 +7,7 @@ from edcraft_validator.domains.code.templates import (
     CODE_TEMPLATE_SYSTEM_PROMPT,
     CodeQuestionTemplate,
     build_template_prompt,
+    parse_code_question_template,
 )
 from edcraft_validator.generation.base import GenerationError
 from edcraft_validator.generation.models import TemplateAuthoringRequest
@@ -56,7 +57,7 @@ class OpenAICompatibleTemplateGenerator:
             content = response.choices[0].message.content
             if not content:
                 raise ValueError("empty response")
-            return CodeQuestionTemplate.model_validate_json(content)
+            return parse_code_question_template(content)
         except Exception as exc:
             raise OpenAIGenerationError(
                 f"{self.provider} failed to generate a question template: {exc}"

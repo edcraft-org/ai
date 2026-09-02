@@ -168,6 +168,26 @@ class TemplateValidationError(ValueError):
     """Raised when any possible instance fails template approval."""
 
 
+def parse_code_question_template(content: str) -> CodeQuestionTemplate:
+    """Parse provider JSON after removing redundant finite-domain values."""
+    payload = json.loads(content)
+    if isinstance(payload, dict) and isinstance(payload.get("parameters"), list):
+        for parameter in payload["parameters"]:
+            if not isinstance(parameter, dict) or not isinstance(
+                parameter.get("values"), list
+            ):
+                continue
+            unique_values = []
+            seen = set()
+            for value in parameter["values"]:
+                encoded = json.dumps(value, sort_keys=True, separators=(",", ":"))
+                if encoded not in seen:
+                    seen.add(encoded)
+                    unique_values.append(value)
+            parameter["values"] = unique_values
+    return CodeQuestionTemplate.model_validate(payload)
+
+
 class TemplateValidator:
     """Approve a finite template only after checking every possible instance."""
 
@@ -540,7 +560,9 @@ def _difficulty_guidance(topic: ProgrammingTopic, difficulty: Difficulty) -> str
     """Give providers a validator-backed complexity profile for each selection."""
     guidance = {
         ("arithmetic", "beginner"): (
-            "Use two integer parameters and one short arithmetic expression."
+            "Use exactly two integer parameters named a and b, in that order, and one "
+            "short arithmetic expression. Give each parameter two to four distinct "
+            "integer values. Do not create a parameter for the arithmetic operator."
         ),
         ("arithmetic", "intermediate"): (
             "Combine integer and boolean parameters with one conditional adjustment."

@@ -22,3 +22,5 @@ def test_real_openai_template_authoring() -> None:
     assert template.code
     assert template.answer_expression
     assert len(template.distractors) == 3
+    assert [parameter.name for parameter in template.parameters] == ["a", "b"]
+    assert all(parameter.kind == "integer" for parameter in template.parameters)
