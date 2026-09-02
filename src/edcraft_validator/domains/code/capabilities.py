@@ -323,6 +323,200 @@ def extract_code_features(code: str, entry_function: str) -> frozenset[CodeFeatu
     return frozenset(features)
 
 
+def profile_semantic_violation(
+    profile: CodeTemplateProfile,
+    code: str,
+    entry_function: str,
+    answer_expression: str,
+) -> tuple[str, str] | None:
+    """Return the first exact profile-contract violation, if any."""
+    tree = ast.parse(code)
+    functions = {
+        node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)
+    }
+    entry = functions.get(entry_function)
+    if entry is None:
+        return "code", "entry function is not defined"
+    key = (profile.topic, profile.difficulty)
+
+    expected_expressions = {
+        ("loops", "beginner"): "n",
+        ("loops", "intermediate"): "n + m",
+        ("loops", "advanced"): "n + n * m",
+        ("functions", "beginner"): "2",
+        ("functions", "intermediate"): "n + 2",
+        ("functions", "advanced"): "3 * n + 2",
+        ("lists", "beginner"): "sum(values)",
+        ("lists", "intermediate"): "sorted(values)",
+    }
+    expected_expression = expected_expressions.get(key)
+    if expected_expression is not None and not _same_expression(
+        answer_expression, expected_expression
+    ):
+        return (
+            "answer_expression",
+            f"{profile.topic}/{profile.difficulty} requires answer_expression "
+            f"equivalent to `{expected_expression}`",
+        )
+
+    if profile.topic == "loops":
+        error = _loop_profile_error(entry, profile.difficulty)
+    elif profile.topic == "functions":
+        error = _function_profile_error(functions, entry, profile.difficulty)
+    elif key == ("lists", "beginner"):
+        error = _single_return_call_error(entry, "sum", "values")
+    elif key == ("lists", "intermediate"):
+        error = _single_return_call_error(entry, "sorted", "values")
+    else:
+        error = None
+    return ("code", error) if error is not None else None
+
+
+def _same_expression(actual: str, expected: str) -> bool:
+    try:
+        actual_node = ast.parse(actual, mode="eval").body
+        expected_node = ast.parse(expected, mode="eval").body
+    except SyntaxError:
+        return False
+    return ast.dump(actual_node, include_attributes=False) == ast.dump(
+        expected_node, include_attributes=False
+    )
+
+
+def _loop_profile_error(entry: ast.FunctionDef, difficulty: Difficulty) -> str | None:
+    loops = [node for node in ast.walk(entry) if isinstance(node, ast.For)]
+    if difficulty == "beginner":
+        if len(loops) != 1 or _range_argument(loops[0]) != "n":
+            return "loops/beginner requires exactly one `for ... in range(n)` loop"
+        return None
+
+    if len(loops) != 2:
+        return f"loops/{difficulty} requires exactly two range loops"
+    outer, second = loops
+    if difficulty == "intermediate":
+        top_level = [
+            statement for statement in entry.body if isinstance(statement, ast.For)
+        ]
+        if (
+            len(top_level) != 2
+            or _range_argument(top_level[0]) != "n"
+            or _range_argument(top_level[1]) != "m"
+        ):
+            return (
+                "loops/intermediate requires sequential `range(n)` and `range(m)` loops"
+            )
+        return None
+
+    nested = [statement for statement in outer.body if isinstance(statement, ast.For)]
+    if (
+        _range_argument(outer) != "n"
+        or len(nested) != 1
+        or nested[0] is not second
+        or _range_argument(second) != "m"
+    ):
+        return "loops/advanced requires a `range(m)` loop nested in `range(n)`"
+    return None
+
+
+def _function_profile_error(
+    functions: dict[str, ast.FunctionDef],
+    entry: ast.FunctionDef,
+    difficulty: Difficulty,
+) -> str | None:
+    helpers = {name: node for name, node in functions.items() if node is not entry}
+    expected_helpers = 2 if difficulty == "advanced" else 1
+    if len(helpers) != expected_helpers:
+        return f"functions/{difficulty} requires exactly {expected_helpers} helper(s)"
+
+    entry_calls = _direct_call_names(entry)
+    if difficulty == "beginner":
+        helper = next(iter(helpers))
+        if entry_calls != [helper] or _direct_call_names(helpers[helper]):
+            return "functions/beginner requires exactly one entry-to-helper call"
+        return None
+
+    helper_calls_in_loops = [
+        node.func.id
+        for loop in ast.walk(entry)
+        if isinstance(loop, ast.For)
+        for node in ast.walk(loop)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in helpers
+    ]
+    if entry_calls.count("range") != 1 or len(helper_calls_in_loops) != 1:
+        return (
+            f"functions/{difficulty} requires one range call and one helper call "
+            "inside the loop"
+        )
+
+    middle_name = helper_calls_in_loops[0]
+    if difficulty == "intermediate":
+        if entry_calls != ["range", middle_name] or _direct_call_names(
+            helpers[middle_name]
+        ):
+            return "functions/intermediate contains calls outside its required pattern"
+        return None
+
+    leaf_names = set(helpers) - {middle_name}
+    leaf_name = next(iter(leaf_names))
+    if (
+        entry_calls != ["range", middle_name]
+        or _direct_call_names(helpers[middle_name]) != [leaf_name, leaf_name]
+        or _direct_call_names(helpers[leaf_name])
+    ):
+        return (
+            "functions/advanced requires the middle helper to call the leaf exactly "
+            "twice and no other calls"
+        )
+    return None
+
+
+def _direct_call_names(function: ast.FunctionDef) -> list[str]:
+    return [
+        node.func.id
+        for node in ast.walk(function)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    ]
+
+
+def _range_argument(loop: ast.For) -> str | None:
+    iterator = loop.iter
+    if (
+        isinstance(iterator, ast.Call)
+        and isinstance(iterator.func, ast.Name)
+        and iterator.func.id == "range"
+        and len(iterator.args) == 1
+        and not iterator.keywords
+        and isinstance(iterator.args[0], ast.Name)
+    ):
+        return iterator.args[0].id
+    return None
+
+
+def _single_return_call_error(
+    entry: ast.FunctionDef, function_name: str, parameter_name: str
+) -> str | None:
+    requirement = (
+        "entry-function body must be exactly "
+        f"`return {function_name}({parameter_name})`"
+    )
+    if len(entry.body) != 1 or not isinstance(entry.body[0], ast.Return):
+        return requirement
+    value = entry.body[0].value
+    if not (
+        isinstance(value, ast.Call)
+        and isinstance(value.func, ast.Name)
+        and value.func.id == function_name
+        and len(value.args) == 1
+        and isinstance(value.args[0], ast.Name)
+        and value.args[0].id == parameter_name
+        and not value.keywords
+    ):
+        return requirement
+    return None
+
+
 def _reachable_function_names(
     functions: dict[str, ast.FunctionDef], entry_function: str
 ) -> set[str]:

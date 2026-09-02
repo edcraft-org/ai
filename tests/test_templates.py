@@ -333,9 +333,10 @@ def test_list_proposal_normalization_adds_list_shaped_fallbacks() -> None:
 
 
 def test_profile_rejects_the_wrong_answer_kind() -> None:
-    value = CodeQuestionTemplate.model_validate_json(
-        (TEMPLATE_DIR / "list_sorted.json").read_text()
-    ).model_copy(update={"answer_expression": "len(values)"})
+    value = template(
+        code="def calculate(a, b, c):\n    return (a + b) > c",
+        answer_expression="(a + b) > c",
+    )
 
     with pytest.raises(TemplateValidationError) as error:
         TemplateValidator(executor=TrustedBatchExecutor()).validate(value)
@@ -346,9 +347,10 @@ def test_profile_rejects_the_wrong_answer_kind() -> None:
 
 
 def test_answer_kind_error_precedes_distractor_selection() -> None:
-    value = CodeQuestionTemplate.model_validate_json(
-        (TEMPLATE_DIR / "list_sorted.json").read_text()
-    ).model_copy(update={"answer_expression": "len(values)"})
+    value = template(
+        code="def calculate(a, b, c):\n    return (a + b) > c",
+        answer_expression="(a + b) > c",
+    )
 
     with pytest.raises(TemplateValidationError) as error:
         TemplateValidator(executor=TrustedBatchExecutor()).validate(
@@ -394,6 +396,55 @@ def test_rejects_an_unused_entry_parameter_before_execution() -> None:
     assert error.value.code == "UNUSED_PARAMETER"
     assert error.value.field == "parameters"
     assert "c" in str(error.value)
+
+
+def test_loop_profile_enforces_its_exact_range_structure() -> None:
+    value = CodeQuestionTemplate.model_validate_json(
+        (TEMPLATE_DIR / "loop_iterations.json").read_text()
+    ).model_copy(
+        update={
+            "code": (
+                "def accumulate(n):\n"
+                "    total = 0\n"
+                "    for i in range(n + 1):\n"
+                "        total += i\n"
+                "    return total"
+            )
+        }
+    )
+
+    with pytest.raises(TemplateValidationError) as error:
+        TemplateValidator(executor=TrustedBatchExecutor()).validate(value)
+
+    assert error.value.code == "PROFILE_MISMATCH"
+    assert error.value.field == "code"
+    assert "range(n)" in str(error.value)
+
+
+def test_function_profile_enforces_its_exact_call_count_expression() -> None:
+    value = CodeQuestionTemplate.model_validate_json(
+        (TEMPLATE_DIR / "function_loop_helper.json").read_text()
+    ).model_copy(update={"answer_expression": "n + 3"})
+
+    with pytest.raises(TemplateValidationError) as error:
+        TemplateValidator(executor=TrustedBatchExecutor()).validate(value)
+
+    assert error.value.code == "PROFILE_MISMATCH"
+    assert error.value.field == "answer_expression"
+    assert "n + 2" in str(error.value)
+
+
+def test_list_profile_enforces_the_literal_beginner_operation() -> None:
+    value = CodeQuestionTemplate.model_validate_json(
+        (TEMPLATE_DIR / "list_sum.json").read_text()
+    ).model_copy(update={"code": "def total(values):\n    return max(values)"})
+
+    with pytest.raises(TemplateValidationError) as error:
+        TemplateValidator(executor=TrustedBatchExecutor()).validate(value)
+
+    assert error.value.code == "PROFILE_MISMATCH"
+    assert error.value.field == "code"
+    assert "return sum(values)" in str(error.value)
 
 
 def test_proposal_normalization_derives_target_aware_loop_wording() -> None:
