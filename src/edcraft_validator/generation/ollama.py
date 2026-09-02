@@ -165,6 +165,10 @@ class OllamaTemplateGenerator:
             raise GenerationTransportError(
                 f"Ollama transport request failed: {exc.reason}"
             ) from exc
+        except ConnectionError as exc:
+            raise GenerationTransportError(
+                f"Ollama connection was interrupted: {exc}"
+            ) from exc
         except json.JSONDecodeError as exc:
             raise GenerationResponseError(
                 f"Ollama endpoint returned malformed response JSON: {exc}"

@@ -5,6 +5,7 @@ import pytest
 from edcraft_validator.generation.base import (
     GenerationSchemaError,
     GenerationTimeoutError,
+    GenerationTransportError,
 )
 from edcraft_validator.generation.models import TemplateAuthoringRequest
 from edcraft_validator.generation.ollama import (
@@ -161,6 +162,18 @@ def test_ollama_reports_timeout_separately(monkeypatch) -> None:
     monkeypatch.setattr("edcraft_validator.generation.ollama.urlopen", timeout)
 
     with pytest.raises(GenerationTimeoutError, match="timed out after 300 seconds"):
+        OllamaTemplateGenerator().generate_proposal(
+            TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
+        )
+
+
+def test_ollama_reports_connection_reset_as_transport_failure(monkeypatch) -> None:
+    def reset(request, timeout):
+        raise ConnectionResetError("peer restarted")
+
+    monkeypatch.setattr("edcraft_validator.generation.ollama.urlopen", reset)
+
+    with pytest.raises(GenerationTransportError, match="connection was interrupted"):
         OllamaTemplateGenerator().generate_proposal(
             TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
         )
