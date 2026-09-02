@@ -3,6 +3,7 @@ import json
 import pytest
 
 from edcraft_validator.generation.base import (
+    GenerationError,
     GenerationSchemaError,
     GenerationTimeoutError,
     GenerationTransportError,
@@ -10,6 +11,9 @@ from edcraft_validator.generation.base import (
 from edcraft_validator.generation.models import TemplateAuthoringRequest
 from edcraft_validator.generation.ollama import (
     OllamaTemplateGenerator,
+    _num_predict,
+    _temperature,
+    _timeout_seconds,
     parse_ollama_proposal,
 )
 
@@ -68,6 +72,7 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     assert "topic" not in schema["properties"]
     assert "question_template" not in schema["properties"]
     assert payload["options"]["temperature"] == 0
+    assert payload["options"]["num_predict"] == 2048
     messages = payload["messages"]
     assert "finite Cartesian product" in messages[0]["content"]
     assert "answer_target=return_value" in messages[1]["content"]
@@ -177,6 +182,26 @@ def test_ollama_reports_connection_reset_as_transport_failure(monkeypatch) -> No
         OllamaTemplateGenerator().generate_proposal(
             TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
         )
+
+
+@pytest.mark.parametrize(
+    ("variable", "value", "reader", "message"),
+    [
+        ("OLLAMA_TIMEOUT_SECONDS", "0", _timeout_seconds, "greater than zero"),
+        ("OLLAMA_TIMEOUT_SECONDS", "slow", _timeout_seconds, "must be a number"),
+        ("OLLAMA_TEMPERATURE", "3", _temperature, "between 0 and 2"),
+        ("OLLAMA_TEMPERATURE", "warm", _temperature, "must be a number"),
+        ("OLLAMA_NUM_PREDICT", "127", _num_predict, "between 128 and 4096"),
+        ("OLLAMA_NUM_PREDICT", "many", _num_predict, "must be an integer"),
+    ],
+)
+def test_ollama_rejects_invalid_generation_bounds(
+    monkeypatch, variable, value, reader, message
+) -> None:
+    monkeypatch.setenv(variable, value)
+
+    with pytest.raises(GenerationError, match=message):
+        reader()
 
 
 def test_ollama_prompt_metadata_is_stable_and_wire_specific() -> None:

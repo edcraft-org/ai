@@ -45,6 +45,7 @@ OPENAI_MAX_RETRIES=1
 OLLAMA_MODEL=qwen2.5-coder:14b
 OLLAMA_TIMEOUT_SECONDS=300
 OLLAMA_TEMPERATURE=0
+OLLAMA_NUM_PREDICT=2048
 ```
 
 Provider selection is always explicit through `--provider`.

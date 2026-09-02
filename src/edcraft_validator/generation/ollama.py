@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import re
 from urllib.error import HTTPError, URLError
@@ -140,7 +141,10 @@ class OllamaTemplateGenerator:
             "messages": messages,
             "stream": False,
             "format": schema.model_json_schema(),
-            "options": {"temperature": float(os.getenv("OLLAMA_TEMPERATURE", "0"))},
+            "options": {
+                "temperature": _temperature(),
+                "num_predict": _num_predict(),
+            },
         }
         request = Request(
             native_url,
@@ -149,7 +153,7 @@ class OllamaTemplateGenerator:
             method="POST",
         )
         try:
-            timeout = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "300"))
+            timeout = _timeout_seconds()
             with urlopen(request, timeout=timeout) as response:
                 body = json.load(response)
             return body["message"]["content"]
@@ -223,3 +227,36 @@ def _parse_parameter_value(kind: ParameterKind, value: str) -> object:
     if not isinstance(parsed, list) or any(type(item) is not int for item in parsed):
         raise ValueError(f"invalid integer_list wire value {value!r}")
     return parsed
+
+
+def _timeout_seconds() -> float:
+    raw_value = os.getenv("OLLAMA_TIMEOUT_SECONDS", "300").strip()
+    try:
+        value = float(raw_value)
+    except ValueError as exc:
+        raise GenerationError("OLLAMA_TIMEOUT_SECONDS must be a number") from exc
+    if not math.isfinite(value) or value <= 0:
+        raise GenerationError("OLLAMA_TIMEOUT_SECONDS must be greater than zero")
+    return value
+
+
+def _temperature() -> float:
+    raw_value = os.getenv("OLLAMA_TEMPERATURE", "0").strip()
+    try:
+        value = float(raw_value)
+    except ValueError as exc:
+        raise GenerationError("OLLAMA_TEMPERATURE must be a number") from exc
+    if not math.isfinite(value) or not 0 <= value <= 2:
+        raise GenerationError("OLLAMA_TEMPERATURE must be between 0 and 2")
+    return value
+
+
+def _num_predict() -> int:
+    raw_value = os.getenv("OLLAMA_NUM_PREDICT", "2048").strip()
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise GenerationError("OLLAMA_NUM_PREDICT must be an integer") from exc
+    if not 128 <= value <= 4096:
+        raise GenerationError("OLLAMA_NUM_PREDICT must be between 128 and 4096")
+    return value
