@@ -41,7 +41,7 @@ OPENAI_MODEL=gpt-5-mini
 
 OLLAMA_MODEL=qwen2.5-coder:14b
 OLLAMA_TIMEOUT_SECONDS=300
-OLLAMA_TEMPERATURE=0.2
+OLLAMA_TEMPERATURE=0
 ```
 
 Provider selection is always explicit through `--provider`.
@@ -59,8 +59,9 @@ uv run python -m edcraft_validator.template author \
   --output /tmp/approved-template.json
 ```
 
-Ollama uses its native structured schema endpoint and the same local template
-contract:
+Ollama uses its native structured endpoint with a simple provider-specific wire
+schema. The adapter strictly normalizes that response into the same local proposal
+contract used by OpenAI:
 
 ```bash
 /usr/bin/time -p uv run python -m edcraft_validator.template author \

@@ -786,9 +786,14 @@ The proposal must use a finite Cartesian product of typed finite parameter value
 the local application can exhaustively validate every possible question once.
 
 Rules:
+- `code` is the learner-facing Python program that the question asks about. It must
+  directly perform the selected topic's computation or control flow. Never write a
+  question generator, template generator, metadata dictionary, schema, or code that
+  stores answer/distractor expressions as strings. Keep code, answer_expression, and
+  distractor candidates as separate schema fields.
 - Define one module-level entry function whose positional arguments exactly match the
-  parameter names and order. Helper functions are allowed. The code must work for every
-  parameter combination.
+  parameter names and order. Use every parameter in executed learner-facing behavior.
+  Helper functions are allowed. The code must work for every parameter combination.
 - Use only expressions, assignments, if statements, and for loops. Do not use imports,
   attributes, classes, decorators, recursion, comprehensions, while loops, lambdas,
   exceptions, file access, networking, input, eval, or exec.

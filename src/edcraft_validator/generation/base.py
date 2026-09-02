@@ -11,6 +11,24 @@ if TYPE_CHECKING:
 class GenerationError(RuntimeError):
     """Raised when a provider cannot produce a usable template."""
 
+    category = "generation_error"
+
+
+class GenerationTimeoutError(GenerationError):
+    category = "timeout"
+
+
+class GenerationTransportError(GenerationError):
+    category = "transport"
+
+
+class GenerationResponseError(GenerationError):
+    category = "invalid_response"
+
+
+class GenerationSchemaError(GenerationError):
+    category = "schema_validation"
+
 
 class QuestionTemplateGenerator(Protocol):
     """Provider contract for authoring one reusable question template."""
