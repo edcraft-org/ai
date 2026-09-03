@@ -11,15 +11,19 @@ cost proportional to the number of templates rather than the number of questions
 
 ```text
 topic + difficulty + provider
-  -> AI authors one finite template
+  -> AI proposes code, parameters, answer logic, and distractor candidates
+  -> application derives identity, target, wording, version, and question type
   -> AST safety checks
   -> all parameter combinations run in one Docker batch
-  -> answers and distractor recipes checked for every combination
+  -> globally valid distractor recipes selected from the candidates
+  -> answers and selected distractors checked for every combination
   -> approved template + validation hash
   -> deterministic questions generated locally from seeds
 ```
 
-Template authoring makes one provider request. Template approval uses Docker once.
+Template authoring makes one provider request for the requested misconception
+candidates. Local normalization adds mechanical fallbacks without another AI call.
+Template approval uses Docker once.
 Generating a question from an approved template uses no AI, Docker, or per-question
 validation call.
 
@@ -35,13 +39,18 @@ Configure only the provider you intend to select:
 ```dotenv
 OPENAI_API_KEY=your-key-here
 OPENAI_MODEL=gpt-5-mini
+OPENAI_TIMEOUT_SECONDS=120
+OPENAI_MAX_RETRIES=1
 
 OLLAMA_MODEL=qwen2.5-coder:14b
 OLLAMA_TIMEOUT_SECONDS=300
-OLLAMA_TEMPERATURE=0.2
+OLLAMA_TEMPERATURE=0
+OLLAMA_NUM_PREDICT=2048
 ```
 
 Provider selection is always explicit through `--provider`.
+Model selection can also be explicit through `--model`; when it is omitted, the
+selected provider's environment setting is used.
 
 ## Author and approve a template
 
@@ -50,18 +59,21 @@ OpenAI uses strict Structured Outputs:
 ```bash
 uv run python -m edcraft_validator.template author \
   --provider openai \
+  --model gpt-5-mini \
   --topic arithmetic \
   --difficulty beginner \
   --num-distractors 3 \
   --output /tmp/approved-template.json
 ```
 
-Ollama uses its native structured schema endpoint and the same local template
-contract:
+Ollama uses its native structured endpoint with a simple provider-specific wire
+schema. The adapter strictly normalizes that response into the same local proposal
+contract used by OpenAI:
 
 ```bash
 /usr/bin/time -p uv run python -m edcraft_validator.template author \
   --provider ollama \
+  --model qwen2.5-coder:14b \
   --topic loops \
   --difficulty beginner \
   --num-distractors 3 \
@@ -101,6 +113,8 @@ uv run python -m edcraft_validator.template validate \
 
 Approval checks every value in the template's Cartesian product. All cases are
 sent to one disposable Docker container to avoid repeated startup costs.
+Rejected templates raise structured diagnostics with a stable code, relevant
+field, and failing parameter values when available; messages remain human-readable.
 
 ## Generate concrete questions locally
 
@@ -116,6 +130,7 @@ uv run python -m edcraft_validator.template generate \
 
 Each output records the template ID, version, SHA-256 hash, seed, selected
 parameters, code, question, answer target, answer, and distractors.
+Rendered misconception reasons are preserved alongside their selected distractors.
 
 ## Currently supported
 
@@ -132,9 +147,17 @@ parameters, code, question, answer target, answer, and distractors.
 - Answers: restricted arithmetic, comparisons, boolean operators, conditional
   expressions, list literals, indexing, and the allowlisted functions `len`, `sum`,
   `min`, `max`, `sorted`, `all`, and `any`.
-- Distractors: two or three deterministic expressions, each with a misconception
-  reason template.
+- Expression safety: at most 500 source characters and 100 syntax nodes; numeric
+  intermediates are bounded to magnitude 1 billion, individual sequences to 100
+  items, and complete nested values to a cumulative logical size of 1,000.
+- Distractors: the provider proposes the requested misconception candidates in the
+  same call. Local normalization appends type-compatible deterministic fallbacks, and
+  the finite-domain validator searches candidate subsets to retain the requested two
+  or three globally unique expressions with reason templates.
 - Reproducibility: deterministic seed selection and template tamper detection.
+  AI-approved artifacts also record the resolved provider and model, authoring
+  request, prompt version and SHA-256 hash, generation time, validation time, and
+  approval status. API keys and other secrets are never stored.
 
 Topic currently selects the answer target as follows:
 
@@ -193,8 +216,11 @@ It is not part of normal template-based question expansion.
 ## Architecture
 
 ```text
-application/generate_template.py   frontend-facing use case
+application/__init__.py            stable frontend-facing application facade
+domains/code/application.py        code authoring, approval, and expansion use cases
+domains/code/evaluation.py         real-provider code-template evaluation
 domains/code/templates.py          code template schema, prompt, approval, expansion
+domains/code/capabilities.py       supported profiles and their machine-readable rules
 generation/base.py                 provider-neutral template protocol
 generation/registry.py             explicit provider selection and extension point
 generation/openai.py               OpenAI and SocLaas adapters
@@ -203,9 +229,11 @@ executor.py + _worker.py            batched Docker execution
 domains/code/pipeline.py           standalone concrete-question validation pipeline
 ```
 
-To add another model, implement `QuestionTemplateGenerator.generate_template`,
-register its factory with `register_template_provider`, and add an adapter test.
-The application and CLI do not need provider-specific branches.
+To use another model from an existing provider, pass `--model`; no domain code
+changes are required. To add another provider, implement
+`QuestionTemplateGenerator.generate_proposal`, register its factory with
+`register_template_provider`, and add an adapter test. The application and CLI do
+not need provider-specific branches.
 
 Future math and physics domains should have their own template schema, approval
 tools, and instance generator under `domains/`. SymPy or Lean should not be added
@@ -233,8 +261,10 @@ Run only the complete code-template matrix locally:
 uv run pytest tests/test_templates.py -q
 ```
 
-The real OpenAI template-authoring test is opt-in locally and runs for same-repo
-pull requests. CI fails clearly if the `OPENAI_API_KEY` GitHub secret is missing:
+The real OpenAI template-authoring test is opt-in locally and performs full Docker
+approval. Build the executor image first. For same-repository pull requests, CI
+runs the equivalent evaluation command, fails clearly if the `OPENAI_API_KEY`
+secret is missing, and uploads the JSONL attempt record:
 
 ```bash
 RUN_OPENAI_LIVE_TESTS=1 uv run pytest -m openai_live -q
@@ -242,3 +272,30 @@ RUN_OPENAI_LIVE_TESTS=1 uv run pytest -m openai_live -q
 
 See [REPRODUCIBILITY.md](REPRODUCIBILITY.md) for pinned dependencies and
 environment details.
+
+## Evaluate a real provider
+
+The evaluation command runs the complete authoring and Docker approval workflow,
+writes and flushes one JSONL record after each attempt (so completed work survives
+an interruption), reports progress on stderr, and prints pass rate, failure codes,
+and latency grouped by provider, resolved model, topic, and difficulty:
+
+```bash
+uv run python -m edcraft_validator.template evaluate \
+  --provider ollama \
+  --model qwen2.5-coder:14b \
+  --topic arithmetic \
+  --difficulty beginner \
+  --repetitions 5 \
+  --output .artifacts/ollama-arithmetic-beginner.jsonl
+```
+
+Use `--topic all --difficulty all` for the complete 15-profile matrix. Each
+repetition makes one real provider call per selected profile, so review the call
+count before running a paid provider. The JSONL artifact and summary are written
+even when attempts fail; the command exits non-zero if any attempt fails.
+
+The current local baseline for `qwen2.5-coder:14b` is 10 approved templates out of
+15 profiles (66.7%), averaging 44.1 seconds per attempt with the bounded v8 prompt.
+Rejected model proposals are expected evaluation outcomes; inspect their structured
+failure codes rather than treating rejection as a validator failure.
