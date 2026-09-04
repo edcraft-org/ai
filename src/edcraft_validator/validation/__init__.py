@@ -1,16 +1,13 @@
-"""Generic validation ports and evidence contracts."""
+"""Structured evidence for domain-specific template approval."""
 
-from edcraft_validator.validation.base import ValidationPipeline, ValidationTool
 from edcraft_validator.validation.contracts import (
-    ToolResult,
-    ValidationContext,
-    ValidationRun,
+    AssuranceLevel,
+    EvidenceStatus,
+    ValidationEvidence,
 )
 
 __all__ = [
-    "ToolResult",
-    "ValidationContext",
-    "ValidationPipeline",
-    "ValidationRun",
-    "ValidationTool",
+    "AssuranceLevel",
+    "EvidenceStatus",
+    "ValidationEvidence",
 ]

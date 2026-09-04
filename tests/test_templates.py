@@ -136,6 +136,19 @@ def test_validates_every_case_once_then_generates_without_executor() -> None:
     approved = TemplateValidator(executor=executor).validate(template())
 
     assert approved.validation.cases_validated == 8
+    assert approved.validation.validator_version == "code-template-validator-v1"
+    assert [item.check for item in approved.validation.evidence] == [
+        "template_structure",
+        "expression_safety",
+        "answer_domain",
+        "sandboxed_execution",
+        "answer_consistency",
+        "distractor_consistency",
+        "template_rendering",
+    ]
+    assert all(item.status == "passed" for item in approved.validation.evidence)
+    assert approved.validation.evidence[2].assurance == "exhaustive"
+    assert approved.validation.evidence[2].details == {"cases": 8}
     assert executor.batch_calls == 1
     assert len(executor.calls) == 8
 
@@ -808,7 +821,8 @@ def test_rejects_missing_profile_code_feature_before_execution() -> None:
     ) as error:
         TemplateValidator(executor=ArithmeticExecutor()).validate(item)
 
-    assert error.value.as_dict() == {
+    payload = error.value.as_dict()
+    assert {key: payload[key] for key in ("code", "message", "field", "inputs")} == {
         "code": "PROFILE_MISMATCH",
         "message": (
             "arithmetic/beginner code is missing required features: arithmetic"
@@ -816,6 +830,8 @@ def test_rejects_missing_profile_code_feature_before_execution() -> None:
         "field": "code",
         "inputs": None,
     }
+    assert payload["evidence"][0]["check"] == "template_structure"
+    assert payload["evidence"][0]["status"] == "failed"
 
 
 def test_rejects_non_positive_profile_integer_domain_before_execution() -> None:
@@ -845,6 +861,40 @@ def test_answer_mismatch_reports_the_failing_inputs() -> None:
     assert error.value.code == "ANSWER_MISMATCH"
     assert error.value.field == "answer_expression"
     assert error.value.inputs == {"a": 2, "b": 5, "c": 1}
+    assert error.value.evidence[-1].check == "answer_consistency"
+    assert error.value.evidence[-1].status == "failed"
+    assert error.value.evidence[-1].issues[0].code == "ANSWER_MISMATCH"
+    assert error.value.evidence[-1].details["failing_inputs"] == error.value.inputs
+
+
+def test_execution_failure_preserves_executor_code_in_evidence() -> None:
+    class FailingExecutor:
+        def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+            return [
+                ExecutionResult(
+                    ok=False,
+                    error_code="EXECUTION_TIMEOUT",
+                    error_message="Execution exceeded the time limit",
+                )
+                for _ in inputs
+            ]
+
+    with pytest.raises(TemplateValidationError) as error:
+        TemplateValidator(executor=FailingExecutor()).validate(template())
+
+    assert error.value.code == "EXECUTION_TIMEOUT"
+    assert error.value.evidence[-1].check == "sandboxed_execution"
+    assert error.value.evidence[-1].status == "failed"
+    assert error.value.evidence[-1].issues[0].code == "EXECUTION_TIMEOUT"
+
+
+def test_approved_template_rejects_failed_validation_evidence() -> None:
+    approved = TemplateValidator(executor=ArithmeticExecutor()).validate(template())
+    payload = approved.model_dump(mode="json")
+    payload["validation"]["evidence"][0]["status"] = "failed"
+
+    with pytest.raises(ValueError, match="require passing validation evidence"):
+        type(approved).model_validate(payload)
 
 
 def test_refuses_to_expand_a_changed_approved_template() -> None:

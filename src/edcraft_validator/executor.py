@@ -254,19 +254,3 @@ class DockerExecutor:
             error_code=code,
             error_message=message[-1000:],
         )
-
-
-def execute_with_tracer(
-    code: str,
-    entry_function: str,
-    inputs: dict[str, Any],
-    *,
-    timeout_seconds: float = 2.0,
-) -> ExecutionResult:
-    """Backward-compatible wrapper around the Docker execution backend."""
-    return DockerExecutor().execute(
-        code,
-        entry_function,
-        inputs,
-        timeout_seconds=timeout_seconds,
-    )
