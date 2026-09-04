@@ -9,8 +9,10 @@ import itertools
 import json
 import math
 import operator
+import time
+from collections.abc import Callable
 from string import Formatter
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -27,8 +29,12 @@ from edcraft_validator.generation.models import (
     TemplateAuthoringProvenance,
     TemplateAuthoringRequest,
 )
-from edcraft_validator.models import AnswerTarget, GeneratedQuestion
+from edcraft_validator.models import AnswerTarget, GeneratedQuestion, ValidationIssue
 from edcraft_validator.safety import check_code_safety
+from edcraft_validator.validation.contracts import (
+    AssuranceLevel,
+    ValidationEvidence,
+)
 
 MAX_TEMPLATE_CASES = 64
 MAX_STRING_LENGTH = 40
@@ -41,7 +47,9 @@ MAX_EXPRESSION_SEQUENCE_LENGTH = 100
 MAX_EXPRESSION_VALUE_SIZE = 1_000
 MAX_EXPRESSION_VALUE_DEPTH = 20
 CODE_TEMPLATE_PROMPT_VERSION = "code-template-v8"
+CODE_TEMPLATE_VALIDATOR_VERSION = "code-template-validator-v1"
 ParameterValue = int | bool | str | list[int]
+_T = TypeVar("_T")
 
 
 class FiniteParameter(BaseModel):
@@ -184,8 +192,19 @@ class CodeQuestionTemplate(BaseModel):
 class TemplateValidationSummary(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
+    validator_version: str = Field(min_length=1)
     cases_validated: int = Field(ge=1)
     template_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    evidence: list[ValidationEvidence] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_successful_unique_evidence(self) -> TemplateValidationSummary:
+        checks = [item.check for item in self.evidence]
+        if len(checks) != len(set(checks)):
+            raise ValueError("validation evidence checks must be unique")
+        if any(item.status != "passed" for item in self.evidence):
+            raise ValueError("approved templates require passing validation evidence")
+        return self
 
 
 class ApprovedCodeQuestionTemplate(BaseModel):
@@ -221,11 +240,13 @@ class TemplateValidationError(ValueError):
         code: str = "TEMPLATE_INVALID",
         field: str | None = None,
         inputs: dict[str, ParameterValue] | None = None,
+        evidence: list[ValidationEvidence] | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.field = field
         self.inputs = copy.deepcopy(inputs)
+        self.evidence = copy.deepcopy(evidence or [])
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -233,6 +254,7 @@ class TemplateValidationError(ValueError):
             "message": str(self),
             "field": self.field,
             "inputs": self.inputs,
+            "evidence": [item.model_dump(mode="json") for item in self.evidence],
         }
 
 
@@ -380,61 +402,217 @@ class TemplateValidator:
     def validate(
         self, template: CodeQuestionTemplate, *, num_distractors: int | None = None
     ) -> ApprovedCodeQuestionTemplate:
+        evidence: list[ValidationEvidence] = []
         names = tuple(parameter.name for parameter in template.parameters)
-        self._validate_structure(template, names)
-        if num_distractors is not None:
-            if not 2 <= num_distractors <= 3:
-                raise ValueError("num_distractors must be 2 or 3")
-            template = self._select_distractors(
-                template, names, num_distractors=num_distractors
-            )
-        answer = SafeExpression(template.answer_expression, names)
-        distractors = [
-            SafeExpression(recipe.expression, names) for recipe in template.distractors
-        ]
-
         value_domains = [parameter.values for parameter in template.parameters]
         inputs_cases = [
             dict(zip(names, values, strict=True))
             for values in itertools.product(*value_domains)
         ]
-        executions = self._execute_all(template, inputs_cases)
-        for inputs, execution in zip(inputs_cases, executions, strict=True):
-            expected_answer = answer.evaluate(inputs)
-            _require_json_value(expected_answer, "answer")
-            self._validate_answer_kind(template, inputs, expected_answer)
-            if not execution.ok:
-                detail = execution.error_message or execution.error_code or "unknown"
-                raise TemplateValidationError(
-                    f"template execution failed for inputs {inputs}: {detail}",
-                    code="EXECUTION_FAILED",
-                    field="code",
-                    inputs=inputs,
-                )
-            actual_answer = _execution_answer(execution, template.answer_target)
-            if not equivalent(actual_answer, expected_answer):
-                raise TemplateValidationError(
-                    "answer_expression does not match the execution target for "
-                    f"inputs {inputs}: expression={expected_answer!r}, "
-                    f"execution={actual_answer!r}",
-                    code="ANSWER_MISMATCH",
-                    field="answer_expression",
-                    inputs=inputs,
-                )
+        case_details = {"cases": len(inputs_cases)}
 
-            generated_distractors = [item.evaluate(inputs) for item in distractors]
-            self._validate_distractors(inputs, expected_answer, generated_distractors)
-            render_template(template.question_template, inputs, require_all=True)
-            for recipe in template.distractors:
-                render_template(recipe.reason_template, inputs)
+        self._record_check(
+            evidence,
+            check="template_structure",
+            assurance="bounded",
+            details={"topic": template.topic, "difficulty": template.difficulty},
+            operation=lambda: self._validate_structure(template, names),
+        )
+        if num_distractors is not None:
+            if not 2 <= num_distractors <= 3:
+                raise ValueError("num_distractors must be 2 or 3")
+            template = self._record_check(
+                evidence,
+                check="distractor_selection",
+                assurance="exhaustive",
+                details={**case_details, "selected": num_distractors},
+                operation=lambda: self._select_distractors(
+                    template, names, num_distractors=num_distractors
+                ),
+            )
+        answer, distractors = self._record_check(
+            evidence,
+            check="expression_safety",
+            assurance="bounded",
+            details={"distractors": len(template.distractors)},
+            operation=lambda: (
+                SafeExpression(template.answer_expression, names),
+                [
+                    SafeExpression(recipe.expression, names)
+                    for recipe in template.distractors
+                ],
+            ),
+        )
+        expected_answers = self._record_check(
+            evidence,
+            check="answer_domain",
+            assurance="exhaustive",
+            details=case_details,
+            operation=lambda: self._evaluate_answers(template, answer, inputs_cases),
+        )
+        executions = self._record_check(
+            evidence,
+            check="sandboxed_execution",
+            assurance="exhaustive",
+            details={**case_details, "executor": type(self.executor).__name__},
+            operation=lambda: self._execute_successfully(template, inputs_cases),
+        )
+        self._record_check(
+            evidence,
+            check="answer_consistency",
+            assurance="exhaustive",
+            details=case_details,
+            operation=lambda: self._validate_answers(
+                template, inputs_cases, executions, expected_answers
+            ),
+        )
+        self._record_check(
+            evidence,
+            check="distractor_consistency",
+            assurance="exhaustive",
+            details={**case_details, "distractors": len(distractors)},
+            operation=lambda: self._validate_all_distractors(
+                inputs_cases, expected_answers, distractors
+            ),
+        )
+        self._record_check(
+            evidence,
+            check="template_rendering",
+            assurance="exhaustive",
+            details=case_details,
+            operation=lambda: self._validate_rendering(template, inputs_cases),
+        )
 
         return ApprovedCodeQuestionTemplate(
             template=template,
             validation=TemplateValidationSummary(
+                validator_version=CODE_TEMPLATE_VALIDATOR_VERSION,
                 cases_validated=len(inputs_cases),
                 template_sha256=template_sha256(template),
+                evidence=evidence,
             ),
         )
+
+    @staticmethod
+    def _record_check(
+        evidence: list[ValidationEvidence],
+        *,
+        check: str,
+        assurance: AssuranceLevel,
+        details: dict[str, Any],
+        operation: Callable[[], _T],
+    ) -> _T:
+        started = time.perf_counter()
+        try:
+            result = operation()
+        except TemplateValidationError as exc:
+            failed_details = copy.deepcopy(details)
+            if exc.inputs is not None:
+                failed_details["failing_inputs"] = copy.deepcopy(exc.inputs)
+            evidence.append(
+                ValidationEvidence(
+                    check=check,
+                    status="failed",
+                    assurance=assurance,
+                    issues=[
+                        ValidationIssue(
+                            code=exc.code,
+                            message=str(exc),
+                            field=exc.field,
+                        )
+                    ],
+                    details=failed_details,
+                    duration_ms=(time.perf_counter() - started) * 1000,
+                )
+            )
+            exc.evidence = copy.deepcopy(evidence)
+            raise
+        evidence.append(
+            ValidationEvidence(
+                check=check,
+                status="passed",
+                assurance=assurance,
+                details=copy.deepcopy(details),
+                duration_ms=(time.perf_counter() - started) * 1000,
+            )
+        )
+        return result
+
+    @classmethod
+    def _evaluate_answers(
+        cls,
+        template: CodeQuestionTemplate,
+        answer: SafeExpression,
+        inputs_cases: list[dict[str, ParameterValue]],
+    ) -> list[Any]:
+        expected_answers = []
+        for inputs in inputs_cases:
+            expected_answer = answer.evaluate(inputs)
+            _require_json_value(expected_answer, "answer")
+            cls._validate_answer_kind(template, inputs, expected_answer)
+            expected_answers.append(expected_answer)
+        return expected_answers
+
+    def _execute_successfully(
+        self,
+        template: CodeQuestionTemplate,
+        inputs_cases: list[dict[str, ParameterValue]],
+    ) -> list[ExecutionResult]:
+        executions = self._execute_all(template, inputs_cases)
+        for inputs, execution in zip(inputs_cases, executions, strict=True):
+            if execution.ok:
+                continue
+            detail = execution.error_message or execution.error_code or "unknown"
+            raise TemplateValidationError(
+                f"template execution failed for inputs {inputs}: {detail}",
+                code=execution.error_code or "EXECUTION_FAILED",
+                field="code",
+                inputs=inputs,
+            )
+        return executions
+
+    @staticmethod
+    def _validate_answers(
+        template: CodeQuestionTemplate,
+        inputs_cases: list[dict[str, ParameterValue]],
+        executions: list[ExecutionResult],
+        expected_answers: list[Any],
+    ) -> None:
+        for inputs, execution, expected_answer in zip(
+            inputs_cases, executions, expected_answers, strict=True
+        ):
+            actual_answer = _execution_answer(execution, template.answer_target)
+            if equivalent(actual_answer, expected_answer):
+                continue
+            raise TemplateValidationError(
+                "answer_expression does not match the execution target for "
+                f"inputs {inputs}: expression={expected_answer!r}, "
+                f"execution={actual_answer!r}",
+                code="ANSWER_MISMATCH",
+                field="answer_expression",
+                inputs=inputs,
+            )
+
+    @classmethod
+    def _validate_all_distractors(
+        cls,
+        inputs_cases: list[dict[str, ParameterValue]],
+        expected_answers: list[Any],
+        distractors: list[SafeExpression],
+    ) -> None:
+        for inputs, expected_answer in zip(inputs_cases, expected_answers, strict=True):
+            generated = [item.evaluate(inputs) for item in distractors]
+            cls._validate_distractors(inputs, expected_answer, generated)
+
+    @staticmethod
+    def _validate_rendering(
+        template: CodeQuestionTemplate,
+        inputs_cases: list[dict[str, ParameterValue]],
+    ) -> None:
+        for inputs in inputs_cases:
+            render_template(template.question_template, inputs, require_all=True)
+            for recipe in template.distractors:
+                render_template(recipe.reason_template, inputs)
 
     @classmethod
     def _select_distractors(

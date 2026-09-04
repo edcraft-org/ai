@@ -14,12 +14,11 @@ uv sync --locked
 uv run ruff check .
 uv run ruff format --check .
 uv run pytest
-uv run python -m edcraft_validator examples/valid_square.json
 ```
 
 For Docker-backed tests:
 
 ```bash
 docker build -f docker/Dockerfile -t edcraft-validator-executor:local .
-EDCRAFT_RUN_DOCKER_TESTS=1 uv run pytest tests/test_docker_integration.py
+uv run pytest -m docker
 ```

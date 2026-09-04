@@ -8,12 +8,11 @@ from edcraft_validator.domains.code.templates import (
     CodeTemplateProposal,
     TemplateValidator,
 )
+from edcraft_validator.executor import DockerExecutor
 from edcraft_validator.generation.models import (
     TemplateAuthoringRequest,
     TemplatePromptMetadata,
 )
-from edcraft_validator.models import GeneratedQuestion
-from edcraft_validator.validator import QuestionValidator
 
 TEMPLATE_PATHS = sorted(
     (Path(__file__).parents[1] / "examples" / "templates").glob("*.json")
@@ -22,68 +21,49 @@ TEMPLATE_PATHS = sorted(
 
 @pytest.mark.docker
 def test_valid_example_executes_in_docker() -> None:
-    # The documented fixture should validate through the real Docker boundary.
-    example_path = Path(__file__).parents[1] / "examples" / "valid_square.json"
-    question = GeneratedQuestion.model_validate_json(
-        example_path.read_text(encoding="utf-8")
+    result = DockerExecutor().execute(
+        "def square(x):\n    return x * x",
+        "square",
+        {"x": 4},
+        timeout_seconds=2,
     )
 
-    report = QuestionValidator().validate(question)
-
-    assert report.status == "valid", report.model_dump_json(indent=2)
-    assert report.actual_answer == 16
+    assert result.ok
+    assert result.answer == 16
 
 
 @pytest.mark.docker
 def test_generated_code_is_bounded_inside_docker() -> None:
     # Either deterministic worker guard may win, but Docker OOM must not win.
-    question = GeneratedQuestion.model_validate(
-        {
-            "code": [
-                "def slow(value):",
-                "    for _ in range(1000000000):",
-                "        pass",
-                "    return value",
-            ],
-            "entry_function": "slow",
-            "inputs": {"value": 1},
-            "question": "What value does slow(1) return?",
-            "proposed_answer": 1,
-            "distractors": [2, 3],
-            "question_type": "mcq",
-        }
+    result = DockerExecutor().execute(
+        "def slow(value):\n"
+        "    for _ in range(1000000000):\n"
+        "        pass\n"
+        "    return value",
+        "slow",
+        {"value": 1},
+        timeout_seconds=0.01,
     )
 
     # Require a worker-level guard to stop execution before Docker's memory ceiling.
-    report = QuestionValidator(timeout_seconds=0.01).validate(question)
-
-    assert report.status == "execution_error"
-    assert report.issues[0].code in {"EXECUTION_TIMEOUT", "TRACE_LIMIT_EXCEEDED"}
+    assert not result.ok
+    assert result.error_code in {"EXECUTION_TIMEOUT", "TRACE_LIMIT_EXCEEDED"}
 
 
 @pytest.mark.docker
 def test_generated_code_trace_limit_is_enforced_inside_docker() -> None:
-    question = GeneratedQuestion.model_validate(
-        {
-            "code": [
-                "def expensive(value):",
-                "    for _ in range(1000000000):",
-                "        value += 1",
-                "    return value",
-            ],
-            "entry_function": "expensive",
-            "inputs": {"value": 1},
-            "question": "What value does expensive(1) return?",
-            "proposed_answer": 1,
-            "distractors": [2, 3],
-            "question_type": "mcq",
-        }
+    result = DockerExecutor().execute(
+        "def expensive(value):\n"
+        "    for _ in range(1000000000):\n"
+        "        value += 1\n"
+        "    return value",
+        "expensive",
+        {"value": 1},
+        timeout_seconds=10,
     )
 
-    report = QuestionValidator(timeout_seconds=10).validate(question)
-
-    assert report.status == "execution_error"
-    assert report.issues[0].code == "TRACE_LIMIT_EXCEEDED"
+    assert not result.ok
+    assert result.error_code == "TRACE_LIMIT_EXCEEDED"
 
 
 @pytest.mark.docker

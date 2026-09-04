@@ -71,6 +71,8 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
     assert report.attempts[0].approved_template is not None
     assert report.attempts[1].failure_stage == "validation"
     assert report.attempts[1].failure_code == "PROFILE_MISMATCH"
+    assert report.attempts[1].validation_evidence[-1].status == "failed"
+    assert report.attempts[1].validation_evidence[-1].check == "template_structure"
     assert report.summary.attempts == 2
     assert report.summary.approved == 1
     assert report.summary.pass_rate == 0.5
@@ -83,6 +85,9 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
     assert len(records) == 2
     assert records[0]["approved_template"]["authoring"]["model"] == "stub-model"
     assert records[1]["failure_code"] == "PROFILE_MISMATCH"
+    assert records[1]["validation_evidence"][-1]["issues"][0]["code"] == (
+        "PROFILE_MISMATCH"
+    )
 
 
 def test_evaluation_notifies_after_each_completed_attempt() -> None:
