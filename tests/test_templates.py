@@ -78,9 +78,7 @@ def relaxed_profile_template(
     data["code"] = code
     data["answer_expression"] = answer_expression
     if parameter_values is not None:
-        for parameter, values in zip(
-            data["parameters"], parameter_values, strict=True
-        ):
+        for parameter, values in zip(data["parameters"], parameter_values, strict=True):
             parameter["values"] = values
 
     answer_kind = code_template_profile(data["topic"], data["difficulty"]).answer_kind
