@@ -259,16 +259,14 @@ class TemplateValidationError(ValueError):
 
 
 def parse_code_question_template(content: str) -> CodeQuestionTemplate:
-    """Parse provider JSON after removing redundant finite-domain values."""
+    """Parse template JSON with strict local schema validation."""
     payload = json.loads(content)
-    _deduplicate_parameter_values(payload)
     return CodeQuestionTemplate.model_validate(payload)
 
 
 def parse_code_template_proposal(content: str) -> CodeTemplateProposal:
-    """Parse a provider proposal after removing duplicate finite values."""
+    """Parse a provider proposal with strict local schema validation."""
     payload = json.loads(content)
-    _deduplicate_parameter_values(payload)
     return CodeTemplateProposal.model_validate(payload)
 
 
@@ -343,24 +341,6 @@ def _with_deterministic_fallbacks(
             )
             existing.add(expression)
     return result
-
-
-def _deduplicate_parameter_values(payload: Any) -> None:
-    if not isinstance(payload, dict) or not isinstance(payload.get("parameters"), list):
-        return
-    for parameter in payload["parameters"]:
-        if not isinstance(parameter, dict) or not isinstance(
-            parameter.get("values"), list
-        ):
-            continue
-        unique_values = []
-        seen = set()
-        for value in parameter["values"]:
-            encoded = json.dumps(value, sort_keys=True, separators=(",", ":"))
-            if encoded not in seen:
-                seen.add(encoded)
-                unique_values.append(value)
-        parameter["values"] = unique_values
 
 
 def _question_template(

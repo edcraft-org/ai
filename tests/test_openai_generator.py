@@ -1,8 +1,10 @@
+import json
 from types import SimpleNamespace
 
 import pytest
 
 from edcraft_validator.domains.code.templates import CodeTemplateProposal
+from edcraft_validator.generation.base import GenerationSchemaError
 from edcraft_validator.generation.models import TemplateAuthoringRequest
 from edcraft_validator.generation.openai import (
     OpenAICompatibleTemplateGenerator,
@@ -55,6 +57,12 @@ def client_with(proposal: CodeTemplateProposal | None) -> SimpleNamespace:
     )
 
 
+def client_with_content(content: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        chat=SimpleNamespace(completions=RecordingCompletions(content))
+    )
+
+
 def test_generates_template_using_strict_structured_outputs() -> None:
     client = client_with(code_proposal())
     generator = OpenAICompatibleTemplateGenerator("openai", client, model="test-model")
@@ -92,6 +100,23 @@ def test_reports_empty_template_response() -> None:
         )
 
     assert error.value.category == "invalid_response"
+
+
+def test_reports_duplicate_parameter_values_as_schema_error() -> None:
+    payload = code_proposal().model_dump(mode="json")
+    payload["parameters"][0]["values"] = [2, 2]
+    generator = OpenAICompatibleTemplateGenerator(
+        "openai", client_with_content(json.dumps(payload)), model="test-model"
+    )
+
+    with pytest.raises(
+        GenerationSchemaError, match="parameter values must be unique"
+    ) as error:
+        generator.generate_proposal(
+            TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
+        )
+
+    assert error.value.category == "schema_validation"
 
 
 def test_provider_uses_provider_specific_configuration(monkeypatch) -> None:

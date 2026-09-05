@@ -160,6 +160,36 @@ def test_ollama_reports_local_wire_schema_failures(monkeypatch) -> None:
         )
 
 
+def test_ollama_reports_duplicate_parameter_values_as_schema_error(
+    monkeypatch,
+) -> None:
+    duplicate = {
+        "code": "def calculate(a):\n    return a",
+        "entry_function": "calculate",
+        "parameters": [{"name": "a", "kind": "integer", "values": ["2", "2"]}],
+        "answer_expression": "a",
+        "distractors": [
+            {"expression": "a + 1", "reason_template": "Adds one."},
+            {"expression": "a - 1", "reason_template": "Subtracts one."},
+            {"expression": "a + 2", "reason_template": "Adds two."},
+        ],
+    }
+    monkeypatch.setattr(
+        OllamaTemplateGenerator,
+        "_ollama_request",
+        lambda self, messages, schema: json.dumps(duplicate),
+    )
+
+    with pytest.raises(
+        GenerationSchemaError, match="parameter values must be unique"
+    ) as error:
+        OllamaTemplateGenerator().generate_proposal(
+            TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
+        )
+
+    assert error.value.category == "schema_validation"
+
+
 def test_ollama_reports_timeout_separately(monkeypatch) -> None:
     def timeout(request, timeout):
         raise TimeoutError
