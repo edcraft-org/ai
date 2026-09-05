@@ -219,8 +219,8 @@ complete when:
 
 ## Non-Goals for the Current Milestone
 
-- Building the final production frontend; the backend contracts and lifecycle come
-  first.
+- Building the final production frontend; backend contracts and validation evidence
+  come first.
 - Treating embedding similarity or an LLM judge as proof of correctness.
 - Using technically valid templates for learners without a user approve/reject
   decision.
@@ -243,9 +243,10 @@ criteria defined for the original code-template milestone:
   approved-template types; provider and model selection are explicit configuration.
 - Evaluation records provider, resolved model, prompt hash/version, request, timing,
   failure stage/code, and approved output. JSONL attempts are flushed incrementally.
-- The final automated baseline passes 190 non-live tests and 19 Docker integration
-  tests. Real OpenAI evaluations produced approved templates for every profile while
-  the profile contracts were tightened.
+- The automated baseline after validation consolidation passes 181 tests: 162
+  non-Docker tests and 19 Docker integration tests. One opt-in live OpenAI test is
+  skipped unless explicitly enabled. Earlier real OpenAI evaluations produced
+  approved templates for every profile while the profile contracts were tightened.
 - A complete Ollama `qwen2.5-coder:14b` v8 matrix approved 10 of 15 profiles (66.7%)
   in 26.2–63.8 seconds per attempt, with no timeout or transport failure. The five
   unsuitable proposals were rejected for schema, safety, answer-kind, or answer
