@@ -5,8 +5,8 @@ from edcraft_validator.domains.code.templates import (
     CodeQuestionTemplate,
     FiniteParameter,
     ParameterValue,
-    TemplateInstanceGenerator,
     TemplateValidator,
+    generate_template_instance,
 )
 
 __all__ = [
@@ -14,6 +14,6 @@ __all__ = [
     "CodeQuestionTemplate",
     "FiniteParameter",
     "ParameterValue",
-    "TemplateInstanceGenerator",
     "TemplateValidator",
+    "generate_template_instance",
 ]

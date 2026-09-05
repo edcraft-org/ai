@@ -2,6 +2,7 @@ from edcraft_validator.application import QuestionTemplateApplication
 from edcraft_validator.domains.code.templates import (
     CodeTemplateProposal,
     TemplateValidator,
+    generate_template_instance,
 )
 from edcraft_validator.executor import ExecutionResult
 from edcraft_validator.generation.models import (
@@ -30,6 +31,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
         }
     )
     provider_calls: list[tuple[str, str | None]] = []
+    instance_seeds: list[int] = []
 
     class StubTemplateGenerator:
         provider = "stub"
@@ -49,9 +51,14 @@ def test_template_application_authors_once_then_generates_locally() -> None:
         provider_calls.append((selection.provider, selection.model))
         return StubTemplateGenerator()
 
+    def instance_generator(approved, seed):
+        instance_seeds.append(seed)
+        return generate_template_instance(approved, seed)
+
     application = QuestionTemplateApplication(
         generator_factory=generator_factory,
         validator_factory=lambda: TemplateValidator(executor=SumExecutor()),
+        instance_generator=instance_generator,
     )
     approved = application.author(
         TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner"),
@@ -61,6 +68,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     instance = application.generate(approved, seed=7)
 
     assert provider_calls == [("stub", "stub-model")]
+    assert instance_seeds == [7]
     assert approved.validation.cases_validated == 4
     assert approved.template.topic == "arithmetic"
     assert approved.template.difficulty == "beginner"

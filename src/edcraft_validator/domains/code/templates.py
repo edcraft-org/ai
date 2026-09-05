@@ -942,61 +942,52 @@ class TemplateValidator:
             )
 
 
-class TemplateInstanceGenerator:
-    """Expand approved templates without AI calls or per-instance validation."""
+def generate_template_instance(
+    approved: ApprovedCodeQuestionTemplate, seed: int
+) -> TemplateQuestionInstance:
+    """Expand an approved template without AI calls or per-instance validation."""
+    template = approved.template
+    digest = template_sha256(template)
+    if digest != approved.validation.template_sha256:
+        raise ValueError("approved template content has changed since validation")
+    if approved.validation.cases_validated != _case_count(template):
+        raise ValueError("approved template does not cover its complete input domain")
 
-    provider = "template"
-    model = None
-
-    def generate(
-        self, approved: ApprovedCodeQuestionTemplate, *, seed: int
-    ) -> TemplateQuestionInstance:
-        template = approved.template
-        digest = template_sha256(template)
-        if digest != approved.validation.template_sha256:
-            raise ValueError("approved template content has changed since validation")
-        if approved.validation.cases_validated != _case_count(template):
-            raise ValueError(
-                "approved template does not cover its complete input domain"
-            )
-
-        inputs = {
-            parameter.name: copy.deepcopy(
-                _seeded_choice(parameter.values, digest, seed, parameter.name)
-            )
-            for parameter in template.parameters
-        }
-        names = tuple(inputs)
-        answer = SafeExpression(template.answer_expression, names).evaluate(inputs)
-        distractors = [
-            SafeExpression(recipe.expression, names).evaluate(inputs)
-            for recipe in template.distractors
-        ]
-        distractor_reasons = [
-            render_template(recipe.reason_template, inputs)
-            for recipe in template.distractors
-        ]
-        question = GeneratedQuestion(
-            code=template.code,
-            entry_function=template.entry_function,
-            inputs=inputs,
-            question=render_template(
-                template.question_template, inputs, require_all=True
-            ),
-            proposed_answer=answer,
-            distractors=distractors,
-            distractor_reasons=distractor_reasons,
-            answer_target=template.answer_target,
-            question_type=template.question_type,
+    inputs = {
+        parameter.name: copy.deepcopy(
+            _seeded_choice(parameter.values, digest, seed, parameter.name)
         )
-        return TemplateQuestionInstance(
-            template_id=template.template_id,
-            template_version=template.version,
-            template_sha256=digest,
-            seed=seed,
-            parameters=inputs,
-            question=question,
-        )
+        for parameter in template.parameters
+    }
+    names = tuple(inputs)
+    answer = SafeExpression(template.answer_expression, names).evaluate(inputs)
+    distractors = [
+        SafeExpression(recipe.expression, names).evaluate(inputs)
+        for recipe in template.distractors
+    ]
+    distractor_reasons = [
+        render_template(recipe.reason_template, inputs)
+        for recipe in template.distractors
+    ]
+    question = GeneratedQuestion(
+        code=template.code,
+        entry_function=template.entry_function,
+        inputs=inputs,
+        question=render_template(template.question_template, inputs, require_all=True),
+        proposed_answer=answer,
+        distractors=distractors,
+        distractor_reasons=distractor_reasons,
+        answer_target=template.answer_target,
+        question_type=template.question_type,
+    )
+    return TemplateQuestionInstance(
+        template_id=template.template_id,
+        template_version=template.version,
+        template_sha256=digest,
+        seed=seed,
+        parameters=inputs,
+        question=question,
+    )
 
 
 class SafeExpression:
