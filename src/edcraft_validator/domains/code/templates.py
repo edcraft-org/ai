@@ -22,7 +22,6 @@ from edcraft_validator.domains.code.capabilities import (
     ProgrammingTopic,
     code_template_profile,
     extract_code_features,
-    profile_semantic_violation,
 )
 from edcraft_validator.executor import DockerExecutor, ExecutionBackend, ExecutionResult
 from edcraft_validator.generation.models import (
@@ -805,20 +804,6 @@ class TemplateValidator:
                 f"features: {', '.join(sorted(missing))}",
                 code="PROFILE_MISMATCH",
                 field="code",
-            )
-
-        semantic_violation = profile_semantic_violation(
-            profile,
-            template.code,
-            template.entry_function,
-            template.answer_expression,
-        )
-        if semantic_violation is not None:
-            field, message = semantic_violation
-            raise TemplateValidationError(
-                message,
-                code="PROFILE_MISMATCH",
-                field=field,
             )
 
     @staticmethod
