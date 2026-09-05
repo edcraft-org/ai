@@ -142,7 +142,9 @@ Rendered misconception reasons are preserved alongside their selected distractor
 - Topic selections: `arithmetic`, `conditionals`, `loops`, `functions`, and
   `lists`.
 - Difficulties: `beginner`, `intermediate`, and `advanced`, each with a distinct
-  validator-backed authoring profile per topic.
+  validator-backed authoring profile per topic. Profiles enforce parameter and answer
+  contracts plus broad, reachable code features without prescribing one exact formula
+  or AST layout.
 - Template parameters: one to three explicitly typed finite parameters. Supported
   kinds are integers, booleans, bounded printable strings, and bounded integer
   lists. Each parameter has two to four unique values.
