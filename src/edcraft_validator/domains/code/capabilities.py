@@ -258,17 +258,6 @@ def code_template_profile(
     return CODE_TEMPLATE_PROFILES[(topic, difficulty)]
 
 
-def answer_target_for_topic(topic: ProgrammingTopic) -> AnswerTarget:
-    targets = {
-        profile.answer_target
-        for profile in CODE_TEMPLATE_PROFILES.values()
-        if profile.topic == topic
-    }
-    if len(targets) != 1:
-        raise RuntimeError(f"topic {topic!r} must have exactly one answer target")
-    return targets.pop()
-
-
 def extract_code_features(code: str, entry_function: str) -> frozenset[CodeFeature]:
     """Extract the structural features used by code capability profiles."""
     tree = ast.parse(code)

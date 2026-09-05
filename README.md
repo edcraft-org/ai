@@ -216,7 +216,7 @@ domains/code/evaluation.py         real-provider code-template evaluation
 domains/code/templates.py          code template schema, prompt, approval, expansion
 domains/code/capabilities.py       supported profiles and their machine-readable rules
 generation/base.py                 provider-neutral template protocol
-generation/registry.py             explicit provider selection and extension point
+generation/registry.py             built-in provider lookup
 generation/openai.py               OpenAI and SocLaas adapters
 generation/ollama.py               Ollama adapter
 executor.py + _worker.py            batched Docker execution
@@ -225,9 +225,9 @@ validation/contracts.py            shared structured validation evidence
 
 To use another model from an existing provider, pass `--model`; no domain code
 changes are required. To add another provider, implement
-`QuestionTemplateGenerator.generate_proposal`, register its factory with
-`register_template_provider`, and add an adapter test. The application and CLI do
-not need provider-specific branches.
+`QuestionTemplateGenerator.generate_proposal`, add its factory to the provider
+registry, and add an adapter test. The application and CLI do not need
+provider-specific branches.
 
 Future math and physics domains should have their own template schema, approval
 tools, and instance generator under `domains/`. SymPy or Lean should not be added

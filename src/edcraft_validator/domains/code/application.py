@@ -8,9 +8,9 @@ from collections.abc import Callable
 from edcraft_validator.domains.code.templates import (
     ApprovedCodeQuestionTemplate,
     CodeQuestionTemplate,
-    TemplateInstanceGenerator,
     TemplateQuestionInstance,
     TemplateValidator,
+    generate_template_instance,
     normalize_code_template_proposal,
 )
 from edcraft_validator.generation.base import QuestionTemplateGenerator
@@ -25,6 +25,9 @@ TemplateGeneratorFactory = Callable[
     [TemplateProviderSelection], QuestionTemplateGenerator
 ]
 TemplateValidatorFactory = Callable[[], TemplateValidator]
+TemplateInstanceFactory = Callable[
+    [ApprovedCodeQuestionTemplate, int], TemplateQuestionInstance
+]
 
 
 class QuestionTemplateApplication:
@@ -35,11 +38,11 @@ class QuestionTemplateApplication:
         *,
         generator_factory: TemplateGeneratorFactory = create_template_generator,
         validator_factory: TemplateValidatorFactory = TemplateValidator,
-        instance_generator: TemplateInstanceGenerator | None = None,
+        instance_generator: TemplateInstanceFactory = generate_template_instance,
     ) -> None:
         self.generator_factory = generator_factory
         self.validator_factory = validator_factory
-        self.instance_generator = instance_generator or TemplateInstanceGenerator()
+        self.instance_generator = instance_generator
 
     def author(
         self,
@@ -76,4 +79,4 @@ class QuestionTemplateApplication:
     def generate(
         self, approved: ApprovedCodeQuestionTemplate, *, seed: int
     ) -> TemplateQuestionInstance:
-        return self.instance_generator.generate(approved, seed=seed)
+        return self.instance_generator(approved, seed)

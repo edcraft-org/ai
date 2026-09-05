@@ -16,10 +16,10 @@ from edcraft_validator.domains.code.templates import (
     CodeTemplateProposal,
     FiniteParameter,
     SafeExpression,
-    TemplateInstanceGenerator,
     TemplateValidationError,
     TemplateValidator,
     build_template_prompt,
+    generate_template_instance,
     normalize_code_template_proposal,
     parse_code_question_template,
     parse_code_template_proposal,
@@ -152,8 +152,8 @@ def test_validates_every_case_once_then_generates_without_executor() -> None:
     assert executor.batch_calls == 1
     assert len(executor.calls) == 8
 
-    first = TemplateInstanceGenerator().generate(approved, seed=42)
-    second = TemplateInstanceGenerator().generate(approved, seed=42)
+    first = generate_template_instance(approved, seed=42)
+    second = generate_template_instance(approved, seed=42)
 
     assert first == second
     assert len(executor.calls) == 8
@@ -205,7 +205,7 @@ def test_supports_loop_iteration_questions() -> None:
             ]
 
     approved = TemplateValidator(executor=LoopExecutor()).validate(loop_template)
-    instance = TemplateInstanceGenerator().generate(approved, seed=3)
+    instance = generate_template_instance(approved, seed=3)
 
     assert approved.validation.cases_validated == 2
     assert instance.question.answer_target == "loop_iterations"
@@ -629,7 +629,7 @@ def test_every_example_template_validates_with_the_real_tracer(path: Path) -> No
     raw_template = CodeQuestionTemplate.model_validate_json(path.read_text())
 
     approved = TemplateValidator(executor=TrustedBatchExecutor()).validate(raw_template)
-    instance = TemplateInstanceGenerator().generate(approved, seed=11)
+    instance = generate_template_instance(approved, seed=11)
 
     expected_cases = 1
     for parameter in raw_template.parameters:
@@ -902,7 +902,7 @@ def test_refuses_to_expand_a_changed_approved_template() -> None:
     approved.template.answer_expression = "a + b + c"
 
     with pytest.raises(ValueError, match="changed since validation"):
-        TemplateInstanceGenerator().generate(approved, seed=1)
+        generate_template_instance(approved, seed=1)
 
 
 def test_refuses_incomplete_approval_evidence() -> None:
@@ -910,4 +910,4 @@ def test_refuses_incomplete_approval_evidence() -> None:
     approved.validation.cases_validated = 7
 
     with pytest.raises(ValueError, match="complete input domain"):
-        TemplateInstanceGenerator().generate(approved, seed=1)
+        generate_template_instance(approved, seed=1)
