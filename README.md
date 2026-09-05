@@ -17,7 +17,7 @@ topic + difficulty + provider
   -> all parameter combinations run in one Docker batch
   -> globally valid distractor recipes selected from the candidates
   -> answers and selected distractors checked for every combination
-  -> approved template + validation hash
+  -> approved template + versioned validation evidence and hash
   -> deterministic questions generated locally from seeds
 ```
 
@@ -114,7 +114,10 @@ uv run python -m edcraft_validator.template validate \
 Approval checks every value in the template's Cartesian product. All cases are
 sent to one disposable Docker container to avoid repeated startup costs.
 Rejected templates raise structured diagnostics with a stable code, relevant
-field, and failing parameter values when available; messages remain human-readable.
+field, failing parameter values, and evidence from every completed check when
+available; messages remain human-readable. Approved templates record the validator
+version, assurance level, duration, and details for each structure, expression,
+execution, answer, distractor, and rendering check.
 
 ## Generate concrete questions locally
 
@@ -204,15 +207,6 @@ event limit stops trace data growth deterministically before the container reach
 its memory ceiling. EdCraft's pinned `step-tracer` supplies return values and
 execution counts; it is not treated as a sandbox outside this Docker boundary.
 
-The standalone concrete-question validator remains available for debugging,
-examples, and future validation tools:
-
-```bash
-uv run python -m edcraft_validator examples/valid_square.json
-```
-
-It is not part of normal template-based question expansion.
-
 ## Architecture
 
 ```text
@@ -226,7 +220,7 @@ generation/registry.py             explicit provider selection and extension poi
 generation/openai.py               OpenAI and SocLaas adapters
 generation/ollama.py               Ollama adapter
 executor.py + _worker.py            batched Docker execution
-domains/code/pipeline.py           standalone concrete-question validation pipeline
+validation/contracts.py            shared structured validation evidence
 ```
 
 To use another model from an existing provider, pass `--model`; no domain code

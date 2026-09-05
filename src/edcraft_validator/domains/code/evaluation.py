@@ -24,6 +24,7 @@ from edcraft_validator.generation.models import (
     TemplateProviderSelection,
 )
 from edcraft_validator.generation.registry import create_template_generator
+from edcraft_validator.validation.contracts import ValidationEvidence
 
 GeneratorFactory = Callable[[TemplateProviderSelection], QuestionTemplateGenerator]
 ValidatorFactory = Callable[[], TemplateValidator]
@@ -53,6 +54,7 @@ class TemplateEvaluationAttempt(BaseModel):
     ) = None
     failure_code: str | None = None
     error: str | None = None
+    validation_evidence: list[ValidationEvidence] = Field(default_factory=list)
     approved_template: ApprovedCodeQuestionTemplate | None = None
 
 
@@ -190,6 +192,9 @@ class TemplateEvaluator:
                 failure_stage=stage,
                 failure_code=code,
                 error=str(exc),
+                validation_evidence=(
+                    exc.evidence if isinstance(exc, TemplateValidationError) else []
+                ),
             )
 
         provenance = approved.authoring
@@ -206,6 +211,7 @@ class TemplateEvaluator:
             generation_duration_ms=provenance.generation_duration_ms,
             validation_duration_ms=provenance.validation_duration_ms,
             total_duration_ms=(time.perf_counter() - started) * 1000,
+            validation_evidence=approved.validation.evidence,
             approved_template=approved,
         )
 
