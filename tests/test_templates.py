@@ -981,6 +981,66 @@ def test_distractor_selection_is_not_dependent_on_greedy_candidate_order() -> No
     ]
 
 
+def test_authoring_evaluates_each_candidate_once_per_case(monkeypatch) -> None:
+    value = template().model_dump(mode="json")
+    value["distractors"] = [
+        {"expression": "0", "reason_template": "Uses zero."},
+        {"expression": "a + b + c", "reason_template": "Adds c."},
+        {"expression": "a - b - c", "reason_template": "Subtracts b."},
+    ]
+    item = CodeQuestionTemplate.model_validate(value)
+    parse_counts: dict[str, int] = {}
+    evaluation_counts: dict[tuple[str, tuple[tuple[str, int], ...]], int] = {}
+    original_init = SafeExpression.__init__
+    original_evaluate = SafeExpression.evaluate
+
+    def counting_init(self, source, names):
+        parse_counts[source] = parse_counts.get(source, 0) + 1
+        original_init(self, source, names)
+
+    def counting_evaluate(self, values):
+        key = (self.source, tuple(sorted(values.items())))
+        evaluation_counts[key] = evaluation_counts.get(key, 0) + 1
+        return original_evaluate(self, values)
+
+    monkeypatch.setattr(SafeExpression, "__init__", counting_init)
+    monkeypatch.setattr(SafeExpression, "evaluate", counting_evaluate)
+
+    TemplateValidator(executor=ArithmeticExecutor()).validate(item, num_distractors=2)
+
+    sources = {
+        item.answer_expression,
+        *(candidate.expression for candidate in item.distractors),
+    }
+    assert parse_counts == {source: 1 for source in sources}
+    assert {source for source, _ in evaluation_counts} == sources
+    assert len(evaluation_counts) == len(sources) * 8
+    assert set(evaluation_counts.values()) == {1}
+
+
+def test_candidate_selection_rejects_pairwise_collisions_across_cases() -> None:
+    value = template().model_dump(mode="json")
+    value["distractors"] = [
+        {"expression": "0", "reason_template": "Uses zero."},
+        {"expression": "a - 2", "reason_template": "Offsets a."},
+        {
+            "expression": "0 if a == 4 else b - 5",
+            "reason_template": "Mixes parameter offsets.",
+        },
+    ]
+    item = CodeQuestionTemplate.model_validate(value)
+
+    with pytest.raises(TemplateValidationError, match="no set of 2") as error:
+        TemplateValidator(executor=ArithmeticExecutor()).validate(
+            item, num_distractors=2
+        )
+
+    assert error.value.code == "DISTRACTOR_SELECTION_FAILED"
+    assert "candidate 1 duplicates candidate 0" in str(error.value)
+    assert "candidate 2 duplicates candidate 0" in str(error.value)
+    assert "candidate 2 duplicates candidate 1" in str(error.value)
+
+
 def test_candidate_selection_reports_when_too_few_are_globally_valid() -> None:
     data = template().model_dump()
     for distractor in data["distractors"]:
