@@ -67,6 +67,36 @@ def template(**changes: Any) -> CodeQuestionTemplate:
     return CodeQuestionTemplate.model_validate(data)
 
 
+def relaxed_profile_template(
+    filename: str,
+    *,
+    code: str,
+    answer_expression: str,
+    parameter_values: list[list[Any]] | None = None,
+) -> CodeQuestionTemplate:
+    data = json.loads((TEMPLATE_DIR / filename).read_text())
+    data["code"] = code
+    data["answer_expression"] = answer_expression
+    if parameter_values is not None:
+        for parameter, values in zip(data["parameters"], parameter_values, strict=True):
+            parameter["values"] = values
+
+    answer_kind = code_template_profile(data["topic"], data["difficulty"]).answer_kind
+    expressions = (
+        ["[901]", "[902]", "[903]"]
+        if answer_kind == "integer_list"
+        else ["901", "902", "903"]
+    )
+    data["distractors"] = [
+        {
+            "expression": expression,
+            "reason_template": "Uses an unrelated fixed result.",
+        }
+        for expression in expressions
+    ]
+    return CodeQuestionTemplate.model_validate(data)
+
+
 class ArithmeticExecutor:
     def __init__(self) -> None:
         self.calls: list[dict[str, int]] = []
@@ -218,8 +248,9 @@ def test_loop_topic_requests_iteration_count_template() -> None:
     )
 
     assert "answer_target=loop_iterations" in prompt
-    assert "exactly one integer parameter named n" in prompt
-    assert "answer_expression exactly `n`" in prompt
+    assert "exactly one positive integer parameter named n" in prompt
+    assert "loop behavior" in prompt
+    assert "answer_expression exactly" not in prompt
 
 
 def test_beginner_arithmetic_prompt_forbids_operator_parameter() -> None:
@@ -435,89 +466,259 @@ def test_rejects_an_unused_entry_parameter_before_execution() -> None:
     assert "c" in str(error.value)
 
 
-def test_loop_profile_enforces_its_exact_range_structure() -> None:
-    value = CodeQuestionTemplate.model_validate_json(
-        (TEMPLATE_DIR / "loop_iterations.json").read_text()
-    ).model_copy(
-        update={
-            "code": (
+@pytest.mark.parametrize(
+    "value",
+    [
+        relaxed_profile_template(
+            "conditional_string.json",
+            code=(
+                "def route(mode):\n"
+                "    if mode == 'routine':\n"
+                "        return 10\n"
+                "    if mode == 'priority':\n"
+                "        return 20\n"
+                "    return 30"
+            ),
+            answer_expression="1 if mode == 'routine' else 2",
+            parameter_values=[["priority", "routine", "deferred"]],
+        ),
+        relaxed_profile_template(
+            "conditional_nested.json",
+            code=(
+                "def classify(score, override):\n"
+                "    if score >= 60:\n"
+                "        if override:\n"
+                "            return 'fast'\n"
+                "        return 'review'\n"
+                "    if override:\n"
+                "        return 'manual'\n"
+                "    return 'low'"
+            ),
+            answer_expression="2",
+        ),
+        relaxed_profile_template(
+            "loop_iterations.json",
+            code=(
                 "def accumulate(n):\n"
                 "    total = 0\n"
                 "    for i in range(n + 1):\n"
                 "        total += i\n"
                 "    return total"
-            )
-        }
-    )
+            ),
+            answer_expression="n + 1",
+        ),
+        relaxed_profile_template(
+            "loop_sequential.json",
+            code=(
+                "def accumulate(n, m):\n"
+                "    total = 0\n"
+                "    for i in range(n + 1):\n"
+                "        total += i\n"
+                "    for j in range(m * 2):\n"
+                "        total += j\n"
+                "    return total"
+            ),
+            answer_expression="n + 1 + 2 * m",
+        ),
+        relaxed_profile_template(
+            "loop_nested.json",
+            code=(
+                "def accumulate(n, m):\n"
+                "    total = 0\n"
+                "    for i in range(n + 1):\n"
+                "        for j in range(m):\n"
+                "            total += i + j\n"
+                "    return total"
+            ),
+            answer_expression="(n + 1) * (m + 1)",
+        ),
+        relaxed_profile_template(
+            "function_helper.json",
+            code=(
+                "def increment(value):\n"
+                "    return value + 1\n\n"
+                "def double_increment(value):\n"
+                "    return increment(value) + 1\n\n"
+                "def calculate(value):\n"
+                "    return double_increment(value)"
+            ),
+            answer_expression="3",
+        ),
+        relaxed_profile_template(
+            "function_loop_helper.json",
+            code=(
+                "def increment(value):\n"
+                "    return value + 1\n\n"
+                "def calculate(n):\n"
+                "    total = 0\n"
+                "    for i in range(n + 1):\n"
+                "        total += increment(i)\n"
+                "    return total"
+            ),
+            answer_expression="n + 3",
+        ),
+        relaxed_profile_template(
+            "function_nested_helpers.json",
+            code=(
+                "def increment(value):\n"
+                "    return value + 1\n\n"
+                "def transform(value):\n"
+                "    return increment(value)\n\n"
+                "def calculate(n):\n"
+                "    total = 0\n"
+                "    for i in range(n + 1):\n"
+                "        total += transform(i)\n"
+                "    return total"
+            ),
+            answer_expression="2 * n + 4",
+        ),
+        relaxed_profile_template(
+            "list_sum.json",
+            code=(
+                "def total(values):\n"
+                "    smallest = min(values)\n"
+                "    largest = max(values)\n"
+                "    return smallest + largest"
+            ),
+            answer_expression="min(values) + max(values)",
+        ),
+        relaxed_profile_template(
+            "list_sorted.json",
+            code=(
+                "def arrange(values):\n"
+                "    ordered = sorted(values)\n"
+                "    return ordered + [len(values)]"
+            ),
+            answer_expression="sorted(values) + [len(values)]",
+        ),
+    ],
+    ids=[
+        "conditional-intermediate",
+        "conditional-advanced",
+        "loop-beginner",
+        "loop-intermediate",
+        "loop-advanced",
+        "function-beginner",
+        "function-intermediate",
+        "function-advanced",
+        "list-beginner",
+        "list-intermediate",
+    ],
+)
+def test_profiles_accept_alternative_programs_and_answer_formulas(
+    value: CodeQuestionTemplate,
+) -> None:
+    approved = TemplateValidator(executor=TrustedBatchExecutor()).validate(value)
 
-    with pytest.raises(TemplateValidationError) as error:
-        TemplateValidator(executor=TrustedBatchExecutor()).validate(value)
-
-    assert error.value.code == "PROFILE_MISMATCH"
-    assert error.value.field == "code"
-    assert "range(n)" in str(error.value)
+    assert approved.validation.cases_validated >= 2
 
 
-def test_function_profile_enforces_its_exact_call_count_expression() -> None:
-    value = CodeQuestionTemplate.model_validate_json(
-        (TEMPLATE_DIR / "function_loop_helper.json").read_text()
-    ).model_copy(update={"answer_expression": "n + 3"})
-
-    with pytest.raises(TemplateValidationError) as error:
-        TemplateValidator(executor=TrustedBatchExecutor()).validate(value)
-
-    assert error.value.code == "PROFILE_MISMATCH"
-    assert error.value.field == "answer_expression"
-    assert "n + 2" in str(error.value)
-
-
-def test_list_profile_enforces_the_literal_beginner_operation() -> None:
-    value = CodeQuestionTemplate.model_validate_json(
-        (TEMPLATE_DIR / "list_sum.json").read_text()
-    ).model_copy(update={"code": "def total(values):\n    return max(values)"})
-
-    with pytest.raises(TemplateValidationError) as error:
-        TemplateValidator(executor=TrustedBatchExecutor()).validate(value)
-
-    assert error.value.code == "PROFILE_MISMATCH"
-    assert error.value.field == "code"
-    assert "return sum(values)" in str(error.value)
-
-
-def test_conditional_profile_enforces_its_teaching_values() -> None:
-    data = json.loads((TEMPLATE_DIR / "conditional_string.json").read_text())
-    data["parameters"][0]["values"] = ["first", "second", "other"]
+@pytest.mark.parametrize(
+    ("filename", "code", "missing_feature"),
+    [
+        (
+            "conditional_string.json",
+            (
+                "def route(mode):\n"
+                "    if mode == 'priority':\n"
+                "        return 1\n"
+                "    return 0"
+            ),
+            "sequential_conditionals",
+        ),
+        (
+            "conditional_nested.json",
+            (
+                "def classify(score, override):\n"
+                "    if score >= 50:\n"
+                "        return 'score'\n"
+                "    if override:\n"
+                "        return 'override'\n"
+                "    return 'neither'"
+            ),
+            "nested_conditional",
+        ),
+        ("loop_iterations.json", "def accumulate(n):\n    return n + 1", "loop"),
+        (
+            "loop_sequential.json",
+            (
+                "def accumulate(n, m):\n"
+                "    total = 0\n"
+                "    for i in range(n):\n"
+                "        for j in range(m):\n"
+                "            total += i + j\n"
+                "    return total"
+            ),
+            "sequential_loops",
+        ),
+        (
+            "loop_nested.json",
+            (
+                "def accumulate(n, m):\n"
+                "    total = 0\n"
+                "    for i in range(n):\n"
+                "        total += i\n"
+                "    for j in range(m):\n"
+                "        total += j\n"
+                "    return total"
+            ),
+            "nested_loop",
+        ),
+        (
+            "function_helper.json",
+            "def calculate(value):\n    return value + 1",
+            "helper_function",
+        ),
+        (
+            "function_loop_helper.json",
+            (
+                "def increment(value):\n"
+                "    return value + 1\n\n"
+                "def calculate(n):\n"
+                "    return increment(n)"
+            ),
+            "loop",
+        ),
+        (
+            "function_nested_helpers.json",
+            (
+                "def increment(value):\n"
+                "    return value + 1\n\n"
+                "def double(value):\n"
+                "    return value * 2\n\n"
+                "def calculate(n):\n"
+                "    total = 0\n"
+                "    for i in range(n):\n"
+                "        total += increment(i) + double(i)\n"
+                "    return total"
+            ),
+            "nested_helper",
+        ),
+        (
+            "list_sum.json",
+            "def total(values):\n    return values[0] + values[-1]",
+            "list_aggregate",
+        ),
+        (
+            "list_sorted.json",
+            "def arrange(values):\n    return values",
+            "list_sort",
+        ),
+    ],
+)
+def test_profiles_still_reject_missing_broad_code_features(
+    filename: str, code: str, missing_feature: str
+) -> None:
+    data = json.loads((TEMPLATE_DIR / filename).read_text())
+    data["code"] = code
     value = CodeQuestionTemplate.model_validate(data)
 
     with pytest.raises(TemplateValidationError) as error:
         TemplateValidator(executor=TrustedBatchExecutor()).validate(value)
 
     assert error.value.code == "PROFILE_MISMATCH"
-    assert error.value.field == "parameters"
-    assert "express" in str(error.value)
-
-
-def test_conditional_profile_enforces_sequential_comparisons() -> None:
-    value = CodeQuestionTemplate.model_validate_json(
-        (TEMPLATE_DIR / "conditional_string.json").read_text()
-    ).model_copy(
-        update={
-            "code": (
-                "def route(mode):\n"
-                "    if mode == 'standard':\n"
-                "        return 2\n"
-                "    if mode == 'express':\n"
-                "        return 1\n"
-                "    return 3"
-            )
-        }
-    )
-
-    with pytest.raises(TemplateValidationError) as error:
-        TemplateValidator(executor=TrustedBatchExecutor()).validate(value)
-
-    assert error.value.code == "PROFILE_MISMATCH"
     assert error.value.field == "code"
+    assert missing_feature in str(error.value)
 
 
 def test_proposal_normalization_derives_target_aware_loop_wording() -> None:
@@ -562,19 +763,20 @@ def test_every_topic_and_difficulty_has_distinct_authoring_guidance() -> None:
     }
 
     assert len(set(prompts.values())) == 15
-    assert "two sequential range loops" in prompts[("loops", "intermediate")]
-    assert "one nested range loop" in prompts[("loops", "advanced")]
-    assert "middle helper calls the leaf" in prompts[("functions", "advanced")]
-    assert "`3 * n + 2`" in prompts[("functions", "advanced")]
-    assert "body must be exactly `return sum(values)`" in prompts[("lists", "beginner")]
-    assert '"required_parameter_values"' in prompts[("conditionals", "intermediate")]
-    assert (
-        '1 if mode == \\"express\\" else 2' in prompts[("conditionals", "intermediate")]
+    assert "reachable sequential loops" in prompts[("loops", "intermediate")]
+    assert "nested-loop behavior" in prompts[("loops", "advanced")]
+    assert "multi-level" in prompts[("functions", "advanced")]
+    assert "allowlisted aggregate operation" in prompts[("lists", "beginner")]
+    assert "distinct mode values" in prompts[("conditionals", "intermediate")]
+    assert "nested conditional" in prompts[("conditionals", "advanced")]
+    assert "call sorted" in prompts[("lists", "intermediate")]
+    assert all(
+        "answer_expression" not in profile.guidance
+        for profile in CODE_TEMPLATE_PROFILES.values()
     )
-    assert "1 if override else" in prompts[("conditionals", "advanced")]
-    assert (
-        "body must be exactly `return sorted(values)`"
-        in prompts[("lists", "intermediate")]
+    assert all(
+        profile.required_parameter_values is None
+        for profile in CODE_TEMPLATE_PROFILES.values()
     )
 
 
@@ -727,7 +929,7 @@ def test_list_topic_requests_an_integer_list_template() -> None:
     )
 
     assert "integer_list parameter named values" in prompt
-    assert "sum(values)" in prompt
+    assert "allowlisted aggregate operation" in prompt
 
 
 def test_rejects_a_distractor_that_is_correct_for_any_case() -> None:

@@ -142,7 +142,9 @@ Rendered misconception reasons are preserved alongside their selected distractor
 - Topic selections: `arithmetic`, `conditionals`, `loops`, `functions`, and
   `lists`.
 - Difficulties: `beginner`, `intermediate`, and `advanced`, each with a distinct
-  validator-backed authoring profile per topic.
+  validator-backed authoring profile per topic. Profiles enforce parameter and answer
+  contracts plus broad, reachable code features without prescribing one exact formula
+  or AST layout.
 - Template parameters: one to three explicitly typed finite parameters. Supported
   kinds are integers, booleans, bounded printable strings, and bounded integer
   lists. Each parameter has two to four unique values.
@@ -289,7 +291,9 @@ repetition makes one real provider call per selected profile, so review the call
 count before running a paid provider. The JSONL artifact and summary are written
 even when attempts fail; the command exits non-zero if any attempt fails.
 
-The current local baseline for `qwen2.5-coder:14b` is 10 approved templates out of
-15 profiles (66.7%), averaging 44.1 seconds per attempt with the bounded v8 prompt.
-Rejected model proposals are expected evaluation outcomes; inspect their structured
-failure codes rather than treating rejection as a validator failure.
+The recorded pre-relaxation baseline for `qwen2.5-coder:14b` was 10 approved
+templates out of 15 profiles (66.7%), averaging 44.1 seconds per attempt with the
+bounded v8 prompt. Rerun the matrix before treating this as the baseline for the
+broader profile contracts. Rejected model proposals are expected evaluation
+outcomes; inspect their structured failure codes rather than treating rejection as
+a validator failure.
