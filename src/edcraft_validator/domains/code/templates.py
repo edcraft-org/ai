@@ -1207,7 +1207,7 @@ class SafeExpression:
                 f"{MAX_EXPRESSION_SEQUENCE_LENGTH} items"
             )
         if isinstance(sequence, list):
-            payload_size = sum(cls._value_size(item) for item in sequence)
+            payload_size = cls._bounded_value_size(sequence) - 1
             if 1 + payload_size * repetitions > MAX_EXPRESSION_VALUE_SIZE:
                 raise TemplateValidationError(
                     "expression value exceeds cumulative size limit of "
@@ -1216,71 +1216,71 @@ class SafeExpression:
 
     @classmethod
     def _bounded(cls, value: Any) -> Any:
-        remaining = [MAX_EXPRESSION_VALUE_SIZE]
-        cls._validate_bounded_value(value, remaining=remaining, depth=0)
+        cls._bounded_value_size(value)
         return value
 
     @classmethod
-    def _validate_bounded_value(
-        cls, value: Any, *, remaining: list[int], depth: int
-    ) -> None:
+    def _bounded_value_size(
+        cls,
+        value: Any,
+        *,
+        depth: int = 0,
+        remaining_size: int = MAX_EXPRESSION_VALUE_SIZE,
+    ) -> int:
         if depth > MAX_EXPRESSION_VALUE_DEPTH:
             raise TemplateValidationError(
                 f"expression value exceeds nesting depth {MAX_EXPRESSION_VALUE_DEPTH}"
             )
         if type(value) is bool:
-            cls._spend_value_budget(remaining, 1)
-            return
-        if type(value) is int:
+            size = 1
+        elif type(value) is int:
             if abs(value) > MAX_EXPRESSION_INTEGER_ABS:
                 raise TemplateValidationError(
                     f"expression integer result exceeds {MAX_EXPRESSION_INTEGER_ABS}"
                 )
-            cls._spend_value_budget(remaining, 1)
-            return
-        if type(value) is float:
+            size = 1
+        elif type(value) is float:
             if not math.isfinite(value) or abs(value) > MAX_EXPRESSION_FLOAT_ABS:
                 raise TemplateValidationError(
                     "expression float result is non-finite or exceeds "
                     f"{MAX_EXPRESSION_FLOAT_ABS:g}"
                 )
-            cls._spend_value_budget(remaining, 1)
-            return
-        if isinstance(value, (str, list)):
+            size = 1
+        elif isinstance(value, str):
             if len(value) > MAX_EXPRESSION_SEQUENCE_LENGTH:
                 raise TemplateValidationError(
                     "expression sequence result exceeds "
                     f"{MAX_EXPRESSION_SEQUENCE_LENGTH} items"
                 )
-            cls._spend_value_budget(
-                remaining, 1 + len(value) if isinstance(value, str) else 1
+            size = 1 + len(value)
+        elif isinstance(value, list):
+            if len(value) > MAX_EXPRESSION_SEQUENCE_LENGTH:
+                raise TemplateValidationError(
+                    "expression sequence result exceeds "
+                    f"{MAX_EXPRESSION_SEQUENCE_LENGTH} items"
+                )
+            size = 1
+            cls._ensure_value_size(size, remaining_size)
+            for item in value:
+                size += cls._bounded_value_size(
+                    item,
+                    depth=depth + 1,
+                    remaining_size=remaining_size - size,
+                )
+        else:
+            raise TemplateValidationError(
+                f"expression produced unsupported value type {type(value).__name__}"
             )
-            if isinstance(value, list):
-                for item in value:
-                    cls._validate_bounded_value(
-                        item, remaining=remaining, depth=depth + 1
-                    )
-            return
-        raise TemplateValidationError(
-            f"expression produced unsupported value type {type(value).__name__}"
-        )
+        cls._ensure_value_size(size, remaining_size)
+        return size
 
     @staticmethod
-    def _spend_value_budget(remaining: list[int], amount: int) -> None:
-        remaining[0] -= amount
-        if remaining[0] < 0:
+    def _ensure_value_size(size: int, limit: int) -> None:
+        if size > limit:
             raise TemplateValidationError(
                 "expression value exceeds cumulative size limit of "
                 f"{MAX_EXPRESSION_VALUE_SIZE}"
             )
-
-    @classmethod
-    def _value_size(cls, value: Any) -> int:
-        if isinstance(value, str):
-            return 1 + len(value)
-        if isinstance(value, list):
-            return 1 + sum(cls._value_size(item) for item in value)
-        return 1
 
 
 def build_template_prompt(request: TemplateAuthoringRequest) -> str:

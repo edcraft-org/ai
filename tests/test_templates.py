@@ -1,3 +1,4 @@
+import ast
 import json
 from pathlib import Path
 from typing import Any
@@ -906,11 +907,45 @@ def test_safe_expression_integer_limit_has_an_explicit_boundary() -> None:
         SafeExpression("10_000 * 10_000 * 10 + 1", ()).evaluate({})
 
 
+def test_safe_expression_float_limit_has_an_explicit_boundary() -> None:
+    assert SafeExpression("10_000 * 10_000 * 10.0", ()).evaluate({}) == 1_000_000_000.0
+
+    with pytest.raises(TemplateValidationError, match="float result is non-finite"):
+        SafeExpression("10_000 * 10_000 * 10.0 + 0.5", ()).evaluate({})
+
+    with pytest.raises(TemplateValidationError, match="float result is non-finite"):
+        SafeExpression("value", ("value",)).evaluate({"value": float("inf")})
+
+
+@pytest.mark.parametrize("source", ["2 ** -1", "2 ** 9", "2 ** 2.0", "2 ** True"])
+def test_safe_expression_rejects_invalid_exponents_before_operation(
+    source: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fail_if_called(left: Any, right: Any) -> Any:
+        raise AssertionError(f"attempted exponentiation: {left} ** {right}")
+
+    monkeypatch.setitem(SafeExpression._binary_operators, ast.Pow, fail_if_called)
+
+    with pytest.raises(TemplateValidationError, match="exponents must be integers"):
+        SafeExpression(source, ()).evaluate({})
+
+
 def test_safe_expression_rejects_large_sequence_before_allocation() -> None:
     expression = SafeExpression("label * count", ("label", "count"))
 
     with pytest.raises(TemplateValidationError, match="sequence result exceeds"):
         expression.evaluate({"label": "x", "count": 1_000_000_000})
+
+
+def test_safe_expression_checks_list_repetition_before_operation() -> None:
+    class AllocationBomb(list[Any]):
+        def __mul__(self, count: int) -> list[Any]:
+            raise AssertionError(f"attempted allocation with count {count}")
+
+    expression = SafeExpression("items * count", ("items", "count"))
+
+    with pytest.raises(TemplateValidationError, match="cumulative size limit"):
+        expression.evaluate({"items": AllocationBomb([[0] * 100]), "count": 10})
 
 
 def test_safe_expression_sequence_limit_has_an_explicit_boundary() -> None:
@@ -926,6 +961,40 @@ def test_safe_expression_rejects_nested_sequence_amplification() -> None:
 
     with pytest.raises(TemplateValidationError, match="cumulative size limit"):
         expression.evaluate({})
+
+
+def test_safe_expression_cumulative_size_includes_all_nested_values() -> None:
+    expression = SafeExpression("items", ("items",))
+    at_limit = [[0] * 100 for _ in range(9)] + [[0] * 89]
+    over_limit = [*at_limit[:-1], [0] * 90]
+
+    assert expression.evaluate({"items": at_limit}) == at_limit
+    with pytest.raises(TemplateValidationError, match="cumulative size limit"):
+        expression.evaluate({"items": over_limit})
+
+
+def test_safe_expression_enforces_syntax_and_value_depth_limits() -> None:
+    too_deep_source = "-(" * 21 + "1" + ")" * 21
+    with pytest.raises(TemplateValidationError, match="too deeply nested"):
+        SafeExpression(too_deep_source, ())
+
+    expression = SafeExpression("value", ("value",))
+    at_limit: Any = 0
+    for _ in range(20):
+        at_limit = [at_limit]
+
+    assert expression.evaluate({"value": at_limit}) == at_limit
+    with pytest.raises(TemplateValidationError, match="exceeds nesting depth"):
+        expression.evaluate({"value": [at_limit]})
+
+
+def test_safe_expression_normalizes_runtime_errors() -> None:
+    with pytest.raises(
+        TemplateValidationError, match=r"expression '1 / 0' failed.*division by zero"
+    ) as error:
+        SafeExpression("1 / 0", ()).evaluate({})
+
+    assert isinstance(error.value.__cause__, ZeroDivisionError)
 
 
 def test_safe_expression_rejects_string_formatting_before_allocation() -> None:
