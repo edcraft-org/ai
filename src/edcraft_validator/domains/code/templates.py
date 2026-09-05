@@ -11,6 +11,7 @@ import math
 import operator
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from string import Formatter
 from typing import Any, Literal, TypeVar
 
@@ -257,6 +258,14 @@ class TemplateValidationError(ValueError):
         }
 
 
+@dataclass
+class _DistractorCandidate:
+    index: int
+    expression: SafeExpression | None = None
+    values: list[Any] | None = None
+    rejection: str | None = None
+
+
 def parse_code_question_template(content: str) -> CodeQuestionTemplate:
     """Parse provider JSON after removing redundant finite-domain values."""
     payload = json.loads(content)
@@ -417,29 +426,17 @@ class TemplateValidator:
             details={"topic": template.topic, "difficulty": template.difficulty},
             operation=lambda: self._validate_structure(template, names),
         )
-        if num_distractors is not None:
-            if not 2 <= num_distractors <= 3:
-                raise ValueError("num_distractors must be 2 or 3")
-            template = self._record_check(
-                evidence,
-                check="distractor_selection",
-                assurance="exhaustive",
-                details={**case_details, "selected": num_distractors},
-                operation=lambda: self._select_distractors(
-                    template, names, num_distractors=num_distractors
-                ),
-            )
-        answer, distractors = self._record_check(
+        if num_distractors is not None and not 2 <= num_distractors <= 3:
+            raise ValueError("num_distractors must be 2 or 3")
+        answer, candidates = self._record_check(
             evidence,
             check="expression_safety",
             assurance="bounded",
             details={"distractors": len(template.distractors)},
-            operation=lambda: (
-                SafeExpression(template.answer_expression, names),
-                [
-                    SafeExpression(recipe.expression, names)
-                    for recipe in template.distractors
-                ],
+            operation=lambda: self._parse_expressions(
+                template,
+                names,
+                allow_candidate_rejections=num_distractors is not None,
             ),
         )
         expected_answers = self._record_check(
@@ -449,6 +446,20 @@ class TemplateValidator:
             details=case_details,
             operation=lambda: self._evaluate_answers(template, answer, inputs_cases),
         )
+        if num_distractors is not None:
+            template, candidates = self._record_check(
+                evidence,
+                check="distractor_selection",
+                assurance="exhaustive",
+                details={**case_details, "selected": num_distractors},
+                operation=lambda: self._select_distractors(
+                    template,
+                    inputs_cases,
+                    expected_answers,
+                    candidates,
+                    num_distractors=num_distractors,
+                ),
+            )
         executions = self._record_check(
             evidence,
             check="sandboxed_execution",
@@ -469,9 +480,9 @@ class TemplateValidator:
             evidence,
             check="distractor_consistency",
             assurance="exhaustive",
-            details={**case_details, "distractors": len(distractors)},
+            details={**case_details, "distractors": len(candidates)},
             operation=lambda: self._validate_all_distractors(
-                inputs_cases, expected_answers, distractors
+                inputs_cases, expected_answers, candidates
             ),
         )
         self._record_check(
@@ -537,6 +548,28 @@ class TemplateValidator:
         )
         return result
 
+    @staticmethod
+    def _parse_expressions(
+        template: CodeQuestionTemplate,
+        names: tuple[str, ...],
+        *,
+        allow_candidate_rejections: bool,
+    ) -> tuple[SafeExpression, list[_DistractorCandidate]]:
+        answer = SafeExpression(template.answer_expression, names)
+        candidates: list[_DistractorCandidate] = []
+        for index, recipe in enumerate(template.distractors):
+            try:
+                expression = SafeExpression(recipe.expression, names)
+            except TemplateValidationError as exc:
+                if not allow_candidate_rejections:
+                    raise
+                candidates.append(_DistractorCandidate(index=index, rejection=str(exc)))
+            else:
+                candidates.append(
+                    _DistractorCandidate(index=index, expression=expression)
+                )
+        return answer, candidates
+
     @classmethod
     def _evaluate_answers(
         cls,
@@ -597,10 +630,26 @@ class TemplateValidator:
         cls,
         inputs_cases: list[dict[str, ParameterValue]],
         expected_answers: list[Any],
-        distractors: list[SafeExpression],
+        candidates: list[_DistractorCandidate],
     ) -> None:
-        for inputs, expected_answer in zip(inputs_cases, expected_answers, strict=True):
-            generated = [item.evaluate(inputs) for item in distractors]
+        for candidate in candidates:
+            if candidate.values is not None:
+                continue
+            if candidate.expression is None:
+                raise AssertionError("validated distractor is missing its expression")
+            candidate.values = [
+                candidate.expression.evaluate(inputs) for inputs in inputs_cases
+            ]
+        for case_index, (inputs, expected_answer) in enumerate(
+            zip(inputs_cases, expected_answers, strict=True)
+        ):
+            generated = [
+                candidate.values[case_index]
+                for candidate in candidates
+                if candidate.values is not None
+            ]
+            if len(generated) != len(candidates):
+                raise AssertionError("validated distractor is missing computed values")
             cls._validate_distractors(inputs, expected_answer, generated)
 
     @staticmethod
@@ -617,52 +666,36 @@ class TemplateValidator:
     def _select_distractors(
         cls,
         template: CodeQuestionTemplate,
-        names: tuple[str, ...],
+        inputs_cases: list[dict[str, ParameterValue]],
+        expected_answers: list[Any],
+        candidates: list[_DistractorCandidate],
         *,
         num_distractors: int,
-    ) -> CodeQuestionTemplate:
-        answer = SafeExpression(template.answer_expression, names)
-        value_domains = [parameter.values for parameter in template.parameters]
-        inputs_cases = [
-            dict(zip(names, values, strict=True))
-            for values in itertools.product(*value_domains)
-        ]
-        expected_answers = [answer.evaluate(inputs) for inputs in inputs_cases]
-        for inputs, expected_answer in zip(inputs_cases, expected_answers, strict=True):
-            cls._validate_answer_kind(template, inputs, expected_answer)
+    ) -> tuple[CodeQuestionTemplate, list[_DistractorCandidate]]:
+        cls._precompute_candidate_vectors(
+            template, inputs_cases, expected_answers, candidates
+        )
         failures: list[str] = []
 
         for candidate_indexes in itertools.combinations(
             range(len(template.distractors)), num_distractors
         ):
-            recipes = [template.distractors[index] for index in candidate_indexes]
-            try:
-                expressions = [
-                    SafeExpression(recipe.expression, names) for recipe in recipes
-                ]
-                for inputs, expected_answer in zip(
-                    inputs_cases, expected_answers, strict=True
-                ):
-                    candidate_values = [
-                        expression.evaluate(inputs) for expression in expressions
-                    ]
-                    cls._validate_distractors(
-                        inputs,
-                        expected_answer,
-                        candidate_values,
-                    )
-                    for recipe in recipes:
-                        render_template(recipe.reason_template, inputs)
-            except (
-                TemplateValidationError,
-                ArithmeticError,
-                TypeError,
-                ValueError,
-            ) as exc:
+            selected = [candidates[index] for index in candidate_indexes]
+            rejection = next(
+                (candidate.rejection for candidate in selected if candidate.rejection),
+                None,
+            )
+            if rejection is None:
+                rejection = cls._find_candidate_collision(selected, inputs_cases)
+            if rejection is not None:
                 rendered_indexes = ",".join(str(index) for index in candidate_indexes)
-                failures.append(f"candidates {rendered_indexes}: {exc}")
+                failures.append(f"candidates {rendered_indexes}: {rejection}")
                 continue
-            return template.model_copy(update={"distractors": recipes}, deep=True)
+            recipes = [template.distractors[index] for index in candidate_indexes]
+            selected_template = template.model_copy(
+                update={"distractors": recipes}, deep=True
+            )
+            return selected_template, selected
 
         detail = "; ".join(failures[:3]) or "not enough candidates"
         raise TemplateValidationError(
@@ -670,6 +703,63 @@ class TemplateValidator:
             code="DISTRACTOR_SELECTION_FAILED",
             field="distractors",
         )
+
+    @classmethod
+    def _precompute_candidate_vectors(
+        cls,
+        template: CodeQuestionTemplate,
+        inputs_cases: list[dict[str, ParameterValue]],
+        expected_answers: list[Any],
+        candidates: list[_DistractorCandidate],
+    ) -> None:
+        for candidate in candidates:
+            if candidate.rejection is not None:
+                candidate.rejection = (
+                    f"candidate {candidate.index}: {candidate.rejection}"
+                )
+                continue
+            if candidate.expression is None:
+                raise AssertionError("distractor candidate is missing its expression")
+            values = []
+            try:
+                for inputs, expected_answer in zip(
+                    inputs_cases, expected_answers, strict=True
+                ):
+                    value = candidate.expression.evaluate(inputs)
+                    cls._validate_distractor_value(
+                        inputs, expected_answer, value, candidate.index
+                    )
+                    render_template(
+                        template.distractors[candidate.index].reason_template, inputs
+                    )
+                    values.append(value)
+            except (
+                TemplateValidationError,
+                ArithmeticError,
+                TypeError,
+                ValueError,
+            ) as exc:
+                candidate.rejection = f"candidate {candidate.index}: {exc}"
+            else:
+                candidate.values = values
+
+    @staticmethod
+    def _find_candidate_collision(
+        candidates: list[_DistractorCandidate],
+        inputs_cases: list[dict[str, ParameterValue]],
+    ) -> str | None:
+        for first, second in itertools.combinations(candidates, 2):
+            if first.values is None or second.values is None:
+                raise AssertionError("valid distractor candidate is missing its values")
+            for inputs, first_value, second_value in zip(
+                inputs_cases, first.values, second.values, strict=True
+            ):
+                if equivalent(first_value, second_value):
+                    return (
+                        f"candidate {second.index} duplicates candidate {first.index} "
+                        f"for inputs {inputs}"
+                    )
+        return None
 
     def _execute_all(
         self,
@@ -835,21 +925,9 @@ class TemplateValidator:
         inputs: dict[str, ParameterValue], answer: Any, distractors: list[Any]
     ) -> None:
         for index, distractor in enumerate(distractors):
-            _require_json_value(distractor, f"distractor {index}")
-            if not same_value_shape(distractor, answer):
-                raise TemplateValidationError(
-                    f"distractor {index} has the wrong type for inputs {inputs}",
-                    code="DISTRACTOR_TYPE_MISMATCH",
-                    field=f"distractors.{index}",
-                    inputs=inputs,
-                )
-            if equivalent(distractor, answer):
-                raise TemplateValidationError(
-                    f"distractor {index} equals the answer for inputs {inputs}",
-                    code="DISTRACTOR_EQUALS_ANSWER",
-                    field=f"distractors.{index}",
-                    inputs=inputs,
-                )
+            TemplateValidator._validate_distractor_value(
+                inputs, answer, distractor, index
+            )
             if any(
                 equivalent(distractor, previous) for previous in distractors[:index]
             ):
@@ -859,6 +937,29 @@ class TemplateValidator:
                     field=f"distractors.{index}",
                     inputs=inputs,
                 )
+
+    @staticmethod
+    def _validate_distractor_value(
+        inputs: dict[str, ParameterValue],
+        answer: Any,
+        distractor: Any,
+        index: int,
+    ) -> None:
+        _require_json_value(distractor, f"distractor {index}")
+        if not same_value_shape(distractor, answer):
+            raise TemplateValidationError(
+                f"distractor {index} has the wrong type for inputs {inputs}",
+                code="DISTRACTOR_TYPE_MISMATCH",
+                field=f"distractors.{index}",
+                inputs=inputs,
+            )
+        if equivalent(distractor, answer):
+            raise TemplateValidationError(
+                f"distractor {index} equals the answer for inputs {inputs}",
+                code="DISTRACTOR_EQUALS_ANSWER",
+                field=f"distractors.{index}",
+                inputs=inputs,
+            )
 
 
 class TemplateInstanceGenerator:
