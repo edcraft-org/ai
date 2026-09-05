@@ -47,7 +47,7 @@ MAX_EXPRESSION_SEQUENCE_LENGTH = 100
 MAX_EXPRESSION_VALUE_SIZE = 1_000
 MAX_EXPRESSION_VALUE_DEPTH = 20
 CODE_TEMPLATE_PROMPT_VERSION = "code-template-v8"
-CODE_TEMPLATE_VALIDATOR_VERSION = "code-template-validator-v1"
+CODE_TEMPLATE_VALIDATOR_VERSION = "code-template-validator-v2"
 ParameterValue = int | bool | str | list[int]
 _T = TypeVar("_T")
 
@@ -165,14 +165,21 @@ class CodeQuestionTemplate(BaseModel):
     parameters: list[FiniteParameter] = Field(min_length=1, max_length=3)
     question_template: str = Field(min_length=1)
     answer_target: AnswerTarget
-    answer_expression: str = Field(min_length=1)
+    answer_expression: str | None = Field(default=None, min_length=1)
     distractors: list[DistractorRecipe] = Field(min_length=2, max_length=8)
     question_type: Literal["mcq"]
 
-    @field_validator("code", "question_template", "answer_expression")
+    @field_validator("code", "question_template")
     @classmethod
     def reject_blank_text(cls, value: str) -> str:
         if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("answer_expression")
+    @classmethod
+    def reject_blank_answer_expression(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
             raise ValueError("must not be blank")
         return value
 
@@ -189,12 +196,32 @@ class CodeQuestionTemplate(BaseModel):
         return self
 
 
+class ValidatedTemplateCase(BaseModel):
+    """One executor-derived answer from the template's finite input domain."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    inputs: dict[str, ParameterValue]
+    answer: Any
+
+    @field_validator("answer")
+    @classmethod
+    def require_finite_json_answer(cls, value: Any) -> Any:
+        try:
+            json.dumps(value, allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("answer must be a finite JSON value") from exc
+        return value
+
+
 class TemplateValidationSummary(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     validator_version: str = Field(min_length=1)
     cases_validated: int = Field(ge=1)
     template_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    validated_cases: list[ValidatedTemplateCase] = Field(min_length=1)
+    validated_cases_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     evidence: list[ValidationEvidence] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -204,6 +231,10 @@ class TemplateValidationSummary(BaseModel):
             raise ValueError("validation evidence checks must be unique")
         if any(item.status != "passed" for item in self.evidence):
             raise ValueError("approved templates require passing validation evidence")
+        if self.cases_validated != len(self.validated_cases):
+            raise ValueError("cases_validated must match validated_cases")
+        if self.validated_cases_sha256 != validated_cases_sha256(self.validated_cases):
+            raise ValueError("validated case answers have changed since validation")
         return self
 
 
@@ -215,6 +246,12 @@ class ApprovedCodeQuestionTemplate(BaseModel):
     template: CodeQuestionTemplate
     validation: TemplateValidationSummary
     authoring: TemplateAuthoringProvenance | None = None
+
+    @model_validator(mode="after")
+    def require_canonical_answers(self) -> ApprovedCodeQuestionTemplate:
+        if self.template.answer_expression is not None:
+            raise ValueError("approved templates must use validator-derived answers")
+        return self
 
 
 class TemplateQuestionInstance(BaseModel):
@@ -391,6 +428,7 @@ class TemplateValidator:
         self, template: CodeQuestionTemplate, *, num_distractors: int | None = None
     ) -> ApprovedCodeQuestionTemplate:
         evidence: list[ValidationEvidence] = []
+        original_distractor_count = len(template.distractors)
         names = tuple(parameter.name for parameter in template.parameters)
         value_domains = [parameter.values for parameter in template.parameters]
         inputs_cases = [
@@ -408,7 +446,7 @@ class TemplateValidator:
         )
         if num_distractors is not None and not 2 <= num_distractors <= 3:
             raise ValueError("num_distractors must be 2 or 3")
-        answer, candidates = self._record_check(
+        proposed_answer, candidates = self._record_check(
             evidence,
             check="expression_safety",
             assurance="bounded",
@@ -419,27 +457,15 @@ class TemplateValidator:
                 allow_candidate_rejections=num_distractors is not None,
             ),
         )
-        expected_answers = self._record_check(
+        proposed_answers = self._record_check(
             evidence,
             check="answer_domain",
             assurance="exhaustive",
             details=case_details,
-            operation=lambda: self._evaluate_answers(template, answer, inputs_cases),
+            operation=lambda: self._evaluate_answers(
+                template, proposed_answer, inputs_cases
+            ),
         )
-        if num_distractors is not None:
-            template, candidates = self._record_check(
-                evidence,
-                check="distractor_selection",
-                assurance="exhaustive",
-                details={**case_details, "selected": num_distractors},
-                operation=lambda: self._select_distractors(
-                    template,
-                    inputs_cases,
-                    expected_answers,
-                    candidates,
-                    num_distractors=num_distractors,
-                ),
-            )
         executions = self._record_check(
             evidence,
             check="sandboxed_execution",
@@ -447,22 +473,51 @@ class TemplateValidator:
             details={**case_details, "executor": type(self.executor).__name__},
             operation=lambda: self._execute_successfully(template, inputs_cases),
         )
-        self._record_check(
+        answer_details = {**case_details, "source": "sandboxed_execution"}
+        canonical_answers, corrected_cases = self._record_check(
             evidence,
-            check="answer_consistency",
+            check="canonical_answers",
             assurance="exhaustive",
-            details=case_details,
-            operation=lambda: self._validate_answers(
-                template, inputs_cases, executions, expected_answers
+            details=answer_details,
+            operation=lambda: self._resolve_canonical_answers(
+                template,
+                inputs_cases,
+                executions,
+                proposed_answers,
+                answer_details,
             ),
         )
+        if corrected_cases:
+            template, candidates = self._promote_proposed_answer_to_distractor(
+                template,
+                proposed_answer,
+                proposed_answers,
+                candidates,
+            )
+        selected_count = num_distractors
+        if selected_count is None and corrected_cases:
+            selected_count = original_distractor_count
+        if selected_count is not None:
+            template, candidates = self._record_check(
+                evidence,
+                check="distractor_selection",
+                assurance="exhaustive",
+                details={**case_details, "selected": selected_count},
+                operation=lambda: self._select_distractors(
+                    template,
+                    inputs_cases,
+                    canonical_answers,
+                    candidates,
+                    num_distractors=selected_count,
+                ),
+            )
         self._record_check(
             evidence,
             check="distractor_consistency",
             assurance="exhaustive",
             details={**case_details, "distractors": len(candidates)},
             operation=lambda: self._validate_all_distractors(
-                inputs_cases, expected_answers, candidates
+                inputs_cases, canonical_answers, candidates
             ),
         )
         self._record_check(
@@ -473,12 +528,21 @@ class TemplateValidator:
             operation=lambda: self._validate_rendering(template, inputs_cases),
         )
 
+        validated_cases = [
+            ValidatedTemplateCase(inputs=inputs, answer=answer)
+            for inputs, answer in zip(inputs_cases, canonical_answers, strict=True)
+        ]
+        approved_template = template.model_copy(
+            update={"answer_expression": None}, deep=True
+        )
         return ApprovedCodeQuestionTemplate(
-            template=template,
+            template=approved_template,
             validation=TemplateValidationSummary(
                 validator_version=CODE_TEMPLATE_VALIDATOR_VERSION,
                 cases_validated=len(inputs_cases),
-                template_sha256=template_sha256(template),
+                template_sha256=template_sha256(approved_template),
+                validated_cases=validated_cases,
+                validated_cases_sha256=validated_cases_sha256(validated_cases),
                 evidence=evidence,
             ),
         )
@@ -535,6 +599,12 @@ class TemplateValidator:
         *,
         allow_candidate_rejections: bool,
     ) -> tuple[SafeExpression, list[_DistractorCandidate]]:
+        if template.answer_expression is None:
+            raise TemplateValidationError(
+                "unapproved templates require an answer_expression",
+                code="ANSWER_EXPRESSION_MISSING",
+                field="answer_expression",
+            )
         answer = SafeExpression(template.answer_expression, names)
         candidates: list[_DistractorCandidate] = []
         for index, recipe in enumerate(template.distractors):
@@ -583,27 +653,79 @@ class TemplateValidator:
             )
         return executions
 
-    @staticmethod
-    def _validate_answers(
+    @classmethod
+    def _resolve_canonical_answers(
+        cls,
         template: CodeQuestionTemplate,
         inputs_cases: list[dict[str, ParameterValue]],
         executions: list[ExecutionResult],
-        expected_answers: list[Any],
-    ) -> None:
-        for inputs, execution, expected_answer in zip(
-            inputs_cases, executions, expected_answers, strict=True
+        proposed_answers: list[Any],
+        details: dict[str, Any],
+    ) -> tuple[list[Any], int]:
+        canonical_answers = []
+        corrected_cases = 0
+        for inputs, execution, proposed_answer in zip(
+            inputs_cases, executions, proposed_answers, strict=True
         ):
             actual_answer = _execution_answer(execution, template.answer_target)
-            if equivalent(actual_answer, expected_answer):
-                continue
-            raise TemplateValidationError(
-                "answer_expression does not match the execution target for "
-                f"inputs {inputs}: expression={expected_answer!r}, "
-                f"execution={actual_answer!r}",
-                code="ANSWER_MISMATCH",
-                field="answer_expression",
-                inputs=inputs,
+            _require_json_value(actual_answer, "executor answer")
+            cls._validate_answer_kind(template, inputs, actual_answer)
+            canonical_answers.append(copy.deepcopy(actual_answer))
+            if not equivalent(actual_answer, proposed_answer):
+                corrected_cases += 1
+        details["corrected_cases"] = corrected_cases
+        details["proposal_matched"] = corrected_cases == 0
+        return canonical_answers, corrected_cases
+
+    @staticmethod
+    def _promote_proposed_answer_to_distractor(
+        template: CodeQuestionTemplate,
+        proposed_answer: SafeExpression,
+        proposed_values: list[Any],
+        candidates: list[_DistractorCandidate],
+    ) -> tuple[CodeQuestionTemplate, list[_DistractorCandidate]]:
+        if template.answer_expression is None:
+            raise AssertionError("proposed answer expression is missing")
+
+        recipes = list(template.distractors)
+        existing_index = next(
+            (
+                index
+                for index, recipe in enumerate(recipes)
+                if recipe.expression == template.answer_expression
+            ),
+            None,
+        )
+        if existing_index is None:
+            promoted_recipe = DistractorRecipe(
+                expression=template.answer_expression,
+                reason_template=(
+                    "Uses the original predicted answer instead of the execution "
+                    "result."
+                ),
             )
+            promoted_candidate = _DistractorCandidate(
+                index=0,
+                expression=proposed_answer,
+                values=copy.deepcopy(proposed_values),
+            )
+        else:
+            promoted_recipe = recipes.pop(existing_index)
+            candidates.pop(existing_index)
+            promoted_candidate = _DistractorCandidate(
+                index=0,
+                expression=proposed_answer,
+                values=copy.deepcopy(proposed_values),
+            )
+
+        recipes.insert(0, promoted_recipe)
+        candidates.insert(0, promoted_candidate)
+        for index, candidate in enumerate(candidates):
+            candidate.index = index
+        return (
+            template.model_copy(update={"distractors": recipes}, deep=True),
+            candidates,
+        )
 
     @classmethod
     def _validate_all_distractors(
@@ -700,19 +822,21 @@ class TemplateValidator:
                 continue
             if candidate.expression is None:
                 raise AssertionError("distractor candidate is missing its expression")
-            values = []
+            values = candidate.values or []
             try:
-                for inputs, expected_answer in zip(
-                    inputs_cases, expected_answers, strict=True
+                if candidate.values is None:
+                    values = [
+                        candidate.expression.evaluate(inputs) for inputs in inputs_cases
+                    ]
+                for inputs, expected_answer, value in zip(
+                    inputs_cases, expected_answers, values, strict=True
                 ):
-                    value = candidate.expression.evaluate(inputs)
                     cls._validate_distractor_value(
                         inputs, expected_answer, value, candidate.index
                     )
                     render_template(
                         template.distractors[candidate.index].reason_template, inputs
                     )
-                    values.append(value)
             except (
                 TemplateValidationError,
                 ArithmeticError,
@@ -952,6 +1076,26 @@ def generate_template_instance(
         raise ValueError("approved template content has changed since validation")
     if approved.validation.cases_validated != _case_count(template):
         raise ValueError("approved template does not cover its complete input domain")
+    cases = approved.validation.validated_cases
+    if approved.validation.validated_cases_sha256 != validated_cases_sha256(cases):
+        raise ValueError("validated case answers have changed since validation")
+    expected_inputs = [
+        dict(
+            zip(
+                (parameter.name for parameter in template.parameters),
+                values,
+                strict=True,
+            )
+        )
+        for values in itertools.product(
+            *(parameter.values for parameter in template.parameters)
+        )
+    ]
+    answers_by_inputs = {_case_key(case.inputs): case.answer for case in cases}
+    if len(answers_by_inputs) != len(cases) or set(answers_by_inputs) != {
+        _case_key(inputs) for inputs in expected_inputs
+    }:
+        raise ValueError("approved template does not cover its complete input domain")
 
     inputs = {
         parameter.name: copy.deepcopy(
@@ -960,7 +1104,7 @@ def generate_template_instance(
         for parameter in template.parameters
     }
     names = tuple(inputs)
-    answer = SafeExpression(template.answer_expression, names).evaluate(inputs)
+    answer = copy.deepcopy(answers_by_inputs[_case_key(inputs)])
     distractors = [
         SafeExpression(recipe.expression, names).evaluate(inputs)
         for recipe in template.distractors
@@ -1405,6 +1549,19 @@ def template_sha256(template: CodeQuestionTemplate) -> str:
         separators=(",", ":"),
     )
     return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def validated_cases_sha256(cases: list[ValidatedTemplateCase]) -> str:
+    payload = json.dumps(
+        [case.model_dump(mode="json") for case in cases],
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _case_key(inputs: dict[str, ParameterValue]) -> str:
+    return json.dumps(inputs, sort_keys=True, separators=(",", ":"))
 
 
 def _execution_answer(execution: ExecutionResult, target: AnswerTarget) -> Any:

@@ -117,7 +117,9 @@ Rejected templates raise structured diagnostics with a stable code, relevant
 field, failing parameter values, and evidence from every completed check when
 available; messages remain human-readable. Approved templates record the validator
 version, assurance level, duration, and details for each structure, expression,
-execution, answer, distractor, and rendering check.
+execution, answer, distractor, and rendering check. Docker-derived answers for every
+finite input combination are stored in the approved artifact and protected by a
+SHA-256 digest.
 
 ## Generate concrete questions locally
 
@@ -149,16 +151,17 @@ Rendered misconception reasons are preserved alongside their selected distractor
   kinds are integers, booleans, bounded printable strings, and bounded integer
   lists. Each parameter has two to four unique values.
 - Exhaustive approval: at most 64 total parameter combinations.
-- Answers: restricted arithmetic, comparisons, boolean operators, conditional
-  expressions, list literals, indexing, and the allowlisted functions `len`, `sum`,
-  `min`, `max`, `sorted`, `all`, and `any`.
+- Answers: the sandboxed execution result is canonical. If the provider's proposed
+  answer differs, the validator stores the corrected answers and considers the old
+  answer as a distractor candidate.
 - Expression safety: at most 500 source characters and 100 syntax nodes; numeric
   intermediates are bounded to magnitude 1 billion, individual sequences to 100
   items, and complete nested values to a cumulative logical size of 1,000.
 - Distractors: the provider proposes the requested misconception candidates in the
   same call. Local normalization appends type-compatible deterministic fallbacks, and
   the finite-domain validator searches candidate subsets to retain the requested two
-  or three globally unique expressions with reason templates.
+  or three globally unique expressions with reason templates. Corrected templates
+  are still rejected when too few valid distractors remain.
 - Reproducibility: deterministic seed selection and template tamper detection.
   AI-approved artifacts also record the resolved provider and model, authoring
   request, prompt version and SHA-256 hash, generation time, validation time, and

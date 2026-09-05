@@ -167,13 +167,15 @@ def test_validates_every_case_once_then_generates_without_executor() -> None:
     approved = TemplateValidator(executor=executor).validate(template())
 
     assert approved.validation.cases_validated == 8
-    assert approved.validation.validator_version == "code-template-validator-v1"
+    assert approved.validation.validator_version == "code-template-validator-v2"
+    assert approved.template.answer_expression is None
+    assert len(approved.validation.validated_cases) == 8
     assert [item.check for item in approved.validation.evidence] == [
         "template_structure",
         "expression_safety",
         "answer_domain",
         "sandboxed_execution",
-        "answer_consistency",
+        "canonical_answers",
         "distractor_consistency",
         "template_rendering",
     ]
@@ -1200,21 +1202,55 @@ def test_rejects_non_allowlisted_expression_calls() -> None:
         SafeExpression("open(a)", ("a",))
 
 
-def test_answer_mismatch_reports_the_failing_inputs() -> None:
-    item = template(answer_expression="a + b + c")
+def test_corrects_answer_and_promotes_proposal_to_distractor() -> None:
+    data = template(answer_expression="a + b - c - 1").model_dump()
+    data["distractors"] = [
+        {
+            "expression": "a + b - c",
+            "reason_template": "Repeats the actual answer.",
+        },
+        {"expression": "a - b - c", "reason_template": "Subtracts b."},
+        {"expression": "a + b", "reason_template": "Omits c."},
+    ]
+    item = CodeQuestionTemplate.model_validate(data)
 
-    with pytest.raises(
-        TemplateValidationError, match="does not match the execution target"
-    ) as error:
+    approved = TemplateValidator(executor=ArithmeticExecutor()).validate(item)
+    instance = generate_template_instance(approved, seed=1)
+
+    assert approved.template.answer_expression is None
+    assert approved.validation.evidence[4].check == "canonical_answers"
+    assert approved.validation.evidence[4].details == {
+        "cases": 8,
+        "source": "sandboxed_execution",
+        "corrected_cases": 8,
+        "proposal_matched": False,
+    }
+    assert [recipe.expression for recipe in approved.template.distractors] == [
+        "a + b - c - 1",
+        "a - b - c",
+        "a + b",
+    ]
+    assert instance.question.proposed_answer == (
+        instance.parameters["a"] + instance.parameters["b"] - instance.parameters["c"]
+    )
+    assert instance.question.proposed_answer - 1 in instance.question.distractors
+
+
+def test_answer_correction_still_rejects_insufficient_valid_distractors() -> None:
+    data = template(answer_expression="a + b - c - 1").model_dump()
+    data["distractors"] = [
+        {
+            "expression": "a + b - c",
+            "reason_template": "Repeats the actual answer.",
+        }
+        for _ in range(3)
+    ]
+    item = CodeQuestionTemplate.model_validate(data)
+
+    with pytest.raises(TemplateValidationError) as error:
         TemplateValidator(executor=ArithmeticExecutor()).validate(item)
 
-    assert error.value.code == "ANSWER_MISMATCH"
-    assert error.value.field == "answer_expression"
-    assert error.value.inputs == {"a": 2, "b": 5, "c": 1}
-    assert error.value.evidence[-1].check == "answer_consistency"
-    assert error.value.evidence[-1].status == "failed"
-    assert error.value.evidence[-1].issues[0].code == "ANSWER_MISMATCH"
-    assert error.value.evidence[-1].details["failing_inputs"] == error.value.inputs
+    assert error.value.code == "DISTRACTOR_SELECTION_FAILED"
 
 
 def test_execution_failure_preserves_executor_code_in_evidence() -> None:
@@ -1260,4 +1296,12 @@ def test_refuses_incomplete_approval_evidence() -> None:
     approved.validation.cases_validated = 7
 
     with pytest.raises(ValueError, match="complete input domain"):
+        generate_template_instance(approved, seed=1)
+
+
+def test_refuses_changed_validator_answer() -> None:
+    approved = TemplateValidator(executor=ArithmeticExecutor()).validate(template())
+    approved.validation.validated_cases[0].answer = 999
+
+    with pytest.raises(ValueError, match="answers have changed"):
         generate_template_instance(approved, seed=1)
