@@ -4,7 +4,6 @@ from edcraft_validator.generation.models import TemplateProviderSelection
 from edcraft_validator.generation.registry import (
     available_template_providers,
     create_template_generator,
-    register_template_provider,
 )
 
 
@@ -20,19 +19,6 @@ def test_registry_passes_explicit_model_to_provider() -> None:
     generator = create_template_generator(selection)
 
     assert generator.model == "qwen-test"
-
-
-def test_registry_supports_template_provider_extensions() -> None:
-    class CustomTemplateGenerator:
-        provider = "custom"
-
-        def generate_proposal(self, request):
-            raise NotImplementedError
-
-    register_template_provider("custom", lambda model: CustomTemplateGenerator())
-
-    selection = TemplateProviderSelection(provider="custom")
-    assert isinstance(create_template_generator(selection), CustomTemplateGenerator)
 
 
 def test_registry_rejects_unknown_template_provider() -> None:

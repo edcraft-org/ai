@@ -19,15 +19,6 @@ _TEMPLATE_PROVIDER_FACTORIES: dict[str, TemplateProviderFactory] = {
 }
 
 
-def register_template_provider(name: str, factory: TemplateProviderFactory) -> None:
-    """Register a template provider without changing CLI routing code."""
-    if not name or not name.strip():
-        raise ValueError("provider name must not be blank")
-    if name in _TEMPLATE_PROVIDER_FACTORIES:
-        raise ValueError(f"provider is already registered: {name}")
-    _TEMPLATE_PROVIDER_FACTORIES[name] = factory
-
-
 def available_template_providers() -> tuple[str, ...]:
     """Return AI providers that can author reusable templates."""
     return tuple(_TEMPLATE_PROVIDER_FACTORIES)

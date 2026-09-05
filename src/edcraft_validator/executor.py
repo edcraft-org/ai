@@ -1,7 +1,7 @@
 import json
 import subprocess
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
 DEFAULT_EXECUTOR_IMAGE = "edcraft-validator-executor:local"
@@ -25,17 +25,6 @@ class ExecutionBackend(Protocol):
         *,
         timeout_seconds: float,
     ) -> ExecutionResult: ...
-
-
-class BatchExecutionBackend(ExecutionBackend, Protocol):
-    def execute_batch(
-        self,
-        code: str,
-        entry_function: str,
-        inputs: list[dict[str, Any]],
-        *,
-        timeout_seconds: float,
-    ) -> list[ExecutionResult]: ...
 
 
 @dataclass(frozen=True)
@@ -107,18 +96,18 @@ class DockerExecutor:
             ),
         )
         if isinstance(response, ExecutionResult):
-            return [self._copy_result(response) for _ in inputs]
+            return [replace(response) for _ in inputs]
         results = response.get("results")
         if response.get("ok") is not True or not isinstance(results, list):
             failure = self._to_execution_result(response)
-            return [self._copy_result(failure) for _ in inputs]
+            return [replace(failure) for _ in inputs]
         if len(results) != len(inputs):
             failure = ExecutionResult(
                 ok=False,
                 error_code="INVALID_WORKER_OUTPUT",
                 error_message="Execution container returned the wrong result count",
             )
-            return [self._copy_result(failure) for _ in inputs]
+            return [replace(failure) for _ in inputs]
         return [self._to_execution_result(result) for result in results]
 
     def _invoke_worker(
@@ -185,16 +174,6 @@ class DockerExecutor:
             error_message=(
                 result.get("error_message") if result.get("ok") is not True else None
             ),
-        )
-
-    @staticmethod
-    def _copy_result(result: ExecutionResult) -> ExecutionResult:
-        return ExecutionResult(
-            ok=result.ok,
-            answer=result.answer,
-            trace_summary=result.trace_summary,
-            error_code=result.error_code,
-            error_message=result.error_message,
         )
 
     def _build_command(self, container_name: str) -> list[str]:
