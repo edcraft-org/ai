@@ -291,7 +291,9 @@ repetition makes one real provider call per selected profile, so review the call
 count before running a paid provider. The JSONL artifact and summary are written
 even when attempts fail; the command exits non-zero if any attempt fails.
 
-The current local baseline for `qwen2.5-coder:14b` is 10 approved templates out of
-15 profiles (66.7%), averaging 44.1 seconds per attempt with the bounded v8 prompt.
-Rejected model proposals are expected evaluation outcomes; inspect their structured
-failure codes rather than treating rejection as a validator failure.
+The recorded pre-relaxation baseline for `qwen2.5-coder:14b` was 10 approved
+templates out of 15 profiles (66.7%), averaging 44.1 seconds per attempt with the
+bounded v8 prompt. Rerun the matrix before treating this as the baseline for the
+broader profile contracts. Rejected model proposals are expected evaluation
+outcomes; inspect their structured failure codes rather than treating rejection as
+a validator failure.

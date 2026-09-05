@@ -243,13 +243,15 @@ criteria defined for the original code-template milestone:
   approved-template types; provider and model selection are explicit configuration.
 - Evaluation records provider, resolved model, prompt hash/version, request, timing,
   failure stage/code, and approved output. JSONL attempts are flushed incrementally.
-- The final automated baseline passes 190 non-live tests and 19 Docker integration
+- The automated baseline covers both non-live tests and 19 Docker integration
   tests. Real OpenAI evaluations produced approved templates for every profile while
   the profile contracts were refined.
-- A complete Ollama `qwen2.5-coder:14b` v8 matrix approved 10 of 15 profiles (66.7%)
-  in 26.2–63.8 seconds per attempt, with no timeout or transport failure. The five
-  unsuitable proposals were rejected for schema, safety, answer-kind, or answer
-  mismatch errors, demonstrating the intended untrusted-draft boundary.
+- Before profile relaxation, a complete Ollama `qwen2.5-coder:14b` v8 matrix
+  approved 10 of 15 profiles (66.7%) in 26.2–63.8 seconds per attempt, with no
+  timeout or transport failure. The five unsuitable proposals were rejected for
+  schema, safety, answer-kind, or answer mismatch errors, demonstrating the intended
+  untrusted-draft boundary. A new matrix is required for direct comparison under the
+  broader contracts.
 
 Provider pass rate is an evaluation signal, not a reason to weaken safety or
 correctness validation. Improving the remaining Ollama generation quality or choosing
