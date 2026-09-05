@@ -331,20 +331,39 @@ def test_reason_placeholders_forbid_embedded_expressions() -> None:
     assert "never put expressions such as `{n-1}` inside braces" in prompt
 
 
-def test_provider_template_parser_removes_duplicate_parameter_values() -> None:
+@pytest.mark.parametrize("values", [[2, 2, 4], [2, 2]])
+def test_provider_template_parser_rejects_duplicate_parameter_values(
+    values: list[int],
+) -> None:
     payload = template().model_dump(mode="json")
-    payload["parameters"][0]["values"] = [2, 2, 4]
+    payload["parameters"][0]["values"] = values
 
-    parsed = parse_code_question_template(json.dumps(payload))
+    with pytest.raises(ValueError, match="parameter values must be unique"):
+        parse_code_question_template(json.dumps(payload))
 
-    assert parsed.parameters[0].values == [2, 4]
 
-
-def test_provider_template_parser_does_not_invent_missing_domain_values() -> None:
-    payload = template().model_dump(mode="json")
+def test_provider_proposal_parser_rejects_duplicate_parameter_values() -> None:
+    payload = template().model_dump(
+        mode="json",
+        include={
+            "code",
+            "entry_function",
+            "parameters",
+            "answer_expression",
+            "distractors",
+        },
+    )
     payload["parameters"][0]["values"] = [2, 2]
 
-    with pytest.raises(ValueError, match="at least 2 items"):
+    with pytest.raises(ValueError, match="parameter values must be unique"):
+        parse_code_template_proposal(json.dumps(payload))
+
+
+def test_duplicate_validation_distinguishes_booleans_from_integers() -> None:
+    payload = template().model_dump(mode="json")
+    payload["parameters"][0]["values"] = [2, True]
+
+    with pytest.raises(ValueError, match="integer values must be integers"):
         parse_code_question_template(json.dumps(payload))
 
 
