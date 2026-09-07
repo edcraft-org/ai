@@ -217,7 +217,11 @@ execution counts; it is not treated as a sandbox outside this Docker boundary.
 application/__init__.py            stable frontend-facing application facade
 domains/code/application.py        code authoring, approval, and expansion use cases
 domains/code/evaluation.py         real-provider code-template evaluation
-domains/code/templates.py          code template schema, prompt, approval, expansion
+domains/code/templates/models.py   code template data contracts
+domains/code/templates/authoring.py prompt construction and proposal normalization
+domains/code/templates/expressions.py restricted deterministic expressions
+domains/code/templates/validation.py exhaustive template approval
+domains/code/templates/generation.py deterministic question expansion
 domains/code/capabilities.py       supported profiles and their machine-readable rules
 generation/base.py                 provider-neutral template protocol
 generation/registry.py             built-in provider lookup
