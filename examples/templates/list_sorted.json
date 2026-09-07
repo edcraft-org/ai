@@ -1,6 +1,5 @@
 {
   "template_id": "lists.sorted_result",
-  "version": 1,
   "topic": "lists",
   "difficulty": "intermediate",
   "code": "def arrange(values):\n    return sorted(values)",

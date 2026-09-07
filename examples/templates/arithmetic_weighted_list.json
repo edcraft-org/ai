@@ -1,6 +1,5 @@
 {
   "template_id": "arithmetic.weighted_list",
-  "version": 1,
   "topic": "arithmetic",
   "difficulty": "advanced",
   "code": "def weighted(values, mode):\n    base = sum(values)\n    if mode == \"double\":\n        return base * 2\n    return base - 1",

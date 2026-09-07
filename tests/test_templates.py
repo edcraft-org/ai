@@ -35,7 +35,6 @@ TEMPLATE_PATHS = sorted(TEMPLATE_DIR.glob("*.json"))
 def template(**changes: Any) -> CodeQuestionTemplate:
     data = {
         "template_id": "arithmetic.linear_sum",
-        "version": 1,
         "topic": "arithmetic",
         "difficulty": "beginner",
         "code": "def calculate(a, b, c):\n    return a + b - c",
@@ -169,6 +168,9 @@ def test_validates_every_case_once_then_generates_without_executor() -> None:
     assert approved.validation.cases_validated == 8
     assert approved.validation.validator_version == "code-template-validator-v2"
     assert approved.template.answer_expression is None
+    assert "version" not in approved.template.model_dump()
+    assert "template_sha256" not in approved.validation.model_dump()
+    assert "validated_cases_sha256" not in approved.validation.model_dump()
     assert len(approved.validation.validated_cases) == 8
     assert [item.check for item in approved.validation.evidence] == [
         "template_structure",
@@ -190,6 +192,8 @@ def test_validates_every_case_once_then_generates_without_executor() -> None:
 
     assert first == second
     assert len(executor.calls) == 8
+    assert "template_version" not in first.model_dump()
+    assert "template_sha256" not in first.model_dump()
     assert first.question.proposed_answer == (
         first.parameters["a"] + first.parameters["b"] - first.parameters["c"]
     )
@@ -200,7 +204,6 @@ def test_supports_loop_iteration_questions() -> None:
     loop_template = CodeQuestionTemplate.model_validate(
         {
             "template_id": "loops.iteration_count",
-            "version": 1,
             "topic": "loops",
             "difficulty": "beginner",
             "code": (
@@ -388,7 +391,6 @@ def test_proposal_normalization_derives_stable_local_fields() -> None:
 
     assert first == second
     assert first.template_id.startswith("arithmetic.beginner.")
-    assert first.version == 1
     assert first.answer_target == "return_value"
     assert first.question_type == "mcq"
     assert first.question_template == (
@@ -1283,25 +1285,9 @@ def test_approved_template_rejects_failed_validation_evidence() -> None:
         type(approved).model_validate(payload)
 
 
-def test_refuses_to_expand_a_changed_approved_template() -> None:
-    approved = TemplateValidator(executor=ArithmeticExecutor()).validate(template())
-    approved.template.answer_expression = "a + b + c"
-
-    with pytest.raises(ValueError, match="changed since validation"):
-        generate_template_instance(approved, seed=1)
-
-
 def test_refuses_incomplete_approval_evidence() -> None:
     approved = TemplateValidator(executor=ArithmeticExecutor()).validate(template())
     approved.validation.cases_validated = 7
 
     with pytest.raises(ValueError, match="complete input domain"):
-        generate_template_instance(approved, seed=1)
-
-
-def test_refuses_changed_validator_answer() -> None:
-    approved = TemplateValidator(executor=ArithmeticExecutor()).validate(template())
-    approved.validation.validated_cases[0].answer = 999
-
-    with pytest.raises(ValueError, match="answers have changed"):
         generate_template_instance(approved, seed=1)

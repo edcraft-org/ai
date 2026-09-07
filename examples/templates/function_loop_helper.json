@@ -1,6 +1,5 @@
 {
   "template_id": "functions.loop_helper",
-  "version": 1,
   "topic": "functions",
   "difficulty": "intermediate",
   "code": "def increment(value):\n    return value + 1\n\ndef calculate(n):\n    total = 0\n    for i in range(n):\n        total += increment(i)\n    return total",

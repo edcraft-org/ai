@@ -1,6 +1,5 @@
 {
   "template_id": "conditionals.boolean_branch_count",
-  "version": 1,
   "topic": "conditionals",
   "difficulty": "beginner",
   "code": "def decide(enabled):\n    if enabled:\n        if 3 > 2:\n            return 1\n    return 0",

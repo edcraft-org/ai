@@ -1,6 +1,5 @@
 {
   "template_id": "loops.iteration_count",
-  "version": 1,
   "topic": "loops",
   "difficulty": "beginner",
   "code": "def accumulate(n):\n    total = 0\n    for i in range(n):\n        total += i\n    return total",

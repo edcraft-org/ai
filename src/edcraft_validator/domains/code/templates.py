@@ -157,7 +157,6 @@ class CodeQuestionTemplate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     template_id: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]*$")
-    version: int = Field(ge=1)
     topic: ProgrammingTopic
     difficulty: Difficulty
     code: str = Field(min_length=1)
@@ -219,9 +218,7 @@ class TemplateValidationSummary(BaseModel):
 
     validator_version: str = Field(min_length=1)
     cases_validated: int = Field(ge=1)
-    template_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     validated_cases: list[ValidatedTemplateCase] = Field(min_length=1)
-    validated_cases_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     evidence: list[ValidationEvidence] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -233,8 +230,6 @@ class TemplateValidationSummary(BaseModel):
             raise ValueError("approved templates require passing validation evidence")
         if self.cases_validated != len(self.validated_cases):
             raise ValueError("cases_validated must match validated_cases")
-        if self.validated_cases_sha256 != validated_cases_sha256(self.validated_cases):
-            raise ValueError("validated case answers have changed since validation")
         return self
 
 
@@ -260,8 +255,6 @@ class TemplateQuestionInstance(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     template_id: str
-    template_version: int
-    template_sha256: str
     seed: int
     parameters: dict[str, ParameterValue]
     question: GeneratedQuestion
@@ -338,7 +331,6 @@ def normalize_code_template_proposal(
     digest = hashlib.sha256(identity_payload).hexdigest()[:12]
     return CodeQuestionTemplate(
         template_id=f"{request.topic}.{request.difficulty}.{digest}",
-        version=1,
         topic=request.topic,
         difficulty=request.difficulty,
         code=proposal.code,
@@ -540,9 +532,7 @@ class TemplateValidator:
             validation=TemplateValidationSummary(
                 validator_version=CODE_TEMPLATE_VALIDATOR_VERSION,
                 cases_validated=len(inputs_cases),
-                template_sha256=template_sha256(approved_template),
                 validated_cases=validated_cases,
-                validated_cases_sha256=validated_cases_sha256(validated_cases),
                 evidence=evidence,
             ),
         )
@@ -1071,14 +1061,9 @@ def generate_template_instance(
 ) -> TemplateQuestionInstance:
     """Expand an approved template without AI calls or per-instance validation."""
     template = approved.template
-    digest = template_sha256(template)
-    if digest != approved.validation.template_sha256:
-        raise ValueError("approved template content has changed since validation")
     if approved.validation.cases_validated != _case_count(template):
         raise ValueError("approved template does not cover its complete input domain")
     cases = approved.validation.validated_cases
-    if approved.validation.validated_cases_sha256 != validated_cases_sha256(cases):
-        raise ValueError("validated case answers have changed since validation")
     expected_inputs = [
         dict(
             zip(
@@ -1099,7 +1084,7 @@ def generate_template_instance(
 
     inputs = {
         parameter.name: copy.deepcopy(
-            _seeded_choice(parameter.values, digest, seed, parameter.name)
+            _seeded_choice(parameter.values, template.template_id, seed, parameter.name)
         )
         for parameter in template.parameters
     }
@@ -1126,8 +1111,6 @@ def generate_template_instance(
     )
     return TemplateQuestionInstance(
         template_id=template.template_id,
-        template_version=template.version,
-        template_sha256=digest,
         seed=seed,
         parameters=inputs,
         question=question,
@@ -1473,7 +1456,7 @@ def build_template_prompt(request: TemplateAuthoringRequest) -> str:
 CODE_TEMPLATE_SYSTEM_PROMPT = """\
 Generate the judgment-bearing fields for one reusable Python execution-trace MCQ
 template, not one concrete question. The local application derives identity, topic,
-difficulty, answer target, question wording, version, and question type.
+difficulty, answer target, question wording, and question type.
 
 The proposal must use a finite Cartesian product of typed finite parameter values so
 the local application can exhaustively validate every possible question once.
@@ -1540,24 +1523,6 @@ def render_template(
     if not rendered.strip():
         raise TemplateValidationError("rendered text must not be blank")
     return rendered
-
-
-def template_sha256(template: CodeQuestionTemplate) -> str:
-    payload = json.dumps(
-        template.model_dump(mode="json"),
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(payload.encode()).hexdigest()
-
-
-def validated_cases_sha256(cases: list[ValidatedTemplateCase]) -> str:
-    payload = json.dumps(
-        [case.model_dump(mode="json") for case in cases],
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(payload.encode()).hexdigest()
 
 
 def _case_key(inputs: dict[str, ParameterValue]) -> str:

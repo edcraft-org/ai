@@ -1,6 +1,5 @@
 {
   "template_id": "loops.sequential",
-  "version": 1,
   "topic": "loops",
   "difficulty": "intermediate",
   "code": "def accumulate(n, m):\n    total = 0\n    for i in range(n):\n        total += i\n    for j in range(m):\n        total += j\n    return total",

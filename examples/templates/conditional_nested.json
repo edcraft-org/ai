@@ -1,6 +1,5 @@
 {
   "template_id": "conditionals.nested_paths",
-  "version": 1,
   "topic": "conditionals",
   "difficulty": "advanced",
   "code": "def classify(score, override):\n    if override:\n        return \"manual\"\n    if score >= 50:\n        if score >= 80:\n            return \"high\"\n        return \"pass\"\n    return \"fail\"",
