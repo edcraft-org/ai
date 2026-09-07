@@ -57,7 +57,7 @@ selected provider's environment setting is used.
 OpenAI uses strict Structured Outputs:
 
 ```bash
-uv run python -m edcraft_validator.template author \
+uv run python -m edcraft_validator.cli author \
   --provider openai \
   --model gpt-5-mini \
   --topic arithmetic \
@@ -71,7 +71,7 @@ schema. The adapter strictly normalizes that response into the same local propos
 contract used by OpenAI:
 
 ```bash
-/usr/bin/time -p uv run python -m edcraft_validator.template author \
+/usr/bin/time -p uv run python -m edcraft_validator.cli author \
   --provider ollama \
   --model qwen2.5-coder:14b \
   --topic loops \
@@ -90,23 +90,23 @@ The repository includes examples for integers, booleans, strings, and integer
 lists:
 
 ```bash
-uv run python -m edcraft_validator.template validate \
+uv run python -m edcraft_validator.cli validate \
   examples/templates/arithmetic_linear.json \
   --output /tmp/approved-arithmetic-template.json
 
-uv run python -m edcraft_validator.template validate \
+uv run python -m edcraft_validator.cli validate \
   examples/templates/loop_iterations.json \
   --output /tmp/approved-loop-template.json
 
-uv run python -m edcraft_validator.template validate \
+uv run python -m edcraft_validator.cli validate \
   examples/templates/conditional_boolean.json \
   --output /tmp/approved-boolean-template.json
 
-uv run python -m edcraft_validator.template validate \
+uv run python -m edcraft_validator.cli validate \
   examples/templates/conditional_string.json \
   --output /tmp/approved-string-template.json
 
-uv run python -m edcraft_validator.template validate \
+uv run python -m edcraft_validator.cli validate \
   examples/templates/list_sum.json \
   --output /tmp/approved-list-template.json
 ```
@@ -126,10 +126,10 @@ SHA-256 digest.
 The same seed and approved template always produce the same output:
 
 ```bash
-uv run python -m edcraft_validator.template generate \
+uv run python -m edcraft_validator.cli generate \
   /tmp/approved-arithmetic-template.json --seed 42
 
-uv run python -m edcraft_validator.template generate \
+uv run python -m edcraft_validator.cli generate \
   /tmp/approved-arithmetic-template.json --seed 43
 ```
 
@@ -280,7 +280,7 @@ an interruption), reports progress on stderr, and prints pass rate, failure code
 and latency grouped by provider, resolved model, topic, and difficulty:
 
 ```bash
-uv run python -m edcraft_validator.template evaluate \
+uv run python -m edcraft_validator.cli evaluate \
   --provider ollama \
   --model qwen2.5-coder:14b \
   --topic arithmetic \

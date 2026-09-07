@@ -1,6 +1,6 @@
 import json
 
-from edcraft_validator import template as template_cli
+from edcraft_validator import cli as template_cli
 
 
 def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> None:

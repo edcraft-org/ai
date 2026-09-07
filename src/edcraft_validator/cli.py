@@ -22,7 +22,8 @@ from edcraft_validator.generation.models import TemplateAuthoringRequest
 from edcraft_validator.generation.registry import available_template_providers
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line interface without executing a command."""
     parser = argparse.ArgumentParser(
         description="Author, approve, and expand reusable code-question templates"
     )
@@ -78,65 +79,83 @@ def main() -> int:
     evaluate.add_argument(
         "--output", type=Path, default=Path(".artifacts/template-evaluation.jsonl")
     )
+    return parser
 
-    args = parser.parse_args()
+
+def main() -> int:
+    args = build_parser().parse_args()
     load_dotenv()
-    application = QuestionTemplateApplication()
     try:
-        if args.command == "author":
-            request = TemplateAuthoringRequest(
-                topic=args.topic,
-                difficulty=args.difficulty,
-                num_distractors=args.num_distractors,
-            )
-            result = application.author(
-                request, provider=args.provider, model=args.model
-            )
-        elif args.command == "evaluate":
-            topics = CODE_TOPICS if args.topic == "all" else (args.topic,)
-            difficulties = (
-                CODE_DIFFICULTIES if args.difficulty == "all" else (args.difficulty,)
-            )
-            args.output.parent.mkdir(parents=True, exist_ok=True)
-            with args.output.open("w") as output:
-
-                def record_attempt(attempt):
-                    print(attempt.model_dump_json(), file=output, flush=True)
-                    print(
-                        f"[{attempt.attempt}] {attempt.request.topic}/"
-                        f"{attempt.request.difficulty}: {attempt.status} "
-                        f"({attempt.total_duration_ms / 1000:.1f}s)",
-                        file=sys.stderr,
-                        flush=True,
-                    )
-
-                report = TemplateEvaluator().evaluate(
-                    provider=args.provider,
-                    model=args.model,
-                    topics=topics,
-                    difficulties=difficulties,
-                    repetitions=args.repetitions,
-                    num_distractors=args.num_distractors,
-                    on_attempt=record_attempt,
-                )
-            print(report.summary.model_dump_json(indent=2))
-            return 0 if report.summary.failed == 0 else 1
-        elif args.command == "validate":
-            template = CodeQuestionTemplate.model_validate_json(
-                args.template.read_text()
-            )
-            result = application.approve(template)
-        else:
-            approved = ApprovedCodeQuestionTemplate.model_validate_json(
-                args.template.read_text()
-            )
-            result = application.generate(approved, seed=args.seed)
+        handlers = {
+            "author": _handle_author,
+            "validate": _handle_validate,
+            "generate": _handle_generate,
+            "evaluate": _handle_evaluate,
+        }
+        return handlers[args.command](args)
     except (GenerationError, OSError, ValidationError, ValueError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
+
+def _handle_author(args: argparse.Namespace) -> int:
+    request = TemplateAuthoringRequest(
+        topic=args.topic,
+        difficulty=args.difficulty,
+        num_distractors=args.num_distractors,
+    )
+    result = QuestionTemplateApplication().author(
+        request, provider=args.provider, model=args.model
+    )
     _write_json(result.model_dump(mode="json"), args.output)
     return 0
+
+
+def _handle_validate(args: argparse.Namespace) -> int:
+    template = CodeQuestionTemplate.model_validate_json(args.template.read_text())
+    result = QuestionTemplateApplication().approve(template)
+    _write_json(result.model_dump(mode="json"), args.output)
+    return 0
+
+
+def _handle_generate(args: argparse.Namespace) -> int:
+    approved = ApprovedCodeQuestionTemplate.model_validate_json(
+        args.template.read_text()
+    )
+    result = QuestionTemplateApplication().generate(approved, seed=args.seed)
+    _write_json(result.model_dump(mode="json"), args.output)
+    return 0
+
+
+def _handle_evaluate(args: argparse.Namespace) -> int:
+    topics = CODE_TOPICS if args.topic == "all" else (args.topic,)
+    difficulties = (
+        CODE_DIFFICULTIES if args.difficulty == "all" else (args.difficulty,)
+    )
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    with args.output.open("w") as output:
+
+        def record_attempt(attempt: Any) -> None:
+            print(attempt.model_dump_json(), file=output, flush=True)
+            print(
+                f"[{attempt.attempt}] {attempt.request.topic}/"
+                f"{attempt.request.difficulty}: {attempt.status} "
+                f"({attempt.total_duration_ms / 1000:.1f}s)",
+                file=sys.stderr,
+                flush=True,
+            )
+
+        report = TemplateEvaluator().evaluate(
+            provider=args.provider,
+            model=args.model,
+            topics=topics,
+            difficulties=difficulties,
+            repetitions=args.repetitions,
+            num_distractors=args.num_distractors,
+            on_attempt=record_attempt,
+        )
+    print(report.summary.model_dump_json(indent=2))
+    return 0 if report.summary.failed == 0 else 1
 
 
 def _write_json(value: dict[str, Any], output: Path | None) -> None:
