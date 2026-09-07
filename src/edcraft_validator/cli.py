@@ -129,9 +129,7 @@ def _handle_generate(args: argparse.Namespace) -> int:
 
 def _handle_evaluate(args: argparse.Namespace) -> int:
     topics = CODE_TOPICS if args.topic == "all" else (args.topic,)
-    difficulties = (
-        CODE_DIFFICULTIES if args.difficulty == "all" else (args.difficulty,)
-    )
+    difficulties = CODE_DIFFICULTIES if args.difficulty == "all" else (args.difficulty,)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w") as output:
 
