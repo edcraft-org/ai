@@ -12,12 +12,12 @@ cost proportional to the number of templates rather than the number of questions
 ```text
 topic + difficulty + provider
   -> AI proposes code, parameters, answer logic, and distractor candidates
-  -> application derives identity, target, wording, version, and question type
+  -> application derives identity, target, wording, and question type
   -> AST safety checks
   -> all parameter combinations run in one Docker batch
   -> globally valid distractor recipes selected from the candidates
   -> answers and selected distractors checked for every combination
-  -> approved template + versioned validation evidence and hash
+  -> approved template + structured validation evidence
   -> deterministic questions generated locally from seeds
 ```
 
@@ -118,8 +118,7 @@ field, failing parameter values, and evidence from every completed check when
 available; messages remain human-readable. Approved templates record the validator
 version, assurance level, duration, and details for each structure, expression,
 execution, answer, distractor, and rendering check. Docker-derived answers for every
-finite input combination are stored in the approved artifact and protected by a
-SHA-256 digest.
+finite input combination are stored in the approved artifact.
 
 ## Generate concrete questions locally
 
@@ -133,8 +132,8 @@ uv run python -m edcraft_validator.cli generate \
   /tmp/approved-arithmetic-template.json --seed 43
 ```
 
-Each output records the template ID, version, SHA-256 hash, seed, selected
-parameters, code, question, answer target, answer, and distractors.
+Each output records the template ID, seed, selected parameters, code, question,
+answer target, answer, and distractors.
 Rendered misconception reasons are preserved alongside their selected distractors.
 
 ## Currently supported
@@ -162,8 +161,8 @@ Rendered misconception reasons are preserved alongside their selected distractor
   the finite-domain validator searches candidate subsets to retain the requested two
   or three globally unique expressions with reason templates. Corrected templates
   are still rejected when too few valid distractors remain.
-- Reproducibility: deterministic seed selection and template tamper detection.
-  AI-approved artifacts also record the resolved provider and model, authoring
+- Reproducibility: deterministic seed selection. AI-approved artifacts also record
+  the resolved provider and model, authoring
   request, prompt version and SHA-256 hash, generation time, validation time, and
   approval status. API keys and other secrets are never stored.
 

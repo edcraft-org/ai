@@ -1,6 +1,5 @@
 {
   "template_id": "arithmetic.linear_sum",
-  "version": 1,
   "topic": "arithmetic",
   "difficulty": "beginner",
   "code": "def calculate(a, b, c):\n    return a + b - c",

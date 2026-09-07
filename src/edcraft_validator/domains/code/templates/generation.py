@@ -13,12 +13,10 @@ from edcraft_validator.models import GeneratedQuestion
 from .expressions import SafeExpression
 from .models import (
     ApprovedCodeQuestionTemplate,
-    CodeQuestionTemplate,
     ParameterValue,
     TemplateQuestionInstance,
     TemplateValidationError,
     _case_count,
-    validated_cases_sha256,
 )
 
 
@@ -27,14 +25,9 @@ def generate_template_instance(
 ) -> TemplateQuestionInstance:
     """Expand an approved template without AI calls or per-instance validation."""
     template = approved.template
-    digest = template_sha256(template)
-    if digest != approved.validation.template_sha256:
-        raise ValueError("approved template content has changed since validation")
     if approved.validation.cases_validated != _case_count(template):
         raise ValueError("approved template does not cover its complete input domain")
     cases = approved.validation.validated_cases
-    if approved.validation.validated_cases_sha256 != validated_cases_sha256(cases):
-        raise ValueError("validated case answers have changed since validation")
     expected_inputs = [
         dict(
             zip(
@@ -55,7 +48,7 @@ def generate_template_instance(
 
     inputs = {
         parameter.name: copy.deepcopy(
-            _seeded_choice(parameter.values, digest, seed, parameter.name)
+            _seeded_choice(parameter.values, template.template_id, seed, parameter.name)
         )
         for parameter in template.parameters
     }
@@ -82,8 +75,6 @@ def generate_template_instance(
     )
     return TemplateQuestionInstance(
         template_id=template.template_id,
-        template_version=template.version,
-        template_sha256=digest,
         seed=seed,
         parameters=inputs,
         question=question,
@@ -118,15 +109,6 @@ def render_template(
     if not rendered.strip():
         raise TemplateValidationError("rendered text must not be blank")
     return rendered
-
-
-def template_sha256(template: CodeQuestionTemplate) -> str:
-    payload = json.dumps(
-        template.model_dump(mode="json"),
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(payload.encode()).hexdigest()
 
 
 def _case_key(inputs: dict[str, ParameterValue]) -> str:

@@ -1,6 +1,5 @@
 {
   "template_id": "lists.weighted_edges",
-  "version": 1,
   "topic": "lists",
   "difficulty": "advanced",
   "code": "def weighted_edges(values):\n    return values[0] * 2 + values[-1]",

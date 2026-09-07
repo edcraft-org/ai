@@ -1,6 +1,5 @@
 {
   "template_id": "functions.single_helper",
-  "version": 1,
   "topic": "functions",
   "difficulty": "beginner",
   "code": "def increment(value):\n    return value + 1\n\ndef calculate(value):\n    return increment(value)",

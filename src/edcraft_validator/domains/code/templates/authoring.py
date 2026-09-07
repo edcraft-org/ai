@@ -54,7 +54,6 @@ def normalize_code_template_proposal(
     digest = hashlib.sha256(identity_payload).hexdigest()[:12]
     return CodeQuestionTemplate(
         template_id=f"{request.topic}.{request.difficulty}.{digest}",
-        version=1,
         topic=request.topic,
         difficulty=request.difficulty,
         code=proposal.code,

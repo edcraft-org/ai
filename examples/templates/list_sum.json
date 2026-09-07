@@ -1,6 +1,5 @@
 {
   "template_id": "lists.integer_sum",
-  "version": 1,
   "topic": "lists",
   "difficulty": "beginner",
   "code": "def total(values):\n    return sum(values)",

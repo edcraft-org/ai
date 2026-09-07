@@ -25,7 +25,7 @@ from edcraft_validator.validation.contracts import (
 )
 
 from .expressions import SafeExpression
-from .generation import render_template, template_sha256
+from .generation import render_template
 from .models import (
     ApprovedCodeQuestionTemplate,
     CodeQuestionTemplate,
@@ -34,7 +34,6 @@ from .models import (
     TemplateValidationError,
     TemplateValidationSummary,
     ValidatedTemplateCase,
-    validated_cases_sha256,
 )
 
 CODE_TEMPLATE_VALIDATOR_VERSION = "code-template-validator-v2"
@@ -177,9 +176,7 @@ class TemplateValidator:
             validation=TemplateValidationSummary(
                 validator_version=CODE_TEMPLATE_VALIDATOR_VERSION,
                 cases_validated=len(inputs_cases),
-                template_sha256=template_sha256(approved_template),
                 validated_cases=validated_cases,
-                validated_cases_sha256=validated_cases_sha256(validated_cases),
                 evidence=evidence,
             ),
         )

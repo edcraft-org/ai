@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 import math
 from typing import Any, Literal
@@ -126,7 +125,6 @@ class CodeQuestionTemplate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     template_id: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]*$")
-    version: int = Field(ge=1)
     topic: ProgrammingTopic
     difficulty: Difficulty
     code: str = Field(min_length=1)
@@ -188,9 +186,7 @@ class TemplateValidationSummary(BaseModel):
 
     validator_version: str = Field(min_length=1)
     cases_validated: int = Field(ge=1)
-    template_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     validated_cases: list[ValidatedTemplateCase] = Field(min_length=1)
-    validated_cases_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     evidence: list[ValidationEvidence] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -202,8 +198,6 @@ class TemplateValidationSummary(BaseModel):
             raise ValueError("approved templates require passing validation evidence")
         if self.cases_validated != len(self.validated_cases):
             raise ValueError("cases_validated must match validated_cases")
-        if self.validated_cases_sha256 != validated_cases_sha256(self.validated_cases):
-            raise ValueError("validated case answers have changed since validation")
         return self
 
 
@@ -229,8 +223,6 @@ class TemplateQuestionInstance(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     template_id: str
-    template_version: int
-    template_sha256: str
     seed: int
     parameters: dict[str, ParameterValue]
     question: GeneratedQuestion
@@ -262,15 +254,6 @@ class TemplateValidationError(ValueError):
             "inputs": self.inputs,
             "evidence": [item.model_dump(mode="json") for item in self.evidence],
         }
-
-
-def validated_cases_sha256(cases: list[ValidatedTemplateCase]) -> str:
-    payload = json.dumps(
-        [case.model_dump(mode="json") for case in cases],
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(payload.encode()).hexdigest()
 
 
 def _case_count(template: CodeQuestionTemplate) -> int:

@@ -110,7 +110,7 @@ Planned domain direction:
 
 Record enough metadata to reproduce and evaluate template generation, including
 the provider, model, generation settings, prompt version, request, source document
-and passage hashes, template version, validation evidence, evaluation scores,
+and passage hashes, validation evidence, evaluation scores,
 threshold versions, and timing. Approved templates and generated questions should
 be reproducible from their stored template and seed.
 
@@ -215,7 +215,7 @@ complete when:
 - A technically valid template is presented for a direct user approve/reject
   decision before it is used for learner-facing generation.
 - Automated tests cover document isolation, provenance, retrieval, grounding,
-  quality evaluators, user decisions, and template tamper detection.
+  quality evaluators, and user decisions.
 
 ## Non-Goals for the Current Milestone
 

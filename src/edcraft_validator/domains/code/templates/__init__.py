@@ -9,7 +9,7 @@ from .authoring import (
     parse_code_template_proposal,
 )
 from .expressions import SafeExpression
-from .generation import generate_template_instance, render_template, template_sha256
+from .generation import generate_template_instance, render_template
 from .models import (
     ApprovedCodeQuestionTemplate,
     CodeQuestionTemplate,
@@ -21,7 +21,6 @@ from .models import (
     TemplateValidationError,
     TemplateValidationSummary,
     ValidatedTemplateCase,
-    validated_cases_sha256,
 )
 from .validation import CODE_TEMPLATE_VALIDATOR_VERSION, TemplateValidator
 
@@ -47,6 +46,4 @@ __all__ = [
     "parse_code_question_template",
     "parse_code_template_proposal",
     "render_template",
-    "template_sha256",
-    "validated_cases_sha256",
 ]

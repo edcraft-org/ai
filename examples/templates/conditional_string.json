@@ -1,6 +1,5 @@
 {
   "template_id": "conditionals.string_route",
-  "version": 1,
   "topic": "conditionals",
   "difficulty": "intermediate",
   "code": "def route(mode):\n    if mode == \"express\":\n        return 1\n    if mode == \"standard\":\n        return 2\n    return 3",
