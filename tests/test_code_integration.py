@@ -2,26 +2,24 @@ from pathlib import Path
 
 import pytest
 
-from edcraft_validator.application import QuestionTemplateApplication, TemplateEvaluator
+from edcraft_validator.application import TemplateApplication
+from edcraft_validator.domains.code.evaluation import TemplateEvaluator
+from edcraft_validator.domains.code.models import CodeTemplateAuthoringRequest
+from edcraft_validator.domains.code.module import CodeDomain
 from edcraft_validator.domains.code.templates import (
     CodeQuestionTemplate,
     CodeTemplateProposal,
     TemplateValidator,
 )
-from edcraft_validator.executor import DockerExecutor
-from edcraft_validator.generation.models import (
-    TemplateAuthoringRequest,
-    TemplatePromptMetadata,
-)
+from edcraft_validator.tools.python_execution import LocalPythonTool
 
 TEMPLATE_PATHS = sorted(
     (Path(__file__).parents[1] / "examples" / "templates").glob("*.json")
 )
 
 
-@pytest.mark.docker
-def test_valid_example_executes_in_docker() -> None:
-    result = DockerExecutor().execute(
+def test_valid_example_executes_with_local_python_tool() -> None:
+    result = LocalPythonTool().execute(
         "def square(x):\n    return x * x",
         "square",
         {"x": 4},
@@ -32,10 +30,8 @@ def test_valid_example_executes_in_docker() -> None:
     assert result.answer == 16
 
 
-@pytest.mark.docker
-def test_generated_code_is_bounded_inside_docker() -> None:
-    # Either deterministic worker guard may win, but Docker OOM must not win.
-    result = DockerExecutor().execute(
+def test_generated_code_is_bounded_by_local_python_tool() -> None:
+    result = LocalPythonTool().execute(
         "def slow(value):\n"
         "    for _ in range(1000000000):\n"
         "        pass\n"
@@ -45,14 +41,12 @@ def test_generated_code_is_bounded_inside_docker() -> None:
         timeout_seconds=0.01,
     )
 
-    # Require a worker-level guard to stop execution before Docker's memory ceiling.
     assert not result.ok
     assert result.error_code in {"EXECUTION_TIMEOUT", "TRACE_LIMIT_EXCEEDED"}
 
 
-@pytest.mark.docker
-def test_generated_code_trace_limit_is_enforced_inside_docker() -> None:
-    result = DockerExecutor().execute(
+def test_generated_code_trace_limit_is_enforced() -> None:
+    result = LocalPythonTool().execute(
         "def expensive(value):\n"
         "    for _ in range(1000000000):\n"
         "        value += 1\n"
@@ -66,9 +60,8 @@ def test_generated_code_trace_limit_is_enforced_inside_docker() -> None:
     assert result.error_code == "TRACE_LIMIT_EXCEEDED"
 
 
-@pytest.mark.docker
 @pytest.mark.parametrize("template_path", TEMPLATE_PATHS, ids=lambda path: path.stem)
-def test_template_is_exhaustively_approved_in_docker(template_path: Path) -> None:
+def test_template_is_exhaustively_approved(template_path: Path) -> None:
     template = CodeQuestionTemplate.model_validate_json(template_path.read_text())
 
     approved = TemplateValidator().validate(template)
@@ -79,8 +72,7 @@ def test_template_is_exhaustively_approved_in_docker(template_path: Path) -> Non
     assert approved.validation.cases_validated == expected_cases
 
 
-@pytest.mark.docker
-def test_model_proposal_is_normalized_then_approved_in_docker() -> None:
+def test_model_proposal_is_built_then_approved() -> None:
     path = (
         Path(__file__).parents[1] / "examples" / "templates" / "arithmetic_linear.json"
     )
@@ -97,21 +89,20 @@ def test_model_proposal_is_normalized_then_approved_in_docker() -> None:
         )
     )
 
-    class StubGenerator:
+    class StubProvider:
         provider = "stub"
         model = "stub-model"
 
-        def prompt_metadata(self, request):
-            return TemplatePromptMetadata(version="test-v1", sha256="b" * 64)
-
-        def generate_proposal(self, request):
+        def generate(self, request):
             return proposal
 
-    application = QuestionTemplateApplication(
-        generator_factory=lambda provider: StubGenerator()
+    application = TemplateApplication(
+        provider_factory=lambda selection: StubProvider(),
+        domain_factory=lambda name: CodeDomain(),
     )
     approved = application.author(
-        TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner"),
+        CodeTemplateAuthoringRequest(topic="arithmetic", difficulty="beginner"),
+        domain="code",
         provider="stub",
     )
 
@@ -124,7 +115,7 @@ def test_model_proposal_is_normalized_then_approved_in_docker() -> None:
     assert approved.validation.cases_validated == expected_cases
 
     report = TemplateEvaluator(
-        generator_factory=lambda selection: StubGenerator()
+        provider_factory=lambda selection: StubProvider()
     ).evaluate(
         provider="stub",
         model="stub-model",

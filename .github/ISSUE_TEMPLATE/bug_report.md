@@ -15,7 +15,6 @@ labels: bug
 ## Environment
 - OS:
 - Python:
-- Docker:
 - Commit or branch:
 
 ## Logs / examples

@@ -2,19 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import TYPE_CHECKING, Protocol
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Protocol
 
-from edcraft_validator.generation.models import (
-    TemplateAuthoringRequest,
-    TemplatePromptMetadata,
-)
+from pydantic import BaseModel
 
-if TYPE_CHECKING:
-    from edcraft_validator.domains.code.templates import CodeTemplateProposal
+from edcraft_validator.generation.models import TemplatePromptMetadata
 
 
 class GenerationError(RuntimeError):
-    """Raised when a provider cannot produce a usable template."""
+    """Raised when a provider cannot produce a usable structured result."""
 
     category = "generation_error"
 
@@ -35,19 +33,29 @@ class GenerationSchemaError(GenerationError):
     category = "schema_validation"
 
 
-class QuestionTemplateGenerator(Protocol):
-    """Provider contract for authoring one reusable question template."""
+@dataclass(frozen=True)
+class StructuredGenerationRequest[ProposalT: BaseModel]:
+    """Domain-owned prompt, response schema, and response parser."""
+
+    messages: list[dict[str, str]]
+    response_model: type[BaseModel]
+    parse_response: Callable[[str], ProposalT]
+    prompt_version: str
+    schema_name: str = "template_proposal"
+
+    def prompt_metadata(self) -> TemplatePromptMetadata:
+        return build_prompt_metadata(self.prompt_version, self.messages)
+
+
+class ModelProvider(Protocol):
+    """Domain-agnostic structured-generation provider."""
 
     provider: str
     model: str
 
-    def generate_proposal(
-        self, request: TemplateAuthoringRequest
-    ) -> CodeTemplateProposal: ...
-
-    def prompt_metadata(
-        self, request: TemplateAuthoringRequest
-    ) -> TemplatePromptMetadata: ...
+    def generate[ProposalT: BaseModel](
+        self, request: StructuredGenerationRequest[ProposalT]
+    ) -> ProposalT: ...
 
 
 def build_prompt_metadata(

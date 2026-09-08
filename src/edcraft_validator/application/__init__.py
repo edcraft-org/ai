@@ -1,6 +1,5 @@
-"""Application use cases shared by the CLI and future frontends."""
+"""Domain-agnostic use cases shared by the CLI and future frontends."""
 
-from edcraft_validator.domains.code.application import QuestionTemplateApplication
-from edcraft_validator.domains.code.evaluation import TemplateEvaluator
+from edcraft_validator.application.templates import TemplateApplication
 
-__all__ = ["QuestionTemplateApplication", "TemplateEvaluator"]
+__all__ = ["TemplateApplication"]

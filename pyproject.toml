@@ -27,7 +27,6 @@ step-tracer = { git = "https://github.com/edcraft-org/step-tracer.git", rev = "a
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-    "docker: tests requiring the Docker executor image",
     "openai_live: real OpenAI template-authoring API test, run before a PR",
 ]
 

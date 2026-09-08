@@ -11,15 +11,13 @@ from typing import Any
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
-from edcraft_validator.application import QuestionTemplateApplication, TemplateEvaluator
+from edcraft_validator.application import TemplateApplication
 from edcraft_validator.domains.code.capabilities import CODE_DIFFICULTIES, CODE_TOPICS
-from edcraft_validator.domains.code.templates import (
-    ApprovedCodeQuestionTemplate,
-    CodeQuestionTemplate,
-)
+from edcraft_validator.domains.code.evaluation import TemplateEvaluator
+from edcraft_validator.domains.code.models import CodeTemplateAuthoringRequest
+from edcraft_validator.domains.registry import available_domains, create_domain
 from edcraft_validator.generation.base import GenerationError
-from edcraft_validator.generation.models import TemplateAuthoringRequest
-from edcraft_validator.generation.registry import available_template_providers
+from edcraft_validator.generation.registry import available_model_providers
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,8 +28,9 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     author = commands.add_parser("author", help="author and approve one AI template")
+    author.add_argument("--domain", choices=available_domains(), required=True)
     author.add_argument(
-        "--provider", choices=available_template_providers(), required=True
+        "--provider", choices=available_model_providers(), required=True
     )
     author.add_argument(
         "--model",
@@ -53,12 +52,14 @@ def build_parser() -> argparse.ArgumentParser:
     validate = commands.add_parser(
         "validate", help="exhaustively approve a raw template JSON file"
     )
+    validate.add_argument("--domain", choices=available_domains(), required=True)
     validate.add_argument("template", type=Path)
     validate.add_argument("--output", type=Path)
 
     generate = commands.add_parser(
         "generate", help="expand an approved template without AI or validation"
     )
+    generate.add_argument("--domain", choices=available_domains(), required=True)
     generate.add_argument("template", type=Path)
     generate.add_argument("--seed", type=int, required=True)
     generate.add_argument("--output", type=Path)
@@ -66,8 +67,9 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate = commands.add_parser(
         "evaluate", help="measure real template approval quality and latency"
     )
+    evaluate.add_argument("--domain", choices=("code",), required=True)
     evaluate.add_argument(
-        "--provider", choices=available_template_providers(), required=True
+        "--provider", choices=available_model_providers(), required=True
     )
     evaluate.add_argument("--model")
     evaluate.add_argument("--topic", choices=(*CODE_TOPICS, "all"), default="all")
@@ -99,30 +101,32 @@ def main() -> int:
 
 
 def _handle_author(args: argparse.Namespace) -> int:
-    request = TemplateAuthoringRequest(
+    request = CodeTemplateAuthoringRequest(
         topic=args.topic,
         difficulty=args.difficulty,
         num_distractors=args.num_distractors,
     )
-    result = QuestionTemplateApplication().author(
-        request, provider=args.provider, model=args.model
+    result = TemplateApplication().author(
+        request, domain=args.domain, provider=args.provider, model=args.model
     )
     _write_json(result.model_dump(mode="json"), args.output)
     return 0
 
 
 def _handle_validate(args: argparse.Namespace) -> int:
-    template = CodeQuestionTemplate.model_validate_json(args.template.read_text())
-    result = QuestionTemplateApplication().approve(template)
+    domain = create_domain(args.domain)
+    template = domain.template_model.model_validate_json(args.template.read_text())
+    result = TemplateApplication().approve(template, domain=args.domain)
     _write_json(result.model_dump(mode="json"), args.output)
     return 0
 
 
 def _handle_generate(args: argparse.Namespace) -> int:
-    approved = ApprovedCodeQuestionTemplate.model_validate_json(
-        args.template.read_text()
+    domain = create_domain(args.domain)
+    approved = domain.approved_model.model_validate_json(args.template.read_text())
+    result = TemplateApplication().generate(
+        approved, domain=args.domain, seed=args.seed
     )
-    result = QuestionTemplateApplication().generate(approved, seed=args.seed)
     _write_json(result.model_dump(mode="json"), args.output)
     return 0
 

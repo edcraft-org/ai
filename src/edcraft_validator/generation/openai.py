@@ -4,34 +4,23 @@ import os
 from typing import Any
 
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
-from edcraft_validator.domains.code.templates import (
-    CODE_TEMPLATE_PROMPT_VERSION,
-    CODE_TEMPLATE_SYSTEM_PROMPT,
-    CodeTemplateProposal,
-    build_template_prompt,
-    parse_code_template_proposal,
-)
 from edcraft_validator.generation.base import (
     GenerationError,
     GenerationResponseError,
     GenerationSchemaError,
     GenerationTimeoutError,
     GenerationTransportError,
-    build_prompt_metadata,
-)
-from edcraft_validator.generation.models import (
-    TemplateAuthoringRequest,
-    TemplatePromptMetadata,
+    StructuredGenerationRequest,
 )
 
 DEFAULT_OPENAI_MODEL = "gpt-5-mini"
 OpenAIGenerationError = GenerationError
 
 
-class OpenAICompatibleTemplateGenerator:
-    """Author templates through an OpenAI-compatible chat-completions API."""
+class OpenAICompatibleProvider:
+    """Structured generation through an OpenAI-compatible API."""
 
     def __init__(
         self, provider: str, client: Any | None = None, *, model: str | None = None
@@ -53,20 +42,20 @@ class OpenAICompatibleTemplateGenerator:
         self.client = client
         self.model = model or _model(provider)
 
-    def generate_proposal(
-        self, request: TemplateAuthoringRequest
-    ) -> CodeTemplateProposal:
-        """Ask the provider for the judgment-bearing template fields."""
+    def generate[ProposalT: BaseModel](
+        self, request: StructuredGenerationRequest[ProposalT]
+    ) -> ProposalT:
+        """Generate any domain proposal described by the supplied request."""
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=self._messages(request),
+                messages=request.messages,
                 response_format={
                     "type": "json_schema",
                     "json_schema": {
-                        "name": "question_template",
+                        "name": request.schema_name,
                         "strict": True,
-                        "schema": CodeTemplateProposal.model_json_schema(),
+                        "schema": request.response_model.model_json_schema(),
                     },
                 },
             )
@@ -75,7 +64,7 @@ class OpenAICompatibleTemplateGenerator:
                 raise GenerationResponseError(
                     f"{self.provider} returned an empty response"
                 )
-            return parse_code_template_proposal(content)
+            return request.parse_response(content)
         except GenerationError:
             raise
         except APITimeoutError as exc:
@@ -94,22 +83,8 @@ class OpenAICompatibleTemplateGenerator:
             ) from exc
         except Exception as exc:
             raise OpenAIGenerationError(
-                f"{self.provider} failed to generate a question template: {exc}"
+                f"{self.provider} failed to generate a structured result: {exc}"
             ) from exc
-
-    def prompt_metadata(
-        self, request: TemplateAuthoringRequest
-    ) -> TemplatePromptMetadata:
-        return build_prompt_metadata(
-            CODE_TEMPLATE_PROMPT_VERSION, self._messages(request)
-        )
-
-    @staticmethod
-    def _messages(request: TemplateAuthoringRequest) -> list[dict[str, str]]:
-        return [
-            {"role": "system", "content": CODE_TEMPLATE_SYSTEM_PROMPT},
-            {"role": "user", "content": build_template_prompt(request)},
-        ]
 
 
 def _api_key(provider: str) -> str | None:
@@ -186,15 +161,15 @@ def _max_retries(provider: str) -> int:
     return value
 
 
-class OpenAITemplateGenerator(OpenAICompatibleTemplateGenerator):
-    """Author reusable templates through OpenAI's API."""
+class OpenAIProvider(OpenAICompatibleProvider):
+    """Structured generation through OpenAI's API."""
 
     def __init__(self, client: Any | None = None, *, model: str | None = None) -> None:
         super().__init__("openai", client, model=model)
 
 
-class SocLaasTemplateGenerator(OpenAICompatibleTemplateGenerator):
-    """Author templates through the SocLaas OpenAI-compatible API."""
+class SocLaasProvider(OpenAICompatibleProvider):
+    """Structured generation through the SocLaas API."""
 
     def __init__(self, client: Any | None = None, *, model: str | None = None) -> None:
         super().__init__("soclaas", client, model=model)

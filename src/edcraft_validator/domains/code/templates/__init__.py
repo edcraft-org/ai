@@ -3,8 +3,8 @@
 from .authoring import (
     CODE_TEMPLATE_PROMPT_VERSION,
     CODE_TEMPLATE_SYSTEM_PROMPT,
+    build_code_template,
     build_template_prompt,
-    normalize_code_template_proposal,
     parse_code_question_template,
     parse_code_template_proposal,
 )
@@ -41,8 +41,8 @@ __all__ = [
     "TemplateValidator",
     "ValidatedTemplateCase",
     "build_template_prompt",
+    "build_code_template",
     "generate_template_instance",
-    "normalize_code_template_proposal",
     "parse_code_question_template",
     "parse_code_template_proposal",
     "render_template",

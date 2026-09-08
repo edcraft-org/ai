@@ -1,8 +1,6 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-from edcraft_validator.domains.code.capabilities import Difficulty, ProgrammingTopic
 
 
 class TemplateProviderSelection(BaseModel):
@@ -24,16 +22,6 @@ class TemplateProviderSelection(BaseModel):
         return stripped
 
 
-class TemplateAuthoringRequest(BaseModel):
-    """Human-selected constraints for one reusable template."""
-
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    topic: ProgrammingTopic
-    difficulty: Difficulty
-    num_distractors: int = Field(default=3, ge=2, le=3)
-
-
 class TemplatePromptMetadata(BaseModel):
     """Versioned identity of the exact messages sent to a provider."""
 
@@ -50,8 +38,9 @@ class TemplateAuthoringProvenance(BaseModel):
 
     provider: str = Field(min_length=1)
     model: str = Field(min_length=1)
+    domain: str = Field(pattern=r"^[a-z][a-z0-9_-]*$")
     prompt: TemplatePromptMetadata
-    request: TemplateAuthoringRequest
+    request: dict[str, Any]
     generation_duration_ms: float = Field(ge=0)
     validation_duration_ms: float = Field(ge=0)
     status: Literal["approved"] = "approved"

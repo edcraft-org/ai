@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from edcraft_validator.domains.code.capabilities import Difficulty, ProgrammingTopic
 from edcraft_validator.generation.models import TemplateAuthoringProvenance
 from edcraft_validator.models import AnswerTarget, GeneratedQuestion
-from edcraft_validator.validation.contracts import ValidationEvidence
+from edcraft_validator.validation.contracts import ValidationEvidence, ValidationFailure
 
 MAX_TEMPLATE_CASES = 64
 MAX_STRING_LENGTH = 40
@@ -228,7 +228,7 @@ class TemplateQuestionInstance(BaseModel):
     question: GeneratedQuestion
 
 
-class TemplateValidationError(ValueError):
+class TemplateValidationError(ValidationFailure):
     """Raised when any possible instance fails template approval."""
 
     def __init__(
@@ -240,11 +240,15 @@ class TemplateValidationError(ValueError):
         inputs: dict[str, ParameterValue] | None = None,
         evidence: list[ValidationEvidence] | None = None,
     ) -> None:
-        super().__init__(message)
-        self.code = code
-        self.field = field
+        context = {"failing_inputs": inputs} if inputs is not None else None
+        super().__init__(
+            message,
+            code=code,
+            field=field,
+            context=context,
+            evidence=evidence,
+        )
         self.inputs = copy.deepcopy(inputs)
-        self.evidence = copy.deepcopy(evidence or [])
 
     def as_dict(self) -> dict[str, Any]:
         return {

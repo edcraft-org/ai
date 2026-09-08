@@ -2,8 +2,8 @@ import os
 
 import pytest
 
-from edcraft_validator.application import QuestionTemplateApplication
-from edcraft_validator.generation.models import TemplateAuthoringRequest
+from edcraft_validator.application import TemplateApplication
+from edcraft_validator.domains.code.models import CodeTemplateAuthoringRequest
 
 pytestmark = pytest.mark.openai_live
 
@@ -13,8 +13,9 @@ def test_real_openai_template_authoring() -> None:
     if not os.getenv("OPENAI_API_KEY"):
         pytest.skip("OPENAI_API_KEY is not configured")
 
-    approved = QuestionTemplateApplication().author(
-        TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner"),
+    approved = TemplateApplication().author(
+        CodeTemplateAuthoringRequest(topic="arithmetic", difficulty="beginner"),
+        domain="code",
         provider="openai",
     )
 

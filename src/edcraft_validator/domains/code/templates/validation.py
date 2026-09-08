@@ -6,23 +6,22 @@ import ast
 import copy
 import itertools
 import json
-import time
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, TypeVar
+from typing import Any
 
 from edcraft_validator.comparison import equivalent, same_value_shape
 from edcraft_validator.domains.code.capabilities import (
     code_template_profile,
     extract_code_features,
 )
-from edcraft_validator.executor import DockerExecutor, ExecutionBackend, ExecutionResult
-from edcraft_validator.models import AnswerTarget, ValidationIssue
-from edcraft_validator.safety import check_code_safety
-from edcraft_validator.validation.contracts import (
-    AssuranceLevel,
-    ValidationEvidence,
+from edcraft_validator.models import AnswerTarget
+from edcraft_validator.tools.python_analysis import analyze_python_subset
+from edcraft_validator.tools.python_execution import (
+    ExecutionResult,
+    LocalPythonTool,
+    PythonExecutionTool,
 )
+from edcraft_validator.validation.pipeline import ValidationPipeline
 
 from .expressions import SafeExpression
 from .generation import render_template
@@ -36,8 +35,7 @@ from .models import (
     ValidatedTemplateCase,
 )
 
-CODE_TEMPLATE_VALIDATOR_VERSION = "code-template-validator-v2"
-_T = TypeVar("_T")
+CODE_TEMPLATE_VALIDATOR_VERSION = "code-template-validator-v3"
 
 
 @dataclass
@@ -54,16 +52,16 @@ class TemplateValidator:
     def __init__(
         self,
         *,
-        executor: ExecutionBackend | None = None,
+        execution_tool: PythonExecutionTool | None = None,
         timeout_seconds: float = 2.0,
     ) -> None:
-        self.executor = executor or DockerExecutor()
+        self.execution_tool = execution_tool or LocalPythonTool()
         self.timeout_seconds = timeout_seconds
 
     def validate(
         self, template: CodeQuestionTemplate, *, num_distractors: int | None = None
     ) -> ApprovedCodeQuestionTemplate:
-        evidence: list[ValidationEvidence] = []
+        pipeline = ValidationPipeline()
         original_distractor_count = len(template.distractors)
         names = tuple(parameter.name for parameter in template.parameters)
         value_domains = [parameter.values for parameter in template.parameters]
@@ -73,18 +71,16 @@ class TemplateValidator:
         ]
         case_details = {"cases": len(inputs_cases)}
 
-        self._record_check(
-            evidence,
-            check="template_structure",
+        pipeline.check(
+            name="template_structure",
             assurance="bounded",
             details={"topic": template.topic, "difficulty": template.difficulty},
             operation=lambda: self._validate_structure(template, names),
         )
         if num_distractors is not None and not 2 <= num_distractors <= 3:
             raise ValueError("num_distractors must be 2 or 3")
-        proposed_answer, candidates = self._record_check(
-            evidence,
-            check="expression_safety",
+        proposed_answer, candidates = pipeline.check(
+            name="expression_safety",
             assurance="bounded",
             details={"distractors": len(template.distractors)},
             operation=lambda: self._parse_expressions(
@@ -93,26 +89,23 @@ class TemplateValidator:
                 allow_candidate_rejections=num_distractors is not None,
             ),
         )
-        proposed_answers = self._record_check(
-            evidence,
-            check="answer_domain",
+        proposed_answers = pipeline.check(
+            name="answer_domain",
             assurance="exhaustive",
             details=case_details,
             operation=lambda: self._evaluate_answers(
                 template, proposed_answer, inputs_cases
             ),
         )
-        executions = self._record_check(
-            evidence,
-            check="sandboxed_execution",
+        executions = pipeline.check(
+            name="code_execution",
             assurance="exhaustive",
-            details={**case_details, "executor": type(self.executor).__name__},
+            details={**case_details, "tool": type(self.execution_tool).__name__},
             operation=lambda: self._execute_successfully(template, inputs_cases),
         )
-        answer_details = {**case_details, "source": "sandboxed_execution"}
-        canonical_answers, corrected_cases = self._record_check(
-            evidence,
-            check="canonical_answers",
+        answer_details = {**case_details, "source": "code_execution"}
+        canonical_answers, corrected_cases = pipeline.check(
+            name="canonical_answers",
             assurance="exhaustive",
             details=answer_details,
             operation=lambda: self._resolve_canonical_answers(
@@ -134,9 +127,8 @@ class TemplateValidator:
         if selected_count is None and corrected_cases:
             selected_count = original_distractor_count
         if selected_count is not None:
-            template, candidates = self._record_check(
-                evidence,
-                check="distractor_selection",
+            template, candidates = pipeline.check(
+                name="distractor_selection",
                 assurance="exhaustive",
                 details={**case_details, "selected": selected_count},
                 operation=lambda: self._select_distractors(
@@ -147,18 +139,16 @@ class TemplateValidator:
                     num_distractors=selected_count,
                 ),
             )
-        self._record_check(
-            evidence,
-            check="distractor_consistency",
+        pipeline.check(
+            name="distractor_consistency",
             assurance="exhaustive",
             details={**case_details, "distractors": len(candidates)},
             operation=lambda: self._validate_all_distractors(
                 inputs_cases, canonical_answers, candidates
             ),
         )
-        self._record_check(
-            evidence,
-            check="template_rendering",
+        pipeline.check(
+            name="template_rendering",
             assurance="exhaustive",
             details=case_details,
             operation=lambda: self._validate_rendering(template, inputs_cases),
@@ -177,54 +167,9 @@ class TemplateValidator:
                 validator_version=CODE_TEMPLATE_VALIDATOR_VERSION,
                 cases_validated=len(inputs_cases),
                 validated_cases=validated_cases,
-                evidence=evidence,
+                evidence=pipeline.evidence,
             ),
         )
-
-    @staticmethod
-    def _record_check(
-        evidence: list[ValidationEvidence],
-        *,
-        check: str,
-        assurance: AssuranceLevel,
-        details: dict[str, Any],
-        operation: Callable[[], _T],
-    ) -> _T:
-        started = time.perf_counter()
-        try:
-            result = operation()
-        except TemplateValidationError as exc:
-            failed_details = copy.deepcopy(details)
-            if exc.inputs is not None:
-                failed_details["failing_inputs"] = copy.deepcopy(exc.inputs)
-            evidence.append(
-                ValidationEvidence(
-                    check=check,
-                    status="failed",
-                    assurance=assurance,
-                    issues=[
-                        ValidationIssue(
-                            code=exc.code,
-                            message=str(exc),
-                            field=exc.field,
-                        )
-                    ],
-                    details=failed_details,
-                    duration_ms=(time.perf_counter() - started) * 1000,
-                )
-            )
-            exc.evidence = copy.deepcopy(evidence)
-            raise
-        evidence.append(
-            ValidationEvidence(
-                check=check,
-                status="passed",
-                assurance=assurance,
-                details=copy.deepcopy(details),
-                duration_ms=(time.perf_counter() - started) * 1000,
-            )
-        )
-        return result
 
     @staticmethod
     def _parse_expressions(
@@ -504,7 +449,7 @@ class TemplateValidator:
         template: CodeQuestionTemplate,
         inputs: list[dict[str, ParameterValue]],
     ) -> list[ExecutionResult]:
-        execute_batch = getattr(self.executor, "execute_batch", None)
+        execute_batch = getattr(self.execution_tool, "execute_batch", None)
         if callable(execute_batch):
             results = execute_batch(
                 template.code,
@@ -514,7 +459,7 @@ class TemplateValidator:
             )
         else:
             results = [
-                self.executor.execute(
+                self.execution_tool.execute(
                     template.code,
                     template.entry_function,
                     item,
@@ -534,10 +479,12 @@ class TemplateValidator:
     def _validate_structure(
         template: CodeQuestionTemplate, names: tuple[str, ...]
     ) -> None:
-        safety = check_code_safety(template.code, template.entry_function)
-        if not safety.is_safe:
+        analysis = analyze_python_subset(template.code, template.entry_function)
+        if not analysis.is_valid:
             raise TemplateValidationError(
-                "; ".join(safety.errors), code="UNSAFE_CODE", field="code"
+                "; ".join(analysis.errors),
+                code="UNSUPPORTED_CODE",
+                field="code",
             )
         TemplateValidator._validate_profile(template)
         arguments = _entry_function_arguments(template.code, template.entry_function)

@@ -11,35 +11,37 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from edcraft_validator.domains.code.application import QuestionTemplateApplication
+from edcraft_validator.application.templates import TemplateApplication
+from edcraft_validator.domains.code.authoring import build_code_generation_request
 from edcraft_validator.domains.code.capabilities import Difficulty, ProgrammingTopic
+from edcraft_validator.domains.code.models import CodeTemplateAuthoringRequest
+from edcraft_validator.domains.code.module import CodeDomain
 from edcraft_validator.domains.code.templates import (
     ApprovedCodeQuestionTemplate,
     TemplateValidationError,
     TemplateValidator,
 )
-from edcraft_validator.generation.base import GenerationError, QuestionTemplateGenerator
+from edcraft_validator.generation.base import GenerationError, ModelProvider
 from edcraft_validator.generation.models import (
-    TemplateAuthoringRequest,
     TemplateProviderSelection,
 )
-from edcraft_validator.generation.registry import create_template_generator
+from edcraft_validator.generation.registry import create_model_provider
 from edcraft_validator.validation.contracts import ValidationEvidence
 
-GeneratorFactory = Callable[[TemplateProviderSelection], QuestionTemplateGenerator]
+ProviderFactory = Callable[[TemplateProviderSelection], ModelProvider]
 ValidatorFactory = Callable[[], TemplateValidator]
 AttemptObserver = Callable[["TemplateEvaluationAttempt"], None]
 
 
 class TemplateEvaluationAttempt(BaseModel):
-    """One complete provider → normalization → validation attempt."""
+    """One complete provider → template building → validation attempt."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
     attempt: int = Field(ge=1)
     provider: str
     model: str
-    request: TemplateAuthoringRequest
+    request: CodeTemplateAuthoringRequest
     status: Literal["approved", "failed"]
     prompt_version: str | None = None
     prompt_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
@@ -48,7 +50,11 @@ class TemplateEvaluationAttempt(BaseModel):
     total_duration_ms: float = Field(ge=0)
     failure_stage: (
         Literal[
-            "configuration", "generation", "normalization", "validation", "unexpected"
+            "configuration",
+            "generation",
+            "template_building",
+            "validation",
+            "unexpected",
         ]
         | None
     ) = None
@@ -105,10 +111,10 @@ class TemplateEvaluator:
     def __init__(
         self,
         *,
-        generator_factory: GeneratorFactory = create_template_generator,
+        provider_factory: ProviderFactory = create_model_provider,
         validator_factory: ValidatorFactory = TemplateValidator,
     ) -> None:
-        self.generator_factory = generator_factory
+        self.provider_factory = provider_factory
         self.validator_factory = validator_factory
 
     def evaluate(
@@ -132,7 +138,7 @@ class TemplateEvaluator:
         attempt_number = 0
         for topic in topics:
             for difficulty in difficulties:
-                request = TemplateAuthoringRequest(
+                request = CodeTemplateAuthoringRequest(
                     topic=topic,
                     difficulty=difficulty,
                     num_distractors=num_distractors,
@@ -156,30 +162,35 @@ class TemplateEvaluator:
         self,
         attempt_number: int,
         selection: TemplateProviderSelection,
-        request: TemplateAuthoringRequest,
+        request: CodeTemplateAuthoringRequest,
     ) -> TemplateEvaluationAttempt:
         started = time.perf_counter()
-        generator: QuestionTemplateGenerator | None = None
+        model_provider: ModelProvider | None = None
         prompt_version = None
         prompt_sha256 = None
         resolved_model = selection.model or "<provider-default>"
         try:
-            generator = self.generator_factory(selection)
-            resolved_model = generator.model
-            prompt = generator.prompt_metadata(request)
+            model_provider = self.provider_factory(selection)
+            resolved_model = model_provider.model
+            prompt = build_code_generation_request(
+                request, provider=model_provider.provider
+            ).prompt_metadata()
             prompt_version = prompt.version
             prompt_sha256 = prompt.sha256
-            application = QuestionTemplateApplication(
-                generator_factory=lambda _: generator,
-                validator_factory=self.validator_factory,
+            application = TemplateApplication(
+                provider_factory=lambda _: model_provider,
+                domain_factory=lambda _: CodeDomain(
+                    validator_factory=self.validator_factory
+                ),
             )
             approved = application.author(
                 request,
+                domain="code",
                 provider=selection.provider,
                 model=selection.model,
             )
         except Exception as exc:
-            stage, code = _classify_failure(exc, generator is not None)
+            stage, code = _classify_failure(exc, model_provider is not None)
             return TemplateEvaluationAttempt(
                 attempt=attempt_number,
                 provider=selection.provider,
@@ -219,7 +230,9 @@ class TemplateEvaluator:
 def _classify_failure(
     error: Exception, generator_created: bool
 ) -> tuple[
-    Literal["configuration", "generation", "normalization", "validation", "unexpected"],
+    Literal[
+        "configuration", "generation", "template_building", "validation", "unexpected"
+    ],
     str,
 ]:
     if isinstance(error, GenerationError):
@@ -228,9 +241,9 @@ def _classify_failure(
     if isinstance(error, TemplateValidationError):
         return "validation", error.code
     if isinstance(error, ValidationError):
-        return "normalization", "SCHEMA_VALIDATION"
+        return "template_building", "SCHEMA_VALIDATION"
     if isinstance(error, ValueError):
-        return "normalization", "NORMALIZATION_ERROR"
+        return "template_building", "TEMPLATE_BUILDING_ERROR"
     return "unexpected", type(error).__name__
 
 

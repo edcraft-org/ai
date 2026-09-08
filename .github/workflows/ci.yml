@@ -26,7 +26,7 @@ jobs:
       - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run pytest -m "not docker"
+      - run: uv run pytest
 
   openai-template-live:
     if: >-
@@ -44,15 +44,6 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile
-          tags: edcraft-validator-executor:local
-          load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -67,6 +58,7 @@ jobs:
       - name: Evaluate live OpenAI template approval
         run: >-
           uv run python -m edcraft_validator.cli evaluate
+          --domain code
           --provider openai
           --model "$OPENAI_MODEL"
           --topic arithmetic
@@ -80,24 +72,3 @@ jobs:
           name: openai-template-evaluation
           path: .artifacts/openai-pr-smoke.jsonl
           if-no-files-found: warn
-
-  docker-integration:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile
-          tags: edcraft-validator-executor:local
-          load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - uses: astral-sh/setup-uv@v7
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - run: uv lock --check
-      - run: uv sync --locked
-      - run: uv run pytest -m docker

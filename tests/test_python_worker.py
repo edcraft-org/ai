@@ -1,4 +1,4 @@
-from edcraft_validator._worker import execute_batch_request, execute_request
+from edcraft_validator.tools.python_worker import execute_batch_request, execute_request
 
 
 def test_executes_request_and_returns_trace_summary() -> None:

@@ -12,17 +12,21 @@ def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> N
             return {"approved": True}
 
     class StubApplication:
-        def author(self, request, *, provider, model):
-            captured.update(request=request, provider=provider, model=model)
+        def author(self, request, *, domain, provider, model):
+            captured.update(
+                request=request, domain=domain, provider=provider, model=model
+            )
             return Result()
 
-    monkeypatch.setattr(template_cli, "QuestionTemplateApplication", StubApplication)
+    monkeypatch.setattr(template_cli, "TemplateApplication", StubApplication)
     monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
     monkeypatch.setattr(
         "sys.argv",
         [
             "edcraft-template",
             "author",
+            "--domain",
+            "code",
             "--provider",
             "ollama",
             "--model",
@@ -38,6 +42,7 @@ def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> N
 
     assert exit_code == 0
     assert captured["provider"] == "ollama"
+    assert captured["domain"] == "code"
     assert captured["model"] == "qwen-test"
     request = captured["request"]
     assert request.topic == "loops"
@@ -88,6 +93,8 @@ def test_evaluate_cli_writes_attempts_and_prints_summary(
         [
             "edcraft-template",
             "evaluate",
+            "--domain",
+            "code",
             "--provider",
             "ollama",
             "--model",
