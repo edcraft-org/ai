@@ -1,6 +1,7 @@
 """Local adapter for executing a batch with the Python tracing tool."""
 
 import json
+import os
 import subprocess
 import sys
 from dataclasses import dataclass, replace
@@ -19,39 +20,18 @@ class ExecutionResult:
 class PythonExecutionTool(Protocol):
     """Interface required by code-domain execution checks."""
 
-    def execute(
+    def execute_batch(
         self,
         code: str,
         entry_function: str,
-        inputs: dict[str, Any],
+        inputs: list[dict[str, Any]],
         *,
         timeout_seconds: float,
-    ) -> ExecutionResult: ...
+    ) -> list[ExecutionResult]: ...
 
 
 class LocalPythonTool:
     """Run the packaged tracing worker in a local Python subprocess."""
-
-    def execute(
-        self,
-        code: str,
-        entry_function: str,
-        inputs: dict[str, Any],
-        *,
-        timeout_seconds: float,
-    ) -> ExecutionResult:
-        response = self._invoke(
-            {
-                "code": code,
-                "entry_function": entry_function,
-                "inputs": inputs,
-                "timeout_seconds": timeout_seconds,
-            },
-            host_timeout=timeout_seconds + 1,
-        )
-        return (
-            response if isinstance(response, ExecutionResult) else _to_result(response)
-        )
 
     def execute_batch(
         self,
@@ -99,6 +79,10 @@ class LocalPythonTool:
                 text=True,
                 timeout=host_timeout,
                 check=False,
+                env={
+                    "PATH": os.environ.get("PATH", ""),
+                    "PYTHONIOENCODING": "utf-8",
+                },
             )
         except subprocess.TimeoutExpired:
             return ExecutionResult(
@@ -107,6 +91,12 @@ class LocalPythonTool:
                 error_message="Python tool exceeded its execution timeout",
             )
 
+        if process.returncode < 0:
+            return ExecutionResult(
+                ok=False,
+                error_code="RESOURCE_LIMIT_EXCEEDED",
+                error_message="Python tool was stopped by an operating-system limit",
+            )
         if process.returncode != 0:
             return ExecutionResult(
                 ok=False,

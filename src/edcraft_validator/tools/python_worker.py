@@ -1,6 +1,8 @@
 """Implementation of the local Python tracing tool."""
 
 import json
+import math
+import resource
 import signal
 import sys
 from typing import Any
@@ -8,6 +10,7 @@ from typing import Any
 from step_tracer import BranchExecution, FunctionCall, LoopExecution, StepTracer
 
 DEFAULT_TRACE_EVENT_LIMIT = 100_000
+MAX_MEMORY_BYTES = 512 * 1024 * 1024
 
 
 class ExecutionTimedOutError(TimeoutError):
@@ -16,6 +19,18 @@ class ExecutionTimedOutError(TimeoutError):
 
 class TraceLimitExceededError(RuntimeError):
     pass
+
+
+def _apply_resource_limits(request: dict[str, Any]) -> None:
+    """Bound the worker before any generated code is executed."""
+    cases = request.get("cases")
+    case_count = len(cases) if isinstance(cases, list) else 1
+    timeout_seconds = float(request.get("timeout_seconds") or 2.0)
+    cpu_seconds = max(1, math.ceil(timeout_seconds * case_count) + 1)
+
+    if sys.platform.startswith("linux"):
+        resource.setrlimit(resource.RLIMIT_AS, (MAX_MEMORY_BYTES, MAX_MEMORY_BYTES))
+    resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
 
 
 def _raise_execution_timeout(signum: int, frame: Any) -> None:
@@ -128,6 +143,12 @@ def execute_request(request: dict[str, Any]) -> dict[str, Any]:
                 f"Execution exceeded the {trace_event_limit} trace-event limit"
             ),
         }
+    except MemoryError:
+        return {
+            "ok": False,
+            "error_code": "RESOURCE_LIMIT_EXCEEDED",
+            "error_message": "Execution exceeded the worker memory limit",
+        }
     except Exception as exc:
         return {
             "ok": False,
@@ -159,6 +180,7 @@ def execute_batch_request(request: dict[str, Any]) -> dict[str, Any]:
 def main() -> None:
     try:
         request = json.loads(sys.stdin.read())
+        _apply_resource_limits(request)
         response = (
             execute_batch_request(request)
             if "cases" in request

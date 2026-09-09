@@ -19,42 +19,42 @@ TEMPLATE_PATHS = sorted(
 
 
 def test_valid_example_executes_with_local_python_tool() -> None:
-    result = LocalPythonTool().execute(
+    result = LocalPythonTool().execute_batch(
         "def square(x):\n    return x * x",
         "square",
-        {"x": 4},
+        [{"x": 4}],
         timeout_seconds=2,
-    )
+    )[0]
 
     assert result.ok
     assert result.answer == 16
 
 
 def test_generated_code_is_bounded_by_local_python_tool() -> None:
-    result = LocalPythonTool().execute(
+    result = LocalPythonTool().execute_batch(
         "def slow(value):\n"
         "    for _ in range(1000000000):\n"
         "        pass\n"
         "    return value",
         "slow",
-        {"value": 1},
+        [{"value": 1}],
         timeout_seconds=0.01,
-    )
+    )[0]
 
     assert not result.ok
     assert result.error_code in {"EXECUTION_TIMEOUT", "TRACE_LIMIT_EXCEEDED"}
 
 
 def test_generated_code_trace_limit_is_enforced() -> None:
-    result = LocalPythonTool().execute(
+    result = LocalPythonTool().execute_batch(
         "def expensive(value):\n"
         "    for _ in range(1000000000):\n"
         "        value += 1\n"
         "    return value",
         "expensive",
-        {"value": 1},
+        [{"value": 1}],
         timeout_seconds=10,
-    )
+    )[0]
 
     assert not result.ok
     assert result.error_code == "TRACE_LIMIT_EXCEEDED"

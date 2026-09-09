@@ -3,6 +3,8 @@
 import ast
 from dataclasses import dataclass, field
 
+MAX_INTEGER_LITERAL = 10_000
+
 
 @dataclass
 class AnalysisResult:
@@ -126,6 +128,12 @@ class PythonSubsetAnalyzer(ast.NodeVisitor):
     def visit_Name(self, node: ast.Name) -> None:
         if node.id.startswith("__") or node.id in self._blocked_names:
             self.errors.append(f"Name '{node.id}' is not allowed (line {node.lineno})")
+
+    def visit_Constant(self, node: ast.Constant) -> None:
+        if type(node.value) is int and abs(node.value) > MAX_INTEGER_LITERAL:
+            self.errors.append(
+                f"Integer literal exceeds {MAX_INTEGER_LITERAL} (line {node.lineno})"
+            )
 
     def visit_Call(self, node: ast.Call) -> None:
         if not isinstance(node.func, ast.Name):

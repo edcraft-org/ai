@@ -75,3 +75,12 @@ def test_rejects_decorated_functions() -> None:
     result = analyze_python_subset("@staticmethod\ndef main():\n    return 1", "main")
     assert not result.is_valid
     assert any("Decorators" in error for error in result.errors)
+
+
+def test_rejects_oversized_integer_literals() -> None:
+    result = analyze_python_subset(
+        "def allocate():\n    return [0] * 100000000", "allocate"
+    )
+
+    assert not result.is_valid
+    assert any("Integer literal exceeds" in error for error in result.errors)

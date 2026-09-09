@@ -102,20 +102,6 @@ class ArithmeticExecutor:
         self.calls: list[dict[str, int]] = []
         self.batch_calls = 0
 
-    def execute(
-        self,
-        code: str,
-        entry_function: str,
-        inputs: dict[str, Any],
-        *,
-        timeout_seconds: float,
-    ) -> ExecutionResult:
-        self.calls.append(inputs)
-        return ExecutionResult(
-            ok=True,
-            answer=inputs["a"] + inputs["b"] - inputs["c"],
-        )
-
     def execute_batch(
         self,
         code: str,
@@ -436,6 +422,26 @@ def test_profile_rejects_the_wrong_answer_kind() -> None:
     assert error.value.code == "ANSWER_KIND_MISMATCH"
     assert error.value.field == "answer_expression"
     assert error.value.inputs is not None
+
+
+def test_unsupported_code_is_rejected_before_execution() -> None:
+    class UnexpectedExecutor:
+        called = False
+
+        def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+            self.called = True
+            raise AssertionError("unsupported code must not execute")
+
+    executor = UnexpectedExecutor()
+    value = template(
+        code="import os\n\ndef calculate(a, b, c):\n    return a + b - c"
+    )
+
+    with pytest.raises(TemplateValidationError) as error:
+        TemplateValidator(execution_tool=executor).validate(value)
+
+    assert error.value.code == "UNSUPPORTED_CODE"
+    assert executor.called is False
 
 
 def test_answer_kind_error_precedes_distractor_selection() -> None:

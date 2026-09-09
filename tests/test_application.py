@@ -65,8 +65,11 @@ def test_template_application_authors_once_then_generates_locally() -> None:
             return proposal
 
     class SumExecutor:
-        def execute(self, code, entry_function, inputs, *, timeout_seconds):
-            return ExecutionResult(ok=True, answer=inputs["a"] + inputs["b"])
+        def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+            return [
+                ExecutionResult(ok=True, answer=item["a"] + item["b"])
+                for item in inputs
+            ]
 
     def provider_factory(selection):
         provider_calls.append((selection.provider, selection.model))

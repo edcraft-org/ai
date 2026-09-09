@@ -449,24 +449,12 @@ class TemplateValidator:
         template: CodeQuestionTemplate,
         inputs: list[dict[str, ParameterValue]],
     ) -> list[ExecutionResult]:
-        execute_batch = getattr(self.execution_tool, "execute_batch", None)
-        if callable(execute_batch):
-            results = execute_batch(
-                template.code,
-                template.entry_function,
-                inputs,
-                timeout_seconds=self.timeout_seconds,
-            )
-        else:
-            results = [
-                self.execution_tool.execute(
-                    template.code,
-                    template.entry_function,
-                    item,
-                    timeout_seconds=self.timeout_seconds,
-                )
-                for item in inputs
-            ]
+        results = self.execution_tool.execute_batch(
+            template.code,
+            template.entry_function,
+            inputs,
+            timeout_seconds=self.timeout_seconds,
+        )
         if len(results) != len(inputs):
             raise TemplateValidationError(
                 "executor returned the wrong number of batch results",

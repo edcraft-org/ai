@@ -1,4 +1,30 @@
-from edcraft_validator.tools.python_worker import execute_batch_request, execute_request
+import resource
+from unittest.mock import call, patch
+
+from edcraft_validator.tools.python_worker import (
+    MAX_MEMORY_BYTES,
+    _apply_resource_limits,
+    execute_batch_request,
+    execute_request,
+)
+
+
+def test_applies_memory_and_cpu_limits_for_batch() -> None:
+    with (
+        patch("edcraft_validator.tools.python_worker.sys.platform", "linux"),
+        patch("edcraft_validator.tools.python_worker.resource.setrlimit") as setlimit,
+    ):
+        _apply_resource_limits(
+            {
+                "cases": [{"inputs": {}}, {"inputs": {}}],
+                "timeout_seconds": 2,
+            }
+        )
+
+    assert setlimit.call_args_list == [
+        call(resource.RLIMIT_AS, (MAX_MEMORY_BYTES, MAX_MEMORY_BYTES)),
+        call(resource.RLIMIT_CPU, (5, 5)),
+    ]
 
 
 def test_executes_request_and_returns_trace_summary() -> None:
