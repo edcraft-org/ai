@@ -17,14 +17,18 @@ domain + topic + difficulty + provider
   -> all parameter combinations run through one local Python tool call
   -> globally valid distractor recipes selected from the candidates
   -> answers and selected distractors checked for every combination
-  -> approved template + structured validation evidence
+  -> validated template + structured validation evidence
   -> deterministic questions generated locally from seeds
 ```
 
 Template authoring makes one provider request for the requested misconception
 candidates. The code domain adds mechanical fallbacks without another AI call.
-Generating a question from an approved template uses no AI, execution tool, or
+Generating a question from a validated template uses no AI, execution tool, or
 per-question validation call.
+
+`Validated` means that deterministic checks passed; it does not mean that a user
+approved the content. The future frontend will present the validated template for a
+human approve/reject decision before allowing question generation.
 
 ## Setup
 
@@ -50,7 +54,7 @@ Provider selection is always explicit through `--provider`.
 Model selection can also be explicit through `--model`; when it is omitted, the
 selected provider's environment setting is used.
 
-## Author and approve a template
+## Author and validate a template
 
 OpenAI uses strict Structured Outputs:
 
@@ -62,7 +66,7 @@ uv run python -m edcraft_validator.cli author \
   --topic arithmetic \
   --difficulty beginner \
   --num-distractors 3 \
-  --output /tmp/approved-template.json
+  --output /tmp/validated-template.json
 ```
 
 Ollama uses its native structured endpoint with a simple provider-specific wire
@@ -77,7 +81,7 @@ contract used by OpenAI:
   --topic loops \
   --difficulty beginner \
   --num-distractors 3 \
-  --output /tmp/approved-loop-template.json
+  --output /tmp/validated-loop-template.json
 ```
 
 SocLaas is also registered through its OpenAI-compatible endpoint. Configure
@@ -93,50 +97,50 @@ lists:
 uv run python -m edcraft_validator.cli validate \
   --domain code \
   examples/templates/arithmetic_linear.json \
-  --output /tmp/approved-arithmetic-template.json
+  --output /tmp/validated-arithmetic-template.json
 
 uv run python -m edcraft_validator.cli validate \
   --domain code \
   examples/templates/loop_iterations.json \
-  --output /tmp/approved-loop-template.json
+  --output /tmp/validated-loop-template.json
 
 uv run python -m edcraft_validator.cli validate \
   --domain code \
   examples/templates/conditional_boolean.json \
-  --output /tmp/approved-boolean-template.json
+  --output /tmp/validated-boolean-template.json
 
 uv run python -m edcraft_validator.cli validate \
   --domain code \
   examples/templates/conditional_string.json \
-  --output /tmp/approved-string-template.json
+  --output /tmp/validated-string-template.json
 
 uv run python -m edcraft_validator.cli validate \
   --domain code \
   examples/templates/list_sum.json \
-  --output /tmp/approved-list-template.json
+  --output /tmp/validated-list-template.json
 ```
 
-Approval checks every value in the template's Cartesian product. All cases are
+Validation checks every value in the template's Cartesian product. All cases are
 sent to one local Python tracing subprocess to avoid repeated startup costs.
 Rejected templates raise structured diagnostics with a stable code, relevant
 field, failing parameter values, and evidence from every completed check when
-available; messages remain human-readable. Approved templates record the validator
+available; messages remain human-readable. Validated templates record the validator
 version, assurance level, duration, and details for each structure, expression,
 execution, answer, distractor, and rendering check. Tool-derived answers for every
-finite input combination are stored in the approved artifact.
+finite input combination are stored in the validated artifact.
 
 ## Generate concrete questions locally
 
-The same seed and approved template always produce the same output:
+The same seed and validated template always produce the same output:
 
 ```bash
 uv run python -m edcraft_validator.cli generate \
   --domain code \
-  /tmp/approved-arithmetic-template.json --seed 42
+  /tmp/validated-arithmetic-template.json --seed 42
 
 uv run python -m edcraft_validator.cli generate \
   --domain code \
-  /tmp/approved-arithmetic-template.json --seed 43
+  /tmp/validated-arithmetic-template.json --seed 43
 ```
 
 Each output records the template ID, seed, selected parameters, code, question,
@@ -156,7 +160,7 @@ Rendered misconception reasons are preserved alongside their selected distractor
 - Template parameters: one to three explicitly typed finite parameters. Supported
   kinds are integers, booleans, bounded printable strings, and bounded integer
   lists. Each parameter has two to four unique values.
-- Exhaustive approval: at most 64 total parameter combinations.
+- Exhaustive validation: at most 64 total parameter combinations.
 - Answers: the Python execution tool's result is canonical. If the provider's proposed
   answer differs, the validator stores the corrected answers and considers the old
   answer as a distractor candidate.
@@ -169,10 +173,10 @@ Rendered misconception reasons are preserved alongside their selected distractor
   the finite-domain validator searches candidate subsets to retain the requested two
   or three globally unique expressions with reason templates. Corrected templates
   are still rejected when too few valid distractors remain.
-- Reproducibility: deterministic seed selection. AI-approved artifacts also record
-  the resolved provider and model, authoring
-  request, prompt version and SHA-256 hash, generation time, validation time, and
-  approval status. API keys and other secrets are never stored.
+- Reproducibility: deterministic seed selection. AI-authored, validated artifacts
+  also record the resolved provider and model, domain, authoring request, base prompt
+  version, generation timestamp, and generation time. API keys and other secrets are
+  never stored.
 
 Topic currently selects the answer target as follows:
 
@@ -229,7 +233,7 @@ domains/code/evaluation.py         real-provider code-template evaluation
 domains/code/templates/models.py   code template data contracts
 domains/code/templates/authoring.py prompt construction and template building
 domains/code/templates/expressions.py restricted deterministic expressions
-domains/code/templates/validation.py exhaustive template approval
+domains/code/templates/validation.py exhaustive template validation
 domains/code/templates/generation.py deterministic question expansion
 domains/code/capabilities.py       supported profiles and their machine-readable rules
 generation/base.py                 domain-agnostic structured generation request
@@ -247,11 +251,12 @@ To use another model from an existing provider, pass `--model`; no domain code
 changes are required. To add another provider, implement `ModelProvider.generate`,
 add its factory to the provider registry, and add an adapter test.
 
-To add a domain, implement `DomainModule`, provide its proposal and template models,
-build its `StructuredGenerationRequest`, register its validation checks and question
-generator, then add it to `domains/registry.py`. Providers and the application do not
-change. Domain-specific tools all live under `tools/`; for example, future SymPy and
-Lean adapters can be added without entering the code-template pipeline.
+To add a domain, implement `DomainModule`, provide its request, proposal, candidate,
+validated-template, and question models, build its `StructuredGenerationRequest`,
+register its validation checks and question generator, then add it to
+`domains/registry.py`. Providers and the application do not change. Domain-specific
+tools all live under `tools/`; for example, future SymPy and Lean adapters can be
+added without entering the code-template pipeline.
 
 ## Tests
 
@@ -270,7 +275,7 @@ uv run pytest tests/test_templates.py -q
 ```
 
 The real OpenAI template-authoring test is opt-in locally and performs full template
-approval. For same-repository pull requests, CI runs the equivalent evaluation
+validation. For same-repository pull requests, CI runs the equivalent evaluation
 command, fails clearly if the `OPENAI_API_KEY` secret is missing, and uploads the
 JSONL attempt record:
 
@@ -283,7 +288,7 @@ environment details.
 
 ## Evaluate a real provider
 
-The evaluation command runs the complete authoring and local approval workflow,
+The evaluation command runs the complete authoring and local validation workflow,
 writes and flushes one JSONL record after each attempt (so completed work survives
 an interruption), reports progress on stderr, and prints pass rate, failure codes,
 and latency grouped by provider, resolved model, topic, and difficulty:
@@ -304,7 +309,7 @@ repetition makes one real provider call per selected profile, so review the call
 count before running a paid provider. The JSONL artifact and summary are written
 even when attempts fail; the command exits non-zero if any attempt fails.
 
-The recorded pre-relaxation baseline for `qwen2.5-coder:14b` was 10 approved
+The recorded pre-relaxation baseline for `qwen2.5-coder:14b` was 10 validated
 templates out of 15 profiles (66.7%), averaging 44.1 seconds per attempt with the
 bounded v8 prompt. Rerun the matrix before treating this as the baseline for the
 broader profile contracts. Rejected model proposals are expected evaluation

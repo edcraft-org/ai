@@ -6,7 +6,7 @@ import re
 from pydantic import BaseModel, ConfigDict, Field
 
 from edcraft_validator.domains.code.capabilities import ParameterKind
-from edcraft_validator.domains.code.models import CodeTemplateAuthoringRequest
+from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.domains.code.templates import (
     CODE_TEMPLATE_PROMPT_VERSION,
     CODE_TEMPLATE_SYSTEM_PROMPT,
@@ -54,7 +54,7 @@ class OllamaProposalWire(BaseModel):
 
 
 def build_code_generation_request(
-    request: CodeTemplateAuthoringRequest, *, provider: str
+    request: CodeTemplateRequest, *, provider: str
 ) -> StructuredGenerationRequest[CodeTemplateProposal]:
     """Return the prompt and response contract required by one provider."""
     system_message = {"role": "system", "content": CODE_TEMPLATE_SYSTEM_PROMPT}

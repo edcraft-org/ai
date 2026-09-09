@@ -14,12 +14,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from edcraft_validator.application.templates import TemplateApplication
 from edcraft_validator.domains.code.authoring import build_code_generation_request
 from edcraft_validator.domains.code.capabilities import Difficulty, ProgrammingTopic
-from edcraft_validator.domains.code.models import CodeTemplateAuthoringRequest
+from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.domains.code.module import CodeDomain
 from edcraft_validator.domains.code.templates import (
-    ApprovedCodeQuestionTemplate,
     TemplateValidationError,
     TemplateValidator,
+    ValidatedCodeTemplate,
 )
 from edcraft_validator.generation.base import GenerationError, ModelProvider
 from edcraft_validator.generation.models import (
@@ -41,12 +41,10 @@ class TemplateEvaluationAttempt(BaseModel):
     attempt: int = Field(ge=1)
     provider: str
     model: str
-    request: CodeTemplateAuthoringRequest
-    status: Literal["approved", "failed"]
+    request: CodeTemplateRequest
+    status: Literal["validated", "failed"]
     prompt_version: str | None = None
-    prompt_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     generation_duration_ms: float | None = Field(default=None, ge=0)
-    validation_duration_ms: float | None = Field(default=None, ge=0)
     total_duration_ms: float = Field(ge=0)
     failure_stage: (
         Literal[
@@ -61,7 +59,7 @@ class TemplateEvaluationAttempt(BaseModel):
     failure_code: str | None = None
     error: str | None = None
     validation_evidence: list[ValidationEvidence] = Field(default_factory=list)
-    approved_template: ApprovedCodeQuestionTemplate | None = None
+    validated_template: ValidatedCodeTemplate | None = None
 
 
 class TemplateEvaluationGroup(BaseModel):
@@ -72,7 +70,7 @@ class TemplateEvaluationGroup(BaseModel):
     topic: ProgrammingTopic
     difficulty: Difficulty
     attempts: int = Field(ge=1)
-    approved: int = Field(ge=0)
+    validated: int = Field(ge=0)
     failed: int = Field(ge=0)
     pass_rate: float = Field(ge=0, le=1)
     failure_counts: dict[str, int]
@@ -86,7 +84,7 @@ class TemplateEvaluationSummary(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     attempts: int = Field(ge=1)
-    approved: int = Field(ge=0)
+    validated: int = Field(ge=0)
     failed: int = Field(ge=0)
     pass_rate: float = Field(ge=0, le=1)
     failure_counts: dict[str, int]
@@ -138,7 +136,7 @@ class TemplateEvaluator:
         attempt_number = 0
         for topic in topics:
             for difficulty in difficulties:
-                request = CodeTemplateAuthoringRequest(
+                request = CodeTemplateRequest(
                     topic=topic,
                     difficulty=difficulty,
                     num_distractors=num_distractors,
@@ -162,28 +160,26 @@ class TemplateEvaluator:
         self,
         attempt_number: int,
         selection: TemplateProviderSelection,
-        request: CodeTemplateAuthoringRequest,
+        request: CodeTemplateRequest,
     ) -> TemplateEvaluationAttempt:
         started = time.perf_counter()
         model_provider: ModelProvider | None = None
         prompt_version = None
-        prompt_sha256 = None
         resolved_model = selection.model or "<provider-default>"
         try:
             model_provider = self.provider_factory(selection)
             resolved_model = model_provider.model
-            prompt = build_code_generation_request(
+            generation_request = build_code_generation_request(
                 request, provider=model_provider.provider
-            ).prompt_metadata()
-            prompt_version = prompt.version
-            prompt_sha256 = prompt.sha256
+            )
+            prompt_version = generation_request.prompt_version
             application = TemplateApplication(
                 provider_factory=lambda _: model_provider,
                 domain_factory=lambda _: CodeDomain(
                     validator_factory=self.validator_factory
                 ),
             )
-            approved = application.author(
+            validated = application.create_validated_template(
                 request,
                 domain="code",
                 provider=selection.provider,
@@ -198,7 +194,6 @@ class TemplateEvaluator:
                 request=request,
                 status="failed",
                 prompt_version=prompt_version,
-                prompt_sha256=prompt_sha256,
                 total_duration_ms=(time.perf_counter() - started) * 1000,
                 failure_stage=stage,
                 failure_code=code,
@@ -208,7 +203,7 @@ class TemplateEvaluator:
                 ),
             )
 
-        provenance = approved.authoring
+        provenance = validated.authoring
         if provenance is None:
             raise RuntimeError("authored template did not include provenance")
         return TemplateEvaluationAttempt(
@@ -216,14 +211,12 @@ class TemplateEvaluator:
             provider=provenance.provider,
             model=provenance.model,
             request=request,
-            status="approved",
-            prompt_version=provenance.prompt.version,
-            prompt_sha256=provenance.prompt.sha256,
+            status="validated",
+            prompt_version=provenance.base_prompt_version,
             generation_duration_ms=provenance.generation_duration_ms,
-            validation_duration_ms=provenance.validation_duration_ms,
             total_duration_ms=(time.perf_counter() - started) * 1000,
-            validation_evidence=approved.validation.evidence,
-            approved_template=approved,
+            validation_evidence=validated.validation.evidence,
+            validated_template=validated,
         )
 
 
@@ -264,15 +257,15 @@ def _summarize(
         grouped.setdefault(key, []).append(attempt)
 
     groups = [_summarize_group(key, values) for key, values in sorted(grouped.items())]
-    approved = sum(attempt.status == "approved" for attempt in attempts)
+    validated = sum(attempt.status == "validated" for attempt in attempts)
     failures = Counter(
         attempt.failure_code for attempt in attempts if attempt.failure_code is not None
     )
     return TemplateEvaluationSummary(
         attempts=len(attempts),
-        approved=approved,
-        failed=len(attempts) - approved,
-        pass_rate=approved / len(attempts),
+        validated=validated,
+        failed=len(attempts) - validated,
+        pass_rate=validated / len(attempts),
         failure_counts=dict(sorted(failures.items())),
         groups=groups,
     )
@@ -283,7 +276,7 @@ def _summarize_group(
     attempts: list[TemplateEvaluationAttempt],
 ) -> TemplateEvaluationGroup:
     provider, model, topic, difficulty = key
-    approved = sum(attempt.status == "approved" for attempt in attempts)
+    validated = sum(attempt.status == "validated" for attempt in attempts)
     durations = [attempt.total_duration_ms for attempt in attempts]
     failures = Counter(
         attempt.failure_code for attempt in attempts if attempt.failure_code is not None
@@ -294,9 +287,9 @@ def _summarize_group(
         topic=topic,
         difficulty=difficulty,
         attempts=len(attempts),
-        approved=approved,
-        failed=len(attempts) - approved,
-        pass_rate=approved / len(attempts),
+        validated=validated,
+        failed=len(attempts) - validated,
+        pass_rate=validated / len(attempts),
         failure_counts=dict(sorted(failures.items())),
         mean_total_duration_ms=statistics.fmean(durations),
         median_total_duration_ms=statistics.median(durations),

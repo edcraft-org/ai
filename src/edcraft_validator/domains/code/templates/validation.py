@@ -1,4 +1,4 @@
-"""Exhaustive approval pipeline for finite code-question templates."""
+"""Exhaustive validation pipeline for finite code-question templates."""
 
 from __future__ import annotations
 
@@ -26,12 +26,12 @@ from edcraft_validator.validation.pipeline import ValidationPipeline
 from .expressions import SafeExpression
 from .generation import render_template
 from .models import (
-    ApprovedCodeQuestionTemplate,
-    CodeQuestionTemplate,
+    CodeTemplateCandidate,
     DistractorRecipe,
     ParameterValue,
     TemplateValidationError,
     TemplateValidationSummary,
+    ValidatedCodeTemplate,
     ValidatedTemplateCase,
 )
 
@@ -47,7 +47,7 @@ class _DistractorCandidate:
 
 
 class TemplateValidator:
-    """Approve a finite template only after checking every possible instance."""
+    """Validate a finite template by checking every possible instance."""
 
     def __init__(
         self,
@@ -59,8 +59,8 @@ class TemplateValidator:
         self.timeout_seconds = timeout_seconds
 
     def validate(
-        self, template: CodeQuestionTemplate, *, num_distractors: int | None = None
-    ) -> ApprovedCodeQuestionTemplate:
+        self, template: CodeTemplateCandidate, *, num_distractors: int | None = None
+    ) -> ValidatedCodeTemplate:
         pipeline = ValidationPipeline()
         original_distractor_count = len(template.distractors)
         names = tuple(parameter.name for parameter in template.parameters)
@@ -158,11 +158,11 @@ class TemplateValidator:
             ValidatedTemplateCase(inputs=inputs, answer=answer)
             for inputs, answer in zip(inputs_cases, canonical_answers, strict=True)
         ]
-        approved_template = template.model_copy(
+        validated_template = template.model_copy(
             update={"answer_expression": None}, deep=True
         )
-        return ApprovedCodeQuestionTemplate(
-            template=approved_template,
+        return ValidatedCodeTemplate(
+            template=validated_template,
             validation=TemplateValidationSummary(
                 validator_version=CODE_TEMPLATE_VALIDATOR_VERSION,
                 cases_validated=len(inputs_cases),
@@ -173,14 +173,14 @@ class TemplateValidator:
 
     @staticmethod
     def _parse_expressions(
-        template: CodeQuestionTemplate,
+        template: CodeTemplateCandidate,
         names: tuple[str, ...],
         *,
         allow_candidate_rejections: bool,
     ) -> tuple[SafeExpression, list[_DistractorCandidate]]:
         if template.answer_expression is None:
             raise TemplateValidationError(
-                "unapproved templates require an answer_expression",
+                "template candidates require an answer_expression",
                 code="ANSWER_EXPRESSION_MISSING",
                 field="answer_expression",
             )
@@ -202,7 +202,7 @@ class TemplateValidator:
     @classmethod
     def _evaluate_answers(
         cls,
-        template: CodeQuestionTemplate,
+        template: CodeTemplateCandidate,
         answer: SafeExpression,
         inputs_cases: list[dict[str, ParameterValue]],
     ) -> list[Any]:
@@ -216,7 +216,7 @@ class TemplateValidator:
 
     def _execute_successfully(
         self,
-        template: CodeQuestionTemplate,
+        template: CodeTemplateCandidate,
         inputs_cases: list[dict[str, ParameterValue]],
     ) -> list[ExecutionResult]:
         executions = self._execute_all(template, inputs_cases)
@@ -235,7 +235,7 @@ class TemplateValidator:
     @classmethod
     def _resolve_canonical_answers(
         cls,
-        template: CodeQuestionTemplate,
+        template: CodeTemplateCandidate,
         inputs_cases: list[dict[str, ParameterValue]],
         executions: list[ExecutionResult],
         proposed_answers: list[Any],
@@ -258,11 +258,11 @@ class TemplateValidator:
 
     @staticmethod
     def _promote_proposed_answer_to_distractor(
-        template: CodeQuestionTemplate,
+        template: CodeTemplateCandidate,
         proposed_answer: SafeExpression,
         proposed_values: list[Any],
         candidates: list[_DistractorCandidate],
-    ) -> tuple[CodeQuestionTemplate, list[_DistractorCandidate]]:
+    ) -> tuple[CodeTemplateCandidate, list[_DistractorCandidate]]:
         if template.answer_expression is None:
             raise AssertionError("proposed answer expression is missing")
 
@@ -335,7 +335,7 @@ class TemplateValidator:
 
     @staticmethod
     def _validate_rendering(
-        template: CodeQuestionTemplate,
+        template: CodeTemplateCandidate,
         inputs_cases: list[dict[str, ParameterValue]],
     ) -> None:
         for inputs in inputs_cases:
@@ -346,13 +346,13 @@ class TemplateValidator:
     @classmethod
     def _select_distractors(
         cls,
-        template: CodeQuestionTemplate,
+        template: CodeTemplateCandidate,
         inputs_cases: list[dict[str, ParameterValue]],
         expected_answers: list[Any],
         candidates: list[_DistractorCandidate],
         *,
         num_distractors: int,
-    ) -> tuple[CodeQuestionTemplate, list[_DistractorCandidate]]:
+    ) -> tuple[CodeTemplateCandidate, list[_DistractorCandidate]]:
         cls._precompute_candidate_vectors(
             template, inputs_cases, expected_answers, candidates
         )
@@ -388,7 +388,7 @@ class TemplateValidator:
     @classmethod
     def _precompute_candidate_vectors(
         cls,
-        template: CodeQuestionTemplate,
+        template: CodeTemplateCandidate,
         inputs_cases: list[dict[str, ParameterValue]],
         expected_answers: list[Any],
         candidates: list[_DistractorCandidate],
@@ -446,7 +446,7 @@ class TemplateValidator:
 
     def _execute_all(
         self,
-        template: CodeQuestionTemplate,
+        template: CodeTemplateCandidate,
         inputs: list[dict[str, ParameterValue]],
     ) -> list[ExecutionResult]:
         results = self.execution_tool.execute_batch(
@@ -465,7 +465,7 @@ class TemplateValidator:
 
     @staticmethod
     def _validate_structure(
-        template: CodeQuestionTemplate, names: tuple[str, ...]
+        template: CodeTemplateCandidate, names: tuple[str, ...]
     ) -> None:
         analysis = analyze_python_subset(template.code, template.entry_function)
         if not analysis.is_valid:
@@ -506,7 +506,7 @@ class TemplateValidator:
         )
 
     @staticmethod
-    def _validate_profile(template: CodeQuestionTemplate) -> None:
+    def _validate_profile(template: CodeTemplateCandidate) -> None:
         profile = code_template_profile(template.topic, template.difficulty)
         if template.answer_target != profile.answer_target:
             raise TemplateValidationError(
@@ -571,7 +571,7 @@ class TemplateValidator:
 
     @staticmethod
     def _validate_answer_kind(
-        template: CodeQuestionTemplate,
+        template: CodeTemplateCandidate,
         inputs: dict[str, ParameterValue],
         answer: Any,
     ) -> None:

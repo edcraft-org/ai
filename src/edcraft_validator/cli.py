@@ -1,4 +1,4 @@
-"""CLI for one-time template approval and deterministic question expansion."""
+"""CLI for template validation and deterministic question expansion."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from pydantic import ValidationError
 from edcraft_validator.application import TemplateApplication
 from edcraft_validator.domains.code.capabilities import CODE_DIFFICULTIES, CODE_TOPICS
 from edcraft_validator.domains.code.evaluation import TemplateEvaluator
-from edcraft_validator.domains.code.models import CodeTemplateAuthoringRequest
+from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.domains.registry import available_domains, create_domain
 from edcraft_validator.generation.base import GenerationError
 from edcraft_validator.generation.registry import available_model_providers
@@ -23,11 +23,11 @@ from edcraft_validator.generation.registry import available_model_providers
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line interface without executing a command."""
     parser = argparse.ArgumentParser(
-        description="Author, approve, and expand reusable code-question templates"
+        description="Author, validate, and expand reusable code-question templates"
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
-    author = commands.add_parser("author", help="author and approve one AI template")
+    author = commands.add_parser("author", help="author and validate one AI template")
     author.add_argument("--domain", choices=available_domains(), required=True)
     author.add_argument(
         "--provider", choices=available_model_providers(), required=True
@@ -50,14 +50,14 @@ def build_parser() -> argparse.ArgumentParser:
     author.add_argument("--output", type=Path)
 
     validate = commands.add_parser(
-        "validate", help="exhaustively approve a raw template JSON file"
+        "validate", help="exhaustively validate a raw template JSON file"
     )
     validate.add_argument("--domain", choices=available_domains(), required=True)
     validate.add_argument("template", type=Path)
     validate.add_argument("--output", type=Path)
 
     generate = commands.add_parser(
-        "generate", help="expand an approved template without AI or validation"
+        "generate", help="expand a validated template without AI or revalidation"
     )
     generate.add_argument("--domain", choices=available_domains(), required=True)
     generate.add_argument("template", type=Path)
@@ -65,7 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--output", type=Path)
 
     evaluate = commands.add_parser(
-        "evaluate", help="measure real template approval quality and latency"
+        "evaluate", help="measure real template validation quality and latency"
     )
     evaluate.add_argument("--domain", choices=("code",), required=True)
     evaluate.add_argument(
@@ -101,12 +101,12 @@ def main() -> int:
 
 
 def _handle_author(args: argparse.Namespace) -> int:
-    request = CodeTemplateAuthoringRequest(
+    request = CodeTemplateRequest(
         topic=args.topic,
         difficulty=args.difficulty,
         num_distractors=args.num_distractors,
     )
-    result = TemplateApplication().author(
+    result = TemplateApplication().create_validated_template(
         request, domain=args.domain, provider=args.provider, model=args.model
     )
     _write_json(result.model_dump(mode="json"), args.output)
@@ -115,17 +115,17 @@ def _handle_author(args: argparse.Namespace) -> int:
 
 def _handle_validate(args: argparse.Namespace) -> int:
     domain = create_domain(args.domain)
-    template = domain.template_model.model_validate_json(args.template.read_text())
-    result = TemplateApplication().approve(template, domain=args.domain)
+    candidate = domain.candidate_model.model_validate_json(args.template.read_text())
+    result = TemplateApplication().validate_template(candidate, domain=args.domain)
     _write_json(result.model_dump(mode="json"), args.output)
     return 0
 
 
 def _handle_generate(args: argparse.Namespace) -> int:
     domain = create_domain(args.domain)
-    approved = domain.approved_model.model_validate_json(args.template.read_text())
-    result = TemplateApplication().generate(
-        approved, domain=args.domain, seed=args.seed
+    validated = domain.validated_model.model_validate_json(args.template.read_text())
+    result = TemplateApplication().generate_question(
+        validated, domain=args.domain, seed=args.seed
     )
     _write_json(result.model_dump(mode="json"), args.output)
     return 0

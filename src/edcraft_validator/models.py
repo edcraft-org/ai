@@ -12,7 +12,7 @@ AnswerTarget = Literal[
 
 
 class GeneratedQuestion(BaseModel):
-    """A deterministic question expanded from an approved template."""
+    """A deterministic question expanded from a validated template."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 

@@ -6,7 +6,7 @@ from edcraft_validator.domains.code.authoring import (
     build_code_generation_request,
     parse_ollama_proposal,
 )
-from edcraft_validator.domains.code.models import CodeTemplateAuthoringRequest
+from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.generation.base import (
     GenerationError,
     GenerationSchemaError,
@@ -23,7 +23,7 @@ from edcraft_validator.generation.ollama import (
 
 def generation_request(topic: str = "arithmetic", difficulty: str = "beginner"):
     return build_code_generation_request(
-        CodeTemplateAuthoringRequest(topic=topic, difficulty=difficulty),
+        CodeTemplateRequest(topic=topic, difficulty=difficulty),
         provider="ollama",
     )
 
@@ -234,15 +234,8 @@ def test_ollama_rejects_invalid_generation_bounds(
         reader()
 
 
-def test_ollama_prompt_metadata_is_stable_and_wire_specific() -> None:
-    request = generation_request("loops", "advanced")
-
-    first = request.prompt_metadata()
-    second = request.prompt_metadata()
-
-    assert first == second
-    assert first.version == "code-template-v8+ollama-wire-v1"
-    assert len(first.sha256) == 64
+def test_ollama_request_records_its_wire_specific_prompt_version() -> None:
     assert (
-        first.sha256 != generation_request("loops", "beginner").prompt_metadata().sha256
+        generation_request("loops", "advanced").prompt_version
+        == "code-template-v8+ollama-wire-v1"
     )

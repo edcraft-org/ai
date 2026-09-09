@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from edcraft_validator.domains.code.capabilities import Difficulty, ProgrammingTopic
 
 
-class CodeTemplateAuthoringRequest(BaseModel):
+class CodeTemplateRequest(BaseModel):
     """Human-selected constraints for one code template."""
 
     model_config = ConfigDict(extra="forbid", strict=True)

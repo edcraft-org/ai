@@ -1,4 +1,4 @@
-"""Structured evidence for domain-specific template approval."""
+"""Structured evidence for domain-specific template validation."""
 
 from edcraft_validator.validation.contracts import (
     AssuranceLevel,

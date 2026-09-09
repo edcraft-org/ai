@@ -33,7 +33,7 @@ class ValidationFailure(ValueError):
 
 
 class ValidationEvidence(BaseModel):
-    """Result of one explainable check performed during template approval."""
+    """Result of one explainable check performed during template validation."""
 
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 

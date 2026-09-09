@@ -1,7 +1,8 @@
-"""Domain-agnostic template authoring, approval, and expansion."""
+"""Domain-agnostic template authoring, validation, and expansion."""
 
 import time
 from collections.abc import Callable
+from datetime import UTC, datetime
 
 from pydantic import BaseModel
 
@@ -11,6 +12,7 @@ from edcraft_validator.generation.base import ModelProvider
 from edcraft_validator.generation.models import (
     TemplateAuthoringProvenance,
     TemplateProviderSelection,
+    ValidatedTemplateArtifact,
 )
 from edcraft_validator.generation.registry import create_model_provider
 
@@ -30,14 +32,14 @@ class TemplateApplication:
         self.provider_factory = provider_factory
         self.domain_factory = domain_factory
 
-    def author(
+    def create_validated_template(
         self,
         request: BaseModel,
         *,
         domain: str,
         provider: str,
         model: str | None = None,
-    ) -> BaseModel:
+    ) -> ValidatedTemplateArtifact:
         domain_module = self.domain_factory(domain)
         model_provider = self.provider_factory(
             TemplateProviderSelection(provider=provider, model=model)
@@ -45,29 +47,41 @@ class TemplateApplication:
         generation_request = domain_module.generation_request(
             request, provider=model_provider.provider
         )
-        prompt = generation_request.prompt_metadata()
-
         generation_started = time.perf_counter()
         proposal = model_provider.generate(generation_request)
         generation_duration_ms = (time.perf_counter() - generation_started) * 1000
-        template = domain_module.build_template(request, proposal)
+        candidate = domain_module.build_candidate(request, proposal)
 
-        validation_started = time.perf_counter()
-        approved = domain_module.approve(template, request=request)
-        validation_duration_ms = (time.perf_counter() - validation_started) * 1000
+        validated = domain_module.validate(candidate, request=request)
+        if not isinstance(validated, ValidatedTemplateArtifact):
+            raise TypeError(
+                f"{domain_module.name} domain returned a validated artifact "
+                "without the shared authoring contract"
+            )
         provenance = TemplateAuthoringProvenance(
             provider=model_provider.provider,
             model=model_provider.model,
             domain=domain_module.name,
-            prompt=prompt,
+            base_prompt_version=generation_request.prompt_version,
             request=request.model_dump(mode="json"),
+            generated_at=datetime.now(UTC),
             generation_duration_ms=generation_duration_ms,
-            validation_duration_ms=validation_duration_ms,
         )
-        return approved.model_copy(update={"authoring": provenance})
+        return validated.model_copy(update={"authoring": provenance})
 
-    def approve(self, template: BaseModel, *, domain: str) -> BaseModel:
-        return self.domain_factory(domain).approve(template)
+    def validate_template(
+        self, candidate: BaseModel, *, domain: str
+    ) -> ValidatedTemplateArtifact:
+        domain_module = self.domain_factory(domain)
+        validated = domain_module.validate(candidate)
+        if not isinstance(validated, ValidatedTemplateArtifact):
+            raise TypeError(
+                f"{domain_module.name} domain returned a validated artifact "
+                "without the shared authoring contract"
+            )
+        return validated
 
-    def generate(self, approved: BaseModel, *, domain: str, seed: int) -> BaseModel:
-        return self.domain_factory(domain).generate(approved, seed=seed)
+    def generate_question(
+        self, validated: ValidatedTemplateArtifact, *, domain: str, seed: int
+    ) -> BaseModel:
+        return self.domain_factory(domain).generate_question(validated, seed=seed)

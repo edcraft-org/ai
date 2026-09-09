@@ -5,7 +5,7 @@ import pytest
 from pydantic import BaseModel
 
 from edcraft_validator.domains.code.authoring import build_code_generation_request
-from edcraft_validator.domains.code.models import CodeTemplateAuthoringRequest
+from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.domains.code.templates import CodeTemplateProposal
 from edcraft_validator.generation.base import (
     GenerationSchemaError,
@@ -24,7 +24,7 @@ from edcraft_validator.generation.openai import (
 
 def generation_request(topic: str = "arithmetic", difficulty: str = "beginner"):
     return build_code_generation_request(
-        CodeTemplateAuthoringRequest(topic=topic, difficulty=difficulty),
+        CodeTemplateRequest(topic=topic, difficulty=difficulty),
         provider="openai",
     )
 
@@ -177,18 +177,10 @@ def test_soclaas_requires_its_own_model(monkeypatch) -> None:
         _model("soclaas")
 
 
-def test_openai_prompt_metadata_is_stable() -> None:
-    request = generation_request("functions", "intermediate")
-
-    first = request.prompt_metadata()
-    second = request.prompt_metadata()
-
-    assert first == second
-    assert first.version == "code-template-v8"
-    assert len(first.sha256) == 64
+def test_openai_request_records_the_base_prompt_version() -> None:
     assert (
-        first.sha256
-        != generation_request("functions", "advanced").prompt_metadata().sha256
+        generation_request("functions", "intermediate").prompt_version
+        == "code-template-v8"
     )
 
 

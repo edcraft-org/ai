@@ -1,4 +1,5 @@
-from typing import Any, Literal
+from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -22,25 +23,21 @@ class TemplateProviderSelection(BaseModel):
         return stripped
 
 
-class TemplatePromptMetadata(BaseModel):
-    """Versioned identity of the exact messages sent to a provider."""
-
-    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
-
-    version: str = Field(min_length=1)
-    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-
-
 class TemplateAuthoringProvenance(BaseModel):
-    """Non-secret evidence for reproducing one successful authoring attempt."""
+    """Non-secret trace of one successful model authoring attempt."""
 
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     provider: str = Field(min_length=1)
     model: str = Field(min_length=1)
     domain: str = Field(pattern=r"^[a-z][a-z0-9_-]*$")
-    prompt: TemplatePromptMetadata
+    base_prompt_version: str = Field(min_length=1)
     request: dict[str, Any]
+    generated_at: datetime
     generation_duration_ms: float = Field(ge=0)
-    validation_duration_ms: float = Field(ge=0)
-    status: Literal["approved"] = "approved"
+
+
+class ValidatedTemplateArtifact(BaseModel):
+    """Shared contract for every domain's technically validated artifact."""
+
+    authoring: TemplateAuthoringProvenance | None = None

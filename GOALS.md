@@ -125,7 +125,7 @@ implementation, domain, provider, or tool.
 ### Milestone 1: Code template generation
 
 Complete the reusable Python code-template workflow: explicit provider and model
-selection, provider-normalized proposals, deterministic fields, exhaustive approval,
+selection, provider-normalized proposals, deterministic fields, exhaustive validation,
 reproducible seeded question generation, and provider evaluation. This milestone is
 complete; its evidence is recorded below.
 
@@ -236,19 +236,19 @@ criteria defined for the original code-template milestone:
 
 - All 15 topic/difficulty profiles have machine-readable parameter, answer-kind, and
   broad reachable-feature contracts backed by positive and negative tests.
-- Approved templates exhaustively validate at most 64 combinations in one local
+- Validated templates exhaustively check at most 64 combinations in one local
   Python tool call, then generate seeded questions without AI or per-question
   validation.
 - OpenAI and Ollama normalize provider-specific responses into the same proposal and
-  approved-template types; provider and model selection are explicit configuration.
-- Evaluation records provider, resolved model, prompt hash/version, request, timing,
-  failure stage/code, and approved output. JSONL attempts are flushed incrementally.
+  validated-template types; provider and model selection are explicit configuration.
+- Evaluation records provider, resolved model, base prompt version, request, timing,
+  failure stage/code, and validated output. JSONL attempts are flushed incrementally.
 - The automated suite covers provider adapters, the domain-agnostic application and
   validation contracts, the complete code matrix, and local tracing integration.
-  Real OpenAI evaluations produced approved templates for every profile while the
+  Real OpenAI evaluations produced validated templates for every profile while the
   profile contracts were refined.
 - Before profile relaxation, a complete Ollama `qwen2.5-coder:14b` v8 matrix
-  approved 10 of 15 profiles (66.7%) in 26.2–63.8 seconds per attempt, with no
+  validated 10 of 15 profiles (66.7%) in 26.2–63.8 seconds per attempt, with no
   timeout or transport failure. The five unsuitable proposals were rejected for
   schema, safety, answer-kind, or answer mismatch errors, demonstrating the intended
   untrusted-draft boundary. A new matrix is required for direct comparison under the
@@ -257,4 +257,4 @@ criteria defined for the original code-template milestone:
 Provider pass rate is an evaluation signal, not a reason to weaken safety or
 correctness validation. Improving the remaining Ollama generation quality or choosing
 a stronger local model is follow-up model work; correctness continues to depend on
-deterministic exhaustive approval.
+deterministic exhaustive validation.

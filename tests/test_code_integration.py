@@ -4,10 +4,10 @@ import pytest
 
 from edcraft_validator.application import TemplateApplication
 from edcraft_validator.domains.code.evaluation import TemplateEvaluator
-from edcraft_validator.domains.code.models import CodeTemplateAuthoringRequest
+from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.domains.code.module import CodeDomain
 from edcraft_validator.domains.code.templates import (
-    CodeQuestionTemplate,
+    CodeTemplateCandidate,
     CodeTemplateProposal,
     TemplateValidator,
 )
@@ -61,22 +61,22 @@ def test_generated_code_trace_limit_is_enforced() -> None:
 
 
 @pytest.mark.parametrize("template_path", TEMPLATE_PATHS, ids=lambda path: path.stem)
-def test_template_is_exhaustively_approved(template_path: Path) -> None:
-    template = CodeQuestionTemplate.model_validate_json(template_path.read_text())
+def test_template_is_exhaustively_validated(template_path: Path) -> None:
+    template = CodeTemplateCandidate.model_validate_json(template_path.read_text())
 
-    approved = TemplateValidator().validate(template)
+    validated = TemplateValidator().validate(template)
 
     expected_cases = 1
     for parameter in template.parameters:
         expected_cases *= len(parameter.values)
-    assert approved.validation.cases_validated == expected_cases
+    assert validated.validation.cases_validated == expected_cases
 
 
-def test_model_proposal_is_built_then_approved() -> None:
+def test_model_proposal_is_built_then_validated() -> None:
     path = (
         Path(__file__).parents[1] / "examples" / "templates" / "arithmetic_linear.json"
     )
-    canonical = CodeQuestionTemplate.model_validate_json(path.read_text())
+    canonical = CodeTemplateCandidate.model_validate_json(path.read_text())
     proposal = CodeTemplateProposal.model_validate(
         canonical.model_dump(
             include={
@@ -100,19 +100,19 @@ def test_model_proposal_is_built_then_approved() -> None:
         provider_factory=lambda selection: StubProvider(),
         domain_factory=lambda name: CodeDomain(),
     )
-    approved = application.author(
-        CodeTemplateAuthoringRequest(topic="arithmetic", difficulty="beginner"),
+    validated = application.create_validated_template(
+        CodeTemplateRequest(topic="arithmetic", difficulty="beginner"),
         domain="code",
         provider="stub",
     )
 
-    assert approved.template.question_template == (
+    assert validated.template.question_template == (
         "What value does calculate({a}, {b}, {c}) return?"
     )
     expected_cases = 1
     for parameter in proposal.parameters:
         expected_cases *= len(parameter.values)
-    assert approved.validation.cases_validated == expected_cases
+    assert validated.validation.cases_validated == expected_cases
 
     report = TemplateEvaluator(
         provider_factory=lambda selection: StubProvider()
@@ -123,5 +123,5 @@ def test_model_proposal_is_built_then_approved() -> None:
         difficulties=("beginner",),
         repetitions=1,
     )
-    assert report.summary.approved == 1
-    assert report.attempts[0].approved_template is not None
+    assert report.summary.validated == 1
+    assert report.attempts[0].validated_template is not None

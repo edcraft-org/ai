@@ -5,37 +5,35 @@ from collections.abc import Callable
 from pydantic import BaseModel
 
 from edcraft_validator.domains.code.authoring import build_code_generation_request
-from edcraft_validator.domains.code.models import CodeTemplateAuthoringRequest
+from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.domains.code.templates import (
-    ApprovedCodeQuestionTemplate,
-    CodeQuestionTemplate,
+    CodeQuestionInstance,
+    CodeTemplateCandidate,
     CodeTemplateProposal,
-    TemplateQuestionInstance,
     TemplateValidator,
-    build_code_template,
-    generate_template_instance,
+    ValidatedCodeTemplate,
+    build_code_candidate,
+    generate_code_question,
 )
 from edcraft_validator.generation.base import StructuredGenerationRequest
 
 ValidatorFactory = Callable[[], TemplateValidator]
-InstanceGenerator = Callable[
-    [ApprovedCodeQuestionTemplate, int], TemplateQuestionInstance
-]
+InstanceGenerator = Callable[[ValidatedCodeTemplate, int], CodeQuestionInstance]
 
 
 class CodeDomain:
     """Prompting, validation, and expansion for code templates."""
 
     name = "code"
-    request_model = CodeTemplateAuthoringRequest
-    template_model = CodeQuestionTemplate
-    approved_model = ApprovedCodeQuestionTemplate
+    request_model = CodeTemplateRequest
+    candidate_model = CodeTemplateCandidate
+    validated_model = ValidatedCodeTemplate
 
     def __init__(
         self,
         *,
         validator_factory: ValidatorFactory = TemplateValidator,
-        instance_generator: InstanceGenerator = generate_template_instance,
+        instance_generator: InstanceGenerator = generate_code_question,
     ) -> None:
         self.validator_factory = validator_factory
         self.instance_generator = instance_generator
@@ -43,33 +41,35 @@ class CodeDomain:
     def generation_request(
         self, request: BaseModel, *, provider: str
     ) -> StructuredGenerationRequest[CodeTemplateProposal]:
-        typed_request = _require_type(request, CodeTemplateAuthoringRequest)
+        typed_request = _require_type(request, CodeTemplateRequest)
         return build_code_generation_request(typed_request, provider=provider)
 
-    def build_template(
+    def build_candidate(
         self, request: BaseModel, proposal: BaseModel
-    ) -> CodeQuestionTemplate:
-        return build_code_template(
-            _require_type(request, CodeTemplateAuthoringRequest),
+    ) -> CodeTemplateCandidate:
+        return build_code_candidate(
+            _require_type(request, CodeTemplateRequest),
             _require_type(proposal, CodeTemplateProposal),
         )
 
-    def approve(
-        self, template: BaseModel, *, request: BaseModel | None = None
-    ) -> ApprovedCodeQuestionTemplate:
-        typed_template = _require_type(template, CodeQuestionTemplate)
+    def validate(
+        self, candidate: BaseModel, *, request: BaseModel | None = None
+    ) -> ValidatedCodeTemplate:
+        typed_candidate = _require_type(candidate, CodeTemplateCandidate)
         num_distractors = None
         if request is not None:
             num_distractors = _require_type(
-                request, CodeTemplateAuthoringRequest
+                request, CodeTemplateRequest
             ).num_distractors
         return self.validator_factory().validate(
-            typed_template, num_distractors=num_distractors
+            typed_candidate, num_distractors=num_distractors
         )
 
-    def generate(self, approved: BaseModel, *, seed: int) -> TemplateQuestionInstance:
+    def generate_question(
+        self, validated: BaseModel, *, seed: int
+    ) -> CodeQuestionInstance:
         return self.instance_generator(
-            _require_type(approved, ApprovedCodeQuestionTemplate), seed
+            _require_type(validated, ValidatedCodeTemplate), seed
         )
 
 

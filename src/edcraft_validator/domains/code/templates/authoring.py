@@ -6,11 +6,11 @@ import hashlib
 import json
 
 from edcraft_validator.domains.code.capabilities import code_template_profile
-from edcraft_validator.domains.code.models import CodeTemplateAuthoringRequest
+from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.models import AnswerTarget
 
 from .models import (
-    CodeQuestionTemplate,
+    CodeTemplateCandidate,
     CodeTemplateProposal,
     DistractorRecipe,
     TemplateValidationError,
@@ -19,10 +19,10 @@ from .models import (
 CODE_TEMPLATE_PROMPT_VERSION = "code-template-v8"
 
 
-def parse_code_question_template(content: str) -> CodeQuestionTemplate:
+def parse_code_template_candidate(content: str) -> CodeTemplateCandidate:
     """Parse template JSON with strict local schema validation."""
     payload = json.loads(content)
-    return CodeQuestionTemplate.model_validate(payload)
+    return CodeTemplateCandidate.model_validate(payload)
 
 
 def parse_code_template_proposal(content: str) -> CodeTemplateProposal:
@@ -31,9 +31,9 @@ def parse_code_template_proposal(content: str) -> CodeTemplateProposal:
     return CodeTemplateProposal.model_validate(payload)
 
 
-def build_code_template(
-    request: CodeTemplateAuthoringRequest, proposal: CodeTemplateProposal
-) -> CodeQuestionTemplate:
+def build_code_candidate(
+    request: CodeTemplateRequest, proposal: CodeTemplateProposal
+) -> CodeTemplateCandidate:
     """Build the canonical code template from a model proposal."""
     if len(proposal.distractors) < request.num_distractors:
         raise TemplateValidationError(
@@ -52,7 +52,7 @@ def build_code_template(
         separators=(",", ":"),
     ).encode()
     digest = hashlib.sha256(identity_payload).hexdigest()[:12]
-    return CodeQuestionTemplate(
+    return CodeTemplateCandidate(
         template_id=f"{request.topic}.{request.difficulty}.{digest}",
         topic=request.topic,
         difficulty=request.difficulty,
@@ -127,7 +127,7 @@ def _question_template(
     return wording[target]
 
 
-def build_template_prompt(request: CodeTemplateAuthoringRequest) -> str:
+def build_template_prompt(request: CodeTemplateRequest) -> str:
     profile = code_template_profile(request.topic, request.difficulty)
     candidate_count = request.num_distractors
     shapes = [

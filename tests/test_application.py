@@ -1,15 +1,17 @@
 import json
 
+import pytest
 from pydantic import BaseModel
 
 from edcraft_validator.application import TemplateApplication
-from edcraft_validator.domains.code.models import CodeTemplateAuthoringRequest
+from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.domains.code.module import CodeDomain
 from edcraft_validator.domains.code.templates import (
     CodeTemplateProposal,
     TemplateValidator,
-    generate_template_instance,
+    generate_code_question,
 )
+from edcraft_validator.generation.models import ValidatedTemplateArtifact
 from edcraft_validator.tools.python_execution import ExecutionResult
 
 
@@ -25,9 +27,8 @@ class ExampleTemplate(BaseModel):
     value: int
 
 
-class ExampleApproved(BaseModel):
+class ExampleValidated(ValidatedTemplateArtifact):
     value: int
-    authoring: object | None = None
 
 
 class ExampleInstance(BaseModel):
@@ -75,9 +76,9 @@ def test_template_application_authors_once_then_generates_locally() -> None:
         provider_calls.append((selection.provider, selection.model))
         return StubProvider()
 
-    def instance_generator(approved, seed):
+    def instance_generator(validated, seed):
         instance_seeds.append(seed)
-        return generate_template_instance(approved, seed)
+        return generate_code_question(validated, seed)
 
     application = TemplateApplication(
         provider_factory=provider_factory,
@@ -86,33 +87,33 @@ def test_template_application_authors_once_then_generates_locally() -> None:
             instance_generator=instance_generator,
         ),
     )
-    approved = application.author(
-        CodeTemplateAuthoringRequest(topic="arithmetic", difficulty="beginner"),
+    validated = application.create_validated_template(
+        CodeTemplateRequest(topic="arithmetic", difficulty="beginner"),
         domain="code",
         provider="stub",
         model="stub-model",
     )
-    instance = application.generate(approved, domain="code", seed=7)
+    instance = application.generate_question(validated, domain="code", seed=7)
 
     assert provider_calls == [("stub", "stub-model")]
     assert instance_seeds == [7]
-    assert approved.validation.cases_validated == 4
-    assert approved.template.topic == "arithmetic"
-    assert approved.template.difficulty == "beginner"
-    assert approved.template.answer_target == "return_value"
+    assert validated.validation.cases_validated == 4
+    assert validated.template.topic == "arithmetic"
+    assert validated.template.difficulty == "beginner"
+    assert validated.template.answer_target == "return_value"
     assert (
-        approved.template.question_template == "What value does add({a}, {b}) return?"
+        validated.template.question_template == "What value does add({a}, {b}) return?"
     )
-    assert approved.template.question_type == "mcq"
-    assert approved.authoring is not None
-    assert approved.authoring.provider == "stub"
-    assert approved.authoring.model == "stub-model"
-    assert approved.authoring.prompt.version == "code-template-v8"
-    assert approved.authoring.domain == "code"
-    assert approved.authoring.request["topic"] == "arithmetic"
-    assert approved.authoring.generation_duration_ms >= 0
-    assert approved.authoring.validation_duration_ms >= 0
-    assert [item.expression for item in approved.template.distractors] == [
+    assert validated.template.question_type == "mcq"
+    assert validated.authoring is not None
+    assert validated.authoring.provider == "stub"
+    assert validated.authoring.model == "stub-model"
+    assert validated.authoring.base_prompt_version == "code-template-v8"
+    assert validated.authoring.domain == "code"
+    assert validated.authoring.request["topic"] == "arithmetic"
+    assert validated.authoring.generated_at.utcoffset() is not None
+    assert validated.authoring.generation_duration_ms >= 0
+    assert [item.expression for item in validated.template.distractors] == [
         "a - b",
         "a + b + 1",
         "a + b - 1",
@@ -128,8 +129,8 @@ def test_template_application_authors_once_then_generates_locally() -> None:
 def test_application_can_run_a_non_code_domain_without_provider_changes() -> None:
     class ExampleDomain:
         name = "example"
-        template_model = ExampleTemplate
-        approved_model = ExampleApproved
+        candidate_model = ExampleTemplate
+        validated_model = ExampleValidated
 
         def generation_request(self, request, *, provider):
             from edcraft_validator.generation.base import StructuredGenerationRequest
@@ -143,14 +144,14 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
                 prompt_version="example-v1",
             )
 
-        def build_template(self, request, proposal):
+        def build_candidate(self, request, proposal):
             return ExampleTemplate(value=proposal.value)
 
-        def approve(self, template, *, request=None):
-            return ExampleApproved(value=template.value)
+        def validate(self, candidate, *, request=None):
+            return ExampleValidated(value=candidate.value)
 
-        def generate(self, approved, *, seed):
-            return ExampleInstance(value=approved.value, seed=seed)
+        def generate_question(self, validated, *, seed):
+            return ExampleInstance(value=validated.value, seed=seed)
 
     class ExampleProvider:
         provider = "stub"
@@ -164,14 +165,27 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
         provider_factory=lambda selection: ExampleProvider(),
         domain_factory=lambda name: ExampleDomain(),
     )
-    approved = application.author(
+    validated = application.create_validated_template(
         ExampleRequest(topic="fractions"),
         domain="example",
         provider="stub",
     )
-    instance = application.generate(approved, domain="example", seed=5)
+    instance = application.generate_question(validated, domain="example", seed=5)
 
-    assert approved.value == 12
-    assert approved.authoring.domain == "example"
-    assert approved.authoring.request == {"topic": "fractions"}
+    assert validated.value == 12
+    assert validated.authoring.domain == "example"
+    assert validated.authoring.request == {"topic": "fractions"}
     assert instance == ExampleInstance(value=12, seed=5)
+
+
+def test_application_rejects_domain_without_shared_validated_contract() -> None:
+    class InvalidDomain:
+        name = "invalid"
+
+        def validate(self, candidate, *, request=None):
+            return ExampleTemplate(value=candidate.value)
+
+    application = TemplateApplication(domain_factory=lambda _: InvalidDomain())
+
+    with pytest.raises(TypeError, match="shared authoring contract"):
+        application.validate_template(ExampleTemplate(value=1), domain="invalid")
