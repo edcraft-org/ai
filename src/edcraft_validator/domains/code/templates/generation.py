@@ -1,4 +1,4 @@
-"""Deterministic expansion of approved code-question templates."""
+"""Deterministic expansion of validated code-question templates."""
 
 from __future__ import annotations
 
@@ -12,22 +12,22 @@ from edcraft_validator.models import GeneratedQuestion
 
 from .expressions import SafeExpression
 from .models import (
-    ApprovedCodeQuestionTemplate,
+    CodeQuestionInstance,
     ParameterValue,
-    TemplateQuestionInstance,
     TemplateValidationError,
+    ValidatedCodeTemplate,
     _case_count,
 )
 
 
-def generate_template_instance(
-    approved: ApprovedCodeQuestionTemplate, seed: int
-) -> TemplateQuestionInstance:
-    """Expand an approved template without AI calls or per-instance validation."""
-    template = approved.template
-    if approved.validation.cases_validated != _case_count(template):
-        raise ValueError("approved template does not cover its complete input domain")
-    cases = approved.validation.validated_cases
+def generate_code_question(
+    validated: ValidatedCodeTemplate, seed: int
+) -> CodeQuestionInstance:
+    """Expand a validated template without AI calls or per-instance validation."""
+    template = validated.template
+    if validated.validation.cases_validated != _case_count(template):
+        raise ValueError("validated template does not cover its complete input domain")
+    cases = validated.validation.validated_cases
     expected_inputs = [
         dict(
             zip(
@@ -44,7 +44,7 @@ def generate_template_instance(
     if len(answers_by_inputs) != len(cases) or set(answers_by_inputs) != {
         _case_key(inputs) for inputs in expected_inputs
     }:
-        raise ValueError("approved template does not cover its complete input domain")
+        raise ValueError("validated template does not cover its complete input domain")
 
     inputs = {
         parameter.name: copy.deepcopy(
@@ -73,7 +73,7 @@ def generate_template_instance(
         answer_target=template.answer_target,
         question_type=template.question_type,
     )
-    return TemplateQuestionInstance(
+    return CodeQuestionInstance(
         template_id=template.template_id,
         seed=seed,
         parameters=inputs,

@@ -1,18 +1,22 @@
+"""Static analysis for EdCraft's supported Python subset."""
+
 import ast
 from dataclasses import dataclass, field
 
+MAX_INTEGER_LITERAL = 10_000
+
 
 @dataclass
-class SafetyResult:
+class AnalysisResult:
     errors: list[str] = field(default_factory=list)
 
     @property
-    def is_safe(self) -> bool:
+    def is_valid(self) -> bool:
         return not self.errors
 
 
-class SafetyChecker(ast.NodeVisitor):
-    """Conservative syntax gate, not a complete security sandbox."""
+class PythonSubsetAnalyzer(ast.NodeVisitor):
+    """Reject Python constructs outside the supported teaching subset."""
 
     _blocked_nodes = (
         ast.AsyncFor,
@@ -38,7 +42,7 @@ class SafetyChecker(ast.NodeVisitor):
         ast.Yield,
         ast.YieldFrom,
     )
-    _safe_builtins = {
+    _supported_builtins = {
         "abs",
         "all",
         "any",
@@ -83,11 +87,11 @@ class SafetyChecker(ast.NodeVisitor):
         self._defined_functions: set[str] = set()
         self._current_function: str | None = None
 
-    def check(self, code: str) -> SafetyResult:
+    def check(self, code: str) -> AnalysisResult:
         try:
             tree = ast.parse(code)
         except SyntaxError as exc:
-            return SafetyResult([f"Syntax error at line {exc.lineno}: {exc.msg}"])
+            return AnalysisResult([f"Syntax error at line {exc.lineno}: {exc.msg}"])
 
         self._defined_functions = {
             node.name for node in tree.body if isinstance(node, ast.FunctionDef)
@@ -96,16 +100,14 @@ class SafetyChecker(ast.NodeVisitor):
             self.errors.append(
                 f"Entry function '{self.entry_function}' is not defined at module level"
             )
-
         for node in tree.body:
             if not isinstance(node, (ast.FunctionDef, ast.Assign, ast.AnnAssign)):
                 self.errors.append(
                     f"Top-level {type(node).__name__} is not allowed "
                     f"(line {node.lineno})"
                 )
-
         self.visit(tree)
-        return SafetyResult(self.errors)
+        return AnalysisResult(self.errors)
 
     def generic_visit(self, node: ast.AST) -> None:
         if isinstance(node, self._blocked_nodes):
@@ -127,6 +129,12 @@ class SafetyChecker(ast.NodeVisitor):
         if node.id.startswith("__") or node.id in self._blocked_names:
             self.errors.append(f"Name '{node.id}' is not allowed (line {node.lineno})")
 
+    def visit_Constant(self, node: ast.Constant) -> None:
+        if type(node.value) is int and abs(node.value) > MAX_INTEGER_LITERAL:
+            self.errors.append(
+                f"Integer literal exceeds {MAX_INTEGER_LITERAL} (line {node.lineno})"
+            )
+
     def visit_Call(self, node: ast.Call) -> None:
         if not isinstance(node.func, ast.Name):
             self.errors.append(
@@ -134,7 +142,7 @@ class SafetyChecker(ast.NodeVisitor):
             )
         else:
             called = node.func.id
-            allowed = self._safe_builtins | self._defined_functions
+            allowed = self._supported_builtins | self._defined_functions
             if called not in allowed:
                 self.errors.append(
                     f"Call to '{called}' is not allowed (line {node.lineno})"
@@ -144,5 +152,5 @@ class SafetyChecker(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-def check_code_safety(code: str, entry_function: str) -> SafetyResult:
-    return SafetyChecker(entry_function).check(code)
+def analyze_python_subset(code: str, entry_function: str) -> AnalysisResult:
+    return PythonSubsetAnalyzer(entry_function).check(code)

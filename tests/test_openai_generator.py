@@ -2,12 +2,17 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from pydantic import BaseModel
 
+from edcraft_validator.domains.code.authoring import build_code_generation_request
+from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.domains.code.templates import CodeTemplateProposal
-from edcraft_validator.generation.base import GenerationSchemaError
-from edcraft_validator.generation.models import TemplateAuthoringRequest
+from edcraft_validator.generation.base import (
+    GenerationSchemaError,
+    StructuredGenerationRequest,
+)
 from edcraft_validator.generation.openai import (
-    OpenAICompatibleTemplateGenerator,
+    OpenAICompatibleProvider,
     OpenAIGenerationError,
     _api_key,
     _base_url,
@@ -15,6 +20,13 @@ from edcraft_validator.generation.openai import (
     _model,
     _timeout_seconds,
 )
+
+
+def generation_request(topic: str = "arithmetic", difficulty: str = "beginner"):
+    return build_code_generation_request(
+        CodeTemplateRequest(topic=topic, difficulty=difficulty),
+        provider="openai",
+    )
 
 
 def code_proposal() -> CodeTemplateProposal:
@@ -65,17 +77,15 @@ def client_with_content(content: str) -> SimpleNamespace:
 
 def test_generates_template_using_strict_structured_outputs() -> None:
     client = client_with(code_proposal())
-    generator = OpenAICompatibleTemplateGenerator("openai", client, model="test-model")
+    provider = OpenAICompatibleProvider("openai", client, model="test-model")
 
-    result = generator.generate_proposal(
-        TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
-    )
+    result = provider.generate(generation_request())
 
     assert result.entry_function == "calculate"
     assert client.chat.completions.arguments["model"] == "test-model"
     response_format = client.chat.completions.arguments["response_format"]
     assert response_format["type"] == "json_schema"
-    assert response_format["json_schema"]["name"] == "question_template"
+    assert response_format["json_schema"]["name"] == "template_proposal"
     assert response_format["json_schema"]["strict"] is True
     schema = response_format["json_schema"]["schema"]
     assert set(schema["required"]) == set(schema["properties"])
@@ -87,17 +97,33 @@ def test_generates_template_using_strict_structured_outputs() -> None:
     assert "exactly 3 distractor candidates" in messages[1]["content"]
 
 
-def test_reports_empty_template_response() -> None:
-    generator = OpenAICompatibleTemplateGenerator(
-        "openai", client_with(None), model="test-model"
+def test_provider_accepts_a_schema_from_another_domain() -> None:
+    class ExampleProposal(BaseModel):
+        equation: str
+
+    client = client_with_content('{"equation":"x + 1"}')
+    provider = OpenAICompatibleProvider("openai", client, model="test-model")
+    request = StructuredGenerationRequest(
+        messages=[{"role": "user", "content": "Create an equation"}],
+        response_model=ExampleProposal,
+        parse_response=ExampleProposal.model_validate_json,
+        prompt_version="example-v1",
     )
+
+    result = provider.generate(request)
+
+    assert result == ExampleProposal(equation="x + 1")
+    schema = client.chat.completions.arguments["response_format"]["json_schema"]
+    assert "equation" in schema["schema"]["properties"]
+
+
+def test_reports_empty_template_response() -> None:
+    provider = OpenAICompatibleProvider("openai", client_with(None), model="test-model")
 
     with pytest.raises(
         OpenAIGenerationError, match="returned an empty response"
     ) as error:
-        generator.generate_proposal(
-            TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
-        )
+        provider.generate(generation_request())
 
     assert error.value.category == "invalid_response"
 
@@ -105,16 +131,14 @@ def test_reports_empty_template_response() -> None:
 def test_reports_duplicate_parameter_values_as_schema_error() -> None:
     payload = code_proposal().model_dump(mode="json")
     payload["parameters"][0]["values"] = [2, 2]
-    generator = OpenAICompatibleTemplateGenerator(
+    provider = OpenAICompatibleProvider(
         "openai", client_with_content(json.dumps(payload)), model="test-model"
     )
 
     with pytest.raises(
         GenerationSchemaError, match="parameter values must be unique"
     ) as error:
-        generator.generate_proposal(
-            TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
-        )
+        provider.generate(generation_request())
 
     assert error.value.category == "schema_validation"
 
@@ -153,23 +177,10 @@ def test_soclaas_requires_its_own_model(monkeypatch) -> None:
         _model("soclaas")
 
 
-def test_openai_prompt_metadata_is_stable() -> None:
-    generator = OpenAICompatibleTemplateGenerator(
-        "openai", client_with(code_proposal()), model="test-model"
-    )
-    request = TemplateAuthoringRequest(topic="functions", difficulty="intermediate")
-
-    first = generator.prompt_metadata(request)
-    second = generator.prompt_metadata(request)
-
-    assert first == second
-    assert first.version == "code-template-v8"
-    assert len(first.sha256) == 64
+def test_openai_request_records_the_base_prompt_version() -> None:
     assert (
-        first.sha256
-        != generator.prompt_metadata(
-            TemplateAuthoringRequest(topic="functions", difficulty="advanced")
-        ).sha256
+        generation_request("functions", "intermediate").prompt_version
+        == "code-template-v8"
     )
 
 
@@ -185,9 +196,9 @@ def test_openai_client_uses_bounded_timeout_and_retries(monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_TIMEOUT_SECONDS", "45")
     monkeypatch.setenv("OPENAI_MAX_RETRIES", "0")
 
-    generator = OpenAICompatibleTemplateGenerator("openai")
+    provider = OpenAICompatibleProvider("openai")
 
-    assert generator.model
+    assert provider.model
     assert captured["timeout"] == 45
     assert captured["max_retries"] == 0
 

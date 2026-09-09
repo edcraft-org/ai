@@ -2,20 +2,30 @@ import json
 
 import pytest
 
+from edcraft_validator.domains.code.authoring import (
+    build_code_generation_request,
+    parse_ollama_proposal,
+)
+from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.generation.base import (
     GenerationError,
     GenerationSchemaError,
     GenerationTimeoutError,
     GenerationTransportError,
 )
-from edcraft_validator.generation.models import TemplateAuthoringRequest
 from edcraft_validator.generation.ollama import (
-    OllamaTemplateGenerator,
+    OllamaProvider,
     _num_predict,
     _temperature,
     _timeout_seconds,
-    parse_ollama_proposal,
 )
+
+
+def generation_request(topic: str = "arithmetic", difficulty: str = "beginner"):
+    return build_code_generation_request(
+        CodeTemplateRequest(topic=topic, difficulty=difficulty),
+        provider="ollama",
+    )
 
 
 def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> None:
@@ -57,9 +67,7 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
     monkeypatch.delenv("OLLAMA_TEMPERATURE", raising=False)
 
-    result = OllamaTemplateGenerator(model="qwen2.5").generate_proposal(
-        TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
-    )
+    result = OllamaProvider(model="qwen2.5").generate(generation_request())
 
     assert result.entry_function == "calculate"
     assert result.parameters[0].values == [1, 2]
@@ -149,15 +157,13 @@ def test_ollama_reports_local_wire_schema_failures(monkeypatch) -> None:
         ],
     }
     monkeypatch.setattr(
-        OllamaTemplateGenerator,
+        OllamaProvider,
         "_ollama_request",
         lambda self, messages, schema: json.dumps(invalid),
     )
 
     with pytest.raises(GenerationSchemaError, match="local schema validation"):
-        OllamaTemplateGenerator().generate_proposal(
-            TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
-        )
+        OllamaProvider().generate(generation_request())
 
 
 def test_ollama_reports_duplicate_parameter_values_as_schema_error(
@@ -175,7 +181,7 @@ def test_ollama_reports_duplicate_parameter_values_as_schema_error(
         ],
     }
     monkeypatch.setattr(
-        OllamaTemplateGenerator,
+        OllamaProvider,
         "_ollama_request",
         lambda self, messages, schema: json.dumps(duplicate),
     )
@@ -183,9 +189,7 @@ def test_ollama_reports_duplicate_parameter_values_as_schema_error(
     with pytest.raises(
         GenerationSchemaError, match="parameter values must be unique"
     ) as error:
-        OllamaTemplateGenerator().generate_proposal(
-            TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
-        )
+        OllamaProvider().generate(generation_request())
 
     assert error.value.category == "schema_validation"
 
@@ -197,9 +201,7 @@ def test_ollama_reports_timeout_separately(monkeypatch) -> None:
     monkeypatch.setattr("edcraft_validator.generation.ollama.urlopen", timeout)
 
     with pytest.raises(GenerationTimeoutError, match="timed out after 300 seconds"):
-        OllamaTemplateGenerator().generate_proposal(
-            TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
-        )
+        OllamaProvider().generate(generation_request())
 
 
 def test_ollama_reports_connection_reset_as_transport_failure(monkeypatch) -> None:
@@ -209,9 +211,7 @@ def test_ollama_reports_connection_reset_as_transport_failure(monkeypatch) -> No
     monkeypatch.setattr("edcraft_validator.generation.ollama.urlopen", reset)
 
     with pytest.raises(GenerationTransportError, match="connection was interrupted"):
-        OllamaTemplateGenerator().generate_proposal(
-            TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner")
-        )
+        OllamaProvider().generate(generation_request())
 
 
 @pytest.mark.parametrize(
@@ -234,19 +234,8 @@ def test_ollama_rejects_invalid_generation_bounds(
         reader()
 
 
-def test_ollama_prompt_metadata_is_stable_and_wire_specific() -> None:
-    generator = OllamaTemplateGenerator(model="qwen-test")
-    request = TemplateAuthoringRequest(topic="loops", difficulty="advanced")
-
-    first = generator.prompt_metadata(request)
-    second = generator.prompt_metadata(request)
-
-    assert first == second
-    assert first.version == "code-template-v8+ollama-wire-v1"
-    assert len(first.sha256) == 64
+def test_ollama_request_records_its_wire_specific_prompt_version() -> None:
     assert (
-        first.sha256
-        != generator.prompt_metadata(
-            TemplateAuthoringRequest(topic="loops", difficulty="beginner")
-        ).sha256
+        generation_request("loops", "advanced").prompt_version
+        == "code-template-v8+ollama-wire-v1"
     )

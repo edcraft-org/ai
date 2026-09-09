@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -12,8 +13,27 @@ EvidenceStatus = Literal["passed", "failed"]
 AssuranceLevel = Literal["proof", "exhaustive", "bounded", "sampled", "heuristic"]
 
 
+class ValidationFailure(ValueError):
+    """A domain-independent validation failure with structured context."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "VALIDATION_FAILED",
+        field: str | None = None,
+        context: dict[str, Any] | None = None,
+        evidence: list[ValidationEvidence] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.field = field
+        self.context = copy.deepcopy(context or {})
+        self.evidence = copy.deepcopy(evidence or [])
+
+
 class ValidationEvidence(BaseModel):
-    """Result of one explainable check performed during template approval."""
+    """Result of one explainable check performed during template validation."""
 
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 

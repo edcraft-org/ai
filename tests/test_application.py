@@ -1,14 +1,39 @@
-from edcraft_validator.application import QuestionTemplateApplication
+import json
+
+import pytest
+from pydantic import BaseModel
+
+from edcraft_validator.application import TemplateApplication
+from edcraft_validator.domains.code.models import CodeTemplateRequest
+from edcraft_validator.domains.code.module import CodeDomain
 from edcraft_validator.domains.code.templates import (
     CodeTemplateProposal,
     TemplateValidator,
-    generate_template_instance,
+    generate_code_question,
 )
-from edcraft_validator.executor import ExecutionResult
-from edcraft_validator.generation.models import (
-    TemplateAuthoringRequest,
-    TemplatePromptMetadata,
-)
+from edcraft_validator.generation.models import ValidatedTemplateArtifact
+from edcraft_validator.tools.python_execution import ExecutionResult
+
+
+class ExampleRequest(BaseModel):
+    topic: str
+
+
+class ExampleProposal(BaseModel):
+    value: int
+
+
+class ExampleTemplate(BaseModel):
+    value: int
+
+
+class ExampleValidated(ValidatedTemplateArtifact):
+    value: int
+
+
+class ExampleInstance(BaseModel):
+    value: int
+    seed: int
 
 
 def test_template_application_authors_once_then_generates_locally() -> None:
@@ -33,58 +58,62 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     provider_calls: list[tuple[str, str | None]] = []
     instance_seeds: list[int] = []
 
-    class StubTemplateGenerator:
+    class StubProvider:
         provider = "stub"
         model = "stub-model"
 
-        def prompt_metadata(self, request):
-            return TemplatePromptMetadata(version="test-v1", sha256="a" * 64)
-
-        def generate_proposal(self, request):
+        def generate(self, request):
             return proposal
 
     class SumExecutor:
-        def execute(self, code, entry_function, inputs, *, timeout_seconds):
-            return ExecutionResult(ok=True, answer=inputs["a"] + inputs["b"])
+        def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+            return [
+                ExecutionResult(ok=True, answer=item["a"] + item["b"])
+                for item in inputs
+            ]
 
-    def generator_factory(selection):
+    def provider_factory(selection):
         provider_calls.append((selection.provider, selection.model))
-        return StubTemplateGenerator()
+        return StubProvider()
 
-    def instance_generator(approved, seed):
+    def instance_generator(validated, seed):
         instance_seeds.append(seed)
-        return generate_template_instance(approved, seed)
+        return generate_code_question(validated, seed)
 
-    application = QuestionTemplateApplication(
-        generator_factory=generator_factory,
-        validator_factory=lambda: TemplateValidator(executor=SumExecutor()),
-        instance_generator=instance_generator,
+    application = TemplateApplication(
+        provider_factory=provider_factory,
+        domain_factory=lambda _: CodeDomain(
+            validator_factory=lambda: TemplateValidator(execution_tool=SumExecutor()),
+            instance_generator=instance_generator,
+        ),
     )
-    approved = application.author(
-        TemplateAuthoringRequest(topic="arithmetic", difficulty="beginner"),
+    validated = application.create_validated_template(
+        CodeTemplateRequest(topic="arithmetic", difficulty="beginner"),
+        domain="code",
         provider="stub",
         model="stub-model",
     )
-    instance = application.generate(approved, seed=7)
+    instance = application.generate_question(validated, domain="code", seed=7)
 
     assert provider_calls == [("stub", "stub-model")]
     assert instance_seeds == [7]
-    assert approved.validation.cases_validated == 4
-    assert approved.template.topic == "arithmetic"
-    assert approved.template.difficulty == "beginner"
-    assert approved.template.answer_target == "return_value"
+    assert validated.validation.cases_validated == 4
+    assert validated.template.topic == "arithmetic"
+    assert validated.template.difficulty == "beginner"
+    assert validated.template.answer_target == "return_value"
     assert (
-        approved.template.question_template == "What value does add({a}, {b}) return?"
+        validated.template.question_template == "What value does add({a}, {b}) return?"
     )
-    assert approved.template.question_type == "mcq"
-    assert approved.authoring is not None
-    assert approved.authoring.provider == "stub"
-    assert approved.authoring.model == "stub-model"
-    assert approved.authoring.prompt.version == "test-v1"
-    assert approved.authoring.request.topic == "arithmetic"
-    assert approved.authoring.generation_duration_ms >= 0
-    assert approved.authoring.validation_duration_ms >= 0
-    assert [item.expression for item in approved.template.distractors] == [
+    assert validated.template.question_type == "mcq"
+    assert validated.authoring is not None
+    assert validated.authoring.provider == "stub"
+    assert validated.authoring.model == "stub-model"
+    assert validated.authoring.base_prompt_version == "code-template-v8"
+    assert validated.authoring.domain == "code"
+    assert validated.authoring.request["topic"] == "arithmetic"
+    assert validated.authoring.generated_at.utcoffset() is not None
+    assert validated.authoring.generation_duration_ms >= 0
+    assert [item.expression for item in validated.template.distractors] == [
         "a - b",
         "a + b + 1",
         "a + b - 1",
@@ -95,3 +124,68 @@ def test_template_application_authors_once_then_generates_locally() -> None:
         "Adds one.",
         "Subtracts one.",
     ]
+
+
+def test_application_can_run_a_non_code_domain_without_provider_changes() -> None:
+    class ExampleDomain:
+        name = "example"
+        candidate_model = ExampleTemplate
+        validated_model = ExampleValidated
+
+        def generation_request(self, request, *, provider):
+            from edcraft_validator.generation.base import StructuredGenerationRequest
+
+            return StructuredGenerationRequest(
+                messages=[{"role": "user", "content": request.topic}],
+                response_model=ExampleProposal,
+                parse_response=lambda content: ExampleProposal.model_validate_json(
+                    content
+                ),
+                prompt_version="example-v1",
+            )
+
+        def build_candidate(self, request, proposal):
+            return ExampleTemplate(value=proposal.value)
+
+        def validate(self, candidate, *, request=None):
+            return ExampleValidated(value=candidate.value)
+
+        def generate_question(self, validated, *, seed):
+            return ExampleInstance(value=validated.value, seed=seed)
+
+    class ExampleProvider:
+        provider = "stub"
+        model = "stub-model"
+
+        def generate(self, request):
+            assert request.response_model is ExampleProposal
+            return request.parse_response(json.dumps({"value": 12}))
+
+    application = TemplateApplication(
+        provider_factory=lambda selection: ExampleProvider(),
+        domain_factory=lambda name: ExampleDomain(),
+    )
+    validated = application.create_validated_template(
+        ExampleRequest(topic="fractions"),
+        domain="example",
+        provider="stub",
+    )
+    instance = application.generate_question(validated, domain="example", seed=5)
+
+    assert validated.value == 12
+    assert validated.authoring.domain == "example"
+    assert validated.authoring.request == {"topic": "fractions"}
+    assert instance == ExampleInstance(value=12, seed=5)
+
+
+def test_application_rejects_domain_without_shared_validated_contract() -> None:
+    class InvalidDomain:
+        name = "invalid"
+
+        def validate(self, candidate, *, request=None):
+            return ExampleTemplate(value=candidate.value)
+
+    application = TemplateApplication(domain_factory=lambda _: InvalidDomain())
+
+    with pytest.raises(TypeError, match="shared authoring contract"):
+        application.validate_template(ExampleTemplate(value=1), domain="invalid")

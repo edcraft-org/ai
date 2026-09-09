@@ -9,20 +9,24 @@ def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> N
     class Result:
         def model_dump(self, *, mode: str) -> dict[str, bool]:
             assert mode == "json"
-            return {"approved": True}
+            return {"validated": True}
 
     class StubApplication:
-        def author(self, request, *, provider, model):
-            captured.update(request=request, provider=provider, model=model)
+        def create_validated_template(self, request, *, domain, provider, model):
+            captured.update(
+                request=request, domain=domain, provider=provider, model=model
+            )
             return Result()
 
-    monkeypatch.setattr(template_cli, "QuestionTemplateApplication", StubApplication)
+    monkeypatch.setattr(template_cli, "TemplateApplication", StubApplication)
     monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
     monkeypatch.setattr(
         "sys.argv",
         [
             "edcraft-template",
             "author",
+            "--domain",
+            "code",
             "--provider",
             "ollama",
             "--model",
@@ -38,11 +42,12 @@ def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> N
 
     assert exit_code == 0
     assert captured["provider"] == "ollama"
+    assert captured["domain"] == "code"
     assert captured["model"] == "qwen-test"
     request = captured["request"]
     assert request.topic == "loops"
     assert request.difficulty == "advanced"
-    assert json.loads(capsys.readouterr().out) == {"approved": True}
+    assert json.loads(capsys.readouterr().out) == {"validated": True}
 
 
 def test_evaluate_cli_writes_attempts_and_prints_summary(
@@ -56,14 +61,14 @@ def test_evaluate_cli_writes_attempts_and_prints_summary(
 
         def model_dump_json(self, *, indent: int) -> str:
             assert indent == 2
-            return json.dumps({"attempts": 2, "approved": 2, "failed": 0})
+            return json.dumps({"attempts": 2, "validated": 2, "failed": 0})
 
     class Report:
         summary = Summary()
 
     class Attempt:
         attempt = 1
-        status = "approved"
+        status = "validated"
         total_duration_ms = 1250.0
 
         class Request:
@@ -73,7 +78,7 @@ def test_evaluate_cli_writes_attempts_and_prints_summary(
         request = Request()
 
         def model_dump_json(self):
-            return json.dumps({"attempt": 1, "status": "approved"})
+            return json.dumps({"attempt": 1, "status": "validated"})
 
     class StubEvaluator:
         def evaluate(self, **kwargs):
@@ -88,6 +93,8 @@ def test_evaluate_cli_writes_attempts_and_prints_summary(
         [
             "edcraft-template",
             "evaluate",
+            "--domain",
+            "code",
             "--provider",
             "ollama",
             "--model",
@@ -111,11 +118,11 @@ def test_evaluate_cli_writes_attempts_and_prints_summary(
     assert captured["topics"] == ("loops",)
     assert captured["difficulties"] == ("beginner",)
     assert captured["repetitions"] == 2
-    assert json.loads(output.read_text()) == {"attempt": 1, "status": "approved"}
+    assert json.loads(output.read_text()) == {"attempt": 1, "status": "validated"}
     captured_output = capsys.readouterr()
-    assert "[1] loops/beginner: approved (1.2s)" in captured_output.err
+    assert "[1] loops/beginner: validated (1.2s)" in captured_output.err
     assert json.loads(captured_output.out) == {
         "attempts": 2,
-        "approved": 2,
+        "validated": 2,
         "failed": 0,
     }

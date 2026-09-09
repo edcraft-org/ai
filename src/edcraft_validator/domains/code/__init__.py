@@ -1,19 +1,23 @@
-"""Template authoring, approval, and expansion for programming questions."""
+"""Template authoring, validation, and expansion for programming questions."""
 
+from edcraft_validator.domains.code.models import CodeTemplateRequest
+from edcraft_validator.domains.code.module import CodeDomain
 from edcraft_validator.domains.code.templates import (
-    ApprovedCodeQuestionTemplate,
-    CodeQuestionTemplate,
+    CodeTemplateCandidate,
     FiniteParameter,
     ParameterValue,
     TemplateValidator,
-    generate_template_instance,
+    ValidatedCodeTemplate,
+    generate_code_question,
 )
 
 __all__ = [
-    "ApprovedCodeQuestionTemplate",
-    "CodeQuestionTemplate",
+    "ValidatedCodeTemplate",
+    "CodeDomain",
+    "CodeTemplateCandidate",
+    "CodeTemplateRequest",
     "FiniteParameter",
     "ParameterValue",
     "TemplateValidator",
-    "generate_template_instance",
+    "generate_code_question",
 ]

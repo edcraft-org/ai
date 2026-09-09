@@ -1,8 +1,7 @@
-from typing import Literal
+from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-from edcraft_validator.domains.code.capabilities import Difficulty, ProgrammingTopic
 
 
 class TemplateProviderSelection(BaseModel):
@@ -24,34 +23,21 @@ class TemplateProviderSelection(BaseModel):
         return stripped
 
 
-class TemplateAuthoringRequest(BaseModel):
-    """Human-selected constraints for one reusable template."""
-
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    topic: ProgrammingTopic
-    difficulty: Difficulty
-    num_distractors: int = Field(default=3, ge=2, le=3)
-
-
-class TemplatePromptMetadata(BaseModel):
-    """Versioned identity of the exact messages sent to a provider."""
-
-    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
-
-    version: str = Field(min_length=1)
-    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-
-
 class TemplateAuthoringProvenance(BaseModel):
-    """Non-secret evidence for reproducing one successful authoring attempt."""
+    """Non-secret trace of one successful model authoring attempt."""
 
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     provider: str = Field(min_length=1)
     model: str = Field(min_length=1)
-    prompt: TemplatePromptMetadata
-    request: TemplateAuthoringRequest
+    domain: str = Field(pattern=r"^[a-z][a-z0-9_-]*$")
+    base_prompt_version: str = Field(min_length=1)
+    request: dict[str, Any]
+    generated_at: datetime
     generation_duration_ms: float = Field(ge=0)
-    validation_duration_ms: float = Field(ge=0)
-    status: Literal["approved"] = "approved"
+
+
+class ValidatedTemplateArtifact(BaseModel):
+    """Shared contract for every domain's technically validated artifact."""
+
+    authoring: TemplateAuthoringProvenance | None = None

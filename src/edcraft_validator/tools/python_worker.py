@@ -1,4 +1,8 @@
+"""Implementation of the local Python tracing tool."""
+
 import json
+import math
+import resource
 import signal
 import sys
 from typing import Any
@@ -6,6 +10,7 @@ from typing import Any
 from step_tracer import BranchExecution, FunctionCall, LoopExecution, StepTracer
 
 DEFAULT_TRACE_EVENT_LIMIT = 100_000
+MAX_MEMORY_BYTES = 512 * 1024 * 1024
 
 
 class ExecutionTimedOutError(TimeoutError):
@@ -16,6 +21,18 @@ class TraceLimitExceededError(RuntimeError):
     pass
 
 
+def _apply_resource_limits(request: dict[str, Any]) -> None:
+    """Bound the worker before any generated code is executed."""
+    cases = request.get("cases")
+    case_count = len(cases) if isinstance(cases, list) else 1
+    timeout_seconds = float(request.get("timeout_seconds") or 2.0)
+    cpu_seconds = max(1, math.ceil(timeout_seconds * case_count) + 1)
+
+    if sys.platform.startswith("linux"):
+        resource.setrlimit(resource.RLIMIT_AS, (MAX_MEMORY_BYTES, MAX_MEMORY_BYTES))
+    resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
+
+
 def _raise_execution_timeout(signum: int, frame: Any) -> None:
     raise ExecutionTimedOutError
 
@@ -23,7 +40,6 @@ def _raise_execution_timeout(signum: int, frame: Any) -> None:
 def _execute_with_trace_limit(
     tracer: StepTracer, transformed_code: str, trace_event_limit: int
 ) -> Any:
-    """Execute transformed user code with a bounded number of Python line events."""
     events = 0
 
     def count_user_code_events(frame: Any, event: str, _arg: Any) -> Any:
@@ -45,7 +61,6 @@ def _execute_with_trace_limit(
 
 
 def execute_request(request: dict[str, Any]) -> dict[str, Any]:
-    """Execute one trusted request; production callers must use the container."""
     timeout_seconds = request.get("timeout_seconds")
     trace_event_limit = request.get("trace_event_limit", DEFAULT_TRACE_EVENT_LIMIT)
     if (
@@ -58,6 +73,7 @@ def execute_request(request: dict[str, Any]) -> dict[str, Any]:
             "error_code": "INVALID_REQUEST",
             "error_message": "trace_event_limit must be a positive integer",
         }
+
     timer_enabled = timeout_seconds is not None and hasattr(signal, "setitimer")
     try:
         if timer_enabled:
@@ -66,7 +82,6 @@ def execute_request(request: dict[str, Any]) -> dict[str, Any]:
 
         entry_function = request["entry_function"]
         invocation = f"\n\n{entry_function}(**{request['inputs']!r})"
-
         tracer = StepTracer()
         transformed = tracer.transform_code(request["code"] + invocation)
         context = _execute_with_trace_limit(tracer, transformed, trace_event_limit)
@@ -128,6 +143,12 @@ def execute_request(request: dict[str, Any]) -> dict[str, Any]:
                 f"Execution exceeded the {trace_event_limit} trace-event limit"
             ),
         }
+    except MemoryError:
+        return {
+            "ok": False,
+            "error_code": "RESOURCE_LIMIT_EXCEEDED",
+            "error_message": "Execution exceeded the worker memory limit",
+        }
     except Exception as exc:
         return {
             "ok": False,
@@ -140,7 +161,6 @@ def execute_request(request: dict[str, Any]) -> dict[str, Any]:
 
 
 def execute_batch_request(request: dict[str, Any]) -> dict[str, Any]:
-    """Execute several input combinations for the same program in one worker."""
     cases = request["cases"]
     if not isinstance(cases, list) or not cases:
         raise ValueError("cases must be a non-empty list")
@@ -160,6 +180,7 @@ def execute_batch_request(request: dict[str, Any]) -> dict[str, Any]:
 def main() -> None:
     try:
         request = json.loads(sys.stdin.read())
+        _apply_resource_limits(request)
         response = (
             execute_batch_request(request)
             if "cases" in request

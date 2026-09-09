@@ -1,13 +1,12 @@
 import json
 
-from edcraft_validator.application import TemplateEvaluator
+from edcraft_validator.domains.code.evaluation import TemplateEvaluator
 from edcraft_validator.domains.code.templates import (
     CodeTemplateProposal,
     TemplateValidator,
 )
-from edcraft_validator.executor import ExecutionResult
 from edcraft_validator.generation.base import GenerationError
-from edcraft_validator.generation.models import TemplatePromptMetadata
+from edcraft_validator.tools.python_execution import ExecutionResult
 
 
 def proposal(*, code: str = "def add(a, b):\n    return a + b") -> CodeTemplateProposal:
@@ -38,25 +37,22 @@ class SumExecutor:
         ]
 
 
-class StubGenerator:
+class StubProvider:
     provider = "stub"
     model = "stub-model"
 
     def __init__(self, result: CodeTemplateProposal) -> None:
         self.result = result
 
-    def prompt_metadata(self, request):
-        return TemplatePromptMetadata(version="test-v1", sha256="c" * 64)
-
-    def generate_proposal(self, request):
+    def generate(self, request):
         return self.result
 
 
 def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> None:
     proposals = iter([proposal(), proposal(code="def add(a, b):\n    return a")])
     evaluator = TemplateEvaluator(
-        generator_factory=lambda selection: StubGenerator(next(proposals)),
-        validator_factory=lambda: TemplateValidator(executor=SumExecutor()),
+        provider_factory=lambda selection: StubProvider(next(proposals)),
+        validator_factory=lambda: TemplateValidator(execution_tool=SumExecutor()),
     )
 
     report = evaluator.evaluate(
@@ -67,14 +63,14 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
         repetitions=2,
     )
 
-    assert [attempt.status for attempt in report.attempts] == ["approved", "failed"]
-    assert report.attempts[0].approved_template is not None
+    assert [attempt.status for attempt in report.attempts] == ["validated", "failed"]
+    assert report.attempts[0].validated_template is not None
     assert report.attempts[1].failure_stage == "validation"
     assert report.attempts[1].failure_code == "PROFILE_MISMATCH"
     assert report.attempts[1].validation_evidence[-1].status == "failed"
     assert report.attempts[1].validation_evidence[-1].check == "template_structure"
     assert report.summary.attempts == 2
-    assert report.summary.approved == 1
+    assert report.summary.validated == 1
     assert report.summary.pass_rate == 0.5
     assert report.summary.failure_counts == {"PROFILE_MISMATCH": 1}
     assert report.summary.groups[0].model == "stub-model"
@@ -83,7 +79,7 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
     report.write_jsonl(output)
     records = [json.loads(line) for line in output.read_text().splitlines()]
     assert len(records) == 2
-    assert records[0]["approved_template"]["authoring"]["model"] == "stub-model"
+    assert records[0]["validated_template"]["authoring"]["model"] == "stub-model"
     assert records[1]["failure_code"] == "PROFILE_MISMATCH"
     assert records[1]["validation_evidence"][-1]["issues"][0]["code"] == (
         "PROFILE_MISMATCH"
@@ -93,8 +89,8 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
 def test_evaluation_notifies_after_each_completed_attempt() -> None:
     observed = []
     evaluator = TemplateEvaluator(
-        generator_factory=lambda selection: StubGenerator(proposal()),
-        validator_factory=lambda: TemplateValidator(executor=SumExecutor()),
+        provider_factory=lambda selection: StubProvider(proposal()),
+        validator_factory=lambda: TemplateValidator(execution_tool=SumExecutor()),
     )
 
     report = evaluator.evaluate(
@@ -114,7 +110,7 @@ def test_evaluation_classifies_provider_setup_failure() -> None:
     def unavailable(selection):
         raise GenerationError("provider is not configured")
 
-    report = TemplateEvaluator(generator_factory=unavailable).evaluate(
+    report = TemplateEvaluator(provider_factory=unavailable).evaluate(
         provider="missing",
         model=None,
         topics=("arithmetic",),

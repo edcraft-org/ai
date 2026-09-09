@@ -3,47 +3,47 @@
 from .authoring import (
     CODE_TEMPLATE_PROMPT_VERSION,
     CODE_TEMPLATE_SYSTEM_PROMPT,
+    build_code_candidate,
     build_template_prompt,
-    normalize_code_template_proposal,
-    parse_code_question_template,
+    parse_code_template_candidate,
     parse_code_template_proposal,
 )
 from .expressions import SafeExpression
-from .generation import generate_template_instance, render_template
+from .generation import generate_code_question, render_template
 from .models import (
-    ApprovedCodeQuestionTemplate,
-    CodeQuestionTemplate,
+    CodeQuestionInstance,
+    CodeTemplateCandidate,
     CodeTemplateProposal,
     DistractorRecipe,
     FiniteParameter,
     ParameterValue,
-    TemplateQuestionInstance,
     TemplateValidationError,
     TemplateValidationSummary,
+    ValidatedCodeTemplate,
     ValidatedTemplateCase,
 )
 from .validation import CODE_TEMPLATE_VALIDATOR_VERSION, TemplateValidator
 
 __all__ = [
-    "ApprovedCodeQuestionTemplate",
+    "ValidatedCodeTemplate",
     "CODE_TEMPLATE_PROMPT_VERSION",
     "CODE_TEMPLATE_SYSTEM_PROMPT",
     "CODE_TEMPLATE_VALIDATOR_VERSION",
-    "CodeQuestionTemplate",
+    "CodeTemplateCandidate",
     "CodeTemplateProposal",
     "DistractorRecipe",
     "FiniteParameter",
     "ParameterValue",
     "SafeExpression",
-    "TemplateQuestionInstance",
+    "CodeQuestionInstance",
     "TemplateValidationError",
     "TemplateValidationSummary",
     "TemplateValidator",
     "ValidatedTemplateCase",
     "build_template_prompt",
-    "generate_template_instance",
-    "normalize_code_template_proposal",
-    "parse_code_question_template",
+    "build_code_candidate",
+    "generate_code_question",
+    "parse_code_template_candidate",
     "parse_code_template_proposal",
     "render_template",
 ]

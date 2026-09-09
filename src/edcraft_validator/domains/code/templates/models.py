@@ -10,9 +10,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from edcraft_validator.domains.code.capabilities import Difficulty, ProgrammingTopic
-from edcraft_validator.generation.models import TemplateAuthoringProvenance
+from edcraft_validator.generation.models import ValidatedTemplateArtifact
 from edcraft_validator.models import AnswerTarget, GeneratedQuestion
-from edcraft_validator.validation.contracts import ValidationEvidence
+from edcraft_validator.validation.contracts import ValidationEvidence, ValidationFailure
 
 MAX_TEMPLATE_CASES = 64
 MAX_STRING_LENGTH = 40
@@ -119,7 +119,7 @@ class CodeTemplateProposal(BaseModel):
         return self
 
 
-class CodeQuestionTemplate(BaseModel):
+class CodeTemplateCandidate(BaseModel):
     """Provider-neutral template contract for the first code-domain version."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -151,7 +151,7 @@ class CodeQuestionTemplate(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def validate_parameter_domain(self) -> CodeQuestionTemplate:
+    def validate_parameter_domain(self) -> CodeTemplateCandidate:
         names = [parameter.name for parameter in self.parameters]
         if len(names) != len(set(names)):
             raise ValueError("parameter names must be unique")
@@ -195,30 +195,29 @@ class TemplateValidationSummary(BaseModel):
         if len(checks) != len(set(checks)):
             raise ValueError("validation evidence checks must be unique")
         if any(item.status != "passed" for item in self.evidence):
-            raise ValueError("approved templates require passing validation evidence")
+            raise ValueError("validated templates require passing validation evidence")
         if self.cases_validated != len(self.validated_cases):
             raise ValueError("cases_validated must match validated_cases")
         return self
 
 
-class ApprovedCodeQuestionTemplate(BaseModel):
+class ValidatedCodeTemplate(ValidatedTemplateArtifact):
     """A template plus evidence that its complete finite domain was checked."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    template: CodeQuestionTemplate
+    template: CodeTemplateCandidate
     validation: TemplateValidationSummary
-    authoring: TemplateAuthoringProvenance | None = None
 
     @model_validator(mode="after")
-    def require_canonical_answers(self) -> ApprovedCodeQuestionTemplate:
+    def require_canonical_answers(self) -> ValidatedCodeTemplate:
         if self.template.answer_expression is not None:
-            raise ValueError("approved templates must use validator-derived answers")
+            raise ValueError("validated templates must use validator-derived answers")
         return self
 
 
-class TemplateQuestionInstance(BaseModel):
-    """A reproducible question expanded from an approved template."""
+class CodeQuestionInstance(BaseModel):
+    """A reproducible question expanded from a validated template."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -228,8 +227,8 @@ class TemplateQuestionInstance(BaseModel):
     question: GeneratedQuestion
 
 
-class TemplateValidationError(ValueError):
-    """Raised when any possible instance fails template approval."""
+class TemplateValidationError(ValidationFailure):
+    """Raised when any possible instance fails template validation."""
 
     def __init__(
         self,
@@ -240,11 +239,15 @@ class TemplateValidationError(ValueError):
         inputs: dict[str, ParameterValue] | None = None,
         evidence: list[ValidationEvidence] | None = None,
     ) -> None:
-        super().__init__(message)
-        self.code = code
-        self.field = field
+        context = {"failing_inputs": inputs} if inputs is not None else None
+        super().__init__(
+            message,
+            code=code,
+            field=field,
+            context=context,
+            evidence=evidence,
+        )
         self.inputs = copy.deepcopy(inputs)
-        self.evidence = copy.deepcopy(evidence or [])
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -256,7 +259,7 @@ class TemplateValidationError(ValueError):
         }
 
 
-def _case_count(template: CodeQuestionTemplate) -> int:
+def _case_count(template: CodeTemplateCandidate) -> int:
     combinations = 1
     for parameter in template.parameters:
         combinations *= len(parameter.values)

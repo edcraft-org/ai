@@ -2,12 +2,12 @@
 
 from edcraft_validator.generation.base import (
     GenerationError,
-    QuestionTemplateGenerator,
+    ModelProvider,
+    StructuredGenerationRequest,
 )
-from edcraft_validator.generation.models import TemplateAuthoringRequest
 
 __all__ = [
     "GenerationError",
-    "QuestionTemplateGenerator",
-    "TemplateAuthoringRequest",
+    "ModelProvider",
+    "StructuredGenerationRequest",
 ]

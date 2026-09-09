@@ -1,4 +1,4 @@
-"""Provider-neutral prompt construction and proposal normalization."""
+"""Code prompt construction and canonical template building."""
 
 from __future__ import annotations
 
@@ -6,11 +6,11 @@ import hashlib
 import json
 
 from edcraft_validator.domains.code.capabilities import code_template_profile
-from edcraft_validator.generation.models import TemplateAuthoringRequest
+from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.models import AnswerTarget
 
 from .models import (
-    CodeQuestionTemplate,
+    CodeTemplateCandidate,
     CodeTemplateProposal,
     DistractorRecipe,
     TemplateValidationError,
@@ -19,10 +19,10 @@ from .models import (
 CODE_TEMPLATE_PROMPT_VERSION = "code-template-v8"
 
 
-def parse_code_question_template(content: str) -> CodeQuestionTemplate:
+def parse_code_template_candidate(content: str) -> CodeTemplateCandidate:
     """Parse template JSON with strict local schema validation."""
     payload = json.loads(content)
-    return CodeQuestionTemplate.model_validate(payload)
+    return CodeTemplateCandidate.model_validate(payload)
 
 
 def parse_code_template_proposal(content: str) -> CodeTemplateProposal:
@@ -31,10 +31,10 @@ def parse_code_template_proposal(content: str) -> CodeTemplateProposal:
     return CodeTemplateProposal.model_validate(payload)
 
 
-def normalize_code_template_proposal(
-    request: TemplateAuthoringRequest, proposal: CodeTemplateProposal
-) -> CodeQuestionTemplate:
-    """Derive non-judgment fields locally and produce the canonical template."""
+def build_code_candidate(
+    request: CodeTemplateRequest, proposal: CodeTemplateProposal
+) -> CodeTemplateCandidate:
+    """Build the canonical code template from a model proposal."""
     if len(proposal.distractors) < request.num_distractors:
         raise TemplateValidationError(
             f"expected at least {request.num_distractors} distractor candidates, "
@@ -52,7 +52,7 @@ def normalize_code_template_proposal(
         separators=(",", ":"),
     ).encode()
     digest = hashlib.sha256(identity_payload).hexdigest()[:12]
-    return CodeQuestionTemplate(
+    return CodeTemplateCandidate(
         template_id=f"{request.topic}.{request.difficulty}.{digest}",
         topic=request.topic,
         difficulty=request.difficulty,
@@ -127,7 +127,7 @@ def _question_template(
     return wording[target]
 
 
-def build_template_prompt(request: TemplateAuthoringRequest) -> str:
+def build_template_prompt(request: CodeTemplateRequest) -> str:
     profile = code_template_profile(request.topic, request.difficulty)
     candidate_count = request.num_distractors
     shapes = [

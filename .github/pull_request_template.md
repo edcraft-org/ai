@@ -12,7 +12,6 @@
 - [ ] `uv run ruff check .`
 - [ ] `uv run ruff format --check .`
 - [ ] `uv run pytest`
-- [ ] Docker integration tests, if relevant
 
 ## Research / project impact
 <!-- Explain any effect on evaluation, reproducibility, safety, or dissertation work. -->
@@ -38,7 +37,7 @@ chore: maintenance or dependency updates
 research: experiments, evaluation, or investigation
 
 Examples:
-ci: add Docker integration tests
+refactor: add a domain module
 feat: validate generated loop questions
 research: evaluate distractor quality
 -->
