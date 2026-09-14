@@ -15,7 +15,9 @@ from edcraft_validator.domains.code.templates import (
     build_code_candidate,
     generate_code_question,
 )
+from edcraft_validator.domains.code.templates.context import CodeValidationContext
 from edcraft_validator.generation.base import StructuredGenerationRequest
+from edcraft_validator.validation.contracts import ValidationPlan
 
 ValidatorFactory = Callable[[], TemplateValidator]
 InstanceGenerator = Callable[[ValidatedCodeTemplate, int], CodeQuestionInstance]
@@ -50,6 +52,19 @@ class CodeDomain:
         return build_code_candidate(
             _require_type(request, CodeTemplateRequest),
             _require_type(proposal, CodeTemplateProposal),
+        )
+
+    def prepare_validation(
+        self, candidate: BaseModel, *, request: BaseModel | None = None
+    ) -> ValidationPlan[CodeValidationContext]:
+        typed_candidate = _require_type(candidate, CodeTemplateCandidate)
+        num_distractors = None
+        if request is not None:
+            num_distractors = _require_type(
+                request, CodeTemplateRequest
+            ).num_distractors
+        return self.validator_factory().prepare_validation(
+            typed_candidate, num_distractors=num_distractors
         )
 
     def validate(

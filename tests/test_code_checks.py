@@ -46,3 +46,32 @@ def test_tool_timeout_is_incomplete_and_retains_domain_error():
     result = execution_check.run(CodeValidationContext(candidate()))
     assert result.status == "incomplete"
     assert result.failure.code == "EXECUTION_TIMEOUT"
+
+
+def test_domain_supplies_plan_with_injected_tool():
+    from edcraft_validator.domains.code.module import CodeDomain
+    from edcraft_validator.validation.pipeline import ValidationPipeline
+
+    calls = []
+
+    class Executor:
+        def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+            calls.append(inputs)
+            return [
+                ExecutionResult(ok=True, answer=x["a"] + x["b"] - x["c"])
+                for x in inputs
+            ]
+
+    domain = CodeDomain(
+        validator_factory=lambda: TemplateValidator(execution_tool=Executor())
+    )
+    plan = domain.prepare_validation(candidate())
+    report = ValidationPipeline().validate(
+        context=plan.context,
+        checks=plan.checks,
+        policy=plan.policy,
+    )
+    assert report.accepted
+    assert len(calls) == 1
+    assert "code_execution" in plan.policy.required_checks
+    assert "distractor_consistency" in plan.policy.required_checks

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from typing import Any, Literal, Protocol
@@ -99,3 +100,12 @@ class ValidationReport:
         )
         failure.evidence = copy.deepcopy(self.evidence)
         raise failure
+
+
+@dataclass(frozen=True)
+class ValidationPlan[ContextT]:
+    """Everything the central runner needs, assembled by a domain."""
+
+    context: ContextT
+    checks: Sequence[ValidationCheck[ContextT]]
+    policy: ValidationPolicy

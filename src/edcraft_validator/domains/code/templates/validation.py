@@ -20,6 +20,7 @@ from edcraft_validator.tools.python_execution import (
     LocalPythonTool,
     PythonExecutionTool,
 )
+from edcraft_validator.validation.contracts import ValidationPlan, ValidationPolicy
 from edcraft_validator.validation.pipeline import ValidationPipeline
 
 from .checks import CodeCheck
@@ -163,6 +164,31 @@ class TemplateValidator:
                 validated_cases=validated_cases,
                 evidence=pipeline.evidence,
             ),
+        )
+
+    def prepare_validation(
+        self, template: CodeTemplateCandidate, *, num_distractors: int | None = None
+    ) -> ValidationPlan[CodeValidationContext]:
+        checks = self.build_checks()
+        # Manual candidates only need selection when execution corrects their answer.
+        # Consistency is always required, even when selection is inapplicable.
+        required = frozenset(
+            {
+                "template_structure",
+                "expression_safety",
+                "answer_domain",
+                "code_execution",
+                "canonical_answers",
+                "distractor_consistency",
+                "template_rendering",
+            }
+        )
+        if num_distractors is not None:
+            required |= {"distractor_selection"}
+        return ValidationPlan(
+            context=CodeValidationContext(template, num_distractors=num_distractors),
+            checks=checks,
+            policy=ValidationPolicy(required_checks=required),
         )
 
     def build_checks(self) -> tuple[CodeCheck, ...]:
