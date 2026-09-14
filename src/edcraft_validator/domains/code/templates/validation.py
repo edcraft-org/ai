@@ -22,6 +22,8 @@ from edcraft_validator.tools.python_execution import (
 )
 from edcraft_validator.validation.pipeline import ValidationPipeline
 
+from .checks import CodeCheck
+from .context import CodeValidationContext
 from .context import DistractorCandidate as _DistractorCandidate
 from .expressions import SafeExpression
 from .generation import render_template
@@ -162,6 +164,137 @@ class TemplateValidator:
                 evidence=pipeline.evidence,
             ),
         )
+
+    def build_checks(self) -> tuple[CodeCheck, ...]:
+        """Keep prerequisites explicit; every operation uses the same typed context."""
+        return (
+            CodeCheck(
+                "template_structure",
+                "bounded",
+                self._check_structure,
+                lambda ctx: {
+                    "topic": ctx.template.topic,
+                    "difficulty": ctx.template.difficulty,
+                },
+            ),
+            CodeCheck(
+                "expression_safety",
+                "bounded",
+                self._check_expressions,
+                lambda ctx: {"distractors": len(ctx.template.distractors)},
+            ),
+            CodeCheck(
+                "answer_domain",
+                "exhaustive",
+                self._check_proposed_answers,
+                lambda ctx: ctx.case_details,
+            ),
+            CodeCheck(
+                "code_execution",
+                "exhaustive",
+                self._check_execution,
+                lambda ctx: {
+                    **ctx.case_details,
+                    "tool": type(self.execution_tool).__name__,
+                },
+            ),
+            CodeCheck(
+                "canonical_answers",
+                "exhaustive",
+                self._check_canonical_answers,
+                lambda ctx: {**ctx.case_details, "source": "code_execution"},
+            ),
+            CodeCheck(
+                "distractor_selection",
+                "exhaustive",
+                self._check_selection,
+                lambda ctx: {**ctx.case_details, "selected": self._selected_count(ctx)},
+                applies=lambda ctx: self._selected_count(ctx) is not None,
+            ),
+            CodeCheck(
+                "distractor_consistency",
+                "exhaustive",
+                self._check_distractors,
+                lambda ctx: {**ctx.case_details, "distractors": len(ctx.candidates)},
+            ),
+            CodeCheck(
+                "template_rendering",
+                "exhaustive",
+                self._check_rendering,
+                lambda ctx: ctx.case_details,
+            ),
+        )
+
+    def _check_structure(self, ctx: CodeValidationContext, details: dict) -> None:
+        self._validate_structure(ctx.template, ctx.names)
+        if ctx.num_distractors is not None and not 2 <= ctx.num_distractors <= 3:
+            raise ValueError("num_distractors must be 2 or 3")
+
+    def _check_expressions(self, ctx: CodeValidationContext, details: dict) -> None:
+        ctx.proposed_answer, ctx.candidates = self._parse_expressions(
+            ctx.template,
+            ctx.names,
+            allow_candidate_rejections=ctx.num_distractors is not None,
+        )
+
+    def _check_proposed_answers(
+        self, ctx: CodeValidationContext, details: dict
+    ) -> None:
+        assert ctx.proposed_answer is not None
+        ctx.proposed_answers = self._evaluate_answers(
+            ctx.template,
+            ctx.proposed_answer,
+            ctx.inputs_cases,
+        )
+
+    def _check_execution(self, ctx: CodeValidationContext, details: dict) -> None:
+        ctx.executions = self._execute_successfully(ctx.template, ctx.inputs_cases)
+
+    def _check_canonical_answers(
+        self, ctx: CodeValidationContext, details: dict
+    ) -> None:
+        ctx.canonical_answers, ctx.corrected_cases = self._resolve_canonical_answers(
+            ctx.template,
+            ctx.inputs_cases,
+            ctx.executions,
+            ctx.proposed_answers,
+            details,
+        )
+        if ctx.corrected_cases:
+            assert ctx.proposed_answer is not None
+            ctx.template, ctx.candidates = self._promote_proposed_answer_to_distractor(
+                ctx.template,
+                ctx.proposed_answer,
+                ctx.proposed_answers,
+                ctx.candidates,
+            )
+
+    @staticmethod
+    def _selected_count(ctx: CodeValidationContext) -> int | None:
+        if ctx.num_distractors is not None:
+            return ctx.num_distractors
+        return ctx.original_distractor_count if ctx.corrected_cases else None
+
+    def _check_selection(self, ctx: CodeValidationContext, details: dict) -> None:
+        count = self._selected_count(ctx)
+        assert count is not None
+        ctx.template, ctx.candidates = self._select_distractors(
+            ctx.template,
+            ctx.inputs_cases,
+            ctx.canonical_answers,
+            ctx.candidates,
+            num_distractors=count,
+        )
+
+    def _check_distractors(self, ctx: CodeValidationContext, details: dict) -> None:
+        self._validate_all_distractors(
+            ctx.inputs_cases,
+            ctx.canonical_answers,
+            ctx.candidates,
+        )
+
+    def _check_rendering(self, ctx: CodeValidationContext, details: dict) -> None:
+        self._validate_rendering(ctx.template, ctx.inputs_cases)
 
     @staticmethod
     def _parse_expressions(
