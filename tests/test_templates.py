@@ -1280,7 +1280,7 @@ def test_execution_failure_preserves_executor_code_in_evidence() -> None:
 
     assert error.value.code == "EXECUTION_TIMEOUT"
     assert error.value.evidence[-1].check == "code_execution"
-    assert error.value.evidence[-1].status == "failed"
+    assert error.value.evidence[-1].status == "incomplete"
     assert error.value.evidence[-1].issues[0].code == "EXECUTION_TIMEOUT"
 
 

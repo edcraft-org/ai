@@ -13,6 +13,7 @@ from .models import TemplateValidationError
 _INCOMPLETE_TOOL_CODES = {
     "EXECUTION_TIMEOUT",
     "RESOURCE_LIMIT_EXCEEDED",
+    "TRACE_LIMIT_EXCEEDED",
     "TOOL_FAILURE",
     "INVALID_TOOL_OUTPUT",
 }

@@ -9,7 +9,8 @@ from edcraft_validator.domains.code.module import CodeDomain
 from edcraft_validator.domains.code.templates import (
     CodeTemplateCandidate,
     CodeTemplateProposal,
-    TemplateValidator,
+    ValidatedCodeTemplate,
+    generate_code_question,
 )
 from edcraft_validator.tools.python_execution import LocalPythonTool
 
@@ -64,7 +65,13 @@ def test_generated_code_trace_limit_is_enforced() -> None:
 def test_template_is_exhaustively_validated(template_path: Path) -> None:
     template = CodeTemplateCandidate.model_validate_json(template_path.read_text())
 
-    validated = TemplateValidator().validate(template)
+    application = TemplateApplication()
+    validated = application.validate_template(template, domain="code")
+    reloaded = ValidatedCodeTemplate.model_validate_json(validated.model_dump_json())
+    for seed in (0, 1, 42, 999):
+        assert application.generate_question(reloaded, domain="code", seed=seed) == (
+            generate_code_question(validated, seed)
+        )
 
     expected_cases = 1
     for parameter in template.parameters:

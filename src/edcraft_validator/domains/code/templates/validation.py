@@ -60,115 +60,12 @@ class TemplateValidator:
     def validate(
         self, template: CodeTemplateCandidate, *, num_distractors: int | None = None
     ) -> ValidatedCodeTemplate:
-        pipeline = ValidationPipeline()
-        original_distractor_count = len(template.distractors)
-        names = tuple(parameter.name for parameter in template.parameters)
-        value_domains = [parameter.values for parameter in template.parameters]
-        inputs_cases = [
-            dict(zip(names, values, strict=True))
-            for values in itertools.product(*value_domains)
-        ]
-        case_details = {"cases": len(inputs_cases)}
-
-        pipeline.check(
-            name="template_structure",
-            assurance="bounded",
-            details={"topic": template.topic, "difficulty": template.difficulty},
-            operation=lambda: self._validate_structure(template, names),
+        """Compatibility entry point using the application's central runner."""
+        plan = self.prepare_validation(template, num_distractors=num_distractors)
+        report = ValidationPipeline().validate(
+            context=plan.context, checks=plan.checks, policy=plan.policy
         )
-        if num_distractors is not None and not 2 <= num_distractors <= 3:
-            raise ValueError("num_distractors must be 2 or 3")
-        proposed_answer, candidates = pipeline.check(
-            name="expression_safety",
-            assurance="bounded",
-            details={"distractors": len(template.distractors)},
-            operation=lambda: self._parse_expressions(
-                template,
-                names,
-                allow_candidate_rejections=num_distractors is not None,
-            ),
-        )
-        proposed_answers = pipeline.check(
-            name="answer_domain",
-            assurance="exhaustive",
-            details=case_details,
-            operation=lambda: self._evaluate_answers(
-                template, proposed_answer, inputs_cases
-            ),
-        )
-        executions = pipeline.check(
-            name="code_execution",
-            assurance="exhaustive",
-            details={**case_details, "tool": type(self.execution_tool).__name__},
-            operation=lambda: self._execute_successfully(template, inputs_cases),
-        )
-        answer_details = {**case_details, "source": "code_execution"}
-        canonical_answers, corrected_cases = pipeline.check(
-            name="canonical_answers",
-            assurance="exhaustive",
-            details=answer_details,
-            operation=lambda: self._resolve_canonical_answers(
-                template,
-                inputs_cases,
-                executions,
-                proposed_answers,
-                answer_details,
-            ),
-        )
-        if corrected_cases:
-            template, candidates = self._promote_proposed_answer_to_distractor(
-                template,
-                proposed_answer,
-                proposed_answers,
-                candidates,
-            )
-        selected_count = num_distractors
-        if selected_count is None and corrected_cases:
-            selected_count = original_distractor_count
-        if selected_count is not None:
-            template, candidates = pipeline.check(
-                name="distractor_selection",
-                assurance="exhaustive",
-                details={**case_details, "selected": selected_count},
-                operation=lambda: self._select_distractors(
-                    template,
-                    inputs_cases,
-                    canonical_answers,
-                    candidates,
-                    num_distractors=selected_count,
-                ),
-            )
-        pipeline.check(
-            name="distractor_consistency",
-            assurance="exhaustive",
-            details={**case_details, "distractors": len(candidates)},
-            operation=lambda: self._validate_all_distractors(
-                inputs_cases, canonical_answers, candidates
-            ),
-        )
-        pipeline.check(
-            name="template_rendering",
-            assurance="exhaustive",
-            details=case_details,
-            operation=lambda: self._validate_rendering(template, inputs_cases),
-        )
-
-        validated_cases = [
-            ValidatedTemplateCase(inputs=inputs, answer=answer)
-            for inputs, answer in zip(inputs_cases, canonical_answers, strict=True)
-        ]
-        validated_template = template.model_copy(
-            update={"answer_expression": None}, deep=True
-        )
-        return ValidatedCodeTemplate(
-            template=validated_template,
-            validation=TemplateValidationSummary(
-                validator_version=CODE_TEMPLATE_VALIDATOR_VERSION,
-                cases_validated=len(inputs_cases),
-                validated_cases=validated_cases,
-                evidence=pipeline.evidence,
-            ),
-        )
+        return self.finalize_template(plan.context, report)
 
     @staticmethod
     def finalize_template(

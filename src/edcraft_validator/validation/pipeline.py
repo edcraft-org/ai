@@ -75,14 +75,21 @@ class ValidationPipeline:
                     duration_ms=duration_ms,
                 )
             )
-            if result.status != "passed" and policy.stop_on_failure:
-                failure = result.failure or ValidationFailure(
-                    f"Validation check {check.name!r} {result.status}",
-                    code="VALIDATION_INCOMPLETE"
-                    if result.status == "incomplete"
-                    else "VALIDATION_FAILED",
+            if result.status != "passed" and (
+                policy.stop_on_failure or check.name in policy.required_checks
+            ):
+                failure = (
+                    failure
+                    or result.failure
+                    or ValidationFailure(
+                        f"Validation check {check.name!r} {result.status}",
+                        code="VALIDATION_INCOMPLETE"
+                        if result.status == "incomplete"
+                        else "VALIDATION_FAILED",
+                    )
                 )
-                break
+                if policy.stop_on_failure:
+                    break
         return ValidationReport(evidence=evidence, policy=policy, failure=failure)
 
     def check(

@@ -18,6 +18,7 @@ from edcraft_validator.domains.code.templates import (
 from edcraft_validator.domains.code.templates.context import CodeValidationContext
 from edcraft_validator.generation.base import StructuredGenerationRequest
 from edcraft_validator.validation.contracts import ValidationPlan, ValidationReport
+from edcraft_validator.validation.pipeline import ValidationPipeline
 
 ValidatorFactory = Callable[[], TemplateValidator]
 InstanceGenerator = Callable[[ValidatedCodeTemplate, int], CodeQuestionInstance]
@@ -77,15 +78,12 @@ class CodeDomain:
     def validate(
         self, candidate: BaseModel, *, request: BaseModel | None = None
     ) -> ValidatedCodeTemplate:
-        typed_candidate = _require_type(candidate, CodeTemplateCandidate)
-        num_distractors = None
-        if request is not None:
-            num_distractors = _require_type(
-                request, CodeTemplateRequest
-            ).num_distractors
-        return self.validator_factory().validate(
-            typed_candidate, num_distractors=num_distractors
+        """Convenience wrapper; the application executes the plan directly."""
+        plan = self.prepare_validation(candidate, request=request)
+        report = ValidationPipeline().validate(
+            context=plan.context, checks=plan.checks, policy=plan.policy
         )
+        return self.finalize_template(plan.context, report)
 
     def generate_question(
         self, validated: BaseModel, *, seed: int

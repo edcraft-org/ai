@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from edcraft_validator.domains.code.templates import (
     CodeTemplateCandidate,
     TemplateValidator,
@@ -33,19 +35,26 @@ def test_extracted_checks_match_existing_validator():
     assert context.template.distractors == expected.template.distractors
 
 
-def test_tool_timeout_is_incomplete_and_retains_domain_error():
+@pytest.mark.parametrize(
+    "failure_code",
+    [
+        "EXECUTION_TIMEOUT",
+        "TRACE_LIMIT_EXCEEDED",
+        "RESOURCE_LIMIT_EXCEEDED",
+        "TOOL_FAILURE",
+        "INVALID_TOOL_OUTPUT",
+    ],
+)
+def test_unfinished_tool_check_is_incomplete_and_retains_domain_error(failure_code):
     class Executor:
         def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
-            return [
-                ExecutionResult(ok=False, error_code="EXECUTION_TIMEOUT")
-                for _ in inputs
-            ]
+            return [ExecutionResult(ok=False, error_code=failure_code) for _ in inputs]
 
     checks = TemplateValidator(execution_tool=Executor()).build_checks()
     execution_check = next(check for check in checks if check.name == "code_execution")
     result = execution_check.run(CodeValidationContext(candidate()))
     assert result.status == "incomplete"
-    assert result.failure.code == "EXECUTION_TIMEOUT"
+    assert result.failure.code == failure_code
 
 
 def test_domain_supplies_plan_with_injected_tool():
@@ -116,3 +125,47 @@ def test_finalization_refuses_incomplete_report():
     plan = validator.prepare_validation(candidate())
     with pytest.raises(ValidationFailure):
         validator.finalize_template(plan.context, ValidationReport([], plan.policy))
+
+
+def test_safety_failure_stops_before_tool_execution():
+    from edcraft_validator.application import TemplateApplication
+    from edcraft_validator.domains.code.module import CodeDomain
+    from edcraft_validator.domains.code.templates import TemplateValidationError
+
+    class ForbiddenExecutor:
+        def execute_batch(self, *args, **kwargs):
+            pytest.fail("Unsafe code reached the execution tool")
+
+    application = TemplateApplication(
+        domain_factory=lambda name: CodeDomain(
+            validator_factory=lambda: TemplateValidator(
+                execution_tool=ForbiddenExecutor()
+            )
+        )
+    )
+    unsafe = candidate().model_copy(update={"code": "import os\ndef f(): return 1"})
+    with pytest.raises(TemplateValidationError) as error:
+        application.validate_template(unsafe, domain="code")
+    assert [item.check for item in error.value.evidence] == ["template_structure"]
+
+
+def test_missing_rendering_check_blocks_finalization():
+    from edcraft_validator.validation import ValidationFailure, ValidationPipeline
+
+    class Executor:
+        def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+            return [
+                ExecutionResult(ok=True, answer=x["a"] + x["b"] - x["c"])
+                for x in inputs
+            ]
+
+    validator = TemplateValidator(execution_tool=Executor())
+    plan = validator.prepare_validation(candidate())
+    report = ValidationPipeline().validate(
+        context=plan.context,
+        checks=[check for check in plan.checks if check.name != "template_rendering"],
+        policy=plan.policy,
+    )
+    assert report.missing_checks == {"template_rendering"}
+    with pytest.raises(ValidationFailure):
+        validator.finalize_template(plan.context, report)

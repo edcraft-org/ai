@@ -126,3 +126,42 @@ def test_duplicate_checks_rejected_before_execution():
             policy=ValidationPolicy(frozenset({"answer"})),
         )
     assert context == []
+
+
+def test_required_failure_retains_diagnostics_when_collecting_later_results():
+    class RejectingCheck:
+        name = "answer"
+        assurance = "bounded"
+
+        def run(self, context):
+            raise ValidationFailure(
+                "Answers disagree", code="ANSWER_MISMATCH", context={"expected": 3}
+            )
+
+    report = ValidationPipeline().validate(
+        context=[],
+        checks=[RejectingCheck(), ExampleCheck("style")],
+        policy=ValidationPolicy(frozenset({"answer"}), stop_on_failure=False),
+    )
+    assert not report.accepted
+    assert [item.check for item in report.evidence] == ["answer", "style"]
+    with pytest.raises(ValidationFailure) as error:
+        report.raise_for_failure()
+    assert error.value.code == "ANSWER_MISMATCH"
+    assert error.value.context == {"expected": 3}
+
+
+def test_unexpected_check_bug_is_not_treated_as_template_rejection():
+    class BrokenCheck:
+        name = "broken"
+        assurance = "bounded"
+
+        def run(self, context):
+            raise RuntimeError("implementation bug")
+
+    with pytest.raises(RuntimeError, match="implementation bug"):
+        ValidationPipeline().validate(
+            context=[],
+            checks=[BrokenCheck()],
+            policy=ValidationPolicy(frozenset({"broken"})),
+        )

@@ -233,14 +233,16 @@ domains/code/evaluation.py         real-provider code-template evaluation
 domains/code/templates/models.py   code template data contracts
 domains/code/templates/authoring.py prompt construction and template building
 domains/code/templates/expressions.py restricted deterministic expressions
-domains/code/templates/validation.py exhaustive template validation
+domains/code/templates/validation.py code check operations, plan, and finalization
+domains/code/templates/context.py    typed intermediate code-validation values
+domains/code/templates/checks.py     named check adapter and tool failure outcomes
 domains/code/templates/generation.py deterministic question expansion
 domains/code/capabilities.py       supported profiles and their machine-readable rules
 generation/base.py                 domain-agnostic structured generation request
 generation/registry.py             model-provider lookup
 generation/openai.py               OpenAI and SocLaas adapters
 generation/ollama.py               Ollama adapter
-validation/pipeline.py             domain-agnostic validation evidence orchestration
+validation/pipeline.py             central runner for domain-supplied checks
 validation/contracts.py            shared validation contracts
 tools/python_analysis.py           supported-Python static analysis
 tools/python_execution.py          local Python tool adapter
@@ -253,10 +255,55 @@ add its factory to the provider registry, and add an adapter test.
 
 To add a domain, implement `DomainModule`, provide its request, proposal, candidate,
 validated-template, and question models, build its `StructuredGenerationRequest`,
-register its validation checks and question generator, then add it to
+supply a validation plan, artifact finalizer, and question generator, then add it to
 `domains/registry.py`. Providers and the application do not change. Domain-specific
 tools all live under `tools/`; for example, future SymPy and Lean adapters can be
 added without entering the code-template pipeline.
+
+### Central validation flow
+
+The application asks the selected domain for a `ValidationPlan`: a typed context,
+ordered checks, and a policy listing required checks. It passes those directly to
+`ValidationPipeline.validate`, which has no code-domain imports or domain switches.
+
+```python
+plan = domain.prepare_validation(candidate, request=request)
+report = pipeline.validate(context=plan.context, checks=plan.checks, policy=plan.policy)
+report.raise_for_failure()
+validated = domain.finalize_template(plan.context, report)
+```
+
+Each check implements `run(context)` and returns a `CheckResult`. The domain owns
+its check logic and tool dependencies. The runner records names, assurance levels,
+durations, and evidence, and applies the supplied acceptance policy. Unexpected
+programming errors propagate rather than being reported as invalid templates.
+
+The code context carries parsed expressions, execution results, canonical answers,
+and selected distractors between checks. Its order is explicit: structure and
+expression checks precede execution; canonical answers precede distractor checks.
+There is no automatic dependency discovery or parallel check execution. Contexts
+are created fresh for each validation and are not intended to be reused.
+
+A check can return `None` when it does not apply. A required check must have a
+passing result; a missing or inapplicable required check cannot produce acceptance.
+For manual code templates, distractor selection is conditional on answer correction;
+distractor consistency is always required. Authoring also requires selection of the
+requested distractor count.
+
+By default, any unsuccessful check stops subsequent checks. A domain can set
+`stop_on_failure=False` to collect independent checks, with only its required
+checks gating acceptance. Do not use that mode for checks with prerequisites.
+
+Tool timeouts, trace/resource limits, and tool infrastructure failures are recorded
+as `incomplete`, preserving their diagnostic codes. Both failed and incomplete
+required checks reject the candidate. The code domain still corrects proposed
+answers using execution results and stores every canonical answer. Finalization
+packages only checked content and refuses an unaccepted report.
+
+Existing `TemplateValidator.validate` and `CodeDomain.validate` calls remain
+available as convenience wrappers around the same central runner. The older
+`ValidationPipeline.check` helper remains available for callers using individual
+operations; the application uses the plan-based `validate` method.
 
 ## Tests
 
