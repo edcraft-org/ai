@@ -6,9 +6,10 @@ from pydantic import BaseModel
 
 from edcraft_validator.generation.base import StructuredGenerationRequest
 from edcraft_validator.generation.models import ValidatedTemplateArtifact
+from edcraft_validator.validation.contracts import ValidationPlan, ValidationReport
 
 
-class DomainModule(Protocol):
+class DomainModule[ContextT](Protocol):
     """Domain-specific behavior used by the generic application workflow."""
 
     name: str
@@ -22,8 +23,12 @@ class DomainModule(Protocol):
 
     def build_candidate(self, request: BaseModel, proposal: BaseModel) -> BaseModel: ...
 
-    def validate(
+    def prepare_validation(
         self, candidate: BaseModel, *, request: BaseModel | None = None
+    ) -> ValidationPlan[ContextT]: ...
+
+    def finalize_template(
+        self, context: ContextT, report: ValidationReport
     ) -> ValidatedTemplateArtifact: ...
 
     def generate_question(

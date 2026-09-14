@@ -15,6 +15,7 @@ from edcraft_validator.generation.models import (
     ValidatedTemplateArtifact,
 )
 from edcraft_validator.generation.registry import create_model_provider
+from edcraft_validator.validation.pipeline import ValidationPipeline
 
 ProviderFactory = Callable[[TemplateProviderSelection], ModelProvider]
 DomainFactory = Callable[[str], DomainModule]
@@ -28,9 +29,11 @@ class TemplateApplication:
         *,
         provider_factory: ProviderFactory = create_model_provider,
         domain_factory: DomainFactory = create_domain,
+        validator: ValidationPipeline | None = None,
     ) -> None:
         self.provider_factory = provider_factory
         self.domain_factory = domain_factory
+        self.validator = validator if validator is not None else ValidationPipeline()
 
     def create_validated_template(
         self,
@@ -52,12 +55,7 @@ class TemplateApplication:
         generation_duration_ms = (time.perf_counter() - generation_started) * 1000
         candidate = domain_module.build_candidate(request, proposal)
 
-        validated = domain_module.validate(candidate, request=request)
-        if not isinstance(validated, ValidatedTemplateArtifact):
-            raise TypeError(
-                f"{domain_module.name} domain returned a validated artifact "
-                "without the shared authoring contract"
-            )
+        validated = self._validate(domain_module, candidate, request=request)
         provenance = TemplateAuthoringProvenance(
             provider=model_provider.provider,
             model=model_provider.model,
@@ -73,7 +71,21 @@ class TemplateApplication:
         self, candidate: BaseModel, *, domain: str
     ) -> ValidatedTemplateArtifact:
         domain_module = self.domain_factory(domain)
-        validated = domain_module.validate(candidate)
+        return self._validate(domain_module, candidate)
+
+    def _validate[ContextT](
+        self,
+        domain_module: DomainModule[ContextT],
+        candidate: BaseModel,
+        *,
+        request: BaseModel | None = None,
+    ) -> ValidatedTemplateArtifact:
+        plan = domain_module.prepare_validation(candidate, request=request)
+        report = self.validator.validate(
+            context=plan.context, checks=plan.checks, policy=plan.policy
+        )
+        report.raise_for_failure()
+        validated = domain_module.finalize_template(plan.context, report)
         if not isinstance(validated, ValidatedTemplateArtifact):
             raise TypeError(
                 f"{domain_module.name} domain returned a validated artifact "

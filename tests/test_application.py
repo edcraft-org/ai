@@ -13,6 +13,12 @@ from edcraft_validator.domains.code.templates import (
 )
 from edcraft_validator.generation.models import ValidatedTemplateArtifact
 from edcraft_validator.tools.python_execution import ExecutionResult
+from edcraft_validator.validation.contracts import (
+    CheckResult,
+    ValidationFailure,
+    ValidationPlan,
+    ValidationPolicy,
+)
 
 
 class ExampleRequest(BaseModel):
@@ -34,6 +40,22 @@ class ExampleValidated(ValidatedTemplateArtifact):
 class ExampleInstance(BaseModel):
     value: int
     seed: int
+
+
+class PositiveValueCheck:
+    name = "positive_value"
+    assurance = "bounded"
+
+    def run(self, context):
+        return CheckResult(status="passed" if context.value > 0 else "failed")
+
+
+def example_plan(candidate):
+    return ValidationPlan(
+        context=candidate,
+        checks=(PositiveValueCheck(),),
+        policy=ValidationPolicy(frozenset({"positive_value"})),
+    )
 
 
 def test_template_application_authors_once_then_generates_locally() -> None:
@@ -147,8 +169,12 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
         def build_candidate(self, request, proposal):
             return ExampleTemplate(value=proposal.value)
 
-        def validate(self, candidate, *, request=None):
-            return ExampleValidated(value=candidate.value)
+        def prepare_validation(self, candidate, *, request=None):
+            return example_plan(candidate)
+
+        def finalize_template(self, context, report):
+            assert report.accepted
+            return ExampleValidated(value=context.value)
 
         def generate_question(self, validated, *, seed):
             return ExampleInstance(value=validated.value, seed=seed)
@@ -182,10 +208,30 @@ def test_application_rejects_domain_without_shared_validated_contract() -> None:
     class InvalidDomain:
         name = "invalid"
 
-        def validate(self, candidate, *, request=None):
-            return ExampleTemplate(value=candidate.value)
+        def prepare_validation(self, candidate, *, request=None):
+            return example_plan(candidate)
+
+        def finalize_template(self, context, report):
+            return ExampleTemplate(value=context.value)
 
     application = TemplateApplication(domain_factory=lambda _: InvalidDomain())
 
     with pytest.raises(TypeError, match="shared authoring contract"):
         application.validate_template(ExampleTemplate(value=1), domain="invalid")
+
+
+def test_application_does_not_finalize_rejected_candidate():
+    class ExampleDomain:
+        name = "example"
+
+        def prepare_validation(self, candidate, *, request=None):
+            return example_plan(candidate)
+
+        def finalize_template(self, context, report):
+            pytest.fail("Rejected candidates must never be finalized")
+
+    application = TemplateApplication(domain_factory=lambda _: ExampleDomain())
+    with pytest.raises(ValidationFailure) as error:
+        application.validate_template(ExampleTemplate(value=-1), domain="example")
+    assert error.value.evidence[0].check == "positive_value"
+    assert error.value.evidence[0].status == "failed"
