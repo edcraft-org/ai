@@ -1,6 +1,9 @@
+from dataclasses import dataclass
+
 import pytest
 
 from edcraft_validator.validation import ValidationFailure, ValidationPipeline
+from edcraft_validator.validation.contracts import CheckResult, ValidationPolicy
 
 
 def test_pipeline_records_success_for_any_domain() -> None:
@@ -41,3 +44,85 @@ def test_pipeline_attaches_evidence_to_a_structured_failure() -> None:
     assert evidence.status == "failed"
     assert evidence.issues[0].code == "UNIT_MISMATCH"
     assert evidence.details["expected_unit"] == "m/s"
+
+
+@dataclass
+class ExampleCheck:
+    name: str
+    outcome: str | None = "passed"
+    assurance: str = "bounded"
+
+    def run(self, context):
+        context.append(self.name)
+        if self.outcome is None:
+            return None
+        if self.outcome == "timeout":
+            raise TimeoutError
+        return CheckResult(status=self.outcome)
+
+
+def test_runner_stops_after_blocking_failure():
+    context = []
+    report = ValidationPipeline().validate(
+        context=context,
+        checks=[ExampleCheck("safety", "failed"), ExampleCheck("execution")],
+        policy=ValidationPolicy(frozenset({"safety", "execution"})),
+    )
+    assert context == ["safety"]
+    assert report.missing_checks == {"execution"}
+    assert not report.accepted
+    assert report.evidence[0].duration_ms >= 0
+
+
+def test_skipped_required_check_is_not_accepted():
+    report = ValidationPipeline().validate(
+        context=[],
+        checks=[ExampleCheck("answer", None)],
+        policy=ValidationPolicy(frozenset({"answer"})),
+    )
+    assert not report.accepted
+    assert report.missing_checks == {"answer"}
+
+
+def test_timeout_is_incomplete():
+    report = ValidationPipeline().validate(
+        context=[],
+        checks=[ExampleCheck("answer", "timeout")],
+        policy=ValidationPolicy(frozenset({"answer"})),
+    )
+    assert not report.accepted
+    assert report.evidence[0].status == "incomplete"
+    with pytest.raises(ValidationFailure) as error:
+        report.raise_for_failure()
+    assert error.value.code == "CHECK_TIMEOUT"
+    assert error.value.evidence == report.evidence
+
+
+def test_advisory_checks_can_continue_and_runner_is_reusable():
+    runner = ValidationPipeline()
+    context = []
+    report = runner.validate(
+        context=context,
+        checks=[ExampleCheck("style", "failed"), ExampleCheck("answer")],
+        policy=ValidationPolicy(frozenset({"answer"}), stop_on_failure=False),
+    )
+    assert report.accepted
+    assert context == ["style", "answer"]
+    second = runner.validate(
+        context=[],
+        checks=[],
+        policy=ValidationPolicy(frozenset({"answer"})),
+    )
+    assert not second.accepted
+    assert second.evidence == []
+
+
+def test_duplicate_checks_rejected_before_execution():
+    context = []
+    with pytest.raises(ValueError, match="unique"):
+        ValidationPipeline().validate(
+            context=context,
+            checks=[ExampleCheck("answer"), ExampleCheck("answer")],
+            policy=ValidationPolicy(frozenset({"answer"})),
+        )
+    assert context == []
