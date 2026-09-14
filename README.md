@@ -332,7 +332,7 @@ uv run ruff format --check .
 Run only the complete code-template matrix locally:
 
 ```bash
-uv run pytest tests/test_templates.py -q
+uv run pytest tests/test_code_integration.py::test_template_is_exhaustively_validated -q
 ```
 
 The real OpenAI template-authoring test is opt-in locally and performs full template

@@ -10,7 +10,7 @@ from edcraft_validator.generation.registry import (
 
 
 def test_registry_exposes_builtin_template_providers() -> None:
-    assert available_model_providers()[:3] == ("openai", "ollama", "soclaas")
+    assert {"openai", "ollama", "soclaas"} <= set(available_model_providers())
     selection = TemplateProviderSelection(provider="ollama")
     assert create_model_provider(selection).provider == "ollama"
 
@@ -29,10 +29,10 @@ def test_registry_rejects_unknown_model_provider() -> None:
 
 
 def test_domain_registry_exposes_code_without_changing_the_application() -> None:
-    assert available_domains() == ("code",)
+    assert "code" in available_domains()
     assert isinstance(create_domain("code"), CodeDomain)
 
 
 def test_domain_registry_rejects_unknown_domain() -> None:
     with pytest.raises(ValueError, match="Unsupported domain"):
-        create_domain("math")
+        create_domain("unregistered-test-domain")

@@ -18,8 +18,11 @@ def candidate():
 
 
 def test_code_checks_populate_canonical_answers():
+    calls = []
+
     class Executor:
         def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+            calls.append(inputs)
             return [
                 ExecutionResult(ok=True, answer=x["a"] + x["b"] - x["c"])
                 for x in inputs
@@ -37,6 +40,7 @@ def test_code_checks_populate_canonical_answers():
         context=plan.context, checks=plan.checks, policy=plan.policy
     )
     assert report.accepted
+    assert calls == [plan.context.inputs_cases]
     assert plan.context.canonical_answers == [6, 4, 9, 7, 8, 6, 11, 9]
     assert plan.context.template.distractors == original.distractors
 
@@ -61,35 +65,6 @@ def test_unfinished_tool_check_is_incomplete_and_retains_domain_error(failure_co
     result = execution_check.run(CodeValidationContext(candidate()))
     assert result.status == "incomplete"
     assert result.failure.code == failure_code
-
-
-def test_domain_supplies_plan_with_injected_tool():
-    from edcraft_validator.domains.code.module import CodeDomain
-    from edcraft_validator.validation.pipeline import ValidationPipeline
-
-    calls = []
-
-    class Executor:
-        def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
-            calls.append(inputs)
-            return [
-                ExecutionResult(ok=True, answer=x["a"] + x["b"] - x["c"])
-                for x in inputs
-            ]
-
-    domain = CodeDomain(
-        validator_factory=lambda: TemplateValidator(execution_tool=Executor())
-    )
-    plan = domain.prepare_validation(candidate())
-    report = ValidationPipeline().validate(
-        context=plan.context,
-        checks=plan.checks,
-        policy=plan.policy,
-    )
-    assert report.accepted
-    assert len(calls) == 1
-    assert "code_execution" in plan.policy.required_checks
-    assert "distractor_consistency" in plan.policy.required_checks
 
 
 def test_finalization_preserves_checked_content_and_deterministic_questions():
@@ -125,43 +100,6 @@ def test_finalization_preserves_checked_content_and_deterministic_questions():
         reloaded, seed=42
     )
     assert original.answer_expression is not None
-
-
-def test_finalization_refuses_incomplete_report():
-    import pytest
-
-    from edcraft_validator.domains.code.module import CodeDomain
-    from edcraft_validator.validation.contracts import (
-        ValidationFailure,
-        ValidationReport,
-    )
-
-    domain = CodeDomain()
-    plan = domain.prepare_validation(candidate())
-    with pytest.raises(ValidationFailure):
-        domain.finalize_template(plan.context, ValidationReport([], plan.policy))
-
-
-def test_safety_failure_stops_before_tool_execution():
-    from edcraft_validator.application import TemplateApplication
-    from edcraft_validator.domains.code.module import CodeDomain
-    from edcraft_validator.domains.code.templates import TemplateValidationError
-
-    class ForbiddenExecutor:
-        def execute_batch(self, *args, **kwargs):
-            pytest.fail("Unsafe code reached the execution tool")
-
-    application = TemplateApplication(
-        domain_factory=lambda name: CodeDomain(
-            validator_factory=lambda: TemplateValidator(
-                execution_tool=ForbiddenExecutor()
-            )
-        )
-    )
-    unsafe = candidate().model_copy(update={"code": "import os\ndef f(): return 1"})
-    with pytest.raises(TemplateValidationError) as error:
-        application.validate_template(unsafe, domain="code")
-    assert [item.check for item in error.value.evidence] == ["template_structure"]
 
 
 def test_missing_rendering_check_blocks_finalization():

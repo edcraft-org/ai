@@ -42,13 +42,21 @@ def test_pipeline_attaches_evidence_to_a_structured_failure() -> None:
             )
 
     report = ValidationPipeline().validate(
-        context=None,
-        checks=[DimensionalCheck()],
+        context=[],
+        checks=[ExampleCheck("structure"), DimensionalCheck(), ExampleCheck("later")],
         policy=ValidationPolicy(frozenset({"dimensional_consistency"})),
     )
     with pytest.raises(ValidationFailure) as error:
         report.raise_for_failure()
-    evidence = error.value.evidence[0]
+    assert [item.check for item in report.evidence] == [
+        "structure",
+        "dimensional_consistency",
+    ]
+    assert not report.accepted
+    assert error.value.code == "UNIT_MISMATCH"
+    assert error.value.field == "answer"
+    assert error.value.evidence == report.evidence
+    evidence = error.value.evidence[-1]
     assert evidence.status == "failed"
     assert evidence.issues[0].code == "UNIT_MISMATCH"
     assert evidence.details["expected_unit"] == "m/s"
@@ -125,29 +133,6 @@ def test_optional_failure_stops_checks_and_runner_is_reusable(status):
     )
     assert not second.accepted
     assert second.evidence == []
-
-
-def test_required_failure_retains_diagnostics_and_stops_later_checks():
-    class RejectingCheck:
-        name = "answer"
-        assurance = "bounded"
-
-        def run(self, context):
-            raise ValidationFailure(
-                "Answers disagree", code="ANSWER_MISMATCH", context={"expected": 3}
-            )
-
-    report = ValidationPipeline().validate(
-        context=[],
-        checks=[RejectingCheck(), ExampleCheck("style")],
-        policy=ValidationPolicy(frozenset({"answer"})),
-    )
-    assert not report.accepted
-    assert [item.check for item in report.evidence] == ["answer"]
-    with pytest.raises(ValidationFailure) as error:
-        report.raise_for_failure()
-    assert error.value.code == "ANSWER_MISMATCH"
-    assert error.value.context == {"expected": 3}
 
 
 def test_unexpected_check_bug_is_not_treated_as_template_rejection():

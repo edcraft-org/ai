@@ -455,6 +455,7 @@ def test_unsupported_code_is_rejected_before_execution() -> None:
 
     assert error.value.code == "UNSUPPORTED_CODE"
     assert executor.called is False
+    assert [item.check for item in error.value.evidence] == ["template_structure"]
 
 
 def test_answer_kind_error_precedes_distractor_selection() -> None:
@@ -509,17 +510,19 @@ def test_profile_features_must_be_reachable_from_the_entry_function() -> None:
 
 
 def test_rejects_an_unused_entry_parameter_before_execution() -> None:
+    executor = ArithmeticExecutor()
     value = template(
         code="def calculate(a, b, c):\n    return a + b",
         answer_expression="a + b",
     )
 
     with pytest.raises(TemplateValidationError) as error:
-        code_application(ArithmeticExecutor()).validate_template(value, domain="code")
+        code_application(executor).validate_template(value, domain="code")
 
     assert error.value.code == "UNUSED_PARAMETER"
     assert error.value.field == "parameters"
     assert "c" in str(error.value)
+    assert executor.batch_calls == 0
 
 
 @pytest.mark.parametrize(
@@ -668,7 +671,12 @@ def test_profiles_accept_alternative_programs_and_answer_formulas(
         value, domain="code"
     )
 
-    assert validated.validation.cases_validated >= 2
+    expected_cases = 1
+    for parameter in value.parameters:
+        expected_cases *= len(parameter.values)
+    assert validated.validation.cases_validated == expected_cases
+    instance = generate_code_question(validated, seed=11)
+    assert instance.question.answer_target == value.answer_target
 
 
 @pytest.mark.parametrize(
@@ -852,28 +860,6 @@ def test_examples_cover_every_topic_and_difficulty() -> None:
     assert actual == expected
 
 
-def test_example_templates_match_their_capability_profiles() -> None:
-    for path in TEMPLATE_PATHS:
-        item = CodeTemplateCandidate.model_validate_json(path.read_text())
-        profile = code_template_profile(item.topic, item.difficulty)
-        actual_kinds = tuple(parameter.kind for parameter in item.parameters)
-        actual_names = tuple(parameter.name for parameter in item.parameters)
-
-        assert item.answer_target == profile.answer_target
-        assert any(
-            actual_kinds == shape.kinds
-            and (shape.names is None or actual_names == shape.names)
-            for shape in profile.parameter_shapes
-        ), item.template_id
-        if profile.require_positive_integers:
-            assert all(
-                value > 0
-                for parameter in item.parameters
-                if parameter.kind == "integer"
-                for value in parameter.values
-            ), item.template_id
-
-
 def test_capability_catalog_covers_each_profile_once() -> None:
     assert len(CODE_TEMPLATE_PROFILES) == 15
     for topic in CODE_TOPICS:
@@ -882,22 +868,6 @@ def test_capability_catalog_covers_each_profile_once() -> None:
             for difficulty in CODE_DIFFICULTIES
         }
         assert len(targets) == 1
-
-
-@pytest.mark.parametrize("path", TEMPLATE_PATHS, ids=lambda path: path.stem)
-def test_every_example_template_validates_with_the_real_tracer(path: Path) -> None:
-    raw_template = CodeTemplateCandidate.model_validate_json(path.read_text())
-
-    validated = code_application(TrustedBatchExecutor()).validate_template(
-        raw_template, domain="code"
-    )
-    instance = generate_code_question(validated, seed=11)
-
-    expected_cases = 1
-    for parameter in raw_template.parameters:
-        expected_cases *= len(parameter.values)
-    assert validated.validation.cases_validated == expected_cases
-    assert instance.question.answer_target == raw_template.answer_target
 
 
 @pytest.mark.parametrize(
@@ -1233,13 +1203,16 @@ def test_candidate_selection_reports_when_too_few_are_globally_valid() -> None:
 
 
 def test_rejects_profile_answer_target_mismatch_before_execution() -> None:
+    executor = ArithmeticExecutor()
     item = template(answer_target="loop_iterations")
 
     with pytest.raises(TemplateValidationError, match="requires answer_target"):
-        code_application(ArithmeticExecutor()).validate_template(item, domain="code")
+        code_application(executor).validate_template(item, domain="code")
+    assert executor.batch_calls == 0
 
 
 def test_rejects_profile_parameter_shape_mismatch_before_execution() -> None:
+    executor = ArithmeticExecutor()
     data = template().model_dump()
     data["parameters"][2] = {
         "name": "c",
@@ -1248,18 +1221,20 @@ def test_rejects_profile_parameter_shape_mismatch_before_execution() -> None:
     }
 
     with pytest.raises(TemplateValidationError, match="parameter profile requires"):
-        code_application(ArithmeticExecutor()).validate_template(
+        code_application(executor).validate_template(
             CodeTemplateCandidate.model_validate(data), domain="code"
         )
+    assert executor.batch_calls == 0
 
 
 def test_rejects_missing_profile_code_feature_before_execution() -> None:
+    executor = ArithmeticExecutor()
     item = template(code="def calculate(a, b, c):\n    return a")
 
     with pytest.raises(
         TemplateValidationError, match="missing required features"
     ) as error:
-        code_application(ArithmeticExecutor()).validate_template(item, domain="code")
+        code_application(executor).validate_template(item, domain="code")
 
     payload = error.value.as_dict()
     assert {key: payload[key] for key in ("code", "message", "field", "inputs")} == {
@@ -1272,17 +1247,20 @@ def test_rejects_missing_profile_code_feature_before_execution() -> None:
     }
     assert payload["evidence"][0]["check"] == "template_structure"
     assert payload["evidence"][0]["status"] == "failed"
+    assert executor.batch_calls == 0
 
 
 def test_rejects_non_positive_profile_integer_domain_before_execution() -> None:
+    executor = ArithmeticExecutor()
     path = TEMPLATE_DIR / "loop_iterations.json"
     data = json.loads(path.read_text())
     data["parameters"][0]["values"] = [0, 2]
 
     with pytest.raises(TemplateValidationError, match="requires positive integer"):
-        code_application(TrustedBatchExecutor()).validate_template(
+        code_application(executor).validate_template(
             CodeTemplateCandidate.model_validate(data), domain="code"
         )
+    assert executor.batch_calls == 0
 
 
 def test_rejects_non_allowlisted_expression_calls() -> None:

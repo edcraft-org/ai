@@ -21,6 +21,19 @@ from edcraft_validator.generation.ollama import (
 )
 
 
+@pytest.fixture(autouse=True)
+def isolated_ollama_settings(monkeypatch):
+    """Unit tests control configuration independently of the developer's shell."""
+    for variable in (
+        "OLLAMA_MODEL",
+        "OLLAMA_BASE_URL",
+        "OLLAMA_TIMEOUT_SECONDS",
+        "OLLAMA_TEMPERATURE",
+        "OLLAMA_NUM_PREDICT",
+    ):
+        monkeypatch.delenv(variable, raising=False)
+
+
 def generation_request(topic: str = "arithmetic", difficulty: str = "beginner"):
     return build_code_generation_request(
         CodeTemplateRequest(topic=topic, difficulty=difficulty),

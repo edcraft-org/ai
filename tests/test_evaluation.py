@@ -86,24 +86,33 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
     )
 
 
-def test_evaluation_notifies_after_each_completed_attempt() -> None:
+def test_evaluation_notifies_before_starting_the_next_attempt() -> None:
     observed = []
+    events = []
+
+    class RecordingProvider(StubProvider):
+        def generate(self, request):
+            events.append("generate")
+            return super().generate(request)
+
+    def record(attempt):
+        events.append(f"completed:{attempt.attempt}")
+        observed.append(attempt)
+
     evaluator = TemplateEvaluator(
-        provider_factory=lambda selection: StubProvider(proposal()),
+        provider_factory=lambda selection: RecordingProvider(proposal()),
         validator_factory=lambda: TemplateValidator(execution_tool=SumExecutor()),
     )
-
     report = evaluator.evaluate(
         provider="stub",
         model="stub-model",
         topics=("arithmetic",),
         difficulties=("beginner",),
         repetitions=2,
-        on_attempt=observed.append,
+        on_attempt=record,
     )
-
     assert observed == report.attempts
-    assert [attempt.attempt for attempt in observed] == [1, 2]
+    assert events == ["generate", "completed:1", "generate", "completed:2"]
 
 
 def test_evaluation_classifies_provider_setup_failure() -> None:

@@ -17,8 +17,8 @@ def valid_data() -> dict[str, object]:
     }
 
 
-def test_rejects_unknown_ai_fields() -> None:
-    # Forbid unexpected model output instead of silently ignoring it.
+def test_generated_question_rejects_unknown_fields() -> None:
+    # Generated-question JSON must conform to its public output contract.
     data = valid_data()
     data["confidence"] = 0.99
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
@@ -43,7 +43,7 @@ def test_rejects_blank_required_text(field: str) -> None:
 
 
 def test_rejects_invalid_entry_function_name() -> None:
-    # Entry-function names must be valid identifiers before code is executed.
+    # Generated questions expose a valid entry-function identifier.
     data = valid_data()
     data["entry_function"] = "not-valid"
     with pytest.raises(ValidationError, match="string_pattern_mismatch"):

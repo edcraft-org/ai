@@ -78,12 +78,15 @@ def test_evaluate_cli_writes_attempts_and_prints_summary(
         request = Request()
 
         def model_dump_json(self):
-            return json.dumps({"attempt": 1, "status": "validated"})
+            return json.dumps({"attempt": self.attempt, "status": "validated"})
 
     class StubEvaluator:
         def evaluate(self, **kwargs):
             captured.update(kwargs)
-            kwargs["on_attempt"](Attempt())
+            for number in range(1, kwargs["repetitions"] + 1):
+                attempt = Attempt()
+                attempt.attempt = number
+                kwargs["on_attempt"](attempt)
             return Report()
 
     monkeypatch.setattr(template_cli, "TemplateEvaluator", StubEvaluator)
@@ -118,9 +121,13 @@ def test_evaluate_cli_writes_attempts_and_prints_summary(
     assert captured["topics"] == ("loops",)
     assert captured["difficulties"] == ("beginner",)
     assert captured["repetitions"] == 2
-    assert json.loads(output.read_text()) == {"attempt": 1, "status": "validated"}
+    assert [json.loads(line) for line in output.read_text().splitlines()] == [
+        {"attempt": 1, "status": "validated"},
+        {"attempt": 2, "status": "validated"},
+    ]
     captured_output = capsys.readouterr()
     assert "[1] loops/beginner: validated (1.2s)" in captured_output.err
+    assert "[2] loops/beginner: validated (1.2s)" in captured_output.err
     assert json.loads(captured_output.out) == {
         "attempts": 2,
         "validated": 2,

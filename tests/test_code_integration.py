@@ -19,18 +19,6 @@ TEMPLATE_PATHS = sorted(
 )
 
 
-def test_valid_example_executes_with_local_python_tool() -> None:
-    result = LocalPythonTool().execute_batch(
-        "def square(x):\n    return x * x",
-        "square",
-        [{"x": 4}],
-        timeout_seconds=2,
-    )[0]
-
-    assert result.ok
-    assert result.answer == 16
-
-
 def test_generated_code_is_bounded_by_local_python_tool() -> None:
     result = LocalPythonTool().execute_batch(
         "def slow(value):\n"
@@ -69,9 +57,9 @@ def test_template_is_exhaustively_validated(template_path: Path) -> None:
     validated = application.validate_template(template, domain="code")
     reloaded = ValidatedCodeTemplate.model_validate_json(validated.model_dump_json())
     for seed in (0, 1, 42, 999):
-        assert application.generate_question(reloaded, domain="code", seed=seed) == (
-            generate_code_question(validated, seed)
-        )
+        question = application.generate_question(reloaded, domain="code", seed=seed)
+        assert question == generate_code_question(validated, seed)
+        assert question.question.answer_target == template.answer_target
 
     expected_cases = 1
     for parameter in template.parameters:
