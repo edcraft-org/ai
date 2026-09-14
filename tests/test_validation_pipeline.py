@@ -7,43 +7,52 @@ from edcraft_validator.validation.contracts import CheckResult, ValidationPolicy
 
 
 def test_pipeline_records_success_for_any_domain() -> None:
-    pipeline = ValidationPipeline()
+    class SymbolicCheck:
+        name = "symbolic_equivalence"
+        assurance = "proof"
 
-    result = pipeline.check(
-        name="symbolic_equivalence",
-        assurance="proof",
-        details={"tool": "example"},
-        operation=lambda: 42,
+        def run(self, context):
+            context["answer"] = 42
+            return CheckResult(details={"tool": "example"})
+
+    context = {}
+    report = ValidationPipeline().validate(
+        context=context,
+        checks=[SymbolicCheck()],
+        policy=ValidationPolicy(frozenset({"symbolic_equivalence"})),
     )
-
-    assert result == 42
-    assert pipeline.evidence[0].check == "symbolic_equivalence"
-    assert pipeline.evidence[0].status == "passed"
+    assert report.accepted
+    assert context["answer"] == 42
+    assert report.evidence[0].check == "symbolic_equivalence"
+    assert report.evidence[0].status == "passed"
+    assert report.evidence[0].details == {"tool": "example"}
 
 
 def test_pipeline_attaches_evidence_to_a_structured_failure() -> None:
-    pipeline = ValidationPipeline()
+    class DimensionalCheck:
+        name = "dimensional_consistency"
+        assurance = "proof"
 
-    def reject() -> None:
-        raise ValidationFailure(
-            "units do not match",
-            code="UNIT_MISMATCH",
-            field="answer",
-            context={"expected_unit": "m/s"},
-        )
+        def run(self, context):
+            raise ValidationFailure(
+                "units do not match",
+                code="UNIT_MISMATCH",
+                field="answer",
+                context={"tool": "unit-checker", "expected_unit": "m/s"},
+            )
 
+    report = ValidationPipeline().validate(
+        context=None,
+        checks=[DimensionalCheck()],
+        policy=ValidationPolicy(frozenset({"dimensional_consistency"})),
+    )
     with pytest.raises(ValidationFailure) as error:
-        pipeline.check(
-            name="dimensional_consistency",
-            assurance="proof",
-            details={"tool": "unit-checker"},
-            operation=reject,
-        )
-
+        report.raise_for_failure()
     evidence = error.value.evidence[0]
     assert evidence.status == "failed"
     assert evidence.issues[0].code == "UNIT_MISMATCH"
     assert evidence.details["expected_unit"] == "m/s"
+    assert evidence.details["tool"] == "unit-checker"
 
 
 @dataclass

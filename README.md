@@ -301,9 +301,9 @@ answers using execution results and stores every canonical answer. Finalization
 packages only checked content and refuses an unaccepted report.
 
 Existing `TemplateValidator.validate` and `CodeDomain.validate` calls remain
-available as convenience wrappers around the same central runner. The older
-`ValidationPipeline.check` helper remains available for callers using individual
-operations; the application uses the plan-based `validate` method.
+available as convenience wrappers around the same central runner. The central runner exposes only the plan-based `validate` method.
+Individual operations should be supplied as checks; evidence belongs to the returned
+report rather than mutable runner state.
 
 ## Tests
 
