@@ -69,10 +69,9 @@ class ValidationCheck[ContextT](Protocol):
 
 @dataclass(frozen=True)
 class ValidationPolicy:
-    """Required checks must pass; by default any failure stops later checks."""
+    """Checks that must run successfully before accepting a template."""
 
     required_checks: frozenset[str]
-    stop_on_failure: bool = True
 
 
 @dataclass
@@ -88,7 +87,11 @@ class ValidationReport:
     @property
     def accepted(self) -> bool:
         passed = {item.check for item in self.evidence if item.status == "passed"}
-        return self.failure is None and self.policy.required_checks <= passed
+        return (
+            self.failure is None
+            and self.policy.required_checks <= passed
+            and all(item.status == "passed" for item in self.evidence)
+        )
 
     def raise_for_failure(self) -> None:
         if self.accepted:

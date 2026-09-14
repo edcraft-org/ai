@@ -107,16 +107,17 @@ def test_timeout_is_incomplete():
     assert error.value.evidence == report.evidence
 
 
-def test_advisory_checks_can_continue_and_runner_is_reusable():
+@pytest.mark.parametrize("status", ["failed", "incomplete"])
+def test_optional_failure_stops_checks_and_runner_is_reusable(status):
     runner = ValidationPipeline()
     context = []
     report = runner.validate(
         context=context,
-        checks=[ExampleCheck("style", "failed"), ExampleCheck("answer")],
-        policy=ValidationPolicy(frozenset({"answer"}), stop_on_failure=False),
+        checks=[ExampleCheck("style", status), ExampleCheck("answer")],
+        policy=ValidationPolicy(frozenset({"answer"})),
     )
-    assert report.accepted
-    assert context == ["style", "answer"]
+    assert not report.accepted
+    assert context == ["style"]
     second = runner.validate(
         context=[],
         checks=[],
@@ -137,7 +138,7 @@ def test_duplicate_checks_rejected_before_execution():
     assert context == []
 
 
-def test_required_failure_retains_diagnostics_when_collecting_later_results():
+def test_required_failure_retains_diagnostics_and_stops_later_checks():
     class RejectingCheck:
         name = "answer"
         assurance = "bounded"
@@ -150,10 +151,10 @@ def test_required_failure_retains_diagnostics_when_collecting_later_results():
     report = ValidationPipeline().validate(
         context=[],
         checks=[RejectingCheck(), ExampleCheck("style")],
-        policy=ValidationPolicy(frozenset({"answer"}), stop_on_failure=False),
+        policy=ValidationPolicy(frozenset({"answer"})),
     )
     assert not report.accepted
-    assert [item.check for item in report.evidence] == ["answer", "style"]
+    assert [item.check for item in report.evidence] == ["answer"]
     with pytest.raises(ValidationFailure) as error:
         report.raise_for_failure()
     assert error.value.code == "ANSWER_MISMATCH"

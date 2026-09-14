@@ -293,9 +293,10 @@ For manual code templates, distractor selection is conditional on answer correct
 distractor consistency is always required. Authoring also requires selection of the
 requested distractor count.
 
-By default, any unsuccessful check stops subsequent checks. A domain can set
-`stop_on_failure=False` to collect independent checks, with only its required
-checks gating acceptance. Do not use that mode for checks with prerequisites.
+Any failed or incomplete check stops subsequent checks and rejects the candidate,
+even if that check is not in the required set. Required checks must additionally
+be present in the completed evidence. There is no configurable continuation or
+advisory acceptance mode; add that only alongside a concrete quality-check workflow.
 
 Tool timeouts, trace/resource limits, and tool infrastructure failures are recorded
 as `incomplete`, preserving their diagnostic codes. Both failed and incomplete

@@ -27,12 +27,13 @@ def test_missing_check_cannot_pass():
     assert not report.accepted
 
 
-def test_advisory_failure_does_not_override_required_success():
+@pytest.mark.parametrize("status", ["failed", "incomplete"])
+def test_unsuccessful_optional_check_rejects_report(status):
     report = ValidationReport(
         [
             ValidationEvidence(check="answer", status="passed", assurance="exhaustive"),
-            ValidationEvidence(check="style", status="failed", assurance="heuristic"),
+            ValidationEvidence(check="style", status=status, assurance="heuristic"),
         ],
-        ValidationPolicy(frozenset({"answer"}), stop_on_failure=False),
+        ValidationPolicy(frozenset({"answer"})),
     )
-    assert report.accepted
+    assert not report.accepted
