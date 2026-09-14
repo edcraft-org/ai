@@ -67,8 +67,6 @@ class CodeDomain:
     def finalize_template(
         self, context: CodeValidationContext, report: ValidationReport
     ) -> ValidatedCodeTemplate:
-        if not isinstance(context, CodeValidationContext):
-            raise TypeError("code domain requires CodeValidationContext")
         return TemplateValidator.finalize_template(context, report)
 
     def generate_question(

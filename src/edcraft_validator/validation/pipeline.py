@@ -26,9 +26,6 @@ class ValidationPipeline:
         policy: ValidationPolicy,
     ) -> ValidationReport:
         """Execute domain-supplied checks without interpreting the context."""
-        names = [check.name for check in checks]
-        if len(names) != len(set(names)):
-            raise ValueError("validation check names must be unique")
         evidence: list[ValidationEvidence] = []
         failure = None
         for check in checks:

@@ -284,6 +284,10 @@ substantial algorithms such as distractor selection remain separate helpers.
 The code context carries parsed expressions, execution results, canonical answers,
 and selected distractors between checks. Its order is explicit: structure and
 expression checks precede execution; canonical answers precede distractor checks.
+Domain contract tests verify unique check names, required-check registration,
+prerequisite ordering, and the context type. These internally supplied plan
+invariants are not rechecked on every run. Caller-supplied models and tool outputs
+still receive boundary validation.
 There is no automatic dependency discovery or parallel check execution. Contexts
 are created fresh for each validation and are not intended to be reused.
 

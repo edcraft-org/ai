@@ -127,17 +127,6 @@ def test_optional_failure_stops_checks_and_runner_is_reusable(status):
     assert second.evidence == []
 
 
-def test_duplicate_checks_rejected_before_execution():
-    context = []
-    with pytest.raises(ValueError, match="unique"):
-        ValidationPipeline().validate(
-            context=context,
-            checks=[ExampleCheck("answer"), ExampleCheck("answer")],
-            policy=ValidationPolicy(frozenset({"answer"})),
-        )
-    assert context == []
-
-
 def test_required_failure_retains_diagnostics_and_stops_later_checks():
     class RejectingCheck:
         name = "answer"

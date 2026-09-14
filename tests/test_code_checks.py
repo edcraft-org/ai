@@ -169,3 +169,26 @@ def test_missing_rendering_check_blocks_finalization():
     assert report.missing_checks == {"template_rendering"}
     with pytest.raises(ValidationFailure):
         validator.finalize_template(plan.context, report)
+
+
+@pytest.mark.parametrize("num_distractors", [None, 2, 3])
+def test_code_domain_plan_contract(num_distractors):
+    from edcraft_validator.domains.code.models import CodeTemplateRequest
+    from edcraft_validator.domains.code.module import CodeDomain
+
+    request = (
+        None
+        if num_distractors is None
+        else CodeTemplateRequest(
+            topic="arithmetic", difficulty="beginner", num_distractors=num_distractors
+        )
+    )
+    plan = CodeDomain().prepare_validation(candidate(), request=request)
+    assert isinstance(plan.context, CodeValidationContext)
+    assert plan.context.num_distractors == num_distractors
+    names = [check.name for check in plan.checks]
+    assert len(names) == len(set(names))
+    assert plan.policy.required_checks <= set(names)
+    assert names.index("template_structure") < names.index("code_execution")
+    assert names.index("expression_safety") < names.index("code_execution")
+    assert names.index("canonical_answers") < names.index("distractor_selection")
