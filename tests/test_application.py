@@ -9,7 +9,6 @@ from edcraft_validator.domains.code.module import CodeDomain
 from edcraft_validator.domains.code.templates import (
     CodeTemplateProposal,
     TemplateValidator,
-    generate_code_question,
 )
 from edcraft_validator.generation.models import ValidatedTemplateArtifact
 from edcraft_validator.tools.python_execution import ExecutionResult
@@ -78,7 +77,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
         }
     )
     provider_calls: list[tuple[str, str | None]] = []
-    instance_seeds: list[int] = []
+    execution_calls: list[str] = []
 
     class StubProvider:
         provider = "stub"
@@ -89,6 +88,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
 
     class SumExecutor:
         def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+            execution_calls.append(code)
             return [
                 ExecutionResult(ok=True, answer=item["a"] + item["b"])
                 for item in inputs
@@ -98,15 +98,10 @@ def test_template_application_authors_once_then_generates_locally() -> None:
         provider_calls.append((selection.provider, selection.model))
         return StubProvider()
 
-    def instance_generator(validated, seed):
-        instance_seeds.append(seed)
-        return generate_code_question(validated, seed)
-
     application = TemplateApplication(
         provider_factory=provider_factory,
         domain_factory=lambda _: CodeDomain(
             validator_factory=lambda: TemplateValidator(execution_tool=SumExecutor()),
-            instance_generator=instance_generator,
         ),
     )
     validated = application.create_validated_template(
@@ -118,7 +113,10 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     instance = application.generate_question(validated, domain="code", seed=7)
 
     assert provider_calls == [("stub", "stub-model")]
-    assert instance_seeds == [7]
+    assert instance.seed == 7
+    assert instance == application.generate_question(validated, domain="code", seed=7)
+    assert len(execution_calls) == 1
+    assert provider_calls == [("stub", "stub-model")]
     assert validated.validation.cases_validated == 4
     assert validated.template.topic == "arithmetic"
     assert validated.template.difficulty == "beginner"

@@ -20,7 +20,6 @@ from edcraft_validator.generation.base import StructuredGenerationRequest
 from edcraft_validator.validation.contracts import ValidationPlan, ValidationReport
 
 ValidatorFactory = Callable[[], TemplateValidator]
-InstanceGenerator = Callable[[ValidatedCodeTemplate, int], CodeQuestionInstance]
 
 
 class CodeDomain:
@@ -35,10 +34,8 @@ class CodeDomain:
         self,
         *,
         validator_factory: ValidatorFactory = TemplateValidator,
-        instance_generator: InstanceGenerator = generate_code_question,
     ) -> None:
         self.validator_factory = validator_factory
-        self.instance_generator = instance_generator
 
     def generation_request(
         self, request: BaseModel, *, provider: str
@@ -77,7 +74,7 @@ class CodeDomain:
     def generate_question(
         self, validated: BaseModel, *, seed: int
     ) -> CodeQuestionInstance:
-        return self.instance_generator(
+        return generate_code_question(
             _require_type(validated, ValidatedCodeTemplate), seed
         )
 
