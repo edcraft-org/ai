@@ -300,8 +300,10 @@ required checks reject the candidate. The code domain still corrects proposed
 answers using execution results and stores every canonical answer. Finalization
 packages only checked content and refuses an unaccepted report.
 
-Existing `TemplateValidator.validate` and `CodeDomain.validate` calls remain
-available as convenience wrappers around the same central runner. The central runner exposes only the plan-based `validate` method.
+`TemplateApplication` coordinates validation for normal application callers.
+`TemplateValidator.validate` remains a direct code-template convenience entry point
+used by tests. `CodeDomain` supplies plans and finalizes artifacts; it does not run
+validation itself. The central runner exposes only the plan-based `validate` method.
 Individual operations should be supplied as checks; evidence belongs to the returned
 report rather than mutable runner state.
 
