@@ -17,7 +17,7 @@ from edcraft_validator.domains.code.templates import (
 )
 from edcraft_validator.domains.code.templates.context import CodeValidationContext
 from edcraft_validator.generation.base import StructuredGenerationRequest
-from edcraft_validator.validation.contracts import ValidationPlan
+from edcraft_validator.validation.contracts import ValidationPlan, ValidationReport
 
 ValidatorFactory = Callable[[], TemplateValidator]
 InstanceGenerator = Callable[[ValidatedCodeTemplate, int], CodeQuestionInstance]
@@ -66,6 +66,13 @@ class CodeDomain:
         return self.validator_factory().prepare_validation(
             typed_candidate, num_distractors=num_distractors
         )
+
+    def finalize_template(
+        self, context: CodeValidationContext, report: ValidationReport
+    ) -> ValidatedCodeTemplate:
+        if not isinstance(context, CodeValidationContext):
+            raise TypeError("code domain requires CodeValidationContext")
+        return TemplateValidator.finalize_template(context, report)
 
     def validate(
         self, candidate: BaseModel, *, request: BaseModel | None = None

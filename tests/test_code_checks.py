@@ -75,3 +75,44 @@ def test_domain_supplies_plan_with_injected_tool():
     assert len(calls) == 1
     assert "code_execution" in plan.policy.required_checks
     assert "distractor_consistency" in plan.policy.required_checks
+
+
+def test_finalization_preserves_checked_content_and_deterministic_questions():
+    from edcraft_validator.domains.code.templates import generate_code_question
+    from edcraft_validator.validation.pipeline import ValidationPipeline
+
+    class Executor:
+        def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+            return [
+                ExecutionResult(ok=True, answer=x["a"] + x["b"] - x["c"])
+                for x in inputs
+            ]
+
+    validator = TemplateValidator(execution_tool=Executor())
+    original = candidate()
+    expected = validator.validate(original)
+    plan = validator.prepare_validation(original)
+    report = ValidationPipeline().validate(
+        context=plan.context,
+        checks=plan.checks,
+        policy=plan.policy,
+    )
+    actual = validator.finalize_template(plan.context, report)
+    assert actual.template == expected.template
+    assert actual.validation.validated_cases == expected.validation.validated_cases
+    assert generate_code_question(actual, 42) == generate_code_question(expected, 42)
+    assert original.answer_expression is not None
+
+
+def test_finalization_refuses_incomplete_report():
+    import pytest
+
+    from edcraft_validator.validation.contracts import (
+        ValidationFailure,
+        ValidationReport,
+    )
+
+    validator = TemplateValidator()
+    plan = validator.prepare_validation(candidate())
+    with pytest.raises(ValidationFailure):
+        validator.finalize_template(plan.context, ValidationReport([], plan.policy))
