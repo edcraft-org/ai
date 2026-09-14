@@ -6,7 +6,6 @@ import ast
 import copy
 import itertools
 import json
-from dataclasses import dataclass
 from typing import Any
 
 from edcraft_validator.comparison import equivalent, same_value_shape
@@ -23,6 +22,7 @@ from edcraft_validator.tools.python_execution import (
 )
 from edcraft_validator.validation.pipeline import ValidationPipeline
 
+from .context import DistractorCandidate as _DistractorCandidate
 from .expressions import SafeExpression
 from .generation import render_template
 from .models import (
@@ -36,14 +36,6 @@ from .models import (
 )
 
 CODE_TEMPLATE_VALIDATOR_VERSION = "code-template-validator-v3"
-
-
-@dataclass
-class _DistractorCandidate:
-    index: int
-    expression: SafeExpression | None = None
-    values: list[Any] | None = None
-    rejection: str | None = None
 
 
 class TemplateValidator:
