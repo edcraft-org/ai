@@ -1,4 +1,4 @@
-"""Small check adapter around existing code-domain validation operations."""
+"""Named code checks with consistent metadata and failure diagnostics."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -23,16 +23,13 @@ _INCOMPLETE_TOOL_CODES = {
 class CodeCheck:
     name: str
     assurance: AssuranceLevel
-    operation: Callable[[CodeValidationContext, dict[str, Any]], None]
+    operation: Callable[[CodeValidationContext], CheckResult | None]
     details: Callable[[CodeValidationContext], dict[str, Any]]
-    applies: Callable[[CodeValidationContext], bool] = lambda context: True
 
     def run(self, context: CodeValidationContext) -> CheckResult | None:
-        if not self.applies(context):
-            return None
         details = self.details(context)
         try:
-            self.operation(context, details)
+            result = self.operation(context)
         except TemplateValidationError as exc:
             details.update(exc.context)
             return CheckResult(
@@ -40,4 +37,6 @@ class CodeCheck:
                 details=details,
                 failure=exc,
             )
-        return CheckResult(details=details)
+        if result is not None:
+            result.details = {**details, **result.details}
+        return result

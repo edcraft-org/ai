@@ -21,6 +21,7 @@ from edcraft_validator.tools.python_execution import (
     PythonExecutionTool,
 )
 from edcraft_validator.validation.contracts import (
+    CheckResult,
     ValidationPlan,
     ValidationPolicy,
     ValidationReport,
@@ -160,7 +161,6 @@ class TemplateValidator:
                 "exhaustive",
                 self._check_selection,
                 lambda ctx: {**ctx.case_details, "selected": self._selected_count(ctx)},
-                applies=lambda ctx: self._selected_count(ctx) is not None,
             ),
             CodeCheck(
                 "distractor_consistency",
@@ -176,42 +176,61 @@ class TemplateValidator:
             ),
         )
 
-    def _check_structure(self, ctx: CodeValidationContext, details: dict) -> None:
+    def _check_structure(self, ctx: CodeValidationContext) -> CheckResult:
         self._validate_structure(ctx.template, ctx.names)
         if ctx.num_distractors is not None and not 2 <= ctx.num_distractors <= 3:
             raise ValueError("num_distractors must be 2 or 3")
+        return CheckResult()
 
-    def _check_expressions(self, ctx: CodeValidationContext, details: dict) -> None:
+    def _check_expressions(self, ctx: CodeValidationContext) -> CheckResult:
         ctx.proposed_answer, ctx.candidates = self._parse_expressions(
             ctx.template,
             ctx.names,
             allow_candidate_rejections=ctx.num_distractors is not None,
         )
+        return CheckResult()
 
-    def _check_proposed_answers(
-        self, ctx: CodeValidationContext, details: dict
-    ) -> None:
+    def _check_proposed_answers(self, ctx: CodeValidationContext) -> CheckResult:
         assert ctx.proposed_answer is not None
-        ctx.proposed_answers = self._evaluate_answers(
-            ctx.template,
-            ctx.proposed_answer,
-            ctx.inputs_cases,
-        )
+        answers = []
+        for inputs in ctx.inputs_cases:
+            answer = ctx.proposed_answer.evaluate(inputs)
+            _require_json_value(answer, "answer")
+            self._validate_answer_kind(ctx.template, inputs, answer)
+            answers.append(answer)
+        ctx.proposed_answers = answers
+        return CheckResult()
 
-    def _check_execution(self, ctx: CodeValidationContext, details: dict) -> None:
-        ctx.executions = self._execute_successfully(ctx.template, ctx.inputs_cases)
+    def _check_execution(self, ctx: CodeValidationContext) -> CheckResult:
+        executions = self._execute_all(ctx.template, ctx.inputs_cases)
+        for inputs, execution in zip(ctx.inputs_cases, executions, strict=True):
+            if execution.ok:
+                continue
+            detail = execution.error_message or execution.error_code or "unknown"
+            raise TemplateValidationError(
+                f"template execution failed for inputs {inputs}: {detail}",
+                code=execution.error_code or "EXECUTION_FAILED",
+                field="code",
+                inputs=inputs,
+            )
+        ctx.executions = executions
+        return CheckResult()
 
-    def _check_canonical_answers(
-        self, ctx: CodeValidationContext, details: dict
-    ) -> None:
-        ctx.canonical_answers, ctx.corrected_cases = self._resolve_canonical_answers(
-            ctx.template,
-            ctx.inputs_cases,
-            ctx.executions,
-            ctx.proposed_answers,
-            details,
-        )
-        if ctx.corrected_cases:
+    def _check_canonical_answers(self, ctx: CodeValidationContext) -> CheckResult:
+        answers = []
+        corrected_cases = 0
+        for inputs, execution, proposed_answer in zip(
+            ctx.inputs_cases, ctx.executions, ctx.proposed_answers, strict=True
+        ):
+            actual_answer = _execution_answer(execution, ctx.template.answer_target)
+            _require_json_value(actual_answer, "executor answer")
+            self._validate_answer_kind(ctx.template, inputs, actual_answer)
+            answers.append(copy.deepcopy(actual_answer))
+            if not equivalent(actual_answer, proposed_answer):
+                corrected_cases += 1
+        ctx.canonical_answers = answers
+        ctx.corrected_cases = corrected_cases
+        if corrected_cases:
             assert ctx.proposed_answer is not None
             ctx.template, ctx.candidates = self._promote_proposed_answer_to_distractor(
                 ctx.template,
@@ -219,6 +238,12 @@ class TemplateValidator:
                 ctx.proposed_answers,
                 ctx.candidates,
             )
+        return CheckResult(
+            details={
+                "corrected_cases": corrected_cases,
+                "proposal_matched": corrected_cases == 0,
+            }
+        )
 
     @staticmethod
     def _selected_count(ctx: CodeValidationContext) -> int | None:
@@ -226,9 +251,10 @@ class TemplateValidator:
             return ctx.num_distractors
         return ctx.original_distractor_count if ctx.corrected_cases else None
 
-    def _check_selection(self, ctx: CodeValidationContext, details: dict) -> None:
+    def _check_selection(self, ctx: CodeValidationContext) -> CheckResult | None:
         count = self._selected_count(ctx)
-        assert count is not None
+        if count is None:
+            return None
         ctx.template, ctx.candidates = self._select_distractors(
             ctx.template,
             ctx.inputs_cases,
@@ -236,16 +262,36 @@ class TemplateValidator:
             ctx.candidates,
             num_distractors=count,
         )
+        return CheckResult()
 
-    def _check_distractors(self, ctx: CodeValidationContext, details: dict) -> None:
-        self._validate_all_distractors(
-            ctx.inputs_cases,
-            ctx.canonical_answers,
-            ctx.candidates,
-        )
+    def _check_distractors(self, ctx: CodeValidationContext) -> CheckResult:
+        for candidate in ctx.candidates:
+            if candidate.values is not None:
+                continue
+            if candidate.expression is None:
+                raise AssertionError("validated distractor is missing its expression")
+            candidate.values = [
+                candidate.expression.evaluate(inputs) for inputs in ctx.inputs_cases
+            ]
+        for case_index, (inputs, expected_answer) in enumerate(
+            zip(ctx.inputs_cases, ctx.canonical_answers, strict=True)
+        ):
+            generated = [
+                candidate.values[case_index]
+                for candidate in ctx.candidates
+                if candidate.values is not None
+            ]
+            if len(generated) != len(ctx.candidates):
+                raise AssertionError("validated distractor is missing computed values")
+            self._validate_distractors(inputs, expected_answer, generated)
+        return CheckResult()
 
-    def _check_rendering(self, ctx: CodeValidationContext, details: dict) -> None:
-        self._validate_rendering(ctx.template, ctx.inputs_cases)
+    def _check_rendering(self, ctx: CodeValidationContext) -> CheckResult:
+        for inputs in ctx.inputs_cases:
+            render_template(ctx.template.question_template, inputs, require_all=True)
+            for recipe in ctx.template.distractors:
+                render_template(recipe.reason_template, inputs)
+        return CheckResult()
 
     @staticmethod
     def _parse_expressions(
@@ -274,63 +320,6 @@ class TemplateValidator:
                     _DistractorCandidate(index=index, expression=expression)
                 )
         return answer, candidates
-
-    @classmethod
-    def _evaluate_answers(
-        cls,
-        template: CodeTemplateCandidate,
-        answer: SafeExpression,
-        inputs_cases: list[dict[str, ParameterValue]],
-    ) -> list[Any]:
-        expected_answers = []
-        for inputs in inputs_cases:
-            expected_answer = answer.evaluate(inputs)
-            _require_json_value(expected_answer, "answer")
-            cls._validate_answer_kind(template, inputs, expected_answer)
-            expected_answers.append(expected_answer)
-        return expected_answers
-
-    def _execute_successfully(
-        self,
-        template: CodeTemplateCandidate,
-        inputs_cases: list[dict[str, ParameterValue]],
-    ) -> list[ExecutionResult]:
-        executions = self._execute_all(template, inputs_cases)
-        for inputs, execution in zip(inputs_cases, executions, strict=True):
-            if execution.ok:
-                continue
-            detail = execution.error_message or execution.error_code or "unknown"
-            raise TemplateValidationError(
-                f"template execution failed for inputs {inputs}: {detail}",
-                code=execution.error_code or "EXECUTION_FAILED",
-                field="code",
-                inputs=inputs,
-            )
-        return executions
-
-    @classmethod
-    def _resolve_canonical_answers(
-        cls,
-        template: CodeTemplateCandidate,
-        inputs_cases: list[dict[str, ParameterValue]],
-        executions: list[ExecutionResult],
-        proposed_answers: list[Any],
-        details: dict[str, Any],
-    ) -> tuple[list[Any], int]:
-        canonical_answers = []
-        corrected_cases = 0
-        for inputs, execution, proposed_answer in zip(
-            inputs_cases, executions, proposed_answers, strict=True
-        ):
-            actual_answer = _execution_answer(execution, template.answer_target)
-            _require_json_value(actual_answer, "executor answer")
-            cls._validate_answer_kind(template, inputs, actual_answer)
-            canonical_answers.append(copy.deepcopy(actual_answer))
-            if not equivalent(actual_answer, proposed_answer):
-                corrected_cases += 1
-        details["corrected_cases"] = corrected_cases
-        details["proposal_matched"] = corrected_cases == 0
-        return canonical_answers, corrected_cases
 
     @staticmethod
     def _promote_proposed_answer_to_distractor(
@@ -381,43 +370,6 @@ class TemplateValidator:
             template.model_copy(update={"distractors": recipes}, deep=True),
             candidates,
         )
-
-    @classmethod
-    def _validate_all_distractors(
-        cls,
-        inputs_cases: list[dict[str, ParameterValue]],
-        expected_answers: list[Any],
-        candidates: list[_DistractorCandidate],
-    ) -> None:
-        for candidate in candidates:
-            if candidate.values is not None:
-                continue
-            if candidate.expression is None:
-                raise AssertionError("validated distractor is missing its expression")
-            candidate.values = [
-                candidate.expression.evaluate(inputs) for inputs in inputs_cases
-            ]
-        for case_index, (inputs, expected_answer) in enumerate(
-            zip(inputs_cases, expected_answers, strict=True)
-        ):
-            generated = [
-                candidate.values[case_index]
-                for candidate in candidates
-                if candidate.values is not None
-            ]
-            if len(generated) != len(candidates):
-                raise AssertionError("validated distractor is missing computed values")
-            cls._validate_distractors(inputs, expected_answer, generated)
-
-    @staticmethod
-    def _validate_rendering(
-        template: CodeTemplateCandidate,
-        inputs_cases: list[dict[str, ParameterValue]],
-    ) -> None:
-        for inputs in inputs_cases:
-            render_template(template.question_template, inputs, require_all=True)
-            for recipe in template.distractors:
-                render_template(recipe.reason_template, inputs)
 
     @classmethod
     def _select_distractors(

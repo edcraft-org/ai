@@ -235,7 +235,7 @@ domains/code/templates/authoring.py prompt construction and template building
 domains/code/templates/expressions.py restricted deterministic expressions
 domains/code/templates/validation.py code check operations, plan, and finalization
 domains/code/templates/context.py    typed intermediate code-validation values
-domains/code/templates/checks.py     named check adapter and tool failure outcomes
+domains/code/templates/checks.py     check metadata and tool failure outcomes
 domains/code/templates/generation.py deterministic question expansion
 domains/code/capabilities.py       supported profiles and their machine-readable rules
 generation/base.py                 domain-agnostic structured generation request
@@ -277,6 +277,9 @@ Each check implements `run(context)` and returns a `CheckResult`. The domain own
 its check logic and tool dependencies. The runner records names, assurance levels,
 durations, and evidence, and applies the supplied acceptance policy. Unexpected
 programming errors propagate rather than being reported as invalid templates.
+Code check operations take only the typed context and return their findings.
+The small `CodeCheck` wrapper attaches metadata and preserves tool-error diagnostics;
+substantial algorithms such as distractor selection remain separate helpers.
 
 The code context carries parsed expressions, execution results, canonical answers,
 and selected distractors between checks. Its order is explicit: structure and
