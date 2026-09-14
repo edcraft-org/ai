@@ -26,7 +26,6 @@ from edcraft_validator.validation.contracts import (
     ValidationPolicy,
     ValidationReport,
 )
-from edcraft_validator.validation.pipeline import ValidationPipeline
 
 from .checks import CodeCheck
 from .context import CodeValidationContext
@@ -47,7 +46,7 @@ CODE_TEMPLATE_VALIDATOR_VERSION = "code-template-validator-v3"
 
 
 class TemplateValidator:
-    """Validate a finite template by checking every possible instance."""
+    """Build code-domain checks and package their validated results."""
 
     def __init__(
         self,
@@ -57,16 +56,6 @@ class TemplateValidator:
     ) -> None:
         self.execution_tool = execution_tool or LocalPythonTool()
         self.timeout_seconds = timeout_seconds
-
-    def validate(
-        self, template: CodeTemplateCandidate, *, num_distractors: int | None = None
-    ) -> ValidatedCodeTemplate:
-        """Compatibility entry point using the application's central runner."""
-        plan = self.prepare_validation(template, num_distractors=num_distractors)
-        report = ValidationPipeline().validate(
-            context=plan.context, checks=plan.checks, policy=plan.policy
-        )
-        return self.finalize_template(plan.context, report)
 
     @staticmethod
     def finalize_template(

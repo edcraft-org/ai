@@ -309,10 +309,13 @@ answers using execution results and stores every canonical answer. Finalization
 packages only checked content and refuses an unaccepted report.
 
 `TemplateApplication` coordinates validation for normal application callers.
-`TemplateValidator.validate` remains a direct code-template convenience entry point
-used by tests. `CodeDomain` supplies plans and finalizes artifacts; it does not run
-validation itself. Each domain calls its own deterministic question-generation
-function directly; model providers and execution tools remain injectable. The central runner exposes only the plan-based `validate` method.
+Tests use `TemplateApplication.validate_template` for end-to-end validation and
+domain plans with `ValidationPipeline.validate` for focused check behavior.
+`TemplateValidator` implements code-domain checks and finalization; it has no
+validation execution entry point. `CodeDomain` supplies plans and finalizes
+artifacts; it does not run validation itself. Each domain calls its own deterministic
+question-generation function directly; model providers and execution tools remain
+injectable. The central runner exposes only the plan-based `validate` method.
 Individual operations should be supplied as checks; evidence belongs to the returned
 report rather than mutable runner state.
 

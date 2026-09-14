@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 
+from edcraft_validator.application import TemplateApplication
 from edcraft_validator.domains.code.capabilities import (
     CODE_DIFFICULTIES,
     CODE_TEMPLATE_PROFILES,
@@ -12,6 +13,7 @@ from edcraft_validator.domains.code.capabilities import (
     code_template_profile,
 )
 from edcraft_validator.domains.code.models import CodeTemplateRequest
+from edcraft_validator.domains.code.module import CodeDomain
 from edcraft_validator.domains.code.templates import (
     CodeTemplateCandidate,
     CodeTemplateProposal,
@@ -27,9 +29,19 @@ from edcraft_validator.domains.code.templates import (
 )
 from edcraft_validator.tools.python_execution import ExecutionResult
 from edcraft_validator.tools.python_worker import execute_request
+from edcraft_validator.validation import ValidationPipeline
 
 TEMPLATE_DIR = Path(__file__).parents[1] / "examples" / "templates"
 TEMPLATE_PATHS = sorted(TEMPLATE_DIR.glob("*.json"))
+
+
+def code_application(execution_tool) -> TemplateApplication:
+    """Only wire test dependencies; exercise the real application workflow."""
+    return TemplateApplication(
+        domain_factory=lambda name: CodeDomain(
+            validator_factory=lambda: TemplateValidator(execution_tool=execution_tool)
+        )
+    )
 
 
 def template(**changes: Any) -> CodeTemplateCandidate:
@@ -149,7 +161,8 @@ class TrustedBatchExecutor:
 
 def test_validates_every_case_once_then_generates_without_executor() -> None:
     executor = ArithmeticExecutor()
-    validated = TemplateValidator(execution_tool=executor).validate(template())
+    application = code_application(executor)
+    validated = application.validate_template(template(), domain="code")
 
     assert validated.validation.cases_validated == 8
     assert validated.validation.validator_version == "code-template-validator-v3"
@@ -173,8 +186,8 @@ def test_validates_every_case_once_then_generates_without_executor() -> None:
     assert executor.batch_calls == 1
     assert len(executor.calls) == 8
 
-    first = generate_code_question(validated, seed=42)
-    second = generate_code_question(validated, seed=42)
+    first = application.generate_question(validated, domain="code", seed=42)
+    second = application.generate_question(validated, domain="code", seed=42)
 
     assert first == second
     assert len(executor.calls) == 8
@@ -226,7 +239,9 @@ def test_supports_loop_iteration_questions() -> None:
                 for item in inputs
             ]
 
-    validated = TemplateValidator(execution_tool=LoopExecutor()).validate(loop_template)
+    validated = code_application(LoopExecutor()).validate_template(
+        loop_template, domain="code"
+    )
     instance = generate_code_question(validated, seed=3)
 
     assert validated.validation.cases_validated == 2
@@ -417,7 +432,7 @@ def test_profile_rejects_the_wrong_answer_kind() -> None:
     )
 
     with pytest.raises(TemplateValidationError) as error:
-        TemplateValidator(execution_tool=TrustedBatchExecutor()).validate(value)
+        code_application(TrustedBatchExecutor()).validate_template(value, domain="code")
 
     assert error.value.code == "ANSWER_KIND_MISMATCH"
     assert error.value.field == "answer_expression"
@@ -436,7 +451,7 @@ def test_unsupported_code_is_rejected_before_execution() -> None:
     value = template(code="import os\n\ndef calculate(a, b, c):\n    return a + b - c")
 
     with pytest.raises(TemplateValidationError) as error:
-        TemplateValidator(execution_tool=executor).validate(value)
+        code_application(executor).validate_template(value, domain="code")
 
     assert error.value.code == "UNSUPPORTED_CODE"
     assert executor.called is False
@@ -449,9 +464,22 @@ def test_answer_kind_error_precedes_distractor_selection() -> None:
     )
 
     with pytest.raises(TemplateValidationError) as error:
-        TemplateValidator(execution_tool=TrustedBatchExecutor()).validate(
-            value, num_distractors=3
+        domain = CodeDomain(
+            validator_factory=lambda: TemplateValidator(
+                execution_tool=TrustedBatchExecutor()
+            )
         )
+        plan = domain.prepare_validation(
+            value,
+            request=CodeTemplateRequest(
+                topic=value.topic, difficulty=value.difficulty, num_distractors=3
+            ),
+        )
+        report = ValidationPipeline().validate(
+            context=plan.context, checks=plan.checks, policy=plan.policy
+        )
+        report.raise_for_failure()
+        domain.finalize_template(plan.context, report)
 
     assert error.value.code == "ANSWER_KIND_MISMATCH"
 
@@ -474,7 +502,7 @@ def test_profile_features_must_be_reachable_from_the_entry_function() -> None:
     )
 
     with pytest.raises(TemplateValidationError) as error:
-        TemplateValidator(execution_tool=TrustedBatchExecutor()).validate(value)
+        code_application(TrustedBatchExecutor()).validate_template(value, domain="code")
 
     assert error.value.code == "PROFILE_MISMATCH"
     assert "list_aggregate" in str(error.value)
@@ -487,7 +515,7 @@ def test_rejects_an_unused_entry_parameter_before_execution() -> None:
     )
 
     with pytest.raises(TemplateValidationError) as error:
-        TemplateValidator(execution_tool=ArithmeticExecutor()).validate(value)
+        code_application(ArithmeticExecutor()).validate_template(value, domain="code")
 
     assert error.value.code == "UNUSED_PARAMETER"
     assert error.value.field == "parameters"
@@ -636,7 +664,9 @@ def test_rejects_an_unused_entry_parameter_before_execution() -> None:
 def test_profiles_accept_alternative_programs_and_answer_formulas(
     value: CodeTemplateCandidate,
 ) -> None:
-    validated = TemplateValidator(execution_tool=TrustedBatchExecutor()).validate(value)
+    validated = code_application(TrustedBatchExecutor()).validate_template(
+        value, domain="code"
+    )
 
     assert validated.validation.cases_validated >= 2
 
@@ -742,7 +772,7 @@ def test_profiles_still_reject_missing_broad_code_features(
     value = CodeTemplateCandidate.model_validate(data)
 
     with pytest.raises(TemplateValidationError) as error:
-        TemplateValidator(execution_tool=TrustedBatchExecutor()).validate(value)
+        code_application(TrustedBatchExecutor()).validate_template(value, domain="code")
 
     assert error.value.code == "PROFILE_MISMATCH"
     assert error.value.field == "code"
@@ -858,8 +888,8 @@ def test_capability_catalog_covers_each_profile_once() -> None:
 def test_every_example_template_validates_with_the_real_tracer(path: Path) -> None:
     raw_template = CodeTemplateCandidate.model_validate_json(path.read_text())
 
-    validated = TemplateValidator(execution_tool=TrustedBatchExecutor()).validate(
-        raw_template
+    validated = code_application(TrustedBatchExecutor()).validate_template(
+        raw_template, domain="code"
     )
     instance = generate_code_question(validated, seed=11)
 
@@ -1035,8 +1065,8 @@ def test_rejects_a_distractor_that_is_correct_for_any_case() -> None:
     value["distractors"][0]["expression"] = "a + b - c"
 
     with pytest.raises(TemplateValidationError, match="equals the answer") as error:
-        TemplateValidator(execution_tool=ArithmeticExecutor()).validate(
-            CodeTemplateCandidate.model_validate(value)
+        code_application(ArithmeticExecutor()).validate_template(
+            CodeTemplateCandidate.model_validate(value), domain="code"
         )
 
     assert error.value.code == "DISTRACTOR_EQUALS_ANSWER"
@@ -1067,9 +1097,20 @@ def test_distractor_selection_is_not_dependent_on_greedy_candidate_order() -> No
                 for case in inputs
             ]
 
-    validated = TemplateValidator(execution_tool=AddTenExecutor()).validate(
-        item, num_distractors=2
+    domain = CodeDomain(
+        validator_factory=lambda: TemplateValidator(execution_tool=AddTenExecutor())
     )
+    plan = domain.prepare_validation(
+        item,
+        request=CodeTemplateRequest(
+            topic=item.topic, difficulty=item.difficulty, num_distractors=2
+        ),
+    )
+    report = ValidationPipeline().validate(
+        context=plan.context, checks=plan.checks, policy=plan.policy
+    )
+    report.raise_for_failure()
+    validated = domain.finalize_template(plan.context, report)
 
     assert [recipe.expression for recipe in validated.template.distractors] == [
         "a - 1",
@@ -1077,7 +1118,7 @@ def test_distractor_selection_is_not_dependent_on_greedy_candidate_order() -> No
     ]
 
 
-def test_authoring_evaluates_each_candidate_once_per_case(monkeypatch) -> None:
+def test_authoring_plan_evaluates_each_candidate_once_per_case(monkeypatch) -> None:
     value = template().model_dump(mode="json")
     value["distractors"] = [
         {"expression": "0", "reason_template": "Uses zero."},
@@ -1102,9 +1143,20 @@ def test_authoring_evaluates_each_candidate_once_per_case(monkeypatch) -> None:
     monkeypatch.setattr(SafeExpression, "__init__", counting_init)
     monkeypatch.setattr(SafeExpression, "evaluate", counting_evaluate)
 
-    TemplateValidator(execution_tool=ArithmeticExecutor()).validate(
-        item, num_distractors=2
+    domain = CodeDomain(
+        validator_factory=lambda: TemplateValidator(execution_tool=ArithmeticExecutor())
     )
+    plan = domain.prepare_validation(
+        item,
+        request=CodeTemplateRequest(
+            topic=item.topic, difficulty=item.difficulty, num_distractors=2
+        ),
+    )
+    report = ValidationPipeline().validate(
+        context=plan.context, checks=plan.checks, policy=plan.policy
+    )
+    report.raise_for_failure()
+    domain.finalize_template(plan.context, report)
 
     sources = {
         item.answer_expression,
@@ -1129,9 +1181,22 @@ def test_candidate_selection_rejects_pairwise_collisions_across_cases() -> None:
     item = CodeTemplateCandidate.model_validate(value)
 
     with pytest.raises(TemplateValidationError, match="no set of 2") as error:
-        TemplateValidator(execution_tool=ArithmeticExecutor()).validate(
-            item, num_distractors=2
+        domain = CodeDomain(
+            validator_factory=lambda: TemplateValidator(
+                execution_tool=ArithmeticExecutor()
+            )
         )
+        plan = domain.prepare_validation(
+            item,
+            request=CodeTemplateRequest(
+                topic=item.topic, difficulty=item.difficulty, num_distractors=2
+            ),
+        )
+        report = ValidationPipeline().validate(
+            context=plan.context, checks=plan.checks, policy=plan.policy
+        )
+        report.raise_for_failure()
+        domain.finalize_template(plan.context, report)
 
     assert error.value.code == "DISTRACTOR_SELECTION_FAILED"
     assert "candidate 1 duplicates candidate 0" in str(error.value)
@@ -1146,9 +1211,22 @@ def test_candidate_selection_reports_when_too_few_are_globally_valid() -> None:
     item = CodeTemplateCandidate.model_validate(data)
 
     with pytest.raises(TemplateValidationError, match="no set of 3") as error:
-        TemplateValidator(execution_tool=ArithmeticExecutor()).validate(
-            item, num_distractors=3
+        domain = CodeDomain(
+            validator_factory=lambda: TemplateValidator(
+                execution_tool=ArithmeticExecutor()
+            )
         )
+        plan = domain.prepare_validation(
+            item,
+            request=CodeTemplateRequest(
+                topic=item.topic, difficulty=item.difficulty, num_distractors=3
+            ),
+        )
+        report = ValidationPipeline().validate(
+            context=plan.context, checks=plan.checks, policy=plan.policy
+        )
+        report.raise_for_failure()
+        domain.finalize_template(plan.context, report)
 
     assert error.value.code == "DISTRACTOR_SELECTION_FAILED"
     assert error.value.field == "distractors"
@@ -1158,7 +1236,7 @@ def test_rejects_profile_answer_target_mismatch_before_execution() -> None:
     item = template(answer_target="loop_iterations")
 
     with pytest.raises(TemplateValidationError, match="requires answer_target"):
-        TemplateValidator(execution_tool=ArithmeticExecutor()).validate(item)
+        code_application(ArithmeticExecutor()).validate_template(item, domain="code")
 
 
 def test_rejects_profile_parameter_shape_mismatch_before_execution() -> None:
@@ -1170,8 +1248,8 @@ def test_rejects_profile_parameter_shape_mismatch_before_execution() -> None:
     }
 
     with pytest.raises(TemplateValidationError, match="parameter profile requires"):
-        TemplateValidator(execution_tool=ArithmeticExecutor()).validate(
-            CodeTemplateCandidate.model_validate(data)
+        code_application(ArithmeticExecutor()).validate_template(
+            CodeTemplateCandidate.model_validate(data), domain="code"
         )
 
 
@@ -1181,7 +1259,7 @@ def test_rejects_missing_profile_code_feature_before_execution() -> None:
     with pytest.raises(
         TemplateValidationError, match="missing required features"
     ) as error:
-        TemplateValidator(execution_tool=ArithmeticExecutor()).validate(item)
+        code_application(ArithmeticExecutor()).validate_template(item, domain="code")
 
     payload = error.value.as_dict()
     assert {key: payload[key] for key in ("code", "message", "field", "inputs")} == {
@@ -1202,8 +1280,8 @@ def test_rejects_non_positive_profile_integer_domain_before_execution() -> None:
     data["parameters"][0]["values"] = [0, 2]
 
     with pytest.raises(TemplateValidationError, match="requires positive integer"):
-        TemplateValidator(execution_tool=TrustedBatchExecutor()).validate(
-            CodeTemplateCandidate.model_validate(data)
+        code_application(TrustedBatchExecutor()).validate_template(
+            CodeTemplateCandidate.model_validate(data), domain="code"
         )
 
 
@@ -1224,7 +1302,9 @@ def test_corrects_answer_and_promotes_proposal_to_distractor() -> None:
     ]
     item = CodeTemplateCandidate.model_validate(data)
 
-    validated = TemplateValidator(execution_tool=ArithmeticExecutor()).validate(item)
+    validated = code_application(ArithmeticExecutor()).validate_template(
+        item, domain="code"
+    )
     instance = generate_code_question(validated, seed=1)
 
     assert validated.template.answer_expression is None
@@ -1258,7 +1338,7 @@ def test_answer_correction_still_rejects_insufficient_valid_distractors() -> Non
     item = CodeTemplateCandidate.model_validate(data)
 
     with pytest.raises(TemplateValidationError) as error:
-        TemplateValidator(execution_tool=ArithmeticExecutor()).validate(item)
+        code_application(ArithmeticExecutor()).validate_template(item, domain="code")
 
     assert error.value.code == "DISTRACTOR_SELECTION_FAILED"
 
@@ -1276,7 +1356,7 @@ def test_execution_failure_preserves_executor_code_in_evidence() -> None:
             ]
 
     with pytest.raises(TemplateValidationError) as error:
-        TemplateValidator(execution_tool=FailingExecutor()).validate(template())
+        code_application(FailingExecutor()).validate_template(template(), domain="code")
 
     assert error.value.code == "EXECUTION_TIMEOUT"
     assert error.value.evidence[-1].check == "code_execution"
@@ -1285,8 +1365,8 @@ def test_execution_failure_preserves_executor_code_in_evidence() -> None:
 
 
 def test_validated_template_rejects_failed_validation_evidence() -> None:
-    validated = TemplateValidator(execution_tool=ArithmeticExecutor()).validate(
-        template()
+    validated = code_application(ArithmeticExecutor()).validate_template(
+        template(), domain="code"
     )
     payload = validated.model_dump(mode="json")
     payload["validation"]["evidence"][0]["status"] = "failed"
@@ -1296,8 +1376,8 @@ def test_validated_template_rejects_failed_validation_evidence() -> None:
 
 
 def test_refuses_incomplete_validation_evidence() -> None:
-    validated = TemplateValidator(execution_tool=ArithmeticExecutor()).validate(
-        template()
+    validated = code_application(ArithmeticExecutor()).validate_template(
+        template(), domain="code"
     )
     validated.validation.cases_validated = 7
 

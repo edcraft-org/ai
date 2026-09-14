@@ -5,6 +5,7 @@ import pytest
 from edcraft_validator.domains.code.templates import (
     CodeTemplateCandidate,
     TemplateValidator,
+    ValidatedCodeTemplate,
 )
 from edcraft_validator.domains.code.templates.context import CodeValidationContext
 from edcraft_validator.tools.python_execution import ExecutionResult
@@ -16,7 +17,7 @@ def candidate():
     )
 
 
-def test_extracted_checks_match_existing_validator():
+def test_code_checks_populate_canonical_answers():
     class Executor:
         def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
             return [
@@ -24,15 +25,20 @@ def test_extracted_checks_match_existing_validator():
                 for x in inputs
             ]
 
-    validator = TemplateValidator(execution_tool=Executor())
-    expected = validator.validate(candidate())
-    context = CodeValidationContext(candidate())
-    results = [check.run(context) for check in validator.build_checks()]
-    assert all(result.status == "passed" for result in results if result is not None)
-    assert context.canonical_answers == [
-        case.answer for case in expected.validation.validated_cases
-    ]
-    assert context.template.distractors == expected.template.distractors
+    from edcraft_validator.domains.code.module import CodeDomain
+    from edcraft_validator.validation import ValidationPipeline
+
+    domain = CodeDomain(
+        validator_factory=lambda: TemplateValidator(execution_tool=Executor())
+    )
+    original = candidate()
+    plan = domain.prepare_validation(original)
+    report = ValidationPipeline().validate(
+        context=plan.context, checks=plan.checks, policy=plan.policy
+    )
+    assert report.accepted
+    assert plan.context.canonical_answers == [6, 4, 9, 7, 8, 6, 11, 9]
+    assert plan.context.template.distractors == original.distractors
 
 
 @pytest.mark.parametrize(
@@ -87,7 +93,7 @@ def test_domain_supplies_plan_with_injected_tool():
 
 
 def test_finalization_preserves_checked_content_and_deterministic_questions():
-    from edcraft_validator.domains.code.templates import generate_code_question
+    from edcraft_validator.domains.code.module import CodeDomain
     from edcraft_validator.validation.pipeline import ValidationPipeline
 
     class Executor:
@@ -97,34 +103,43 @@ def test_finalization_preserves_checked_content_and_deterministic_questions():
                 for x in inputs
             ]
 
-    validator = TemplateValidator(execution_tool=Executor())
-    original = candidate()
-    expected = validator.validate(original)
-    plan = validator.prepare_validation(original)
-    report = ValidationPipeline().validate(
-        context=plan.context,
-        checks=plan.checks,
-        policy=plan.policy,
+    domain = CodeDomain(
+        validator_factory=lambda: TemplateValidator(execution_tool=Executor())
     )
-    actual = validator.finalize_template(plan.context, report)
-    assert actual.template == expected.template
-    assert actual.validation.validated_cases == expected.validation.validated_cases
-    assert generate_code_question(actual, 42) == generate_code_question(expected, 42)
+    original = candidate()
+    plan = domain.prepare_validation(original)
+    report = ValidationPipeline().validate(
+        context=plan.context, checks=plan.checks, policy=plan.policy
+    )
+    actual = domain.finalize_template(plan.context, report)
+    assert actual.template == original.model_copy(update={"answer_expression": None})
+    assert actual.validation.evidence == report.evidence
+    assert [
+        case.inputs for case in actual.validation.validated_cases
+    ] == plan.context.inputs_cases
+    assert [
+        case.answer for case in actual.validation.validated_cases
+    ] == plan.context.canonical_answers
+    reloaded = ValidatedCodeTemplate.model_validate_json(actual.model_dump_json())
+    assert domain.generate_question(actual, seed=42) == domain.generate_question(
+        reloaded, seed=42
+    )
     assert original.answer_expression is not None
 
 
 def test_finalization_refuses_incomplete_report():
     import pytest
 
+    from edcraft_validator.domains.code.module import CodeDomain
     from edcraft_validator.validation.contracts import (
         ValidationFailure,
         ValidationReport,
     )
 
-    validator = TemplateValidator()
-    plan = validator.prepare_validation(candidate())
+    domain = CodeDomain()
+    plan = domain.prepare_validation(candidate())
     with pytest.raises(ValidationFailure):
-        validator.finalize_template(plan.context, ValidationReport([], plan.policy))
+        domain.finalize_template(plan.context, ValidationReport([], plan.policy))
 
 
 def test_safety_failure_stops_before_tool_execution():
@@ -159,8 +174,12 @@ def test_missing_rendering_check_blocks_finalization():
                 for x in inputs
             ]
 
-    validator = TemplateValidator(execution_tool=Executor())
-    plan = validator.prepare_validation(candidate())
+    from edcraft_validator.domains.code.module import CodeDomain
+
+    domain = CodeDomain(
+        validator_factory=lambda: TemplateValidator(execution_tool=Executor())
+    )
+    plan = domain.prepare_validation(candidate())
     report = ValidationPipeline().validate(
         context=plan.context,
         checks=[check for check in plan.checks if check.name != "template_rendering"],
@@ -168,7 +187,7 @@ def test_missing_rendering_check_blocks_finalization():
     )
     assert report.missing_checks == {"template_rendering"}
     with pytest.raises(ValidationFailure):
-        validator.finalize_template(plan.context, report)
+        domain.finalize_template(plan.context, report)
 
 
 @pytest.mark.parametrize("num_distractors", [None, 2, 3])
