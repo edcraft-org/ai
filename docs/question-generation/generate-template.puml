@@ -1,0 +1,76 @@
+@startuml
+title Template generation
+autonumber
+
+actor Caller
+participant TemplateApplication as App
+participant "Domain" as Domain
+participant "ModelProvider" as Provider
+participant ValidationPipeline as Validator
+participant "Check" as Check
+participant "Tool" as Tool
+
+Caller -> App: create_validated_template(request, domain, provider)
+
+App -> Domain: generation_request(request)
+Domain --> App: Generation specification\n(messages, response schema, parser)
+
+App -> Provider: generate(specification)
+note right of Provider
+  Call model and decode response
+  using the supplied response contract
+end note
+Provider --> App: Proposal
+
+App -> Domain: build_candidate(request, proposal)
+note right of Domain
+  Combine request settings and proposal
+  Derive domain-owned fields (Types for code etc)
+  Add fallback distractor candidates
+end note
+Domain --> App: Candidate
+
+App -> Domain: prepare_validation(candidate, request)
+note right of Domain
+  Create shared domain context
+  Choose checks and their order
+  Define required-check policy
+end note
+Domain --> App: ValidationPlan(context, checks, policy)
+
+App -> Validator: validate(plan)
+
+loop Each check in plan order, until failure
+    Validator -> Check: run(context)
+
+    opt Check requires a tool
+        Check -> Tool: Execute operation
+        Tool --> Check: Tool result
+    end
+
+    Check --> Validator: CheckResult(status, findings)
+    Validator -> Validator: Record evidence and duration
+
+    opt Check failed or could not complete
+        Validator -> Validator: Record failure and stop iteration
+    end
+end
+
+Validator --> App: ValidationReport
+
+alt Validation rejected
+    App --> Caller: Validation failure with evidence
+else All required checks passed
+    App -> Domain: finalize_template(plan.context, report)
+    note right of Domain
+      Package checked values
+      Store canonical answers from context
+      Retain selected distractors and evidence
+      Clear proposed answer expression
+    end note
+    Domain --> App: Validated template
+
+    App -> App: Attach authoring provenance
+    App --> Caller: Validated template
+end
+@enduml
