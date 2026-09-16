@@ -26,7 +26,7 @@ def parse_code_template_candidate(content: str) -> CodeTemplateCandidate:
 
 
 def parse_code_template_proposal(content: str) -> CodeTemplateProposal:
-    """Parse a provider proposal with strict local schema validation."""
+    """Parse an already canonical proposal with strict local schema validation."""
     payload = json.loads(content)
     return CodeTemplateProposal.model_validate(payload)
 

@@ -1,4 +1,5 @@
 import json
+from dataclasses import dataclass
 
 import pytest
 from pydantic import BaseModel
@@ -138,10 +139,38 @@ def test_template_application_authors_once_then_generates_locally() -> None:
 
 
 def test_application_can_run_a_non_code_domain_without_provider_changes() -> None:
+    events = []
+
+    @dataclass
+    class ExampleContext:
+        candidate: ExampleTemplate
+        checked_value: int | None = None
+
+    class ExampleTool:
+        def double(self, value):
+            events.append("tool")
+            return value * 2
+
+    class DoublingCheck:
+        name = "double_value"
+        assurance = "exhaustive"
+
+        def __init__(self, tool):
+            self.tool = tool
+
+        def run(self, context):
+            events.append("check")
+            context.checked_value = self.tool.double(context.candidate.value)
+            return CheckResult(details={"input": context.candidate.value})
+
     class ExampleDomain:
         name = "example"
+        request_model = ExampleRequest
         candidate_model = ExampleTemplate
         validated_model = ExampleValidated
+
+        def __init__(self, tool):
+            self.tool = tool
 
         def generation_request(self, request):
             from edcraft_validator.generation.base import StructuredGenerationRequest
@@ -156,16 +185,25 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
             )
 
         def build_candidate(self, request, proposal):
+            events.append("build")
             return ExampleTemplate(value=proposal.value)
 
         def prepare_validation(self, candidate, *, request=None):
-            return example_plan(candidate)
+            events.append("plan")
+            return ValidationPlan(
+                context=ExampleContext(candidate),
+                checks=(DoublingCheck(self.tool),),
+                policy=ValidationPolicy(frozenset({"double_value"})),
+            )
 
         def finalize_template(self, context, report):
+            events.append("finalize")
             assert report.accepted
-            return ExampleValidated(value=context.value)
+            assert report.evidence[0].details == {"input": 12}
+            return ExampleValidated(value=context.checked_value)
 
         def generate_question(self, validated, *, seed):
+            events.append("question")
             return ExampleInstance(value=validated.value, seed=seed)
 
     class ExampleProvider:
@@ -173,10 +211,11 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
         model = "stub-model"
 
         def generate(self, request):
+            events.append("generate")
             assert request.response_model is ExampleProposal
             return request.parse_response(json.dumps({"value": 12}))
 
-    domain = ExampleDomain()
+    domain = ExampleDomain(ExampleTool())
     application = TemplateApplication()
     validated = application.create_validated_template(
         ExampleRequest(topic="fractions"),
@@ -185,10 +224,19 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
     )
     instance = application.generate_question(validated, domain=domain, seed=5)
 
-    assert validated.value == 12
+    assert events == [
+        "generate",
+        "build",
+        "plan",
+        "check",
+        "tool",
+        "finalize",
+        "question",
+    ]
+    assert validated.value == 24
     assert validated.authoring.domain == "example"
     assert validated.authoring.request == {"topic": "fractions"}
-    assert instance == ExampleInstance(value=12, seed=5)
+    assert instance == ExampleInstance(value=24, seed=5)
 
 
 def test_application_rejects_domain_without_shared_validated_contract() -> None:

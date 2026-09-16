@@ -191,13 +191,6 @@ def test_soclaas_requires_its_own_model(monkeypatch) -> None:
         _model("soclaas")
 
 
-def test_openai_request_records_the_common_response_prompt_version() -> None:
-    assert (
-        generation_request("functions", "intermediate").prompt_version
-        == "code-template-v8+response-v1"
-    )
-
-
 def test_openai_client_uses_bounded_timeout_and_retries(monkeypatch) -> None:
     captured: dict[str, object] = {}
 

@@ -249,13 +249,16 @@ application/templates.py           domain-agnostic authoring and expansion workf
 domains/base.py                    contract implemented by every domain
 domains/registry.py                domain lookup used by entry points
 domains/code/module.py             code prompt, validation, and expansion wiring
-domains/code/authoring.py          code generation request and Ollama wire schema
+domains/code/authoring.py           common response schema, parser, and generation request
 domains/code/models.py             code authoring request
 domains/code/evaluation.py         real-provider code-template evaluation
 domains/code/templates/models.py   code template data contracts
 domains/code/templates/authoring.py prompt construction and template building
 domains/code/templates/expressions.py restricted deterministic expressions
-domains/code/templates/validation.py code check operations, plan, and finalization
+domains/code/templates/structure.py  structure, profile, and rendering checks
+domains/code/templates/answers.py    expression checks and canonical answer correction
+domains/code/templates/distractors.py distractor selection and consistency checks
+domains/code/templates/execution.py  execution operation with an injected tool
 domains/code/templates/context.py    typed intermediate code-validation values
 domains/code/templates/checks.py     check metadata and tool failure outcomes
 domains/code/templates/generation.py deterministic question expansion
@@ -271,16 +274,57 @@ tools/python_execution.py          local Python tool adapter
 tools/python_worker.py             batched tracing implementation
 ```
 
-To use another model from an existing provider, pass `--model`; no domain code
-changes are required. To add another provider, implement `ModelProvider.generate`,
-add its factory to the provider registry, and add an adapter test.
+Entry points resolve a domain and provider, then pass those objects to the
+application. The domain supplies a generation specification containing messages,
+a response schema, and a parser. The provider handles its API and invokes that
+parser; it does not import domain models. The code parser converts string-encoded
+parameter values into typed proposals before candidate construction. The common
+response contract is recorded as `code-template-v8+response-v1` in provenance.
 
-To add a domain, implement `DomainModule`, provide its request, proposal, candidate,
-validated-template, and question models, build its `StructuredGenerationRequest`,
-supply a validation plan, artifact finalizer, and question generator, then add it to
-`domains/registry.py`. Providers and the application do not change. Domain-specific
-tools all live under `tools/`; for example, future SymPy and Lean adapters can be
-added without entering the code-template pipeline.
+```python
+domain = create_domain("code")
+request = domain.request_model.model_validate_json(request_json)
+provider = create_model_provider(
+    TemplateProviderSelection(provider="openai", model="gpt-5-mini")
+)
+validated = TemplateApplication().create_validated_template(
+    request, domain=domain, provider=provider
+)
+```
+
+The [PlantUML sequence diagram](https://github.com/edcraft-org/ai/blob/docs/template-generation-flow/docs/question-generation/generate-template.puml)
+is maintained on the separate `docs/template-generation-flow` branch.
+
+### Adding a domain, provider, or check
+
+To add a domain:
+
+1. Define its request, proposal, candidate, validated artifact, and question models.
+   The validated artifact extends `ValidatedTemplateArtifact` for provenance.
+2. Implement `DomainModule`: build the generation specification and candidate,
+   assemble the validation context/checks/policy, finalize accepted results, and
+   generate questions. Keep the specification independent of provider names.
+3. Register its factory in `domains/registry.py`. Supply its request data through
+   `--request-json`; the application and generic CLI handler need no changes.
+4. Test a successful workflow and rejection before finalization. The example domain
+   in `tests/test_application.py` demonstrates its own context, check, and tool;
+   `tests/test_template_cli.py` demonstrates registration and request parsing.
+
+To use another model from an existing provider, pass `--model`. To add a provider,
+implement `ModelProvider.generate`, send the supplied messages/schema through its
+API, and call the supplied parser on the response text. Register its factory in
+`generation/registry.py`; test transport errors and parsing with an injected client
+or mocked endpoint, then run a live compatibility check. No domain imports belong
+in the adapter.
+
+To add a domain check, implement `run(context)` with a name and assurance level,
+or use a function with the existing `CodeCheck` wrapper for code-domain operations.
+Add it to the domain's ordered plan after its prerequisites and include its name
+in the required-check policy when it must run. If it needs a tool, inject that tool
+into the check operation when assembling the plan. Tool adapters live under
+`tools/`; the runner never selects or calls them directly. Test tool failures as
+well as successful results. A class is useful when storing dependencies, as in
+`ExecutionCheck`; pure operations can remain functions.
 
 ### Central validation flow
 
@@ -338,8 +382,8 @@ Tests use `TemplateApplication.validate_template` for end-to-end validation and
 domain plans with `ValidationPipeline.validate` for focused check behavior.
 `CodeDomain` directly assembles plans and finalizes artifacts; it does not run
 validation itself. Check operations live in focused code-domain modules, and
-`ExecutionCheck` receives its execution tool and timeout directly. Each domain calls its own deterministic
-question-generation function directly; model providers and execution tools remain
+`ExecutionCheck` receives its execution tool and timeout directly. Each domain calls
+its own deterministic question-generation function; model providers and tools remain
 injectable. The central runner exposes only the plan-based `validate` method.
 Individual operations should be supplied as checks; evidence belongs to the returned
 report rather than mutable runner state.
@@ -366,7 +410,7 @@ command, fails clearly if the `OPENAI_API_KEY` secret is missing, and uploads th
 JSONL attempt record:
 
 ```bash
-RUN_OPENAI_LIVE_TESTS=1 uv run pytest -m openai_live -q
+RUN_OPENAI_LIVE_TESTS=1 uv run --env-file .env pytest -m openai_live -q
 ```
 
 See [REPRODUCIBILITY.md](REPRODUCIBILITY.md) for pinned dependencies and

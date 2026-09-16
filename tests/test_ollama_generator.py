@@ -186,10 +186,3 @@ def test_ollama_rejects_invalid_generation_bounds(
 
     with pytest.raises(GenerationError, match=message):
         reader()
-
-
-def test_ollama_request_records_the_common_response_prompt_version() -> None:
-    assert (
-        generation_request("loops", "advanced").prompt_version
-        == "code-template-v8+response-v1"
-    )
