@@ -1,46 +1,33 @@
-"""Exhaustive validation pipeline for finite code-question templates."""
+"""Validation plan and finalization for finite code-question templates."""
 
 from __future__ import annotations
 
-import ast
-import copy
-import itertools
-import json
-from typing import Any
-
-from edcraft_validator.comparison import equivalent, same_value_shape
-from edcraft_validator.domains.code.capabilities import (
-    code_template_profile,
-    extract_code_features,
-)
-from edcraft_validator.models import AnswerTarget
-from edcraft_validator.tools.python_analysis import analyze_python_subset
 from edcraft_validator.tools.python_execution import (
-    ExecutionResult,
     LocalPythonTool,
     PythonExecutionTool,
 )
 from edcraft_validator.validation.contracts import (
-    CheckResult,
     ValidationPlan,
     ValidationPolicy,
     ValidationReport,
 )
 
+from .answers import (
+    check_canonical_answers,
+    check_expressions,
+    check_proposed_answers,
+)
 from .checks import CodeCheck
 from .context import CodeValidationContext
-from .context import DistractorCandidate as _DistractorCandidate
-from .expressions import SafeExpression
-from .generation import render_template
+from .distractors import check_distractors, check_selection, selected_count
+from .execution import ExecutionCheck
 from .models import (
     CodeTemplateCandidate,
-    DistractorRecipe,
-    ParameterValue,
-    TemplateValidationError,
     TemplateValidationSummary,
     ValidatedCodeTemplate,
     ValidatedTemplateCase,
 )
+from .structure import check_rendering, check_structure
 
 CODE_TEMPLATE_VALIDATOR_VERSION = "code-template-validator-v3"
 
@@ -54,8 +41,10 @@ class TemplateValidator:
         execution_tool: PythonExecutionTool | None = None,
         timeout_seconds: float = 2.0,
     ) -> None:
-        self.execution_tool = execution_tool or LocalPythonTool()
-        self.timeout_seconds = timeout_seconds
+        self.execution_check = ExecutionCheck(
+            execution_tool=execution_tool or LocalPythonTool(),
+            timeout_seconds=timeout_seconds,
+        )
 
     @staticmethod
     def finalize_template(
@@ -112,7 +101,7 @@ class TemplateValidator:
             CodeCheck(
                 "template_structure",
                 "bounded",
-                self._check_structure,
+                check_structure,
                 lambda ctx: {
                     "topic": ctx.template.topic,
                     "difficulty": ctx.template.difficulty,
@@ -121,591 +110,52 @@ class TemplateValidator:
             CodeCheck(
                 "expression_safety",
                 "bounded",
-                self._check_expressions,
+                check_expressions,
                 lambda ctx: {"distractors": len(ctx.template.distractors)},
             ),
             CodeCheck(
                 "answer_domain",
                 "exhaustive",
-                self._check_proposed_answers,
+                check_proposed_answers,
                 lambda ctx: ctx.case_details,
             ),
             CodeCheck(
                 "code_execution",
                 "exhaustive",
-                self._check_execution,
+                self.execution_check.run,
                 lambda ctx: {
                     **ctx.case_details,
-                    "tool": type(self.execution_tool).__name__,
+                    "tool": type(self.execution_check.execution_tool).__name__,
                 },
             ),
             CodeCheck(
                 "canonical_answers",
                 "exhaustive",
-                self._check_canonical_answers,
+                check_canonical_answers,
                 lambda ctx: {**ctx.case_details, "source": "code_execution"},
             ),
             CodeCheck(
                 "distractor_selection",
                 "exhaustive",
-                self._check_selection,
-                lambda ctx: {**ctx.case_details, "selected": self._selected_count(ctx)},
+                check_selection,
+                lambda ctx: {
+                    **ctx.case_details,
+                    "selected": selected_count(ctx),
+                },
             ),
             CodeCheck(
                 "distractor_consistency",
                 "exhaustive",
-                self._check_distractors,
-                lambda ctx: {**ctx.case_details, "distractors": len(ctx.candidates)},
+                check_distractors,
+                lambda ctx: {
+                    **ctx.case_details,
+                    "distractors": len(ctx.candidates),
+                },
             ),
             CodeCheck(
                 "template_rendering",
                 "exhaustive",
-                self._check_rendering,
+                check_rendering,
                 lambda ctx: ctx.case_details,
             ),
         )
-
-    def _check_structure(self, ctx: CodeValidationContext) -> CheckResult:
-        self._validate_structure(ctx.template, ctx.names)
-        if ctx.num_distractors is not None and not 2 <= ctx.num_distractors <= 3:
-            raise ValueError("num_distractors must be 2 or 3")
-        return CheckResult()
-
-    def _check_expressions(self, ctx: CodeValidationContext) -> CheckResult:
-        ctx.proposed_answer, ctx.candidates = self._parse_expressions(
-            ctx.template,
-            ctx.names,
-            allow_candidate_rejections=ctx.num_distractors is not None,
-        )
-        return CheckResult()
-
-    def _check_proposed_answers(self, ctx: CodeValidationContext) -> CheckResult:
-        assert ctx.proposed_answer is not None
-        answers = []
-        for inputs in ctx.inputs_cases:
-            answer = ctx.proposed_answer.evaluate(inputs)
-            _require_json_value(answer, "answer")
-            self._validate_answer_kind(ctx.template, inputs, answer)
-            answers.append(answer)
-        ctx.proposed_answers = answers
-        return CheckResult()
-
-    def _check_execution(self, ctx: CodeValidationContext) -> CheckResult:
-        executions = self._execute_all(ctx.template, ctx.inputs_cases)
-        for inputs, execution in zip(ctx.inputs_cases, executions, strict=True):
-            if execution.ok:
-                continue
-            detail = execution.error_message or execution.error_code or "unknown"
-            raise TemplateValidationError(
-                f"template execution failed for inputs {inputs}: {detail}",
-                code=execution.error_code or "EXECUTION_FAILED",
-                field="code",
-                inputs=inputs,
-            )
-        ctx.executions = executions
-        return CheckResult()
-
-    def _check_canonical_answers(self, ctx: CodeValidationContext) -> CheckResult:
-        answers = []
-        corrected_cases = 0
-        for inputs, execution, proposed_answer in zip(
-            ctx.inputs_cases, ctx.executions, ctx.proposed_answers, strict=True
-        ):
-            actual_answer = _execution_answer(execution, ctx.template.answer_target)
-            _require_json_value(actual_answer, "executor answer")
-            self._validate_answer_kind(ctx.template, inputs, actual_answer)
-            answers.append(copy.deepcopy(actual_answer))
-            if not equivalent(actual_answer, proposed_answer):
-                corrected_cases += 1
-        ctx.canonical_answers = answers
-        ctx.corrected_cases = corrected_cases
-        if corrected_cases:
-            assert ctx.proposed_answer is not None
-            ctx.template, ctx.candidates = self._promote_proposed_answer_to_distractor(
-                ctx.template,
-                ctx.proposed_answer,
-                ctx.proposed_answers,
-                ctx.candidates,
-            )
-        return CheckResult(
-            details={
-                "corrected_cases": corrected_cases,
-                "proposal_matched": corrected_cases == 0,
-            }
-        )
-
-    @staticmethod
-    def _selected_count(ctx: CodeValidationContext) -> int | None:
-        if ctx.num_distractors is not None:
-            return ctx.num_distractors
-        return ctx.original_distractor_count if ctx.corrected_cases else None
-
-    def _check_selection(self, ctx: CodeValidationContext) -> CheckResult | None:
-        count = self._selected_count(ctx)
-        if count is None:
-            return None
-        ctx.template, ctx.candidates = self._select_distractors(
-            ctx.template,
-            ctx.inputs_cases,
-            ctx.canonical_answers,
-            ctx.candidates,
-            num_distractors=count,
-        )
-        return CheckResult()
-
-    def _check_distractors(self, ctx: CodeValidationContext) -> CheckResult:
-        for candidate in ctx.candidates:
-            if candidate.values is not None:
-                continue
-            if candidate.expression is None:
-                raise AssertionError("validated distractor is missing its expression")
-            candidate.values = [
-                candidate.expression.evaluate(inputs) for inputs in ctx.inputs_cases
-            ]
-        for case_index, (inputs, expected_answer) in enumerate(
-            zip(ctx.inputs_cases, ctx.canonical_answers, strict=True)
-        ):
-            generated = [
-                candidate.values[case_index]
-                for candidate in ctx.candidates
-                if candidate.values is not None
-            ]
-            if len(generated) != len(ctx.candidates):
-                raise AssertionError("validated distractor is missing computed values")
-            self._validate_distractors(inputs, expected_answer, generated)
-        return CheckResult()
-
-    def _check_rendering(self, ctx: CodeValidationContext) -> CheckResult:
-        for inputs in ctx.inputs_cases:
-            render_template(ctx.template.question_template, inputs, require_all=True)
-            for recipe in ctx.template.distractors:
-                render_template(recipe.reason_template, inputs)
-        return CheckResult()
-
-    @staticmethod
-    def _parse_expressions(
-        template: CodeTemplateCandidate,
-        names: tuple[str, ...],
-        *,
-        allow_candidate_rejections: bool,
-    ) -> tuple[SafeExpression, list[_DistractorCandidate]]:
-        if template.answer_expression is None:
-            raise TemplateValidationError(
-                "template candidates require an answer_expression",
-                code="ANSWER_EXPRESSION_MISSING",
-                field="answer_expression",
-            )
-        answer = SafeExpression(template.answer_expression, names)
-        candidates: list[_DistractorCandidate] = []
-        for index, recipe in enumerate(template.distractors):
-            try:
-                expression = SafeExpression(recipe.expression, names)
-            except TemplateValidationError as exc:
-                if not allow_candidate_rejections:
-                    raise
-                candidates.append(_DistractorCandidate(index=index, rejection=str(exc)))
-            else:
-                candidates.append(
-                    _DistractorCandidate(index=index, expression=expression)
-                )
-        return answer, candidates
-
-    @staticmethod
-    def _promote_proposed_answer_to_distractor(
-        template: CodeTemplateCandidate,
-        proposed_answer: SafeExpression,
-        proposed_values: list[Any],
-        candidates: list[_DistractorCandidate],
-    ) -> tuple[CodeTemplateCandidate, list[_DistractorCandidate]]:
-        if template.answer_expression is None:
-            raise AssertionError("proposed answer expression is missing")
-
-        recipes = list(template.distractors)
-        existing_index = next(
-            (
-                index
-                for index, recipe in enumerate(recipes)
-                if recipe.expression == template.answer_expression
-            ),
-            None,
-        )
-        if existing_index is None:
-            promoted_recipe = DistractorRecipe(
-                expression=template.answer_expression,
-                reason_template=(
-                    "Uses the original predicted answer instead of the execution "
-                    "result."
-                ),
-            )
-            promoted_candidate = _DistractorCandidate(
-                index=0,
-                expression=proposed_answer,
-                values=copy.deepcopy(proposed_values),
-            )
-        else:
-            promoted_recipe = recipes.pop(existing_index)
-            candidates.pop(existing_index)
-            promoted_candidate = _DistractorCandidate(
-                index=0,
-                expression=proposed_answer,
-                values=copy.deepcopy(proposed_values),
-            )
-
-        recipes.insert(0, promoted_recipe)
-        candidates.insert(0, promoted_candidate)
-        for index, candidate in enumerate(candidates):
-            candidate.index = index
-        return (
-            template.model_copy(update={"distractors": recipes}, deep=True),
-            candidates,
-        )
-
-    @classmethod
-    def _select_distractors(
-        cls,
-        template: CodeTemplateCandidate,
-        inputs_cases: list[dict[str, ParameterValue]],
-        expected_answers: list[Any],
-        candidates: list[_DistractorCandidate],
-        *,
-        num_distractors: int,
-    ) -> tuple[CodeTemplateCandidate, list[_DistractorCandidate]]:
-        cls._precompute_candidate_vectors(
-            template, inputs_cases, expected_answers, candidates
-        )
-        failures: list[str] = []
-
-        for candidate_indexes in itertools.combinations(
-            range(len(template.distractors)), num_distractors
-        ):
-            selected = [candidates[index] for index in candidate_indexes]
-            rejection = next(
-                (candidate.rejection for candidate in selected if candidate.rejection),
-                None,
-            )
-            if rejection is None:
-                rejection = cls._find_candidate_collision(selected, inputs_cases)
-            if rejection is not None:
-                rendered_indexes = ",".join(str(index) for index in candidate_indexes)
-                failures.append(f"candidates {rendered_indexes}: {rejection}")
-                continue
-            recipes = [template.distractors[index] for index in candidate_indexes]
-            selected_template = template.model_copy(
-                update={"distractors": recipes}, deep=True
-            )
-            return selected_template, selected
-
-        detail = "; ".join(failures[:3]) or "not enough candidates"
-        raise TemplateValidationError(
-            f"no set of {num_distractors} distractors is globally valid: {detail}",
-            code="DISTRACTOR_SELECTION_FAILED",
-            field="distractors",
-        )
-
-    @classmethod
-    def _precompute_candidate_vectors(
-        cls,
-        template: CodeTemplateCandidate,
-        inputs_cases: list[dict[str, ParameterValue]],
-        expected_answers: list[Any],
-        candidates: list[_DistractorCandidate],
-    ) -> None:
-        for candidate in candidates:
-            if candidate.rejection is not None:
-                candidate.rejection = (
-                    f"candidate {candidate.index}: {candidate.rejection}"
-                )
-                continue
-            if candidate.expression is None:
-                raise AssertionError("distractor candidate is missing its expression")
-            values = candidate.values or []
-            try:
-                if candidate.values is None:
-                    values = [
-                        candidate.expression.evaluate(inputs) for inputs in inputs_cases
-                    ]
-                for inputs, expected_answer, value in zip(
-                    inputs_cases, expected_answers, values, strict=True
-                ):
-                    cls._validate_distractor_value(
-                        inputs, expected_answer, value, candidate.index
-                    )
-                    render_template(
-                        template.distractors[candidate.index].reason_template, inputs
-                    )
-            except (
-                TemplateValidationError,
-                ArithmeticError,
-                TypeError,
-                ValueError,
-            ) as exc:
-                candidate.rejection = f"candidate {candidate.index}: {exc}"
-            else:
-                candidate.values = values
-
-    @staticmethod
-    def _find_candidate_collision(
-        candidates: list[_DistractorCandidate],
-        inputs_cases: list[dict[str, ParameterValue]],
-    ) -> str | None:
-        for first, second in itertools.combinations(candidates, 2):
-            if first.values is None or second.values is None:
-                raise AssertionError("valid distractor candidate is missing its values")
-            for inputs, first_value, second_value in zip(
-                inputs_cases, first.values, second.values, strict=True
-            ):
-                if equivalent(first_value, second_value):
-                    return (
-                        f"candidate {second.index} duplicates candidate {first.index} "
-                        f"for inputs {inputs}"
-                    )
-        return None
-
-    def _execute_all(
-        self,
-        template: CodeTemplateCandidate,
-        inputs: list[dict[str, ParameterValue]],
-    ) -> list[ExecutionResult]:
-        results = self.execution_tool.execute_batch(
-            template.code,
-            template.entry_function,
-            inputs,
-            timeout_seconds=self.timeout_seconds,
-        )
-        if len(results) != len(inputs):
-            raise TemplateValidationError(
-                "executor returned the wrong number of batch results",
-                code="EXECUTOR_PROTOCOL_ERROR",
-                field="code",
-            )
-        return results
-
-    @staticmethod
-    def _validate_structure(
-        template: CodeTemplateCandidate, names: tuple[str, ...]
-    ) -> None:
-        analysis = analyze_python_subset(template.code, template.entry_function)
-        if not analysis.is_valid:
-            raise TemplateValidationError(
-                "; ".join(analysis.errors),
-                code="UNSUPPORTED_CODE",
-                field="code",
-            )
-        TemplateValidator._validate_profile(template)
-        arguments = _entry_function_arguments(template.code, template.entry_function)
-        if arguments != names:
-            raise TemplateValidationError(
-                "entry function arguments must exactly match parameter order: "
-                f"expected {names}, received {arguments}",
-                code="ENTRY_FUNCTION_MISMATCH",
-                field="entry_function",
-            )
-        unused = _unused_entry_parameters(
-            template.code, template.entry_function, arguments
-        )
-        if unused:
-            raise TemplateValidationError(
-                "entry function parameters must affect learner-facing behavior; "
-                f"unused parameters: {', '.join(unused)}",
-                code="UNUSED_PARAMETER",
-                field="parameters",
-            )
-        if template.entry_function not in template.question_template:
-            raise TemplateValidationError(
-                "question_template must name the entry function",
-                code="QUESTION_TEMPLATE_INVALID",
-                field="question_template",
-            )
-        render_template(
-            template.question_template,
-            {name: 0 for name in names},
-            require_all=True,
-        )
-
-    @staticmethod
-    def _validate_profile(template: CodeTemplateCandidate) -> None:
-        profile = code_template_profile(template.topic, template.difficulty)
-        if template.answer_target != profile.answer_target:
-            raise TemplateValidationError(
-                f"{template.topic}/{template.difficulty} requires answer_target="
-                f"{profile.answer_target}",
-                code="PROFILE_MISMATCH",
-                field="answer_target",
-            )
-
-        actual_kinds = tuple(parameter.kind for parameter in template.parameters)
-        actual_names = tuple(parameter.name for parameter in template.parameters)
-        if not any(
-            actual_kinds == shape.kinds
-            and (shape.names is None or actual_names == shape.names)
-            for shape in profile.parameter_shapes
-        ):
-            expected = " or ".join(
-                repr(shape.names or shape.kinds) for shape in profile.parameter_shapes
-            )
-            raise TemplateValidationError(
-                f"{template.topic}/{template.difficulty} parameter profile requires "
-                f"{expected}; received {actual_names} with kinds {actual_kinds}",
-                code="PROFILE_MISMATCH",
-                field="parameters",
-            )
-
-        if profile.require_positive_integers and any(
-            value <= 0
-            for parameter in template.parameters
-            if parameter.kind == "integer"
-            for value in parameter.values
-        ):
-            raise TemplateValidationError(
-                f"{template.topic}/{template.difficulty} requires positive integer "
-                "parameter values",
-                code="PROFILE_MISMATCH",
-                field="parameters",
-            )
-
-        if profile.required_parameter_values is not None:
-            actual_values = tuple(
-                tuple(parameter.values) for parameter in template.parameters
-            )
-            if actual_values != profile.required_parameter_values:
-                raise TemplateValidationError(
-                    f"{template.topic}/{template.difficulty} requires parameter "
-                    f"values {profile.required_parameter_values}; received "
-                    f"{actual_values}",
-                    code="PROFILE_MISMATCH",
-                    field="parameters",
-                )
-
-        actual_features = extract_code_features(template.code, template.entry_function)
-        missing = profile.required_features - actual_features
-        if missing:
-            raise TemplateValidationError(
-                f"{template.topic}/{template.difficulty} code is missing required "
-                f"features: {', '.join(sorted(missing))}",
-                code="PROFILE_MISMATCH",
-                field="code",
-            )
-
-    @staticmethod
-    def _validate_answer_kind(
-        template: CodeTemplateCandidate,
-        inputs: dict[str, ParameterValue],
-        answer: Any,
-    ) -> None:
-        answer_kind = code_template_profile(
-            template.topic, template.difficulty
-        ).answer_kind
-        valid = {
-            "number": type(answer) in {int, float},
-            "integer": type(answer) is int,
-            "integer_list": type(answer) is list
-            and all(type(item) is int for item in answer),
-        }[answer_kind]
-        if not valid:
-            raise TemplateValidationError(
-                f"{template.topic}/{template.difficulty} requires answer kind "
-                f"{answer_kind}; received {type(answer).__name__} for inputs {inputs}",
-                code="ANSWER_KIND_MISMATCH",
-                field="answer_expression",
-                inputs=inputs,
-            )
-
-    @staticmethod
-    def _validate_distractors(
-        inputs: dict[str, ParameterValue], answer: Any, distractors: list[Any]
-    ) -> None:
-        for index, distractor in enumerate(distractors):
-            TemplateValidator._validate_distractor_value(
-                inputs, answer, distractor, index
-            )
-            if any(
-                equivalent(distractor, previous) for previous in distractors[:index]
-            ):
-                raise TemplateValidationError(
-                    f"distractor {index} is duplicated for inputs {inputs}",
-                    code="DISTRACTOR_DUPLICATE",
-                    field=f"distractors.{index}",
-                    inputs=inputs,
-                )
-
-    @staticmethod
-    def _validate_distractor_value(
-        inputs: dict[str, ParameterValue],
-        answer: Any,
-        distractor: Any,
-        index: int,
-    ) -> None:
-        _require_json_value(distractor, f"distractor {index}")
-        if not same_value_shape(distractor, answer):
-            raise TemplateValidationError(
-                f"distractor {index} has the wrong type for inputs {inputs}",
-                code="DISTRACTOR_TYPE_MISMATCH",
-                field=f"distractors.{index}",
-                inputs=inputs,
-            )
-        if equivalent(distractor, answer):
-            raise TemplateValidationError(
-                f"distractor {index} equals the answer for inputs {inputs}",
-                code="DISTRACTOR_EQUALS_ANSWER",
-                field=f"distractors.{index}",
-                inputs=inputs,
-            )
-
-
-def _execution_answer(execution: ExecutionResult, target: AnswerTarget) -> Any:
-    if target == "return_value":
-        return execution.answer
-    summary = execution.trace_summary
-    if not isinstance(summary, dict) or target not in summary:
-        raise TemplateValidationError(
-            f"execution did not provide answer target {target!r}"
-        )
-    return summary[target]
-
-
-def _entry_function_arguments(code: str, entry_function: str) -> tuple[str, ...]:
-    tree = ast.parse(code)
-    for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name == entry_function:
-            if (
-                node.args.posonlyargs
-                or node.args.kwonlyargs
-                or node.args.vararg
-                or node.args.kwarg
-                or node.args.defaults
-                or node.args.kw_defaults
-            ):
-                raise TemplateValidationError(
-                    "entry function must use plain positional arguments "
-                    "without defaults"
-                )
-            return tuple(argument.arg for argument in node.args.args)
-    raise TemplateValidationError("entry function is not defined")
-
-
-def _unused_entry_parameters(
-    code: str, entry_function: str, parameters: tuple[str, ...]
-) -> tuple[str, ...]:
-    tree = ast.parse(code)
-    parents = {
-        child: parent
-        for parent in ast.walk(tree)
-        for child in ast.iter_child_nodes(parent)
-    }
-    loaded: set[str] = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Name) or not isinstance(node.ctx, ast.Load):
-            continue
-        current = parents.get(node)
-        while current is not None and not isinstance(current, ast.FunctionDef):
-            current = parents.get(current)
-        if isinstance(current, ast.FunctionDef) and current.name == entry_function:
-            loaded.add(node.id)
-    return tuple(parameter for parameter in parameters if parameter not in loaded)
-
-
-def _require_json_value(value: Any, label: str) -> None:
-    try:
-        json.dumps(value, allow_nan=False)
-    except (TypeError, ValueError) as exc:
-        raise TemplateValidationError(f"{label} is not a finite JSON value") from exc

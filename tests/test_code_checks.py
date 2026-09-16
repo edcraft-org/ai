@@ -7,7 +7,9 @@ from edcraft_validator.domains.code.templates import (
     TemplateValidator,
     ValidatedCodeTemplate,
 )
+from edcraft_validator.domains.code.templates.checks import CodeCheck
 from edcraft_validator.domains.code.templates.context import CodeValidationContext
+from edcraft_validator.domains.code.templates.execution import ExecutionCheck
 from edcraft_validator.tools.python_execution import ExecutionResult
 
 
@@ -60,11 +62,46 @@ def test_unfinished_tool_check_is_incomplete_and_retains_domain_error(failure_co
         def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
             return [ExecutionResult(ok=False, error_code=failure_code) for _ in inputs]
 
-    checks = TemplateValidator(execution_tool=Executor()).build_checks()
-    execution_check = next(check for check in checks if check.name == "code_execution")
-    result = execution_check.run(CodeValidationContext(candidate()))
+    operation = ExecutionCheck(execution_tool=Executor())
+    check = CodeCheck(
+        "code_execution",
+        "exhaustive",
+        operation.run,
+        lambda context: {
+            **context.case_details,
+            "tool": type(operation.execution_tool).__name__,
+        },
+    )
+    result = check.run(CodeValidationContext(candidate()))
     assert result.status == "incomplete"
     assert result.failure.code == failure_code
+
+
+def test_execution_check_uses_injected_tool_and_timeout_without_validator():
+    calls = []
+
+    class Executor:
+        def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+            calls.append((code, entry_function, inputs, timeout_seconds))
+            return [ExecutionResult(ok=True, answer=0) for _ in inputs]
+
+    context = CodeValidationContext(candidate())
+    check = ExecutionCheck(execution_tool=Executor(), timeout_seconds=0.25)
+
+    result = check.run(context)
+
+    assert result.status == "passed"
+    assert calls == [
+        (
+            context.template.code,
+            context.template.entry_function,
+            context.inputs_cases,
+            0.25,
+        )
+    ]
+    assert context.executions == [
+        ExecutionResult(ok=True, answer=0) for _ in context.inputs_cases
+    ]
 
 
 def test_finalization_preserves_checked_content_and_deterministic_questions():
