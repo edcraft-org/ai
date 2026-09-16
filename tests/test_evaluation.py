@@ -3,7 +3,6 @@ import json
 from edcraft_validator.domains.code.evaluation import TemplateEvaluator
 from edcraft_validator.domains.code.templates import (
     CodeTemplateProposal,
-    TemplateValidator,
 )
 from edcraft_validator.generation.base import GenerationError
 from edcraft_validator.tools.python_execution import ExecutionResult
@@ -52,7 +51,7 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
     proposals = iter([proposal(), proposal(code="def add(a, b):\n    return a")])
     evaluator = TemplateEvaluator(
         provider_factory=lambda selection: StubProvider(next(proposals)),
-        validator_factory=lambda: TemplateValidator(execution_tool=SumExecutor()),
+        execution_tool=SumExecutor(),
     )
 
     report = evaluator.evaluate(
@@ -101,7 +100,7 @@ def test_evaluation_notifies_before_starting_the_next_attempt() -> None:
 
     evaluator = TemplateEvaluator(
         provider_factory=lambda selection: RecordingProvider(proposal()),
-        validator_factory=lambda: TemplateValidator(execution_tool=SumExecutor()),
+        execution_tool=SumExecutor(),
     )
     report = evaluator.evaluate(
         provider="stub",

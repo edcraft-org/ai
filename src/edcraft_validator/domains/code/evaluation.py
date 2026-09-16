@@ -18,7 +18,6 @@ from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.domains.code.module import CodeDomain
 from edcraft_validator.domains.code.templates import (
     TemplateValidationError,
-    TemplateValidator,
     ValidatedCodeTemplate,
 )
 from edcraft_validator.generation.base import GenerationError, ModelProvider
@@ -26,10 +25,10 @@ from edcraft_validator.generation.models import (
     TemplateProviderSelection,
 )
 from edcraft_validator.generation.registry import create_model_provider
+from edcraft_validator.tools.python_execution import PythonExecutionTool
 from edcraft_validator.validation.contracts import ValidationEvidence
 
 ProviderFactory = Callable[[TemplateProviderSelection], ModelProvider]
-ValidatorFactory = Callable[[], TemplateValidator]
 AttemptObserver = Callable[["TemplateEvaluationAttempt"], None]
 
 
@@ -110,10 +109,13 @@ class TemplateEvaluator:
         self,
         *,
         provider_factory: ProviderFactory = create_model_provider,
-        validator_factory: ValidatorFactory = TemplateValidator,
+        execution_tool: PythonExecutionTool | None = None,
+        timeout_seconds: float = 2.0,
     ) -> None:
         self.provider_factory = provider_factory
-        self.validator_factory = validator_factory
+        self.domain = CodeDomain(
+            execution_tool=execution_tool, timeout_seconds=timeout_seconds
+        )
 
     def evaluate(
         self,
@@ -175,9 +177,7 @@ class TemplateEvaluator:
             prompt_version = generation_request.prompt_version
             application = TemplateApplication(
                 provider_factory=lambda _: model_provider,
-                domain_factory=lambda _: CodeDomain(
-                    validator_factory=self.validator_factory
-                ),
+                domain_factory=lambda _: self.domain,
             )
             validated = application.create_validated_template(
                 request,

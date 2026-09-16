@@ -8,7 +8,6 @@ from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.domains.code.module import CodeDomain
 from edcraft_validator.domains.code.templates import (
     CodeTemplateProposal,
-    TemplateValidator,
 )
 from edcraft_validator.generation.models import ValidatedTemplateArtifact
 from edcraft_validator.tools.python_execution import ExecutionResult
@@ -101,7 +100,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     application = TemplateApplication(
         provider_factory=provider_factory,
         domain_factory=lambda _: CodeDomain(
-            validator_factory=lambda: TemplateValidator(execution_tool=SumExecutor()),
+            execution_tool=SumExecutor(),
         ),
     )
     validated = application.create_validated_template(

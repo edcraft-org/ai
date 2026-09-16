@@ -20,7 +20,6 @@ from edcraft_validator.domains.code.templates import (
     FiniteParameter,
     SafeExpression,
     TemplateValidationError,
-    TemplateValidator,
     build_code_candidate,
     build_template_prompt,
     generate_code_question,
@@ -38,9 +37,7 @@ TEMPLATE_PATHS = sorted(TEMPLATE_DIR.glob("*.json"))
 def code_application(execution_tool) -> TemplateApplication:
     """Only wire test dependencies; exercise the real application workflow."""
     return TemplateApplication(
-        domain_factory=lambda name: CodeDomain(
-            validator_factory=lambda: TemplateValidator(execution_tool=execution_tool)
-        )
+        domain_factory=lambda name: CodeDomain(execution_tool=execution_tool)
     )
 
 
@@ -465,11 +462,7 @@ def test_answer_kind_error_precedes_distractor_selection() -> None:
     )
 
     with pytest.raises(TemplateValidationError) as error:
-        domain = CodeDomain(
-            validator_factory=lambda: TemplateValidator(
-                execution_tool=TrustedBatchExecutor()
-            )
-        )
+        domain = CodeDomain(execution_tool=TrustedBatchExecutor())
         plan = domain.prepare_validation(
             value,
             request=CodeTemplateRequest(
@@ -1067,9 +1060,7 @@ def test_distractor_selection_is_not_dependent_on_greedy_candidate_order() -> No
                 for case in inputs
             ]
 
-    domain = CodeDomain(
-        validator_factory=lambda: TemplateValidator(execution_tool=AddTenExecutor())
-    )
+    domain = CodeDomain(execution_tool=AddTenExecutor())
     plan = domain.prepare_validation(
         item,
         request=CodeTemplateRequest(
@@ -1113,9 +1104,7 @@ def test_authoring_plan_evaluates_each_candidate_once_per_case(monkeypatch) -> N
     monkeypatch.setattr(SafeExpression, "__init__", counting_init)
     monkeypatch.setattr(SafeExpression, "evaluate", counting_evaluate)
 
-    domain = CodeDomain(
-        validator_factory=lambda: TemplateValidator(execution_tool=ArithmeticExecutor())
-    )
+    domain = CodeDomain(execution_tool=ArithmeticExecutor())
     plan = domain.prepare_validation(
         item,
         request=CodeTemplateRequest(
@@ -1151,11 +1140,7 @@ def test_candidate_selection_rejects_pairwise_collisions_across_cases() -> None:
     item = CodeTemplateCandidate.model_validate(value)
 
     with pytest.raises(TemplateValidationError, match="no set of 2") as error:
-        domain = CodeDomain(
-            validator_factory=lambda: TemplateValidator(
-                execution_tool=ArithmeticExecutor()
-            )
-        )
+        domain = CodeDomain(execution_tool=ArithmeticExecutor())
         plan = domain.prepare_validation(
             item,
             request=CodeTemplateRequest(
@@ -1181,11 +1166,7 @@ def test_candidate_selection_reports_when_too_few_are_globally_valid() -> None:
     item = CodeTemplateCandidate.model_validate(data)
 
     with pytest.raises(TemplateValidationError, match="no set of 3") as error:
-        domain = CodeDomain(
-            validator_factory=lambda: TemplateValidator(
-                execution_tool=ArithmeticExecutor()
-            )
-        )
+        domain = CodeDomain(execution_tool=ArithmeticExecutor())
         plan = domain.prepare_validation(
             item,
             request=CodeTemplateRequest(
