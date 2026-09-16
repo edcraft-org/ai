@@ -11,6 +11,7 @@ from .authoring import (
 from .expressions import SafeExpression
 from .generation import generate_code_question, render_template
 from .models import (
+    CODE_TEMPLATE_VALIDATOR_VERSION,
     CodeQuestionInstance,
     CodeTemplateCandidate,
     CodeTemplateProposal,
@@ -22,7 +23,6 @@ from .models import (
     ValidatedCodeTemplate,
     ValidatedTemplateCase,
 )
-from .validation import CODE_TEMPLATE_VALIDATOR_VERSION, TemplateValidator
 
 __all__ = [
     "ValidatedCodeTemplate",
@@ -38,7 +38,6 @@ __all__ = [
     "CodeQuestionInstance",
     "TemplateValidationError",
     "TemplateValidationSummary",
-    "TemplateValidator",
     "ValidatedTemplateCase",
     "build_template_prompt",
     "build_code_candidate",

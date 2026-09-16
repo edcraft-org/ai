@@ -14,6 +14,7 @@ from edcraft_validator.generation.models import ValidatedTemplateArtifact
 from edcraft_validator.models import AnswerTarget, GeneratedQuestion
 from edcraft_validator.validation.contracts import ValidationEvidence, ValidationFailure
 
+CODE_TEMPLATE_VALIDATOR_VERSION = "code-template-validator-v3"
 MAX_TEMPLATE_CASES = 64
 MAX_STRING_LENGTH = 40
 MAX_LIST_LENGTH = 8

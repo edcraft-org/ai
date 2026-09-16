@@ -6,7 +6,6 @@ from edcraft_validator.domains.code.templates import (
     CodeTemplateCandidate,
     FiniteParameter,
     ParameterValue,
-    TemplateValidator,
     ValidatedCodeTemplate,
     generate_code_question,
 )
@@ -18,6 +17,5 @@ __all__ = [
     "CodeTemplateRequest",
     "FiniteParameter",
     "ParameterValue",
-    "TemplateValidator",
     "generate_code_question",
 ]

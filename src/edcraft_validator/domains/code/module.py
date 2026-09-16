@@ -5,11 +5,13 @@ from pydantic import BaseModel
 from edcraft_validator.domains.code.authoring import build_code_generation_request
 from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.domains.code.templates import (
+    CODE_TEMPLATE_VALIDATOR_VERSION,
     CodeQuestionInstance,
     CodeTemplateCandidate,
     CodeTemplateProposal,
-    TemplateValidator,
+    TemplateValidationSummary,
     ValidatedCodeTemplate,
+    ValidatedTemplateCase,
     build_code_candidate,
     generate_code_question,
 )
@@ -174,7 +176,25 @@ class CodeDomain:
     def finalize_template(
         self, context: CodeValidationContext, report: ValidationReport
     ) -> ValidatedCodeTemplate:
-        return TemplateValidator.finalize_template(context, report)
+        """Package checked values only; no generation or tool calls happen here."""
+        report.raise_for_failure()
+        cases = [
+            ValidatedTemplateCase(inputs=inputs, answer=answer)
+            for inputs, answer in zip(
+                context.inputs_cases, context.canonical_answers, strict=True
+            )
+        ]
+        return ValidatedCodeTemplate(
+            template=context.template.model_copy(
+                update={"answer_expression": None}, deep=True
+            ),
+            validation=TemplateValidationSummary(
+                validator_version=CODE_TEMPLATE_VALIDATOR_VERSION,
+                cases_validated=len(cases),
+                validated_cases=cases,
+                evidence=report.evidence,
+            ),
+        )
 
     def generate_question(
         self, validated: BaseModel, *, seed: int
