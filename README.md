@@ -69,9 +69,10 @@ uv run python -m edcraft_validator.cli author \
   --output /tmp/validated-template.json
 ```
 
-Ollama uses its native structured endpoint with a simple provider-specific wire
-schema. The adapter strictly normalizes that response into the same local proposal
-contract used by OpenAI:
+All providers use the same domain-owned response schema: parameter values arrive
+as strings and the domain parser converts them to their declared types. Templates
+and questions keep their existing typed values. Ollama sends this schema through
+its native structured endpoint:
 
 ```bash
 /usr/bin/time -p uv run python -m edcraft_validator.cli author \

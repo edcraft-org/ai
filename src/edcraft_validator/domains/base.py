@@ -17,9 +17,7 @@ class DomainModule[ContextT](Protocol):
     candidate_model: type[BaseModel]
     validated_model: type[ValidatedTemplateArtifact]
 
-    def generation_request(
-        self, request: BaseModel, *, provider: str
-    ) -> StructuredGenerationRequest: ...
+    def generation_request(self, request: BaseModel) -> StructuredGenerationRequest: ...
 
     def build_candidate(self, request: BaseModel, proposal: BaseModel) -> BaseModel: ...
 

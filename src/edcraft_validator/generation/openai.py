@@ -1,10 +1,9 @@
-import json
 import math
 import os
 from typing import Any
 
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from edcraft_validator.generation.base import (
     GenerationError,
@@ -77,7 +76,7 @@ class OpenAICompatibleProvider:
             raise GenerationTransportError(
                 f"{self.provider} HTTP request failed with status {exc.status_code}"
             ) from exc
-        except (json.JSONDecodeError, ValidationError) as exc:
+        except ValueError as exc:
             raise GenerationSchemaError(
                 f"{self.provider} response failed local schema validation: {exc}"
             ) from exc

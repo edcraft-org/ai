@@ -119,7 +119,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring is not None
     assert validated.authoring.provider == "stub"
     assert validated.authoring.model == "stub-model"
-    assert validated.authoring.base_prompt_version == "code-template-v8"
+    assert validated.authoring.base_prompt_version == "code-template-v8+response-v1"
     assert validated.authoring.domain == "code"
     assert validated.authoring.request["topic"] == "arithmetic"
     assert validated.authoring.generated_at.utcoffset() is not None
@@ -143,7 +143,7 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
         candidate_model = ExampleTemplate
         validated_model = ExampleValidated
 
-        def generation_request(self, request, *, provider):
+        def generation_request(self, request):
             from edcraft_validator.generation.base import StructuredGenerationRequest
 
             return StructuredGenerationRequest(

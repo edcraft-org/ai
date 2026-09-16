@@ -64,10 +64,10 @@ class CodeDomain:
         self.timeout_seconds = timeout_seconds
 
     def generation_request(
-        self, request: BaseModel, *, provider: str
+        self, request: BaseModel
     ) -> StructuredGenerationRequest[CodeTemplateProposal]:
         typed_request = _require_type(request, CodeTemplateRequest)
-        return build_code_generation_request(typed_request, provider=provider)
+        return build_code_generation_request(typed_request)
 
     def build_candidate(
         self, request: BaseModel, proposal: BaseModel

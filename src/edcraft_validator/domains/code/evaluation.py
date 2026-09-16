@@ -171,9 +171,7 @@ class TemplateEvaluator:
         try:
             model_provider = self.provider_factory(selection)
             resolved_model = model_provider.model
-            generation_request = build_code_generation_request(
-                request, provider=model_provider.provider
-            )
+            generation_request = build_code_generation_request(request)
             prompt_version = generation_request.prompt_version
             application = TemplateApplication()
             validated = application.create_validated_template(

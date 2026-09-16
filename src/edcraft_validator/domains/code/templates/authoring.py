@@ -193,7 +193,8 @@ Rules:
 - Every parameter declares a kind and two to four distinct finite values. Supported
   kinds are integer (-100 through 100), boolean, string (non-empty short printable
   text), and
-  integer_list (at most eight integers from -100 through 100). Use JSON booleans.
+  integer_list (at most eight integers from -100 through 100). Encode parameter
+  values according to the response schema and the user prompt's format guidance.
 - The user prompt states the selected answer target. answer_expression must calculate
   that target using parameter names,
   numeric constants, arithmetic, comparisons, boolean operators, or a conditional

@@ -31,9 +31,7 @@ class TemplateApplication:
         domain: DomainModule,
         provider: ModelProvider,
     ) -> ValidatedTemplateArtifact:
-        generation_request = domain.generation_request(
-            request, provider=provider.provider
-        )
+        generation_request = domain.generation_request(request)
         generation_started = time.perf_counter()
         proposal = provider.generate(generation_request)
         generation_duration_ms = (time.perf_counter() - generation_started) * 1000

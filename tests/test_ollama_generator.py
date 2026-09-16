@@ -2,10 +2,7 @@ import json
 
 import pytest
 
-from edcraft_validator.domains.code.authoring import (
-    build_code_generation_request,
-    parse_ollama_proposal,
-)
+from edcraft_validator.domains.code.authoring import build_code_generation_request
 from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.generation.base import (
     GenerationError,
@@ -36,8 +33,7 @@ def isolated_ollama_settings(monkeypatch):
 
 def generation_request(topic: str = "arithmetic", difficulty: str = "beginner"):
     return build_code_generation_request(
-        CodeTemplateRequest(topic=topic, difficulty=difficulty),
-        provider="ollama",
+        CodeTemplateRequest(topic=topic, difficulty=difficulty)
     )
 
 
@@ -88,7 +84,7 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     payload = captured["payload"]
     schema = payload["format"]
     assert schema["properties"]["parameters"]["type"] == "array"
-    parameter_schema = schema["$defs"]["OllamaParameterWire"]
+    parameter_schema = schema["$defs"]["CodeParameterResponse"]
     assert parameter_schema["properties"]["values"]["items"] == {"type": "string"}
     assert "topic" not in schema["properties"]
     assert "question_template" not in schema["properties"]
@@ -98,66 +94,11 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     assert "finite Cartesian product" in messages[0]["content"]
     assert "answer_target=return_value" in messages[1]["content"]
     assert "exactly 3 distractor candidates" in messages[1]["content"]
+    assert "Use strings for every item" in messages[1]["content"]
     assert captured["timeout"] == 300
 
 
-def test_ollama_wire_converts_each_supported_parameter_kind() -> None:
-    content = json.dumps(
-        {
-            "code": "def inspect(count, enabled, label):\n    return count",
-            "entry_function": "inspect",
-            "parameters": [
-                {"name": "count", "kind": "integer", "values": ["-2", "3"]},
-                {
-                    "name": "enabled",
-                    "kind": "boolean",
-                    "values": ["true", "false"],
-                },
-                {"name": "label", "kind": "string", "values": ["a", "b"]},
-            ],
-            "answer_expression": "count",
-            "distractors": [
-                {"expression": "count + 1", "reason_template": "Adds one."},
-                {"expression": "count - 1", "reason_template": "Subtracts one."},
-                {"expression": "count + 2", "reason_template": "Adds two."},
-            ],
-        }
-    )
-
-    proposal = parse_ollama_proposal(content)
-
-    assert proposal.parameters[0].values == [-2, 3]
-    assert proposal.parameters[1].values == [True, False]
-    assert proposal.parameters[2].values == ["a", "b"]
-
-
-def test_ollama_wire_converts_integer_lists() -> None:
-    content = json.dumps(
-        {
-            "code": "def total(values):\n    return sum(values)",
-            "entry_function": "total",
-            "parameters": [
-                {
-                    "name": "values",
-                    "kind": "integer_list",
-                    "values": ["[1,2]", "[-3,4]"],
-                }
-            ],
-            "answer_expression": "sum(values)",
-            "distractors": [
-                {"expression": "len(values)", "reason_template": "Counts items."},
-                {"expression": "sum(values) + 1", "reason_template": "Adds one."},
-                {"expression": "sum(values) - 1", "reason_template": "Subtracts one."},
-            ],
-        }
-    )
-
-    proposal = parse_ollama_proposal(content)
-
-    assert proposal.parameters[0].values == [[1, 2], [-3, 4]]
-
-
-def test_ollama_reports_local_wire_schema_failures(monkeypatch) -> None:
+def test_ollama_reports_common_response_schema_failures(monkeypatch) -> None:
     invalid = {
         "code": "def calculate(a):\n    return a",
         "entry_function": "calculate",
@@ -247,8 +188,8 @@ def test_ollama_rejects_invalid_generation_bounds(
         reader()
 
 
-def test_ollama_request_records_its_wire_specific_prompt_version() -> None:
+def test_ollama_request_records_the_common_response_prompt_version() -> None:
     assert (
         generation_request("loops", "advanced").prompt_version
-        == "code-template-v8+ollama-wire-v1"
+        == "code-template-v8+response-v1"
     )

@@ -6,7 +6,6 @@ from pydantic import BaseModel
 
 from edcraft_validator.domains.code.authoring import build_code_generation_request
 from edcraft_validator.domains.code.models import CodeTemplateRequest
-from edcraft_validator.domains.code.templates import CodeTemplateProposal
 from edcraft_validator.generation.base import (
     GenerationSchemaError,
     StructuredGenerationRequest,
@@ -24,30 +23,27 @@ from edcraft_validator.generation.openai import (
 
 def generation_request(topic: str = "arithmetic", difficulty: str = "beginner"):
     return build_code_generation_request(
-        CodeTemplateRequest(topic=topic, difficulty=difficulty),
-        provider="openai",
+        CodeTemplateRequest(topic=topic, difficulty=difficulty)
     )
 
 
-def code_proposal() -> CodeTemplateProposal:
-    return CodeTemplateProposal.model_validate(
-        {
-            "code": "def calculate(a, b):\n    return a + b",
-            "entry_function": "calculate",
-            "parameters": [
-                {"name": "a", "kind": "integer", "values": [1, 2]},
-                {"name": "b", "kind": "integer", "values": [3, 4]},
-            ],
-            "answer_expression": "a + b",
-            "distractors": [
-                {"expression": "a - b", "reason_template": "Subtracts b."},
-                {"expression": "a * b", "reason_template": "Multiplies."},
-                {"expression": "a + b + 1", "reason_template": "Adds one."},
-                {"expression": "a + b - 1", "reason_template": "Subtracts one."},
-                {"expression": "a + b + 2", "reason_template": "Adds two."},
-            ],
-        }
-    )
+def code_response() -> dict[str, object]:
+    return {
+        "code": "def calculate(a, b):\n    return a + b",
+        "entry_function": "calculate",
+        "parameters": [
+            {"name": "a", "kind": "integer", "values": ["1", "2"]},
+            {"name": "b", "kind": "integer", "values": ["3", "4"]},
+        ],
+        "answer_expression": "a + b",
+        "distractors": [
+            {"expression": "a - b", "reason_template": "Subtracts b."},
+            {"expression": "a * b", "reason_template": "Multiplies."},
+            {"expression": "a + b + 1", "reason_template": "Adds one."},
+            {"expression": "a + b - 1", "reason_template": "Subtracts one."},
+            {"expression": "a + b + 2", "reason_template": "Adds two."},
+        ],
+    }
 
 
 class RecordingCompletions:
@@ -62,8 +58,8 @@ class RecordingCompletions:
         )
 
 
-def client_with(proposal: CodeTemplateProposal | None) -> SimpleNamespace:
-    content = proposal.model_dump_json() if proposal is not None else None
+def client_with(response: dict[str, object] | None) -> SimpleNamespace:
+    content = json.dumps(response) if response is not None else None
     return SimpleNamespace(
         chat=SimpleNamespace(completions=RecordingCompletions(content))
     )
@@ -75,13 +71,15 @@ def client_with_content(content: str) -> SimpleNamespace:
     )
 
 
-def test_generates_template_using_strict_structured_outputs() -> None:
-    client = client_with(code_proposal())
-    provider = OpenAICompatibleProvider("openai", client, model="test-model")
+@pytest.mark.parametrize("provider_name", ["openai", "soclaas"])
+def test_generates_template_using_strict_structured_outputs(provider_name) -> None:
+    client = client_with(code_response())
+    provider = OpenAICompatibleProvider(provider_name, client, model="test-model")
 
     result = provider.generate(generation_request())
 
     assert result.entry_function == "calculate"
+    assert result.parameters[0].values == [1, 2]
     assert client.chat.completions.arguments["model"] == "test-model"
     response_format = client.chat.completions.arguments["response_format"]
     assert response_format["type"] == "json_schema"
@@ -91,10 +89,13 @@ def test_generates_template_using_strict_structured_outputs() -> None:
     assert set(schema["required"]) == set(schema["properties"])
     assert "topic" not in schema["properties"]
     assert "question_template" not in schema["properties"]
+    parameter_schema = schema["$defs"]["CodeParameterResponse"]
+    assert parameter_schema["properties"]["values"]["items"] == {"type": "string"}
     messages = client.chat.completions.arguments["messages"]
     assert "finite Cartesian product" in messages[0]["content"]
     assert "answer_target=return_value" in messages[1]["content"]
     assert "exactly 3 distractor candidates" in messages[1]["content"]
+    assert "Use strings for every item" in messages[1]["content"]
 
 
 def test_provider_accepts_a_schema_from_another_domain() -> None:
@@ -129,8 +130,8 @@ def test_reports_empty_template_response() -> None:
 
 
 def test_reports_duplicate_parameter_values_as_schema_error() -> None:
-    payload = code_proposal().model_dump(mode="json")
-    payload["parameters"][0]["values"] = [2, 2]
+    payload = code_response()
+    payload["parameters"][0]["values"] = ["2", "2"]
     provider = OpenAICompatibleProvider(
         "openai", client_with_content(json.dumps(payload)), model="test-model"
     )
@@ -138,6 +139,19 @@ def test_reports_duplicate_parameter_values_as_schema_error() -> None:
     with pytest.raises(
         GenerationSchemaError, match="parameter values must be unique"
     ) as error:
+        provider.generate(generation_request())
+
+    assert error.value.category == "schema_validation"
+
+
+def test_reports_invalid_parameter_encoding_as_schema_error() -> None:
+    payload = code_response()
+    payload["parameters"][0]["values"] = ["not-an-int", "2"]
+    provider = OpenAICompatibleProvider(
+        "openai", client_with_content(json.dumps(payload)), model="test-model"
+    )
+
+    with pytest.raises(GenerationSchemaError, match="local schema validation") as error:
         provider.generate(generation_request())
 
     assert error.value.category == "schema_validation"
@@ -177,10 +191,10 @@ def test_soclaas_requires_its_own_model(monkeypatch) -> None:
         _model("soclaas")
 
 
-def test_openai_request_records_the_base_prompt_version() -> None:
+def test_openai_request_records_the_common_response_prompt_version() -> None:
     assert (
         generation_request("functions", "intermediate").prompt_version
-        == "code-template-v8"
+        == "code-template-v8+response-v1"
     )
 
 
