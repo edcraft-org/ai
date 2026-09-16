@@ -75,7 +75,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
             ],
         }
     )
-    provider_calls: list[tuple[str, str | None]] = []
+    provider_calls = []
     execution_calls: list[str] = []
 
     class StubProvider:
@@ -83,6 +83,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
         model = "stub-model"
 
         def generate(self, request):
+            provider_calls.append(request)
             return proposal
 
     class SumExecutor:
@@ -93,29 +94,20 @@ def test_template_application_authors_once_then_generates_locally() -> None:
                 for item in inputs
             ]
 
-    def provider_factory(selection):
-        provider_calls.append((selection.provider, selection.model))
-        return StubProvider()
-
-    application = TemplateApplication(
-        provider_factory=provider_factory,
-        domain_factory=lambda _: CodeDomain(
-            execution_tool=SumExecutor(),
-        ),
-    )
+    domain = CodeDomain(execution_tool=SumExecutor())
+    application = TemplateApplication()
     validated = application.create_validated_template(
         CodeTemplateRequest(topic="arithmetic", difficulty="beginner"),
-        domain="code",
-        provider="stub",
-        model="stub-model",
+        domain=domain,
+        provider=StubProvider(),
     )
-    instance = application.generate_question(validated, domain="code", seed=7)
+    instance = application.generate_question(validated, domain=domain, seed=7)
 
-    assert provider_calls == [("stub", "stub-model")]
+    assert len(provider_calls) == 1
     assert instance.seed == 7
-    assert instance == application.generate_question(validated, domain="code", seed=7)
+    assert instance == application.generate_question(validated, domain=domain, seed=7)
     assert len(execution_calls) == 1
-    assert provider_calls == [("stub", "stub-model")]
+    assert len(provider_calls) == 1
     assert validated.validation.cases_validated == 4
     assert validated.template.topic == "arithmetic"
     assert validated.template.difficulty == "beginner"
@@ -184,16 +176,14 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
             assert request.response_model is ExampleProposal
             return request.parse_response(json.dumps({"value": 12}))
 
-    application = TemplateApplication(
-        provider_factory=lambda selection: ExampleProvider(),
-        domain_factory=lambda name: ExampleDomain(),
-    )
+    domain = ExampleDomain()
+    application = TemplateApplication()
     validated = application.create_validated_template(
         ExampleRequest(topic="fractions"),
-        domain="example",
-        provider="stub",
+        domain=domain,
+        provider=ExampleProvider(),
     )
-    instance = application.generate_question(validated, domain="example", seed=5)
+    instance = application.generate_question(validated, domain=domain, seed=5)
 
     assert validated.value == 12
     assert validated.authoring.domain == "example"
@@ -211,10 +201,10 @@ def test_application_rejects_domain_without_shared_validated_contract() -> None:
         def finalize_template(self, context, report):
             return ExampleTemplate(value=context.value)
 
-    application = TemplateApplication(domain_factory=lambda _: InvalidDomain())
+    application = TemplateApplication()
 
     with pytest.raises(TypeError, match="shared authoring contract"):
-        application.validate_template(ExampleTemplate(value=1), domain="invalid")
+        application.validate_template(ExampleTemplate(value=1), domain=InvalidDomain())
 
 
 def test_application_does_not_finalize_rejected_candidate():
@@ -227,8 +217,8 @@ def test_application_does_not_finalize_rejected_candidate():
         def finalize_template(self, context, report):
             pytest.fail("Rejected candidates must never be finalized")
 
-    application = TemplateApplication(domain_factory=lambda _: ExampleDomain())
+    application = TemplateApplication()
     with pytest.raises(ValidationFailure) as error:
-        application.validate_template(ExampleTemplate(value=-1), domain="example")
+        application.validate_template(ExampleTemplate(value=-1), domain=ExampleDomain())
     assert error.value.evidence[0].check == "positive_value"
     assert error.value.evidence[0].status == "failed"

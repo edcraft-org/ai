@@ -1,6 +1,59 @@
 import json
 
+import pytest
+
 from edcraft_validator import cli as template_cli
+from edcraft_validator.domains.code.module import CodeDomain
+
+
+@pytest.mark.parametrize("command", ["validate", "generate"])
+def test_local_cli_commands_pass_domain_without_creating_provider(
+    command, monkeypatch, tmp_path, capsys
+):
+    from types import SimpleNamespace
+
+    parsed = object()
+    calls = []
+    source = tmp_path / "template.json"
+    source.write_text('{"value": 7}')
+
+    class Model:
+        @staticmethod
+        def model_validate_json(content):
+            assert json.loads(content) == {"value": 7}
+            return parsed
+
+    domain = SimpleNamespace(candidate_model=Model, validated_model=Model)
+
+    class Result:
+        def model_dump(self, *, mode):
+            return {"success": True}
+
+    class Application:
+        def validate_template(self, candidate, *, domain):
+            calls.append((candidate, domain))
+            return Result()
+
+        def generate_question(self, validated, *, domain, seed):
+            assert seed == 7
+            calls.append((validated, domain))
+            return Result()
+
+    def unexpected_provider(*args):
+        pytest.fail("Local template commands must not create a model provider")
+
+    monkeypatch.setattr(template_cli, "create_domain", lambda name: domain)
+    monkeypatch.setattr(template_cli, "create_model_provider", unexpected_provider)
+    monkeypatch.setattr(template_cli, "TemplateApplication", Application)
+    monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
+    args = ["edcraft-template", command, "--domain", "code", str(source)]
+    if command == "generate":
+        args += ["--seed", "7"]
+    monkeypatch.setattr("sys.argv", args)
+
+    assert template_cli.main() == 0
+    assert calls == [(parsed, domain)]
+    assert json.loads(capsys.readouterr().out) == {"success": True}
 
 
 def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> None:
@@ -12,12 +65,17 @@ def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> N
             return {"validated": True}
 
     class StubApplication:
-        def create_validated_template(self, request, *, domain, provider, model):
-            captured.update(
-                request=request, domain=domain, provider=provider, model=model
-            )
+        def create_validated_template(self, request, *, domain, provider):
+            captured.update(request=request, domain=domain, provider=provider)
             return Result()
 
+    provider = object()
+
+    def create_provider(selection):
+        captured["selection"] = selection
+        return provider
+
+    monkeypatch.setattr(template_cli, "create_model_provider", create_provider)
     monkeypatch.setattr(template_cli, "TemplateApplication", StubApplication)
     monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
     monkeypatch.setattr(
@@ -41,9 +99,10 @@ def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> N
     exit_code = template_cli.main()
 
     assert exit_code == 0
-    assert captured["provider"] == "ollama"
-    assert captured["domain"] == "code"
-    assert captured["model"] == "qwen-test"
+    assert captured["provider"] is provider
+    assert isinstance(captured["domain"], CodeDomain)
+    assert captured["selection"].provider == "ollama"
+    assert captured["selection"].model == "qwen-test"
     request = captured["request"]
     assert request.topic == "loops"
     assert request.difficulty == "advanced"

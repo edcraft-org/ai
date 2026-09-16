@@ -175,15 +175,11 @@ class TemplateEvaluator:
                 request, provider=model_provider.provider
             )
             prompt_version = generation_request.prompt_version
-            application = TemplateApplication(
-                provider_factory=lambda _: model_provider,
-                domain_factory=lambda _: self.domain,
-            )
+            application = TemplateApplication()
             validated = application.create_validated_template(
                 request,
-                domain="code",
-                provider=selection.provider,
-                model=selection.model,
+                domain=self.domain,
+                provider=model_provider,
             )
         except Exception as exc:
             stage, code = _classify_failure(exc, model_provider is not None)

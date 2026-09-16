@@ -4,6 +4,9 @@ import pytest
 
 from edcraft_validator.application import TemplateApplication
 from edcraft_validator.domains.code.models import CodeTemplateRequest
+from edcraft_validator.domains.code.module import CodeDomain
+from edcraft_validator.generation.models import TemplateProviderSelection
+from edcraft_validator.generation.registry import create_model_provider
 
 pytestmark = pytest.mark.openai_live
 
@@ -13,10 +16,11 @@ def test_real_openai_template_authoring() -> None:
     if not os.getenv("OPENAI_API_KEY"):
         pytest.skip("OPENAI_API_KEY is not configured")
 
+    provider = create_model_provider(TemplateProviderSelection(provider="openai"))
     validated = TemplateApplication().create_validated_template(
         CodeTemplateRequest(topic="arithmetic", difficulty="beginner"),
-        domain="code",
-        provider="openai",
+        domain=CodeDomain(),
+        provider=provider,
     )
 
     assert validated.validation.cases_validated >= 4

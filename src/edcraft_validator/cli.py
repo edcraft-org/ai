@@ -17,7 +17,11 @@ from edcraft_validator.domains.code.evaluation import TemplateEvaluator
 from edcraft_validator.domains.code.models import CodeTemplateRequest
 from edcraft_validator.domains.registry import available_domains, create_domain
 from edcraft_validator.generation.base import GenerationError
-from edcraft_validator.generation.registry import available_model_providers
+from edcraft_validator.generation.models import TemplateProviderSelection
+from edcraft_validator.generation.registry import (
+    available_model_providers,
+    create_model_provider,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -106,8 +110,12 @@ def _handle_author(args: argparse.Namespace) -> int:
         difficulty=args.difficulty,
         num_distractors=args.num_distractors,
     )
+    domain = create_domain(args.domain)
+    provider = create_model_provider(
+        TemplateProviderSelection(provider=args.provider, model=args.model)
+    )
     result = TemplateApplication().create_validated_template(
-        request, domain=args.domain, provider=args.provider, model=args.model
+        request, domain=domain, provider=provider
     )
     _write_json(result.model_dump(mode="json"), args.output)
     return 0
@@ -116,7 +124,7 @@ def _handle_author(args: argparse.Namespace) -> int:
 def _handle_validate(args: argparse.Namespace) -> int:
     domain = create_domain(args.domain)
     candidate = domain.candidate_model.model_validate_json(args.template.read_text())
-    result = TemplateApplication().validate_template(candidate, domain=args.domain)
+    result = TemplateApplication().validate_template(candidate, domain=domain)
     _write_json(result.model_dump(mode="json"), args.output)
     return 0
 
@@ -125,7 +133,7 @@ def _handle_generate(args: argparse.Namespace) -> int:
     domain = create_domain(args.domain)
     validated = domain.validated_model.model_validate_json(args.template.read_text())
     result = TemplateApplication().generate_question(
-        validated, domain=args.domain, seed=args.seed
+        validated, domain=domain, seed=args.seed
     )
     _write_json(result.model_dump(mode="json"), args.output)
     return 0

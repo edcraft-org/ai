@@ -1,4 +1,4 @@
-"""Model-provider registry used by the CLI and application layer."""
+"""Model-provider registry used by the CLI and evaluation entry points."""
 
 from collections.abc import Callable
 

@@ -225,7 +225,7 @@ is not a security sandbox for untrusted Python.
 ```text
 application/templates.py           domain-agnostic authoring and expansion workflow
 domains/base.py                    contract implemented by every domain
-domains/registry.py                domain lookup used by the application
+domains/registry.py                domain lookup used by entry points
 domains/code/module.py             code prompt, validation, and expansion wiring
 domains/code/authoring.py          code generation request and Ollama wire schema
 domains/code/models.py             code authoring request
@@ -309,6 +309,9 @@ answers using execution results and stores every canonical answer. Finalization
 packages only checked content and refuses an unaccepted report.
 
 `TemplateApplication` coordinates validation for normal application callers.
+Callers pass domain and provider objects directly; CLI and evaluation entry points
+resolve names and configuration through the registries. Validation and question
+generation need only the domain object.
 Tests use `TemplateApplication.validate_template` for end-to-end validation and
 domain plans with `ValidationPipeline.validate` for focused check behavior.
 `CodeDomain` directly assembles plans and finalizes artifacts; it does not run
