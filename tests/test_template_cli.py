@@ -1,9 +1,108 @@
 import json
 
 import pytest
+from pydantic import BaseModel, ConfigDict, Field
 
 from edcraft_validator import cli as template_cli
+from edcraft_validator.domains import registry as domain_registry
 from edcraft_validator.domains.code.module import CodeDomain
+from edcraft_validator.generation import registry as provider_registry
+from edcraft_validator.generation.base import StructuredGenerationRequest
+from edcraft_validator.generation.models import ValidatedTemplateArtifact
+from edcraft_validator.validation.contracts import (
+    CheckResult,
+    ValidationPlan,
+    ValidationPolicy,
+)
+
+
+class ExampleRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    lesson: str = Field(min_length=1)
+
+
+class ExampleProposal(BaseModel):
+    value: int
+
+
+class ExampleCandidate(BaseModel):
+    lesson: str
+    value: int
+
+
+class ExampleValidated(ValidatedTemplateArtifact):
+    lesson: str
+    value: int
+
+
+class PositiveValueCheck:
+    name = "positive_value"
+    assurance = "bounded"
+
+    def run(self, context):
+        return CheckResult(status="passed" if context.value > 0 else "failed")
+
+
+class ExampleDomain:
+    name = "example"
+    request_model = ExampleRequest
+    candidate_model = ExampleCandidate
+    validated_model = ExampleValidated
+
+    def generation_request(self, request):
+        return StructuredGenerationRequest(
+            messages=[{"role": "user", "content": request.lesson}],
+            response_model=ExampleProposal,
+            parse_response=ExampleProposal.model_validate_json,
+            prompt_version="example-v1",
+        )
+
+    def build_candidate(self, request, proposal):
+        return ExampleCandidate(lesson=request.lesson, value=proposal.value)
+
+    def prepare_validation(self, candidate, *, request=None):
+        assert request is not None
+        return ValidationPlan(
+            context=candidate,
+            checks=(PositiveValueCheck(),),
+            policy=ValidationPolicy(required_checks=frozenset({"positive_value"})),
+        )
+
+    def finalize_template(self, context, report):
+        assert report.accepted
+        return ExampleValidated(lesson=context.lesson, value=context.value)
+
+    def generate_question(self, validated, *, seed):
+        raise NotImplementedError
+
+
+class ExampleProvider:
+    provider = "example-provider"
+
+    def __init__(self, model):
+        self.model = model or "example-model"
+
+    def generate(self, request):
+        assert request.response_model is ExampleProposal
+        return request.parse_response('{"value":12}')
+
+
+@pytest.fixture
+def example_registry(monkeypatch):
+    provider_models = []
+
+    def create_provider(model):
+        provider_models.append(model)
+        return ExampleProvider(model)
+
+    monkeypatch.setitem(domain_registry._DOMAIN_FACTORIES, "example", ExampleDomain)
+    monkeypatch.setitem(
+        provider_registry._MODEL_PROVIDER_FACTORIES,
+        "example-provider",
+        create_provider,
+    )
+    return provider_models
 
 
 @pytest.mark.parametrize("command", ["validate", "generate"])
@@ -56,6 +155,134 @@ def test_local_cli_commands_pass_domain_without_creating_provider(
     assert json.loads(capsys.readouterr().out) == {"success": True}
 
 
+def test_author_cli_uses_registered_domain_request_json_end_to_end(
+    example_registry, monkeypatch, tmp_path, capsys
+) -> None:
+    request_path = tmp_path / "example-request.json"
+    request_path.write_text(json.dumps({"lesson": "fractions"}))
+    monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "edcraft-template",
+            "author",
+            "--domain",
+            "example",
+            "--provider",
+            "example-provider",
+            "--model",
+            "example-test-model",
+            "--request-json",
+            str(request_path),
+        ],
+    )
+
+    assert template_cli.main() == 0
+
+    assert example_registry == ["example-test-model"]
+    result = json.loads(capsys.readouterr().out)
+    assert result["lesson"] == "fractions"
+    assert result["value"] == 12
+    assert result["authoring"]["domain"] == "example"
+    assert result["authoring"]["request"] == {"lesson": "fractions"}
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        pytest.param('{"lesson":', "Invalid JSON", id="malformed-json"),
+        pytest.param('{"unknown":"value"}', "lesson", id="invalid-model-fields"),
+    ],
+)
+def test_author_request_json_fails_before_provider_creation(
+    content, message, example_registry, monkeypatch, tmp_path, capsys
+) -> None:
+    request_path = tmp_path / "invalid-request.json"
+    request_path.write_text(content)
+    monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "edcraft-template",
+            "author",
+            "--domain",
+            "example",
+            "--provider",
+            "example-provider",
+            "--request-json",
+            str(request_path),
+        ],
+    )
+
+    assert template_cli.main() == 1
+    assert example_registry == []
+    assert message in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "legacy_flag",
+    [
+        ("--topic", "arithmetic"),
+        ("--difficulty", "beginner"),
+        ("--num-distractors", "2"),
+    ],
+)
+def test_author_rejects_request_json_with_any_legacy_request_flag(
+    legacy_flag, monkeypatch, tmp_path, capsys
+) -> None:
+    request_path = tmp_path / "request.json"
+    request_path.write_text(json.dumps({"topic": "loops", "difficulty": "advanced"}))
+
+    def unexpected_provider(*args):
+        pytest.fail("Conflicting request input must fail before provider creation")
+
+    monkeypatch.setattr(template_cli, "create_model_provider", unexpected_provider)
+    monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "edcraft-template",
+            "author",
+            "--domain",
+            "code",
+            "--provider",
+            "ollama",
+            "--request-json",
+            str(request_path),
+            *legacy_flag,
+        ],
+    )
+
+    assert template_cli.main() == 1
+    assert "--request-json cannot be combined" in capsys.readouterr().err
+
+
+def test_author_legacy_flags_report_missing_code_request_fields_before_provider(
+    monkeypatch, capsys
+) -> None:
+    def unexpected_provider(*args):
+        pytest.fail("Invalid request data must fail before provider creation")
+
+    monkeypatch.setattr(template_cli, "create_model_provider", unexpected_provider)
+    monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "edcraft-template",
+            "author",
+            "--domain",
+            "code",
+            "--provider",
+            "ollama",
+        ],
+    )
+
+    assert template_cli.main() == 1
+    error = capsys.readouterr().err
+    assert "topic" in error
+    assert "difficulty" in error
+
+
 def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> None:
     captured: dict[str, object] = {}
 
@@ -106,6 +333,7 @@ def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> N
     request = captured["request"]
     assert request.topic == "loops"
     assert request.difficulty == "advanced"
+    assert request.num_distractors == 3
     assert json.loads(capsys.readouterr().out) == {"validated": True}
 
 

@@ -89,6 +89,27 @@ SocLaas is also registered through its OpenAI-compatible endpoint. Configure
 `SOCLAAS_API_KEY`, `SOCLAAS_BASE_URL`, and `SOCLAAS_MODEL`, then select
 `--provider soclaas`.
 
+For any domain, supply a JSON file matching that domain's request model:
+
+```bash
+uv run python -m edcraft_validator.cli author \
+  --domain code --provider openai \
+  --request-json examples/code-request.json \
+  --output /tmp/validated-template.json
+```
+
+For code, that file can contain:
+
+```json
+{"topic": "arithmetic", "difficulty": "beginner", "num_distractors": 3}
+```
+
+`--request-json` cannot be combined with `--topic`, `--difficulty`, or
+`--num-distractors`. The existing code flags remain supported; omitting the
+distractor count uses the code request model's default of three. Request data is
+validated before a model provider is created. A new domain can declare different
+request fields without changing this handler.
+
 ## Validate an existing raw template
 
 The repository includes examples for integers, booleans, strings, and integer
