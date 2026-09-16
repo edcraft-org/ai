@@ -3,6 +3,7 @@ title Template generation
 autonumber
 
 actor Caller
+participant "CLI / API entry point" as Entry
 participant TemplateApplication as App
 participant "Domain" as Domain
 participant "ModelProvider" as Provider
@@ -10,7 +11,12 @@ participant ValidationPipeline as Validator
 participant "Check" as Check
 participant "Tool" as Tool
 
-Caller -> App: create_validated_template(request, domain, provider)
+Caller -> Entry: Author template (domain, provider, request data)
+Entry -> Entry: Resolve domain object
+Entry -> Domain: request_model.model_validate(request data)
+Domain --> Entry: Typed request
+Entry -> Entry: Resolve provider object and model configuration
+Entry -> App: create_validated_template(request, domain, provider)
 
 App -> Domain: generation_request(request)
 Domain --> App: Generation specification\n(messages, response schema, parser)
@@ -25,7 +31,7 @@ Provider --> App: Proposal
 App -> Domain: build_candidate(request, proposal)
 note right of Domain
   Combine request settings and proposal
-  Derive domain-owned fields (Types for code etc)
+  Derive domain-owned fields
   Add fallback distractor candidates
 end note
 Domain --> App: Candidate
@@ -38,7 +44,7 @@ note right of Domain
 end note
 Domain --> App: ValidationPlan(context, checks, policy)
 
-App -> Validator: validate(plan)
+App -> Validator: validate(context=plan.context,\nchecks=plan.checks, policy=plan.policy)
 
 loop Each check in plan order, until failure
     Validator -> Check: run(context)
@@ -48,8 +54,9 @@ loop Each check in plan order, until failure
         Tool --> Check: Tool result
     end
 
-    Check --> Validator: CheckResult(status, findings)
-    Validator -> Validator: Record evidence and duration
+    Check -> Check: Store intermediate results in shared context
+    Check --> Validator: CheckResult or None if inapplicable
+    Validator -> Validator: Record evidence and duration for completed checks
 
     opt Check failed or could not complete
         Validator -> Validator: Record failure and stop iteration
@@ -59,7 +66,8 @@ end
 Validator --> App: ValidationReport
 
 alt Validation rejected
-    App --> Caller: Validation failure with evidence
+    App --> Entry: Validation failure with evidence
+    Entry --> Caller: Error
 else All required checks passed
     App -> Domain: finalize_template(plan.context, report)
     note right of Domain
@@ -71,6 +79,7 @@ else All required checks passed
     Domain --> App: Validated template
 
     App -> App: Attach authoring provenance
-    App --> Caller: Validated template
+    App --> Entry: Validated template
+    Entry --> Caller: Validated template JSON
 end
 @enduml
