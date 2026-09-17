@@ -6,6 +6,11 @@
 - Copy `.env.example` to `.env` for local configuration. Never commit secrets.
 - Keep generated evaluation output under `.artifacts/`; it is ignored by Git.
 
+The readable-layout refactor changes internal Python module paths only. It does not
+change CLI commands, flags, environment variables, locked dependencies, or serialized
+template and question artifacts. Scripts that import implementation modules directly
+must use the new paths documented in [README.md](README.md#architecture).
+
 ## Standard verification
 
 ```bash

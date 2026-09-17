@@ -2,11 +2,11 @@ import os
 
 import pytest
 
-from edcraft_validator.application import TemplateApplication
-from edcraft_validator.domains.code.models import CodeTemplateRequest
-from edcraft_validator.domains.code.module import CodeDomain
-from edcraft_validator.generation.models import TemplateProviderSelection
-from edcraft_validator.generation.registry import create_model_provider
+from edcraft_validator.application.template_workflow import TemplateApplication
+from edcraft_validator.domains.code.code_domain import CodeDomain
+from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
+from edcraft_validator.llm.llm_contracts import TemplateProviderSelection
+from edcraft_validator.llm.provider_registry import create_model_provider
 
 pytestmark = pytest.mark.openai_live
 

@@ -11,13 +11,13 @@ from typing import Any
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
-from edcraft_validator.application import TemplateApplication
-from edcraft_validator.domains.code.capabilities import CODE_DIFFICULTIES, CODE_TOPICS
-from edcraft_validator.domains.code.evaluation import TemplateEvaluator
-from edcraft_validator.domains.registry import available_domains, create_domain
-from edcraft_validator.generation.base import GenerationError
-from edcraft_validator.generation.models import TemplateProviderSelection
-from edcraft_validator.generation.registry import (
+from edcraft_validator.application.template_workflow import TemplateApplication
+from edcraft_validator.domains.code.code_types import CODE_DIFFICULTIES, CODE_TOPICS
+from edcraft_validator.domains.code.template_evaluator import TemplateEvaluator
+from edcraft_validator.domains.domain_registry import available_domains, create_domain
+from edcraft_validator.llm.llm_contracts import TemplateProviderSelection
+from edcraft_validator.llm.llm_errors import GenerationError
+from edcraft_validator.llm.provider_registry import (
     available_model_providers,
     create_model_provider,
 )

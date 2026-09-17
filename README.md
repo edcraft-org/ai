@@ -237,41 +237,57 @@ gate rejects imports, attributes, classes, decorators, recursion, comprehensions
 
 ## Validation boundary
 
-The code domain uses a local Python tracing subprocess with per-case timeouts and a
-100,000 user-code trace-event limit. EdCraft's pinned `step-tracer` supplies return
-values and execution counts. The current tool supports deterministic validation; it
-is not a security sandbox for untrusted Python.
+`CodeDomain` assembles `ExecutionCheck` with an injected `PythonExecutionTool`.
+The default adapter in `tools/python_execution.py` sends every case for one candidate
+to one `tools/python_worker.py` subprocess, which uses EdCraft's pinned `step-tracer`
+to return values and execution counts. Per-case timeouts and a 100,000 user-code
+trace-event limit bound tracing. This tool supports deterministic validation; it is
+not a security sandbox for untrusted Python.
 
 ## Architecture
 
 ```text
-application/templates.py           domain-agnostic authoring and expansion workflow
-domains/base.py                    contract implemented by every domain
-domains/registry.py                domain lookup used by entry points
-domains/code/module.py             code prompt, validation, and expansion wiring
-domains/code/authoring.py           common response schema, parser, and generation request
-domains/code/models.py             code authoring request
-domains/code/evaluation.py         real-provider code-template evaluation
-domains/code/templates/models.py   code template data contracts
-domains/code/templates/authoring.py prompt construction and template building
-domains/code/templates/expressions.py restricted deterministic expressions
-domains/code/templates/structure.py  structure, profile, and rendering checks
-domains/code/templates/answers.py    expression checks and canonical answer correction
-domains/code/templates/distractors.py distractor selection and consistency checks
-domains/code/templates/execution.py  execution operation with an injected tool
-domains/code/templates/context.py    typed intermediate code-validation values
-domains/code/templates/checks.py     check metadata and tool failure outcomes
-domains/code/templates/generation.py deterministic question expansion
-domains/code/capabilities.py       supported profiles and their machine-readable rules
-generation/base.py                 domain-agnostic structured generation request
-generation/registry.py             model-provider lookup
-generation/openai.py               OpenAI and SocLaas adapters
-generation/ollama.py               Ollama adapter
-validation/pipeline.py             central runner for domain-supplied checks
-validation/contracts.py            shared validation contracts
-tools/python_analysis.py           supported-Python static analysis
-tools/python_execution.py          local Python tool adapter
-tools/python_worker.py             batched tracing implementation
+edcraft_validator/
+├── application/
+│   └── template_workflow.py       domain-agnostic authoring and expansion workflow
+├── artifact_contracts.py          shared artifact and provenance contracts
+├── value_comparison.py            typed answer and distractor comparison
+├── llm/
+│   ├── llm_contracts.py           provider protocol, request, and selection contracts
+│   ├── llm_errors.py              provider-independent generation failures
+│   ├── provider_registry.py       model-provider lookup
+│   ├── openai_compatible_provider.py  OpenAI and SocLaas adapter
+│   └── ollama_provider.py         Ollama adapter
+├── domains/
+│   ├── domain_contract.py         contract implemented by every domain
+│   ├── domain_registry.py         domain lookup used by entry points
+│   └── code/
+│       ├── code_domain.py         code prompting, validation, and expansion wiring
+│       ├── code_types.py          code-domain aliases, topics, and answer targets
+│       ├── code_schemas.py        request, proposal, template, and question schemas
+│       ├── profiles.py            topic/difficulty profiles and profile rules
+│       ├── code_features.py       AST feature extraction and feature predicates
+│       ├── prompt_builder.py      code prompts and structured generation request
+│       ├── proposal_response.py   provider response schema and proposal parser
+│       ├── candidate_builder.py   canonical candidate construction
+│       ├── safe_expressions.py    restricted deterministic expressions
+│       ├── template_evaluator.py  repeatable real-provider evaluation
+│       ├── question_generator.py  deterministic question expansion
+│       ├── text_rendering.py      safe question and reason-template rendering
+│       └── checks/
+│           ├── validation_context.py typed intermediate validation values
+│           ├── check_wrapper.py   check metadata and tool-failure outcomes
+│           ├── structure_checks.py structure, profile, and rendering checks
+│           ├── answer_checks.py   expression checks and canonical answers
+│           ├── distractor_checks.py distractor selection and consistency
+│           └── execution_check.py execution operation with an injected tool
+├── validation/
+│   ├── validation_contracts.py    shared validation contracts
+│   └── check_runner.py            central runner for domain-supplied checks
+└── tools/
+    ├── python_analysis.py         supported-Python static analysis
+    ├── python_execution.py        local Python tool adapter
+    └── python_worker.py           batched tracing implementation
 ```
 
 Entry points resolve a domain and provider, then pass those objects to the
@@ -299,21 +315,21 @@ is maintained on the separate `docs/template-generation-flow` branch.
 
 To add a domain:
 
-1. Define its request, proposal, candidate, validated artifact, and question models.
+1. Define its request, proposal, candidate, validated artifact, and question schemas.
    The validated artifact extends `ValidatedTemplateArtifact` for provenance.
 2. Implement `DomainModule`: build the generation specification and candidate,
    assemble the validation context/checks/policy, finalize accepted results, and
    generate questions. Keep the specification independent of provider names.
-3. Register its factory in `domains/registry.py`. Supply its request data through
+3. Register its factory in `domains/domain_registry.py`. Supply its request data through
    `--request-json`; the application and generic CLI handler need no changes.
 4. Test a successful workflow and rejection before finalization. The example domain
-   in `tests/test_application.py` demonstrates its own context, check, and tool;
-   `tests/test_template_cli.py` demonstrates registration and request parsing.
+   in `tests/test_template_workflow.py` demonstrates its own context, check, and tool;
+   `tests/test_cli.py` demonstrates registration and request parsing.
 
 To use another model from an existing provider, pass `--model`. To add a provider,
 implement `ModelProvider.generate`, send the supplied messages/schema through its
 API, and call the supplied parser on the response text. Register its factory in
-`generation/registry.py`; test transport errors and parsing with an injected client
+`llm/provider_registry.py`; test transport errors and parsing with an injected client
 or mocked endpoint, then run a live compatibility check. No domain imports belong
 in the adapter.
 
@@ -343,7 +359,8 @@ Each check implements `run(context)` and returns a `CheckResult`. The domain own
 its check logic and tool dependencies. The runner records names, assurance levels,
 durations, and evidence, and applies the supplied acceptance policy. Unexpected
 programming errors propagate rather than being reported as invalid templates.
-Code check operations take only the typed context and return their findings.
+Code check operations under `domains/code/checks/` take only the typed context and
+return their findings.
 The small `CodeCheck` wrapper attaches metadata and preserves tool-error diagnostics;
 substantial algorithms such as distractor selection remain separate helpers.
 
@@ -387,6 +404,16 @@ its own deterministic question-generation function; model providers and tools re
 injectable. The central runner exposes only the plan-based `validate` method.
 Individual operations should be supplied as checks; evidence belongs to the returned
 report rather than mutable runner state.
+
+### Import-path migration
+
+This layout refactor changes internal Python import paths. Update integrations that
+import implementation modules directly to the paths shown above; for example, model
+provider contracts now live in `edcraft_validator.llm.llm_contracts`, the code domain
+in `edcraft_validator.domains.code.code_domain`, and validation contracts in
+`edcraft_validator.validation.validation_contracts`. Class and function names are
+unchanged. CLI commands, flags, and serialized template/question artifacts remain
+compatible.
 
 ## Tests
 

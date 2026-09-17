@@ -2,13 +2,15 @@ from pathlib import Path
 
 import pytest
 
-from edcraft_validator.domains.code.templates import (
+from edcraft_validator.domains.code.checks.check_wrapper import CodeCheck
+from edcraft_validator.domains.code.checks.execution_check import ExecutionCheck
+from edcraft_validator.domains.code.checks.validation_context import (
+    CodeValidationContext,
+)
+from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
     ValidatedCodeTemplate,
 )
-from edcraft_validator.domains.code.templates.checks import CodeCheck
-from edcraft_validator.domains.code.templates.context import CodeValidationContext
-from edcraft_validator.domains.code.templates.execution import ExecutionCheck
 from edcraft_validator.tools.python_execution import ExecutionResult
 
 
@@ -29,8 +31,8 @@ def test_code_checks_populate_canonical_answers():
                 for x in inputs
             ]
 
-    from edcraft_validator.domains.code.module import CodeDomain
-    from edcraft_validator.validation import ValidationPipeline
+    from edcraft_validator.domains.code.code_domain import CodeDomain
+    from edcraft_validator.validation.check_runner import ValidationPipeline
 
     domain = CodeDomain(execution_tool=Executor())
     original = candidate()
@@ -102,8 +104,8 @@ def test_execution_check_uses_injected_tool_and_timeout_without_validator():
 
 
 def test_finalization_preserves_checked_content_and_deterministic_questions():
-    from edcraft_validator.domains.code.module import CodeDomain
-    from edcraft_validator.validation.pipeline import ValidationPipeline
+    from edcraft_validator.domains.code.code_domain import CodeDomain
+    from edcraft_validator.validation.check_runner import ValidationPipeline
 
     class Executor:
         def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
@@ -135,7 +137,8 @@ def test_finalization_preserves_checked_content_and_deterministic_questions():
 
 
 def test_missing_rendering_check_blocks_finalization():
-    from edcraft_validator.validation import ValidationFailure, ValidationPipeline
+    from edcraft_validator.validation.check_runner import ValidationPipeline
+    from edcraft_validator.validation.validation_contracts import ValidationFailure
 
     class Executor:
         def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
@@ -144,7 +147,7 @@ def test_missing_rendering_check_blocks_finalization():
                 for x in inputs
             ]
 
-    from edcraft_validator.domains.code.module import CodeDomain
+    from edcraft_validator.domains.code.code_domain import CodeDomain
 
     domain = CodeDomain(execution_tool=Executor())
     plan = domain.prepare_validation(candidate())
@@ -160,8 +163,8 @@ def test_missing_rendering_check_blocks_finalization():
 
 @pytest.mark.parametrize("num_distractors", [None, 2, 3])
 def test_code_domain_plan_contract(num_distractors):
-    from edcraft_validator.domains.code.models import CodeTemplateRequest
-    from edcraft_validator.domains.code.module import CodeDomain
+    from edcraft_validator.domains.code.code_domain import CodeDomain
+    from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
 
     request = (
         None

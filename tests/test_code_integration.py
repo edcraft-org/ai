@@ -2,16 +2,16 @@ from pathlib import Path
 
 import pytest
 
-from edcraft_validator.application import TemplateApplication
-from edcraft_validator.domains.code.evaluation import TemplateEvaluator
-from edcraft_validator.domains.code.models import CodeTemplateRequest
-from edcraft_validator.domains.code.module import CodeDomain
-from edcraft_validator.domains.code.templates import (
+from edcraft_validator.application.template_workflow import TemplateApplication
+from edcraft_validator.domains.code.code_domain import CodeDomain
+from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
     CodeTemplateProposal,
+    CodeTemplateRequest,
     ValidatedCodeTemplate,
-    generate_code_question,
 )
+from edcraft_validator.domains.code.question_generator import generate_code_question
+from edcraft_validator.domains.code.template_evaluator import TemplateEvaluator
 from edcraft_validator.tools.python_execution import LocalPythonTool
 
 TEMPLATE_PATHS = sorted(
