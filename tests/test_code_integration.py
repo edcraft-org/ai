@@ -2,16 +2,16 @@ from pathlib import Path
 
 import pytest
 
-from edcraft_validator.application import TemplateApplication
-from edcraft_validator.domains.code.evaluation import TemplateEvaluator
-from edcraft_validator.domains.code.models import CodeTemplateRequest
-from edcraft_validator.domains.code.module import CodeDomain
-from edcraft_validator.domains.code.templates import (
+from edcraft_validator.application.template_workflow import TemplateApplication
+from edcraft_validator.domains.code.code_domain import CodeDomain
+from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
     CodeTemplateProposal,
+    CodeTemplateRequest,
     ValidatedCodeTemplate,
-    generate_code_question,
 )
+from edcraft_validator.domains.code.question_generator import generate_code_question
+from edcraft_validator.domains.code.template_evaluator import TemplateEvaluator
 from edcraft_validator.tools.python_execution import LocalPythonTool
 
 TEMPLATE_PATHS = sorted(
@@ -54,10 +54,11 @@ def test_template_is_exhaustively_validated(template_path: Path) -> None:
     template = CodeTemplateCandidate.model_validate_json(template_path.read_text())
 
     application = TemplateApplication()
-    validated = application.validate_template(template, domain="code")
+    domain = CodeDomain()
+    validated = application.validate_template(template, domain=domain)
     reloaded = ValidatedCodeTemplate.model_validate_json(validated.model_dump_json())
     for seed in (0, 1, 42, 999):
-        question = application.generate_question(reloaded, domain="code", seed=seed)
+        question = application.generate_question(reloaded, domain=domain, seed=seed)
         assert question == generate_code_question(validated, seed)
         assert question.question.answer_target == template.answer_target
 
@@ -91,14 +92,10 @@ def test_model_proposal_is_built_then_validated() -> None:
         def generate(self, request):
             return proposal
 
-    application = TemplateApplication(
-        provider_factory=lambda selection: StubProvider(),
-        domain_factory=lambda name: CodeDomain(),
-    )
-    validated = application.create_validated_template(
+    validated = TemplateApplication().create_validated_template(
         CodeTemplateRequest(topic="arithmetic", difficulty="beginner"),
-        domain="code",
-        provider="stub",
+        domain=CodeDomain(),
+        provider=StubProvider(),
     )
 
     assert validated.template.question_template == (

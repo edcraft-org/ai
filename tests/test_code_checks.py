@@ -2,12 +2,15 @@ from pathlib import Path
 
 import pytest
 
-from edcraft_validator.domains.code.templates import (
+from edcraft_validator.domains.code.checks.check_wrapper import CodeCheck
+from edcraft_validator.domains.code.checks.execution_check import ExecutionCheck
+from edcraft_validator.domains.code.checks.validation_context import (
+    CodeValidationContext,
+)
+from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
-    TemplateValidator,
     ValidatedCodeTemplate,
 )
-from edcraft_validator.domains.code.templates.context import CodeValidationContext
 from edcraft_validator.tools.python_execution import ExecutionResult
 
 
@@ -28,12 +31,10 @@ def test_code_checks_populate_canonical_answers():
                 for x in inputs
             ]
 
-    from edcraft_validator.domains.code.module import CodeDomain
-    from edcraft_validator.validation import ValidationPipeline
+    from edcraft_validator.domains.code.code_domain import CodeDomain
+    from edcraft_validator.validation.check_runner import ValidationPipeline
 
-    domain = CodeDomain(
-        validator_factory=lambda: TemplateValidator(execution_tool=Executor())
-    )
+    domain = CodeDomain(execution_tool=Executor())
     original = candidate()
     plan = domain.prepare_validation(original)
     report = ValidationPipeline().validate(
@@ -60,16 +61,51 @@ def test_unfinished_tool_check_is_incomplete_and_retains_domain_error(failure_co
         def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
             return [ExecutionResult(ok=False, error_code=failure_code) for _ in inputs]
 
-    checks = TemplateValidator(execution_tool=Executor()).build_checks()
-    execution_check = next(check for check in checks if check.name == "code_execution")
-    result = execution_check.run(CodeValidationContext(candidate()))
+    operation = ExecutionCheck(execution_tool=Executor())
+    check = CodeCheck(
+        "code_execution",
+        "exhaustive",
+        operation.run,
+        lambda context: {
+            **context.case_details,
+            "tool": type(operation.execution_tool).__name__,
+        },
+    )
+    result = check.run(CodeValidationContext(candidate()))
     assert result.status == "incomplete"
     assert result.failure.code == failure_code
 
 
+def test_execution_check_uses_injected_tool_and_timeout_without_validator():
+    calls = []
+
+    class Executor:
+        def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+            calls.append((code, entry_function, inputs, timeout_seconds))
+            return [ExecutionResult(ok=True, answer=0) for _ in inputs]
+
+    context = CodeValidationContext(candidate())
+    check = ExecutionCheck(execution_tool=Executor(), timeout_seconds=0.25)
+
+    result = check.run(context)
+
+    assert result.status == "passed"
+    assert calls == [
+        (
+            context.template.code,
+            context.template.entry_function,
+            context.inputs_cases,
+            0.25,
+        )
+    ]
+    assert context.executions == [
+        ExecutionResult(ok=True, answer=0) for _ in context.inputs_cases
+    ]
+
+
 def test_finalization_preserves_checked_content_and_deterministic_questions():
-    from edcraft_validator.domains.code.module import CodeDomain
-    from edcraft_validator.validation.pipeline import ValidationPipeline
+    from edcraft_validator.domains.code.code_domain import CodeDomain
+    from edcraft_validator.validation.check_runner import ValidationPipeline
 
     class Executor:
         def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
@@ -78,9 +114,7 @@ def test_finalization_preserves_checked_content_and_deterministic_questions():
                 for x in inputs
             ]
 
-    domain = CodeDomain(
-        validator_factory=lambda: TemplateValidator(execution_tool=Executor())
-    )
+    domain = CodeDomain(execution_tool=Executor())
     original = candidate()
     plan = domain.prepare_validation(original)
     report = ValidationPipeline().validate(
@@ -103,7 +137,8 @@ def test_finalization_preserves_checked_content_and_deterministic_questions():
 
 
 def test_missing_rendering_check_blocks_finalization():
-    from edcraft_validator.validation import ValidationFailure, ValidationPipeline
+    from edcraft_validator.validation.check_runner import ValidationPipeline
+    from edcraft_validator.validation.validation_contracts import ValidationFailure
 
     class Executor:
         def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
@@ -112,11 +147,9 @@ def test_missing_rendering_check_blocks_finalization():
                 for x in inputs
             ]
 
-    from edcraft_validator.domains.code.module import CodeDomain
+    from edcraft_validator.domains.code.code_domain import CodeDomain
 
-    domain = CodeDomain(
-        validator_factory=lambda: TemplateValidator(execution_tool=Executor())
-    )
+    domain = CodeDomain(execution_tool=Executor())
     plan = domain.prepare_validation(candidate())
     report = ValidationPipeline().validate(
         context=plan.context,
@@ -130,8 +163,8 @@ def test_missing_rendering_check_blocks_finalization():
 
 @pytest.mark.parametrize("num_distractors", [None, 2, 3])
 def test_code_domain_plan_contract(num_distractors):
-    from edcraft_validator.domains.code.models import CodeTemplateRequest
-    from edcraft_validator.domains.code.module import CodeDomain
+    from edcraft_validator.domains.code.code_domain import CodeDomain
+    from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
 
     request = (
         None
@@ -140,12 +173,28 @@ def test_code_domain_plan_contract(num_distractors):
             topic="arithmetic", difficulty="beginner", num_distractors=num_distractors
         )
     )
-    plan = CodeDomain().prepare_validation(candidate(), request=request)
+
+    class UnexpectedExecutor:
+        def execute_batch(self, *args, **kwargs):
+            pytest.fail("Preparing a validation plan must not execute tools")
+
+    plan = CodeDomain(execution_tool=UnexpectedExecutor()).prepare_validation(
+        candidate(), request=request
+    )
     assert isinstance(plan.context, CodeValidationContext)
     assert plan.context.num_distractors == num_distractors
     names = [check.name for check in plan.checks]
-    assert len(names) == len(set(names))
-    assert plan.policy.required_checks <= set(names)
-    assert names.index("template_structure") < names.index("code_execution")
-    assert names.index("expression_safety") < names.index("code_execution")
-    assert names.index("canonical_answers") < names.index("distractor_selection")
+    assert names == [
+        "template_structure",
+        "expression_safety",
+        "answer_domain",
+        "code_execution",
+        "canonical_answers",
+        "distractor_selection",
+        "distractor_consistency",
+        "template_rendering",
+    ]
+    expected_required = set(names)
+    if num_distractors is None:
+        expected_required.remove("distractor_selection")
+    assert plan.policy.required_checks == expected_required
