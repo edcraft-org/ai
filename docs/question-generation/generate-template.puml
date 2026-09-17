@@ -12,10 +12,11 @@ participant "Check" as Check
 participant "Tool" as Tool
 
 Caller -> Entry: Author template (domain, provider, request data)
-Entry -> Entry: Resolve domain object
 Entry -> Domain: request_model.model_validate(request data)
+note right of Domain
+  Each domain has its own request fields
+end note
 Domain --> Entry: Typed request
-Entry -> Entry: Resolve provider object and model configuration
 Entry -> App: create_validated_template(request, domain, provider)
 
 App -> Domain: generation_request(request)
@@ -31,7 +32,6 @@ Provider --> App: Proposal
 App -> Domain: build_candidate(request, proposal)
 note right of Domain
   Combine request settings and proposal
-  Derive domain-owned fields
   Add fallback distractor candidates
 end note
 Domain --> App: Candidate
@@ -40,7 +40,6 @@ App -> Domain: prepare_validation(candidate, request)
 note right of Domain
   Create shared domain context
   Choose checks and their order
-  Define required-check policy
 end note
 Domain --> App: ValidationPlan(context, checks, policy)
 
