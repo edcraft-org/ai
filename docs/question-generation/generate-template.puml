@@ -1,80 +1,103 @@
-@startuml
-title Template generation
+@startuml TemplateGeneration
+title Target workflow: free-form prompt and model-selected checks
 autonumber
 
-actor Caller
+actor User
 participant TemplateApplication as App
-participant "Domain" as Domain
-participant "ModelProvider" as Provider
-participant ValidationPipeline as Validator
-participant "Check" as Check
-participant "Tool" as Tool
+participant Domain
+participant "MCP client" as Client
+participant "Configured MCP check server(s)" as MCP
+participant "Model provider adapter" as Provider
+participant Model
+participant Validator
 
-Caller -> App: create_validated_template(request, domain, provider)
+User -> App: Generate template(domain, prompt)
 note right of App
-  We can allow an optional field for users to
-  have more control over the generation
+  Provider/model are application configuration.
+  Preserve the original prompt.
+  Source passages are optional future context.
 end note
-
-App -> Domain: generation_request(request)
-Domain --> App: Generation specification\n(messages, response schema, parser)
-
-App -> Provider: generate(specification)
+App -> Domain: Get instructions, schemas and acceptance requirements
+Domain --> App: Domain specification
+App -> Client: Obtain cached allowed capability catalogue
+opt Initialize connection or explicitly refresh catalogue
+    Client -> MCP: tools/list (all pages)
+    MCP --> Client: Registered check definitions and schemas
+    Client -> Client: Cache catalogue and server/tool bindings
+end
+Client --> App: Catalogue snapshot and execution bindings
+note right of App
+  Discover at startup/connection and reuse the catalogue.
+  Refresh on reconnect, deployment or change notification.
+  Fail clearly if no usable catalogue is available.
+  Supply descriptions and schemas to the model,
+  never credentials or execution bindings.
+end note
+App -> Provider: Generate(prompt, domain specification, catalogue)
+Provider -> Model: Messages + structured response schema
+Model --> Provider: Proposal + selected check names and arguments
+Provider -> Provider: Extract provider response content
+Provider -> Provider: Generic JSON/schema parsing using supplied response model
+Provider --> App: Typed proposal + check selections
 note right of Provider
-  Call model and decode response
-  using the supplied response contract
+  One planning request; no provider-managed MCP execution.
+  Domain supplies schemas, not a parser callback.
+  Malformed output stops before check execution.
 end note
-Provider --> App: Proposal
 
-App -> Domain: build_candidate(request, proposal)
+App -> Domain: Build candidate and acceptance requirements
+Domain --> App: Candidate + requirements
 note right of Domain
-  Combine request settings and proposal
-  Derive domain-owned fields (Types for code etc)
-  Add fallback distractor candidates
+  Derive identity and supported domain fields.
+  Keep model-selected checks; do not replace them
+  with a fixed domain-selected check list.
 end note
-Domain --> App: Candidate
+App -> Validator: Validate(candidate, selections, catalogue, requirements)
+Validator -> Validator: Validate names/arguments and bind candidate
+Validator -> Validator: Resolve prerequisites and execution order
 
-App -> Domain: prepare_validation(candidate, request)
-note right of Domain
-  Create shared domain context
-  Choose checks and their order
-  Define required-check policy
-end note
-Domain --> App: ValidationPlan(context, checks, policy)
-
-App -> Validator: validate(plan)
-
-loop Each check in plan order, until failure
-    Validator -> Check: run(context)
-
-    opt Check requires a tool
-        Check -> Tool: Execute operation
-        Tool --> Check: Tool result
+alt Plan invalid or required coverage unsupported
+    Validator --> App: Rejected or incomplete report with reason
+else Plan executable
+    loop Each resolved check, until blocking failure/incompletion
+        Validator -> Client: Execute check against candidate
+        Client -> MCP: tools/call(name, bound arguments)
+        MCP --> Client: Structured result + checked values
+        Client --> Validator: Validated tool result or execution error
+        Validator -> Validator: Record evidence, scope, duration and candidate identity
     end
-
-    Check --> Validator: CheckResult(status, findings)
-    Validator -> Validator: Record evidence and duration
-
-    opt Check failed or could not complete
-        Validator -> Validator: Record failure and stop iteration
-    end
+    Validator -> Validator: Assess evidence against acceptance requirements
+    Validator --> App: Report + checked values
 end
 
-Validator --> App: ValidationReport
-
-alt Validation rejected
-    App --> Caller: Validation failure with evidence
-else All required checks passed
-    App -> Domain: finalize_template(plan.context, report)
-    note right of Domain
-      Package checked values
-      Store canonical answers from context
-      Retain selected distractors and evidence
-      Clear proposed answer expression
+alt Rejected or incomplete
+    App --> User: Failure or missing coverage + available evidence
+    note right of User
+      User may revise the prompt and start a new attempt.
+      No automatic model repair loop in this workflow.
     end note
-    Domain --> App: Validated template
-
-    App -> App: Attach authoring provenance
-    App --> Caller: Validated template
+else Accepted within declared validation scope
+    App -> Domain: Finalize(candidate, checked values, report)
+    Domain --> App: Technically validated template
+    App -> App: Attach prompt, model, catalogue, plan and evidence provenance
+    App -> Domain: Generate representative questions using fixed seeds
+    Domain --> App: Deterministic preview questions
+    App --> User: Template + evidence + limitations + previews
+    User -> App: Approve or reject
+    alt User approves
+        App -> App: Record approval for this exact artifact version
+        User -> App: Generate question(template, seed)
+        App -> Domain: Generate question(approved template, seed)
+        Domain --> App: Deterministic question
+        App --> User: Question
+    else User rejects
+        App -> App: Record decision; keep artifact unavailable to learners
+    end
 end
+
+note over App, MCP
+  Target design, not a claim about the current implementation.
+  Approval UI/persistence follows in the frontend milestone.
+  Preview and learner question expansion need no model or MCP calls.
+end note
 @enduml

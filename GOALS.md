@@ -5,17 +5,27 @@
 EdCraft should help educators and learners create trustworthy, varied questions
 without requiring an AI call for every question.
 
-The intended workflow is:
+The agreed target workflow (18 September 2026) is documented in
+[the workflow specification](docs/question-generation/README.md) and
+[the sequence diagram](docs/question-generation/generate-template.puml).
+It is the implementation target; the historical milestone evidence below does not
+claim that free-form input, MCP execution or model-selected checks already exist.
 
-1. A user uploads source documents and organizes them into a personal knowledge
-   base.
-2. The user selects a domain, topic, difficulty, and relevant source material.
-3. An AI model authors a reusable, source-grounded question template.
-4. Domain-specific tools validate correctness, grounding, answerability, relevance,
-   coverage, difficulty, and redundancy as far as deterministic methods allow.
-5. The user reviews and manually approves the template.
-6. The approved template generates many deterministic questions from different
-   parameter values without additional AI calls.
+1. The user selects a domain and submits a free-form prompt describing the desired
+   question, concepts and difficulty. Provider/model are separate configuration.
+2. The application obtains domain guidance and schemas and a cached MCP capability
+   catalogue, then passes check descriptions and argument schemas to the model.
+3. The model returns a structured reusable template proposal and selected checks.
+4. The central validator validates the selections, resolves prerequisites, executes
+   checks through MCP and assesses actual evidence against acceptance requirements.
+5. An accepted template is presented with evidence, limitations and deterministic
+   preview questions. The user approves or rejects that exact artifact version.
+6. Approved templates generate deterministic questions without additional AI or MCP
+   calls. A failed attempt may be retried by the user; automatic repair is deferred.
+
+Document upload and personal knowledge bases remain planned milestones. When
+available, retrieved source passages augment the prompt and are preserved in
+provenance; uploading documents is not a prerequisite for the initial workflow.
 
 ## Main Goals
 
@@ -27,9 +37,12 @@ fast, and require no additional AI calls.
 
 ### 2. Make correctness depend on tools, not model confidence
 
-Treat model output as an untrusted draft. A template is usable only after
-domain-specific validators establish that its generated questions and answers are
-correct throughout its supported parameter domain.
+Treat model output and its proposed check plan as untrusted drafts. The model
+selects checking capabilities; the central validator executes them and records
+actual results. Acceptance requirements specify necessary properties and scope,
+not a fixed domain-selected tool list. Missing required evidence is incomplete
+validation. For supported finite code templates, check correctness across every
+declared parameter combination; label narrower or heuristic evidence honestly.
 
 For code questions, validation should use static safety analysis and isolated
 execution. Future domains may use tools such as SymPy, Lean, or physics-specific
@@ -39,7 +52,7 @@ solvers.
 
 Evaluate more than executable correctness. The quality pipeline should cover:
 
-- Relevance to the selected topic and learning objectives.
+- Relevance to the original prompt and requested learning objectives.
 - Coverage of the requested concepts and uploaded source material.
 - Content grounding, including traceable evidence from source documents.
 - Answerability using the question, code, and permitted context.
@@ -79,25 +92,35 @@ generate learner-facing questions.
 ### 6. Complete and preserve the code domain
 
 Build a reliable end-to-end workflow for Python code questions before expanding
-to other domains. The code domain should support the topics and difficulty levels
-accepted by the public interface, with corresponding validator support for every
-advertised capability.
+to other domains. The code domain should accept free-form learning objectives
+within documented technical capabilities, without requiring a complete
+topic/difficulty catalogue.
+Unsupported Python features, answer formats or validation requirements must be
+reported clearly. Existing profiles can remain presets and evaluation fixtures;
+they must not gate all authoring requests.
 
 ### 7. Keep models and providers replaceable
 
 Select the provider explicitly and allow its model to be configured independently.
 Changing an Ollama or OpenAI model should not require changes to domain logic or
 validation code. Adding a provider should require only a small adapter that
-produces the shared template contract.
+produces the shared proposal and check-selection contract.
 
-Provider-specific wire formats are acceptable, but they must be normalized into
-the same provider-neutral template before validation.
+Provider-specific wire formats are acceptable, but adapters must extract content
+and invoke generic parsing against supplied schemas before validation. Domains
+supply schemas, not parser callbacks. The application supplies the same documented capability catalogue to
+all models. Hosted MCP access and native tool calling are not prerequisites: the
+model emits a structured plan, and the validator controls MCP execution.
 
 ### 8. Keep domains modular
 
-Each domain should own its template contract, generation guidance, and validation
-tools. The application workflow should coordinate these modules without containing
-code-, mathematics-, or physics-specific rules.
+Each domain owns its template contract, generation guidance, acceptance
+requirements, checking capabilities, finalization and deterministic expansion.
+The application supplies the allowed catalogue to the model. The model selects
+checks; the validator binds inputs, resolves declared prerequisites and executes
+through an MCP client. Neither application nor validator contains code-,
+mathematics-, or physics-specific algorithms. Keep one authoritative capability
+definition for MCP exposure and planner documentation.
 
 Planned domain direction:
 
@@ -111,8 +134,10 @@ Planned domain direction:
 Record enough metadata to reproduce and evaluate template generation, including
 the provider, model, generation settings, prompt version, request, source document
 and passage hashes, validation evidence, evaluation scores,
-threshold versions, and timing. Approved templates and generated questions should
-be reproducible from their stored template and seed.
+threshold versions, original free-form prompt, capability catalogue snapshot,
+selected and resolved check plans, tool versions, candidate/artifact hashes, and
+timing. Preserve user approval for the exact artifact version. Approved templates
+and generated questions should be reproducible from their stored template and seed.
 
 ### 10. Keep the architecture simple
 
@@ -129,19 +154,33 @@ selection, provider-normalized proposals, deterministic fields, exhaustive valid
 reproducible seeded question generation, and provider evaluation. This milestone is
 complete; its evidence is recorded below.
 
-### Milestone 2: Enhanced validation
+### Milestone 2: Free-form authoring and model-selected validation
 
+- Replace required topic/difficulty inputs with a domain and free-form prompt.
+- Remove domain parser callbacks; use generic JSON/schema parsing in provider adapters.
+- Return a provider-neutral proposal and check-selection envelope.
+- Expose documented code-check capabilities through MCP and pass discovered,
+  allowed descriptions/schemas to the model. Cache discovery across requests and
+  refresh on connection/deployment changes.
+- Let the validator execute the selected plan, bind candidate inputs, resolve
+  prerequisites and assess actual evidence against domain acceptance requirements.
+- Retain deterministic code algorithms and technical execution constraints.
+- Persist catalogue versions, plan selections, execution results and artifact identity.
+- Evaluate check-selection quality separately from proposal schema compliance and
+  check execution. Include unknown/omitted checks, invalid arguments, unavailable
+  tools, unsupported requests and false acceptance/rejection.
 - Define a common evaluation result that separates hard validation failures from
   advisory quality scores and records the assurance level of each method.
-- Strengthen deterministic checks for relevance, concept coverage, grounding,
-  answerability, and redundancy.
 - Investigate symbolic, property-based, and other deterministic validation methods
   where they provide value beyond finite exhaustive execution.
 - Continue provider evaluations and record all generation settings.
 
 ### Milestone 3: Difficulty and question quality
 
-- Define versioned learning objectives and concept tags for code-domain profiles.
+- Strengthen checks for relevance, concept coverage, grounding, answerability and
+  redundancy using the new capability and evidence contracts.
+- Describe requested learning objectives and concept tags without requiring an
+  exhaustive profile catalogue; version any reference definitions used in checks.
 - Make difficulty levels measurable using structural code features, reasoning steps,
   trace complexity, and the concepts required to answer a question.
 - Add Bloom's taxonomy classification and alignment checks.
@@ -153,8 +192,8 @@ complete; its evidence is recorded below.
 ### Milestone 4: Frontend
 
 - Allow users to upload documents and organize a personal knowledge base.
-- Let users choose the domain, topic, difficulty, provider, model, and source
-  material used for generation.
+- Let users select a domain and write a prompt; offer provider/model settings and
+  optional source selection separately. Topic/difficulty presets are conveniences.
 - Present generated templates, citations, validation evidence, and representative
   questions for a simple user approve/reject decision.
 - Generate and present questions from templates the user approves.
@@ -186,13 +225,30 @@ code, validation, quality, frontend, mathematics, or physics milestones.
 
 ## Current Priority
 
-Milestone 1 is complete. The immediate priority is Milestone 2: enhanced
-validation. Milestone 3 should follow once the validation evidence model is stable.
+The original Milestone 1 is complete. The immediate priority is implementing
+Milestone 2's free-form authoring and model-selected validation workflow. Follow the
+[implementation order](docs/question-generation/README.md#implementation-order-and-completion-criteria).
+Milestone 3 follows once execution and evidence contracts are stable.
+Track implementation issues and progress in GitHub Projects using the
+[project setup guide](docs/project-tracking.md). Repository documents specify design
+and acceptance criteria; Projects tracks delivery status.
 
 ## Quality and Product Success Criteria
 
-The validation, question-quality, knowledge-base, and frontend milestones are
-complete when:
+Milestone 2 is complete when:
+
+- Users can request concepts outside the old topic catalogue within supported
+  technical limits, and the original prompt is retained.
+- Every provider receives the allowed capability documentation and produces the
+  shared proposal/selection envelope without executing validation tools.
+- The validator executes selected checks and declared prerequisites through MCP,
+  records actual evidence, and rejects invalid or insufficient plans.
+- Canonical answers, distractors and deterministic expansion retain their existing
+  correctness guarantees within the declared finite input domain.
+- Workflow tests and live evaluations cover generation, selection, execution and
+  acceptance failures for each supported provider/model configuration.
+
+The later question-quality, knowledge-base, and frontend milestones are complete when:
 
 - A user can create an isolated knowledge base from uploaded documents and receive
   structured ingestion diagnostics.
@@ -219,6 +275,9 @@ complete when:
 
 ## Non-Goals for the Current Milestone
 
+- Automatic model repair loops or provider-managed MCP execution.
+- A mandatory skills runtime or a general-purpose agent/workflow framework.
+- Requiring a fixed topic/difficulty catalogue or a fixed domain-selected check list.
 - Building the final production frontend; the backend contracts and lifecycle come
   first.
 - Treating embedding similarity or an LLM judge as proof of correctness.

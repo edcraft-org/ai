@@ -7,6 +7,19 @@ questions deterministically without further AI calls.
 Direct AI-to-question generation is intentionally not supported. This keeps API
 cost proportional to the number of templates rather than the number of questions.
 
+## Agreed target workflow
+
+The next implementation accepts a domain and free-form prompt. The application
+passes cached MCP check descriptions and schemas to the model, which returns a
+proposal and selected checks. Domains supply schemas; provider adapters extract
+response content and invoke generic JSON/schema parsing. The validator executes the plan and assesses evidence.
+This is a documented target, not yet the behavior of the CLI shown below.
+
+- [Workflow specification and implementation order](docs/question-generation/README.md)
+- [PlantUML sequence diagram](docs/question-generation/generate-template.puml)
+- [Goals and milestones](GOALS.md)
+- [GitHub Projects setup](docs/project-tracking.md)
+
 ## Current workflow
 
 ```text
