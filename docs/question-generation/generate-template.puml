@@ -15,10 +15,10 @@ User -> App: Generate template(domain, prompt)
 note right of App
   Provider/model are application configuration.
   Preserve the original prompt.
-  Source passages are optional future context.
+  Source passages are optional future context (RAG).
 end note
-App -> Domain: Get instructions, schemas and acceptance requirements
-Domain --> App: Domain specification
+App -> Domain: Get instructions, schemas
+Domain --> App: Domain specification, acceptance requirements
 App -> Client: Obtain cached allowed capability catalogue
 opt Initialize connection or explicitly refresh catalogue
     Client -> MCP: tools/list (all pages)
@@ -30,28 +30,20 @@ note right of App
   Discover at startup/connection and reuse the catalogue.
   Refresh on reconnect, deployment or change notification.
   Fail clearly if no usable catalogue is available.
-  Supply descriptions and schemas to the model,
-  never credentials or execution bindings.
+  Supply descriptions and schemas to the model
 end note
 App -> Provider: Generate(prompt, domain specification, catalogue)
-Provider -> Model: Messages + structured response schema
+Provider -> Model: Prompt + structured response schema
 Model --> Provider: Proposal + selected check names and arguments
-Provider -> Provider: Extract provider response content
-Provider -> Provider: Generic JSON/schema parsing using supplied response model
 Provider --> App: Typed proposal + check selections
 note right of Provider
   One planning request; no provider-managed MCP execution.
-  Domain supplies schemas, not a parser callback.
-  Malformed output stops before check execution.
+  Validator running checks gives us more 
+  control over the validation process.
 end note
 
-App -> Domain: Build candidate and acceptance requirements
-Domain --> App: Candidate + requirements
-note right of Domain
-  Derive identity and supported domain fields.
-  Keep model-selected checks; do not replace them
-  with a fixed domain-selected check list.
-end note
+App -> Domain: Build candidate
+Domain --> App: Candidate
 App -> Validator: Validate(candidate, selections, catalogue, requirements)
 Validator -> Validator: Validate names/arguments and bind candidate
 Validator -> Validator: Resolve prerequisites and execution order
@@ -95,9 +87,4 @@ else Accepted within declared validation scope
     end
 end
 
-note over App, MCP
-  Target design, not a claim about the current implementation.
-  Approval UI/persistence follows in the frontend milestone.
-  Preview and learner question expansion need no model or MCP calls.
-end note
 @enduml
