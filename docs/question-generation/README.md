@@ -1,223 +1,202 @@
 # Template generation workflow
 
-Status: agreed target design before implementation, 18 September 2026.
-This document and [the sequence diagram](generate-template.puml) supersede the
-earlier domain-selected validation plan and optional custom-prompt design.
-The code and CLI on this docs branch still implement the older workflow.
-Product goals and milestone scope are in [GOALS.md](../../GOALS.md).
+Status: agreed target design before implementation, 23 September 2026.
+This document and [the sequence diagram](generate-template.puml) define the target
+workflow. The code on this documentation branch still implements the earlier
+workflow. Product scope and milestone order are in [GOALS.md](../../GOALS.md).
 
 ## Decisions
 
-1. The user selects a domain and submits a free-form prompt. Topic and difficulty
-   may be expressed in that prompt; neither requires a predefined catalogue.
-2. The application obtains a cached capability catalogue through an MCP client
-   and supplies its documentation to the model with the domain specification.
-   Discovery happens at connection/startup and explicit refresh, not every request.
-3. The model returns a structured proposal and selected check names and arguments.
-   It plans validation but does not execute checks or produce evidence.
-4. The central validator validates and executes that plan through the MCP client.
-   Check implementations may remain deterministic despite model-driven selection.
-5. Domain-owned acceptance requirements specify required properties and scope,
-   rather than a fixed list of tools.
-6. Initially, use one generation/planning request and one validation pass. Return
-   rejection to the user; automatic repair is deferred.
-7. Review and approve technically validated templates before learner use. Allow
-   deterministic previews for review. Approval UI and persistence follow in the
-   frontend milestone; they do not exist merely because this diagram includes them.
+1. Every request contains a domain, a free-form prompt, and a required `easy`,
+   `medium`, or `hard` difficulty. Provider and model remain separate configuration.
+2. The selected domain supplies generation instructions, a proposal schema, and the
+   names of MCP tools allowed for that domain.
+3. MCP is authoritative for each tool's description, input and result schemas, and
+   implementation. The application resolves the domain's names against MCP and
+   freezes those definitions for the generation job.
+4. In its first response, the model returns both a complete proposal and a fixed
+   recommended check plan selected from the offered tools.
+5. The model requests the selected checks. The application enforces the frozen
+   allowlist and plan, calls MCP, records the evidence, and returns it to the model.
+6. All selected checks must pass in one complete attempt. After a failed attempt,
+   the model may revise the proposal and arguments, then reruns the same check plan.
+   The workflow permits at most three complete attempts.
+7. A third failed attempt returns the latest proposal and evidence as
+   `needs_review`. A passed proposal becomes a reviewable artifact; it is not
+   learner-facing until a user approves that exact version.
+8. Approved templates generate questions deterministically, without further model
+   or MCP calls.
 
-## Input and model response
+There is no central validator. The application owns orchestration and permission
+checks, MCP tools own domain-specific validation algorithms, and the model owns
+check selection and correction. Provider-managed MCP execution is outside the
+initial scope because the application must preserve permissions, limits, evidence,
+and consistent behavior across local and hosted models.
+
+## Request and response
 
 The public authoring request is:
 
 ```json
 {
   "domain": "code",
-  "prompt": "Create a Python MCQ about summing even numbers in a list. Use a loop and include accumulator mistakes as distractors."
+  "prompt": "Create a Python MCQ about summing even numbers in a list. Use a loop and include accumulator mistakes as distractors.",
+  "difficulty": "medium"
 }
 ```
 
-Validate a nonblank prompt and resolve the domain at the application boundary.
-Provider/model selection remains independent application configuration, with an
-optional advanced override. Preserve the original prompt in provenance.
-The domain supplies defaults such as option count in its generation instructions.
-Unsupported or conflicting requirements must produce an actionable failure; do
-not silently substitute an unrelated supported topic.
+The application validates the request, resolves the domain, and preserves the
+original values in provenance. Topic profiles may remain presets and evaluation
+fixtures, but they do not gate free-form authoring. Unsupported requests return an
+actionable error rather than being silently changed to a supported topic.
 
-Combine domain instructions, the original user prompt, optional future retrieved
-source context, the allowed check catalogue and a response schema. User prompts
-and source passages cannot change tool permissions or acceptance rules.
-No preliminary model call to map the prompt into the old topic/difficulty enum is
-required. The proposal carries supported operational fields, including answer
-target and answer kind, which the domain validates. Topic labels are descriptive
-metadata, not execution dispatch keys. Profiles may remain optional presets and
-historical evaluation fixtures.
-
-The response contains `proposal` (the domain's proposal schema) and `checks`
-(names and arguments validated against the catalogue). For example, these
-illustrative selections accompany the proposal:
+The domain returns a generation specification such as:
 
 ```json
 {
-  "checks": [
-    {"name": "code_verify_execution_answers", "arguments": {}},
-    {"name": "code_require_feature", "arguments": {"feature": "loop"}},
-    {"name": "code_check_distractors", "arguments": {}}
+  "instructions": "Generate one reusable Python multiple-choice template.",
+  "proposal_schema": "CodeTemplateProposalV1",
+  "allowed_tool_names": [
+    "code_verify_execution_answers",
+    "code_require_feature",
+    "code_check_distractors",
+    "code_assess_difficulty"
   ]
 }
 ```
 
-These are planned capability names, not existing MCP endpoints. The validator
-binds the actual candidate and prerequisite results to execution inputs. The model
-need not duplicate the candidate in every check's arguments. The planner-facing
-schema describes model-supplied arguments; the execution schema also includes
-validator-supplied data. Their mapping belongs to the capability definition and is
-tested, not inferred from arbitrary tool names.
+The application resolves those names to current MCP descriptions and schemas and
+sends them with the prompt, difficulty, instructions, and proposal schema. The
+model's first response contains the proposal and a nonempty fixed check plan:
 
-Every provider returns this shared envelope. The domain supplies its proposal
-schema; shared generation code defines the envelope containing proposal and checks.
-The provider adapter extracts response content and invokes generic JSON/schema
-parsing, for example `response_model.model_validate_json(content)`. Domains supply
-no parser callback, and provider adapters do not import concrete domain classes.
-The model generates data; local code still validates its structure before execution.
+```json
+{
+  "proposal": {
+    "question_text": "What value is printed?",
+    "code": "...",
+    "parameters": {"values": [[1, 2, 4], [3, 6, 7]]},
+    "answer_kind": "integer"
+  },
+  "checks": [
+    {"name": "code_verify_execution_answers", "arguments": {}},
+    {"name": "code_require_feature", "arguments": {"feature": "loop"}},
+    {"name": "code_check_distractors", "arguments": {}},
+    {"name": "code_assess_difficulty", "arguments": {"requested": "medium"}}
+  ]
+}
+```
 
-Provider-specific response envelopes and transport formats belong to adapters.
-Domain field types and constraints belong to schemas. If a response representation
-needs normalization, prefer an explicit shared representation and schema-level
-validation; do not recreate a custom domain parser interface. Candidate construction
-remains domain-owned and derives domain fields from already parsed data.
+This is one proposal-and-planning response. It does not mean that the model executes
+tools inside that response. Subsequent model turns request calls and receive the
+actual evidence. Provider adapters normalize native tool-call formats into the
+shared application representation. Domains supply schemas and never supply parser
+callbacks.
 
-Use structured output for the proposal and plan. Native function calling and hosted
-MCP execution are not required. Model quality and supported schema features still
-require live tests for each exact model/version, including Ollama Qwen and LFM.
+## Tool catalogue
 
-## Capability catalogue
+FastMCP maintains the deterministic tool registry. Each exposed tool documents:
 
-Maintain one authoritative definition alongside each check implementation. Use it
-to expose MCP tools and construct the catalogue given to the model. Document:
+- A stable unique name and a description that says when to select it.
+- Its supported inputs, limitations, and structured result schema.
+- What property it checks and the scope and assurance of its evidence.
+- Its implementation, timeout, resource, and isolation constraints where relevant.
 
-- Unique name, purpose, applicability and limitations.
-- Model argument schema, execution input schema and structured output schema.
-- Required inputs/prerequisites and checked values produced.
-- Properties it can establish, evidence scope and assurance method.
+The application queries MCP once at the start of a generation job, resolves only
+the selected domain's allowed names, and freezes the resulting catalogue snapshot
+for all retries. A missing or duplicate allowed name fails before model generation.
+The domain does not duplicate tool descriptions or schemas. MCP `tools/list` reads
+the registry; it does not run every tool.
 
-MCP standardizes names, descriptions, schemas, discovery and invocation. EdCraft's
-coverage, prerequisite and input-binding metadata are application-specific
-extensions; MCP does not supply a validation policy or dependency scheduler.
-
-Use only configured servers and allowed capabilities for the selected domain.
-Resolve names to server/tool bindings in code, including server identity when names
-collide. Supply documentation to the model, not credentials, callables or URLs for
-it to choose. The server maintains a registry of check implementations and their
-definitions. `tools/list` reads that registry; it does not execute or probe each tool.
-
-Discover at connection/startup, following pagination, and cache the catalogue.
-Reuse it across authoring requests. Refresh on reconnect, capability deployment or
-supported list-change notifications. Pin the snapshot for an in-flight attempt;
-changes apply to later attempts. Do not maintain a second hand-written catalogue.
-Changed/unavailable execution contracts fail clearly rather than being silently
-substituted; a cached definition does not guarantee the server is available.
-
-Expose meaningful checks, not every helper. An execution-verification capability
-can own parsing, static preconditions, bounded execution and answer extraction.
-Keep unavoidable prerequisites explicit and let the validator resolve their order.
-A small declared dependency list and stable ordering suffice initially; a general
-workflow language is out of scope. Skills remain optional future guidance.
+The initial implementation may connect to one MCP server while keeping tool names
+globally unique. Shared tools can appear in several domain allowlists. Domain-
+specific tools remain in the same registry until independent deployment, security,
+or scaling requirements justify separate servers.
 
 ## Responsibilities
 
 | Component | Responsibility |
 | --- | --- |
-| Application | Resolve domain/provider, obtain cached catalogue, assemble generation input, coordinate validation/review and preserve provenance. |
-| Domain | Own schemas, guidance, candidate construction, acceptance requirements, finalization and deterministic question expansion. |
-| Model | Propose the template and select suitable checks and arguments. |
-| Provider adapter | Send messages/schema, extract response content, invoke generic JSON/schema parsing and return the typed proposal and selections. |
-| Validator | Validate selections, bind inputs, resolve prerequisites, execute checks, collect evidence and assess acceptance. |
-| MCP client | Discover/cache tool definitions, refresh when needed, invoke bound server/tools and translate transport/protocol failures. |
-| MCP server | Execute capabilities and return structured findings and checked values. |
+| Application | Validate the request, resolve the domain and MCP definitions, call the model, mediate allowed tool calls, enforce the attempt limit, record evidence, and coordinate review. |
+| Domain | Own generation instructions, proposal schema, allowed MCP tool names, deterministic finalization, and deterministic question expansion. |
+| Model | Return the proposal and fixed check plan, request each check, and revise failed proposals using returned evidence. |
+| Provider adapter | Translate provider-specific structured responses and tool calls into the shared model interface and parse against supplied schemas. |
+| MCP | Own authoritative tool definitions, deterministic implementations, technical limits, and structured evidence. |
 
-The validator stays domain agnostic: it consumes contracts, dependencies and
-acceptance requirements. Domain-specific comparisons or evidence interpretation
-belong in domain capabilities. Adding a model does not change validation code.
-Adding a domain supplies its schemas, guidance and capabilities.
+The application contains no code-, mathematics-, or physics-specific checking
+algorithm. Adding a provider changes only its adapter. Adding a domain supplies a
+new domain module and appropriate MCP tools without adding domain branches to the
+application loop.
 
-## Validation and acceptance
+## Checking and correction
 
-Before execution, reject unknown checks, invalid arguments, unsupported inputs,
-unresolvable dependencies or cycles. Technical constraints apply regardless of
-selection: the model cannot bypass execution isolation, safety checks or limits.
+Before a call, the application rejects an unknown tool, a name outside the frozen
+domain allowlist or fixed plan, malformed arguments, and a call after the attempt
+limit. It also enforces deployment safety and resource limits. These checks protect
+the execution boundary; they do not interpret domain correctness.
 
-Required properties for supported code MCQs include answer evidence across the
-declared finite parameter domain, valid distinct options and renderable questions.
-The model selects capabilities. The validator may add declared prerequisites but
-must not silently replace the plan with the old fixed list. Record selected checks
-and resolved prerequisites separately. Missing required coverage is incomplete
-validation, not acceptance of an empty or weak plan.
+An attempt is complete after every tool in the fixed plan returns structured
+evidence for the same proposal version. A successful transport call is not a passed
+check: the application reads the tool result's `passed`, `failed`, or `error` state.
+Any failure or error prevents technical success. Tool evidence should include
+findings, checked values, actual scope, assurance method, tool version, duration,
+and the proposal identity.
 
-Metadata establishes eligibility to run; actual results establish success. A
-successful MCP call may contain a failed or incomplete check. Validate result
-schemas, preserve errors and stop on blocking failures. Advisory quality findings
-remain visible without being misrepresented as correctness proof.
+When all checks pass, the application marks the proposal checked. When anything
+fails and attempts remain, it returns the complete attempt evidence to the model.
+The model may revise proposal fields and arguments, but it cannot add, remove, or
+replace checks. The full fixed plan then runs against the new proposal version.
+After the third failed attempt, the application returns `needs_review`; it does not
+pretend the evidence passed.
 
-Distinguish mandatory correctness properties from requested quality objectives.
-Record unverified prompt requirements. If a requested property is essential for
-acceptance and no capability can establish it, return incomplete. Arbitrary
-natural-language coverage cannot be guaranteed by matching capability names;
-evaluate interpretation and selection with human-labelled examples.
+The initial architecture deliberately does not add an independent rule engine that
+decides which checks the model omitted. Check-selection quality is measured with
+reviewed evaluation fixtures in issues #40 and #56. Evidence from deterministic
+correctness or safety tools remains authoritative and cannot be overridden by model
+confidence or a heuristic quality score.
 
-Results carry `passed`, `failed` or `incomplete`, findings, checked values and actual
-scope. Retain `proof`, `exhaustive`, `bounded`, `sampled` and `heuristic` assurance.
-Exhaustive means every declared finite case, not every possible program input.
-Model confidence cannot override failures; heuristic reviews remain labelled.
+## Finalization, review, and reuse
 
-Checks may derive canonical answers and select distractors as today. Record checked
-values and their relationship to the candidate. Finalization packages these values
-without new generation or execution. A material proposal change requires fresh
-validation; evidence for an older candidate cannot approve a different artifact.
+Domain finalization may package checked values into the reusable template and build
+deterministic fields such as canonical answers or distractors. It must be a pure,
+deterministic transformation and must not change the checked semantic content. If
+that constraint proves unnecessary, finalization can be folded into application
+artifact construction later without changing the model/MCP loop.
 
-## Review, reuse and provenance
+The review screen presents the exact artifact, original prompt and difficulty,
+fixed plan, evidence history, limitations, and representative deterministic
+questions. Approval and rejection are bound to its stable identity. Any material
+revision creates a new version that requires fresh checks and approval.
 
-Present the template, report, limitations, any citations and deterministic previews.
-Bind approval to the exact finalized artifact version. Rejected artifacts remain
-unavailable to learners. Generate questions from approved artifacts and seeds
-without model calls, MCP calls or per-question validation.
-
-Record the original prompt, domain, provider/model and settings, prompt/schema
-versions, catalogue snapshot and capability versions, selected and resolved plans,
-candidate/final artifact hashes, actual results/scopes, timings and user decision.
-Record source identifiers/hashes when retrieval is added. Never store credentials
-or hidden model reasoning. Model generation is not guaranteed reproducible;
-expansion from a recorded artifact and seed must be reproducible.
+Record the domain, prompt, difficulty, provider/model and settings, prompt/schema
+versions, frozen catalogue, fixed plan, every proposal version and tool result,
+tool versions, timings, artifact hash, and user decision. When source grounding is
+added, also record immutable source and passage identifiers and citations. Never
+store credentials or hidden model reasoning.
 
 ## Implementation order and completion criteria
 
-1. Remove domain parser callbacks. Adapters extract content and use generic parsing
-   against supplied schemas, retaining domain-independent provider implementations.
-2. Define free-form input and the proposal/check-selection envelope. Remove required
-   profile lookups from generation and candidate construction.
-3. Define capability contracts and expose a small code-check MCP server, retaining
-   deterministic algorithms and technical constraints.
-4. Add cached discovery and pass the same allowed snapshot to every provider.
-5. Extend the validator for selected checks, prerequisites, input binding, MCP
-   execution, failures and acceptance coverage.
-6. Adapt finalization, provenance and deterministic previews/reuse. Keep technical
-   validation distinct from later user approval.
-7. Update tests and run live evaluations. Track frontend approval and knowledge-base
-   work separately in GitHub Projects.
+1. Remove domain parser callbacks and parse provider responses generically against
+   supplied schemas (#34).
+2. Add the free-form request and combined proposal/check-plan contract (#35).
+3. Expose authoritative MCP tools and structured evidence while preserving code
+   execution limits (#36).
+4. Resolve domain-allowed names to one frozen MCP catalogue snapshot and supply it
+   to the model (#37).
+5. Implement the application-mediated calls, fixed-plan retries, three-attempt
+   limit, and `needs_review` result (#38).
+6. Bind evidence and approval to a reproducible artifact and deterministic reuse
+   path (#39).
+7. Test the integrated workflow and run live provider/model evaluations (#40).
 
 The [implementation issue list](../project-tracking.md#implementation-issues) records
-GitHub issues and their dependencies. Each implementation issue includes its own
-focused tests; the final evaluation issue verifies the integrated workflow.
-
-Test successful novel-topic prompts, malformed output, unknown checks, invalid
-arguments, missing coverage, unmet prerequisites, unavailable servers, timeouts,
-malformed results and outdated evidence. Verify that generation never executes
-tools and the validator executes selections and prerequisites. Measure missed and
-unnecessary checks, invalid arguments, false acceptance/rejection, cost and latency
-separately from schema compliance. Use the same fixtures and rules across providers.
+the detailed acceptance criteria and dependencies. Tests must cover novel prompts,
+all three difficulties, malformed model output, empty and unknown plans, invalid
+tool arguments, unavailable tools, result errors, correction success, three failed
+attempts, outdated evidence, exact artifact approval, and deterministic reuse.
 
 ## References
 
 - [MCP tools](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)
-- [OpenAI tool descriptions](https://developers.openai.com/api/docs/guides/function-calling)
-- [Ollama structured generation](https://docs.ollama.com/api/chat)
+- [OpenAI function calling](https://developers.openai.com/api/docs/guides/function-calling)
+- [Ollama tool calling](https://docs.ollama.com/capabilities/tool-calling)
 - [GitHub Projects setup](../project-tracking.md)

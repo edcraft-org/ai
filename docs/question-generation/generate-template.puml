@@ -1,90 +1,48 @@
 @startuml TemplateGeneration
-title Target workflow: free-form prompt and model-selected checks
+title Template generation with model-directed checks
 autonumber
 
 actor User
-participant TemplateApplication as App
+participant Application as App
 participant Domain
-participant "MCP client" as Client
-participant "Configured MCP check server(s)" as MCP
-participant "Model provider adapter" as Provider
 participant Model
-participant Validator
+participant MCP
 
-User -> App: Generate template(domain, prompt)
-note right of App
-  Provider/model are application configuration.
-  Preserve the original prompt.
-  Source passages are optional future context (RAG).
-end note
-App -> Domain: Get instructions, schemas
-Domain --> App: Domain specification, acceptance requirements
-App -> Client: Obtain cached allowed capability catalogue
-opt Initialize connection or explicitly refresh catalogue
-    Client -> MCP: tools/list (all pages)
-    MCP --> Client: Registered check definitions and schemas
-    Client -> Client: Cache catalogue and server/tool bindings
-end
-Client --> App: Catalogue snapshot and execution bindings
-note right of App
-  Discover at startup/connection and reuse the catalogue.
-  Refresh on reconnect, deployment or change notification.
-  Fail clearly if no usable catalogue is available.
-  Supply descriptions and schemas to the model
-end note
-App -> Provider: Generate(prompt, domain specification, catalogue)
-Provider -> Model: Prompt + structured response schema
-Model --> Provider: Proposal + selected check names and arguments
-Provider --> App: Typed proposal + check selections
-note right of Provider
-  One planning request; no provider-managed MCP execution.
-  Validator running checks gives us more 
-  control over the validation process.
-end note
+User -> App: Generate template(domain, prompt, difficulty)
+App -> Domain: Get generation specification
+Domain --> App: Instructions + schema + allowed tool names
 
-App -> Domain: Build candidate
-Domain --> App: Candidate
-App -> Validator: Validate(candidate, selections, catalogue, requirements)
-Validator -> Validator: Validate names/arguments and bind candidate
-Validator -> Validator: Resolve prerequisites and execution order
+App -> MCP: Get definitions for allowed tools
+MCP --> App: Tool descriptions and schemas
+App -> Model: Generate proposal and recommend checks\n(prompt, difficulty, instructions, schema, tools)
+Model --> App: Proposal + fixed check plan
 
-alt Plan invalid or required coverage unsupported
-    Validator --> App: Rejected or incomplete report with reason
-else Plan executable
-    loop Each resolved check, until blocking failure/incompletion
-        Validator -> Client: Execute check against candidate
-        Client -> MCP: tools/call(name, bound arguments)
-        MCP --> Client: Structured result + checked values
-        Client --> Validator: Validated tool result or execution error
-        Validator -> Validator: Record evidence, scope, duration and candidate identity
+loop Run checks (maximum 3 attempts)
+    loop Each selected check
+        Model --> App: Request check for current proposal
+        App -> MCP: Run check
+        MCP --> App: Pass/fail + validation evidence
+        App --> Model: Validation evidence
     end
-    Validator -> Validator: Assess evidence against acceptance requirements
-    Validator --> App: Report + checked values
+
+    alt All checks passed
+        App -> App: Mark proposal as checked
+        break Stop retrying
+    else A check failed and attempts remain
+        App -> Model: Revise proposal using validation evidence
+        Model --> App: Revised proposal
+    else A check failed on attempt 3
+        App -> App: Mark proposal as needs_review
+    end
 end
 
-alt Rejected or incomplete
-    App --> User: Failure or missing coverage + available evidence
-    note right of User
-      User may revise the prompt and start a new attempt.
-      No automatic model repair loop in this workflow.
-    end note
-else Accepted within declared validation scope
-    App -> Domain: Finalize(candidate, checked values, report)
-    Domain --> App: Technically validated template
-    App -> App: Attach prompt, model, catalogue, plan and evidence provenance
-    App -> Domain: Generate representative questions using fixed seeds
-    Domain --> App: Deterministic preview questions
-    App --> User: Template + evidence + limitations + previews
+alt All checks passed
+    App -> Domain: Finalize proposal
+    Domain --> App: Reviewable template
+    App --> User: Template + validation evidence
     User -> App: Approve or reject
-    alt User approves
-        App -> App: Record approval for this exact artifact version
-        User -> App: Generate question(template, seed)
-        App -> Domain: Generate question(approved template, seed)
-        Domain --> App: Deterministic question
-        App --> User: Question
-    else User rejects
-        App -> App: Record decision; keep artifact unavailable to learners
-    end
+else Three attempts failed
+    App --> User: Latest proposal + validation evidence + needs_review
 end
 
 @enduml
