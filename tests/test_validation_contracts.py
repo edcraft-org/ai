@@ -1,6 +1,6 @@
 import pytest
 
-from edcraft_validator.validation.contracts import (
+from edcraft_validator.validation.validation_contracts import (
     ValidationEvidence,
     ValidationFailure,
     ValidationPolicy,

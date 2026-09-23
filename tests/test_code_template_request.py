@@ -1,8 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from edcraft_validator.domains.code.models import CodeTemplateRequest
-from edcraft_validator.generation.models import TemplateProviderSelection
+from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
+from edcraft_validator.llm.llm_contracts import TemplateProviderSelection
 
 
 def test_template_request_defaults_to_three_distractors() -> None:
