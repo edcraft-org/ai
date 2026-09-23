@@ -1,0 +1,48 @@
+@startuml TemplateGeneration
+title Template generation with model-directed checks
+autonumber
+
+actor User
+participant Application as App
+participant Domain
+participant Model
+participant MCP
+
+User -> App: Generate template(domain, prompt, difficulty)
+App -> Domain: Get generation specification
+Domain --> App: Instructions + schema + allowed tool names
+
+App -> MCP: Get definitions for allowed tools
+MCP --> App: Tool descriptions and schemas
+App -> Model: Generate proposal and recommend checks\n(prompt, difficulty, instructions, schema, tools)
+Model --> App: Proposal + fixed check plan
+
+loop Run checks (maximum 3 attempts)
+    loop Each selected check
+        Model --> App: Request check for current proposal
+        App -> MCP: Run check
+        MCP --> App: Pass/fail + validation evidence
+        App --> Model: Validation evidence
+    end
+
+    alt All checks passed
+        App -> App: Mark proposal as checked
+        break Stop retrying
+    else A check failed and attempts remain
+        App -> Model: Revise proposal using validation evidence
+        Model --> App: Revised proposal
+    else A check failed on attempt 3
+        App -> App: Mark proposal as needs_review
+    end
+end
+
+alt All checks passed
+    App -> Domain: Finalize proposal
+    Domain --> App: Reviewable template
+    App --> User: Template + validation evidence
+    User -> App: Approve or reject
+else Three attempts failed
+    App --> User: Latest proposal + validation evidence + needs_review
+end
+
+@enduml

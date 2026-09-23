@@ -5,17 +5,32 @@
 EdCraft should help educators and learners create trustworthy, varied questions
 without requiring an AI call for every question.
 
-The intended workflow is:
+The agreed target workflow (23 September 2026) is documented in
+[the workflow specification](docs/question-generation/README.md) and
+[the sequence diagram](docs/question-generation/generate-template.puml).
+It is the implementation target; the historical milestone evidence below does not
+claim that free-form input, MCP execution or model-selected checks already exist.
 
-1. A user uploads source documents and organizes them into a personal knowledge
-   base.
-2. The user selects a domain, topic, difficulty, and relevant source material.
-3. An AI model authors a reusable, source-grounded question template.
-4. Domain-specific tools validate correctness, grounding, answerability, relevance,
-   coverage, difficulty, and redundancy as far as deterministic methods allow.
-5. The user reviews and manually approves the template.
-6. The approved template generates many deterministic questions from different
-   parameter values without additional AI calls.
+1. The user selects a domain, supplies a free-form prompt, and chooses a required
+   `easy`, `medium`, or `hard` difficulty. Provider/model remain separate
+   configuration.
+2. The domain supplies generation instructions, a proposal schema, and the names of
+   tools allowed for that domain. The application obtains the corresponding tool
+   descriptions and schemas from MCP.
+3. In one generation attempt, the model returns both a structured reusable template
+   proposal and its recommended fixed check plan.
+4. The model requests every selected check, the application routes each request to
+   MCP, and the resulting validation evidence is returned to the model.
+5. If a check fails, the model revises the proposal and reruns the fixed plan, for a
+   maximum of three complete attempts. After the third failure, the latest proposal
+   and evidence are returned with a `needs_review` status.
+6. A proposal whose selected checks pass is finalized and presented with its evidence.
+   The user approves or rejects that exact artifact version. Approved templates then
+   generate deterministic questions without additional AI or MCP calls.
+
+Document upload and personal knowledge bases remain planned milestones. When
+available, retrieved source passages augment the prompt and are preserved in
+provenance; uploading documents is not a prerequisite for the initial workflow.
 
 ## Main Goals
 
@@ -27,9 +42,13 @@ fast, and require no additional AI calls.
 
 ### 2. Make correctness depend on tools, not model confidence
 
-Treat model output as an untrusted draft. A template is usable only after
-domain-specific validators establish that its generated questions and answers are
-correct throughout its supported parameter domain.
+Treat model output and its proposed check plan as untrusted drafts. The domain limits
+which tools may be offered, while the model selects a fixed plan from that set. The
+application routes requested calls to MCP, records actual results, and returns the
+evidence to the model. A proposal proceeds only when every check in its fixed plan
+passes. For supported finite code templates, checking tools should cover every
+declared parameter combination; narrower or heuristic evidence must be labelled
+honestly.
 
 For code questions, validation should use static safety analysis and isolated
 execution. Future domains may use tools such as SymPy, Lean, or physics-specific
@@ -39,7 +58,7 @@ solvers.
 
 Evaluate more than executable correctness. The quality pipeline should cover:
 
-- Relevance to the selected topic and learning objectives.
+- Relevance to the original prompt and requested learning objectives.
 - Coverage of the requested concepts and uploaded source material.
 - Content grounding, including traceable evidence from source documents.
 - Answerability using the question, code, and permitted context.
@@ -79,25 +98,35 @@ generate learner-facing questions.
 ### 6. Complete and preserve the code domain
 
 Build a reliable end-to-end workflow for Python code questions before expanding
-to other domains. The code domain should support the topics and difficulty levels
-accepted by the public interface, with corresponding validator support for every
-advertised capability.
+to other domains. The code domain should accept free-form learning objectives
+within documented technical capabilities, without requiring a complete topic
+catalogue. Every domain uses the common `easy`, `medium`, and `hard` request
+levels, while domain-specific tools determine how those levels are assessed.
+Unsupported Python features, answer formats or validation requirements must be
+reported clearly. Existing profiles can remain presets and evaluation fixtures;
+they must not gate all authoring requests.
 
 ### 7. Keep models and providers replaceable
 
 Select the provider explicitly and allow its model to be configured independently.
 Changing an Ollama or OpenAI model should not require changes to domain logic or
-validation code. Adding a provider should require only a small adapter that
-produces the shared template contract.
+checking tools. Adding a provider should require only a small adapter that supports
+the shared proposal/check-plan response and tool-calling loop.
 
-Provider-specific wire formats are acceptable, but they must be normalized into
-the same provider-neutral template before validation.
+Provider-specific wire formats are acceptable, but adapters must extract content
+and invoke generic parsing against supplied schemas. Domains supply schemas, not
+parser callbacks. The application supplies the domain-allowed tool definitions to
+every model and mediates tool execution consistently across providers.
 
 ### 8. Keep domains modular
 
-Each domain should own its template contract, generation guidance, and validation
-tools. The application workflow should coordinate these modules without containing
-code-, mathematics-, or physics-specific rules.
+Each domain owns its proposal schema, generation guidance, allowed tool names,
+finalization and deterministic expansion. MCP owns the authoritative tool
+descriptions, input schemas, implementations, and evidence contracts. The
+application resolves the domain's allowed names against MCP and supplies those
+definitions to the model. The model selects checks, requests their execution, and
+revises failed proposals; the application only orchestrates this loop. The
+application contains no code-, mathematics-, or physics-specific algorithms.
 
 Planned domain direction:
 
@@ -111,8 +140,11 @@ Planned domain direction:
 Record enough metadata to reproduce and evaluate template generation, including
 the provider, model, generation settings, prompt version, request, source document
 and passage hashes, validation evidence, evaluation scores,
-threshold versions, and timing. Approved templates and generated questions should
-be reproducible from their stored template and seed.
+threshold versions, original free-form prompt, requested difficulty, capability
+catalogue snapshot, fixed check plan, per-attempt evidence, tool versions,
+candidate/artifact hashes, and timing. Preserve user approval for the exact artifact
+version. Approved templates and generated questions should be reproducible from
+their stored template and seed.
 
 ### 10. Keep the architecture simple
 
@@ -129,50 +161,75 @@ selection, provider-normalized proposals, deterministic fields, exhaustive valid
 reproducible seeded question generation, and provider evaluation. This milestone is
 complete; its evidence is recorded below.
 
-### Milestone 2: Enhanced validation
+### Milestone 2: Free-form authoring and model-selected validation
 
+- Replace required topic inputs with a domain and free-form prompt while requiring
+  an `easy`, `medium`, or `hard` difficulty on every request.
+- Remove domain parser callbacks; use generic JSON/schema parsing in provider adapters.
+- Return the provider-neutral proposal and recommended fixed check plan from one
+  model generation attempt.
+- Let each domain declare its allowed tool names. Resolve their current descriptions
+  and schemas from MCP and freeze that catalogue for the generation workflow.
+- Let the model request every check in its fixed plan. Route calls through the
+  application to MCP and return structured pass/fail evidence to the model.
+- If evidence contains a failure, let the model revise the proposal and rerun the
+  fixed plan for at most three complete attempts. Return the latest proposal and
+  evidence as `needs_review` after the third failure.
+- Retain deterministic code algorithms and technical execution constraints.
+- Persist catalogue versions, the fixed plan, per-attempt evidence and artifact
+  identity.
+- Evaluate check-selection quality separately from proposal schema compliance and
+  check execution. Include unknown/omitted checks, invalid arguments, unavailable
+  tools, unsupported requests and false acceptance/rejection.
 - Define a common evaluation result that separates hard validation failures from
   advisory quality scores and records the assurance level of each method.
-- Strengthen deterministic checks for relevance, concept coverage, grounding,
-  answerability, and redundancy.
 - Investigate symbolic, property-based, and other deterministic validation methods
   where they provide value beyond finite exhaustive execution.
 - Continue provider evaluations and record all generation settings.
 
 ### Milestone 3: Difficulty and question quality
 
-- Define versioned learning objectives and concept tags for code-domain profiles.
-- Make difficulty levels measurable using structural code features, reasoning steps,
-  trace complexity, and the concepts required to answer a question.
-- Add Bloom's taxonomy classification and alignment checks.
-- Add a knowledge base that grounds template generation in selected source material.
-- Preserve source identifiers, passage hashes, and citations on generated templates.
-- Calibrate embeddings and any fallback LLM judges using a labelled set of
-  human-reviewed EdCraft templates.
+- Build a reviewed benchmark of code questions labelled for difficulty and topic
+  relevance, with a written annotation guide and agreement results.
+- Extract deterministic static and execution-trace features that explain the work a
+  learner must perform.
+- Estimate code difficulty with a bounded rubric covering execution burden, state
+  tracking, conceptual demand, and answer discrimination.
+- Estimate relevance to the free-form learning objective using deterministic topic
+  and structural evidence, with calibrated embedding similarity where it adds value.
+- Version thresholds and report component evidence and uncertainty rather than only
+  a final label.
 
-### Milestone 4: Frontend
+### Milestone 4: Authoring and review workflow
 
-- Allow users to upload documents and organize a personal knowledge base.
-- Let users choose the domain, topic, difficulty, provider, model, and source
-  material used for generation.
-- Present generated templates, citations, validation evidence, and representative
-  questions for a simple user approve/reject decision.
-- Generate and present questions from templates the user approves.
+- Let users select a domain, write a free-form prompt, and choose the required
+  `easy`, `medium`, or `hard` difficulty. Keep provider/model settings separate.
+- Show generation, check execution, correction attempts, errors, and `needs_review`
+  without duplicating the application workflow in the frontend.
+- Present the exact artifact, provenance, validation and quality evidence, and
+  representative deterministic questions for user approval or rejection.
+- Bind approval to the exact artifact version and support deterministic generation
+  from approved templates.
+- Prepare and pilot the usability protocol before the final UAT milestone.
 
-### Milestone 5: Mathematics and physics modules
+### Milestone 5: Mathematics domain pilot
 
-- Add mathematics as an independent domain module using symbolic checking with
-  SymPy and formal verification with Lean where appropriate.
-- Add physics as an independent module using symbolic, numerical, dimensional, and
-  constraint-based checks.
+- Add one bounded mathematics question family as an independent domain module.
+- Use symbolic checking with SymPy where appropriate; investigate Lean only where it
+  adds assurance that the first pilot needs.
+- Define mathematics-specific meanings for the common `easy`, `medium`, and `hard`
+  labels and evaluate them against reviewed examples.
 - Extract shared domain abstractions only when both the existing code domain and a
   real second domain demonstrate the requirement.
 
-### Milestone 6: Optional chemistry module
+### Milestone 6: Conditional source-grounded generation pilot
 
-If project time permits, add a narrowly scoped chemistry module with its own
-template schema and deterministic validation tools. Chemistry must not delay the
-code, validation, quality, frontend, mathematics, or physics milestones.
+If Milestones 2 to 5 are stable, add one bounded source format and corpus for
+document ingestion, retrieval, cited generation, and grounding evaluation. Preserve
+source identifiers, content hashes, selected passages, and citations on artifacts.
+Retrieved content remains untrusted input and cannot change tool permissions or
+system policy. Defer this milestone rather than weakening the core code,
+mathematics, authoring, or evaluation work.
 
 ### Milestone 7: UAT and refinement
 
@@ -181,31 +238,52 @@ code, validation, quality, frontend, mathematics, or physics milestones.
   and model/provider performance.
 - Prioritize refinements from observed UAT evidence rather than adding speculative
   complexity.
-- Recalibrate quality thresholds and improve prompts, validators, and interactions
+- Recalibrate quality thresholds and improve prompts, checking tools, and interactions
   while preserving reproducibility.
 
 ## Current Priority
 
-Milestone 1 is complete. The immediate priority is Milestone 2: enhanced
-validation. Milestone 3 should follow once the validation evidence model is stable.
+The original Milestone 1 is complete. The immediate priority is implementing
+Milestone 2's free-form authoring and model-selected validation workflow. Follow the
+[implementation order](docs/question-generation/README.md#implementation-order-and-completion-criteria).
+Milestone 3 follows once execution and evidence contracts are stable.
+Track implementation issues and progress in GitHub Projects using the
+[project setup guide](docs/project-tracking.md). Repository documents specify design
+and acceptance criteria; Projects tracks delivery status.
 
 ## Quality and Product Success Criteria
 
-The validation, question-quality, knowledge-base, and frontend milestones are
-complete when:
+Milestone 2 is complete when:
 
-- A user can create an isolated knowledge base from uploaded documents and receive
-  structured ingestion diagnostics.
-- Every authored template records the source passages and immutable content hashes
-  used during generation.
-- Grounding checks can detect unsupported claims or answers that cannot be derived
-  from the selected source material and executable template.
-- Relevance and coverage are checked against versioned learning objectives and
-  concept definitions using deterministic structural methods first.
-- Bloom classification combines explainable structural signals with calibrated
-  semantic methods and reports uncertainty rather than forcing a classification.
-- Redundancy detection identifies exact and semantic duplicates while preserving
-  legitimate variations produced from one approved template.
+- Users can request concepts outside the old topic catalogue within supported
+  technical limits, the original prompt is retained, and every request includes an
+  `easy`, `medium`, or `hard` difficulty.
+- Every provider receives the domain-allowed tool definitions and produces the
+  shared proposal and fixed check plan in one generation attempt.
+- The model requests each selected check, the application routes it to MCP, and the
+  resulting evidence is returned to the model.
+- A failed proposal is revised and rechecked for at most three complete attempts;
+  only a proposal whose entire fixed plan passes proceeds to approval, while the
+  third failed attempt returns as `needs_review`.
+- Canonical answers, distractors and deterministic expansion retain their existing
+  correctness guarantees within the declared finite input domain.
+- Workflow tests and live evaluations cover generation, selection, execution and
+  acceptance failures for each supported provider/model configuration.
+
+The later question-quality, authoring, mathematics, and conditional grounding
+milestones are complete when:
+
+- The code difficulty estimator reports its four component scores, supporting
+  evidence, versioned thresholds, and agreement with reviewed examples.
+- Relevance is measured against the original learning objective using explainable
+  evidence and a calibrated labelled benchmark.
+- Users can inspect evidence and representative questions, and their approval is
+  bound to the exact artifact version used for deterministic reuse.
+- A bounded mathematics family runs through the same application/model/MCP loop and
+  demonstrates correct symbolic evidence and reproducible expansion.
+- If the conditional grounding milestone proceeds, each artifact records immutable
+  source and passage identifiers and citations, and evaluation detects unsupported
+  claims within the supported scope.
 - Embedding models, revisions, preprocessing, reference hashes, similarity metrics,
   and thresholds are pinned and recorded.
 - LLM judges are optional, explicitly labelled as heuristic, and invoked only when
@@ -219,9 +297,15 @@ complete when:
 
 ## Non-Goals for the Current Milestone
 
+- Provider-managed MCP execution or changing check membership during retries.
+- A mandatory skills runtime or a general-purpose agent/workflow framework.
+- Requiring a fixed topic catalogue or having the domain choose the proposal's final
+  check plan.
 - Building the final production frontend; the backend contracts and lifecycle come
   first.
 - Treating embedding similarity or an LLM judge as proof of correctness.
+- Adding physics, chemistry, broad Bloom classification, or cross-corpus redundancy
+  detection before the planned code and mathematics evaluations justify them.
 - Using technically valid templates for learners without a user approve/reject
   decision.
 - Supporting every document type, programming language, or learning platform.
