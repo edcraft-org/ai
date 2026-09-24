@@ -4,15 +4,9 @@ from __future__ import annotations
 
 import json
 
-from edcraft_validator.domains.code.code_schemas import (
-    CodeTemplateProposal,
-    CodeTemplateRequest,
-)
+from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
 from edcraft_validator.domains.code.profiles import code_template_profile
-from edcraft_validator.domains.code.proposal_response import (
-    CodeProposalResponse,
-    parse_code_proposal_response,
-)
+from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
 
 CODE_TEMPLATE_PROMPT_VERSION = "code-template-v8"
@@ -105,16 +99,15 @@ Rules:
 
 
 RESPONSE_GUIDANCE = """\
-Use strings for every item in each parameter's `values` array: integers use decimal
-strings such as "2"; booleans use "true" or "false"; strings use their plain text;
-integer_list values use JSON-array strings such as "[1,2]". Local validation converts
-these strings to the declared parameter kind.
+Use native JSON values matching each parameter's `kind`: integers use JSON numbers;
+booleans use JSON booleans; strings use JSON strings; integer_list values use nested
+JSON arrays of numbers. Do not encode numbers, booleans, or arrays as strings.
 """
 
 
 def build_code_generation_request(
     request: CodeTemplateRequest,
-) -> StructuredGenerationRequest[CodeTemplateProposal]:
+) -> StructuredGenerationRequest[CodeProposalResponse]:
     """Return the provider-independent code proposal contract."""
     system_message = {"role": "system", "content": CODE_TEMPLATE_SYSTEM_PROMPT}
     user_prompt = build_template_prompt(request)
@@ -128,6 +121,5 @@ def build_code_generation_request(
             },
         ],
         response_model=CodeProposalResponse,
-        parse_response=parse_code_proposal_response,
-        prompt_version=f"{CODE_TEMPLATE_PROMPT_VERSION}+response-v1",
+        prompt_version=f"{CODE_TEMPLATE_PROMPT_VERSION}+response-v2",
     )

@@ -1,11 +1,14 @@
 import json
 
 import pytest
+from pydantic import BaseModel
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
 from edcraft_validator.domains.code.prompt_builder import build_code_generation_request
+from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
 from edcraft_validator.llm.llm_errors import (
     GenerationError,
+    GenerationResponseError,
     GenerationSchemaError,
     GenerationTimeoutError,
     GenerationTransportError,
@@ -43,8 +46,8 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
         "code": "def calculate(a, b):\n    return a + b",
         "entry_function": "calculate",
         "parameters": [
-            {"name": "a", "kind": "integer", "values": ["1", "2"]},
-            {"name": "b", "kind": "integer", "values": ["3", "4"]},
+            {"name": "a", "kind": "integer", "values": [1, 2]},
+            {"name": "b", "kind": "integer", "values": [3, 4]},
         ],
         "answer_expression": "a + b",
         "distractors": [
@@ -84,8 +87,10 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     payload = captured["payload"]
     schema = payload["format"]
     assert schema["properties"]["parameters"]["type"] == "array"
-    parameter_schema = schema["$defs"]["CodeParameterResponse"]
-    assert parameter_schema["properties"]["values"]["items"] == {"type": "string"}
+    parameter_items = schema["properties"]["parameters"]["items"]
+    assert len(parameter_items["anyOf"]) == 4
+    integer_schema = schema["$defs"]["IntegerParameterResponse"]
+    assert integer_schema["properties"]["values"]["items"] == {"type": "integer"}
     assert "topic" not in schema["properties"]
     assert "question_template" not in schema["properties"]
     assert payload["options"]["temperature"] == 0
@@ -94,7 +99,7 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     assert "finite Cartesian product" in messages[0]["content"]
     assert "answer_target=return_value" in messages[1]["content"]
     assert "exactly 3 distractor candidates" in messages[1]["content"]
-    assert "Use strings for every item" in messages[1]["content"]
+    assert "Use native JSON values" in messages[1]["content"]
     assert captured["timeout"] == 300
 
 
@@ -126,7 +131,7 @@ def test_ollama_reports_duplicate_parameter_values_as_schema_error(
     duplicate = {
         "code": "def calculate(a):\n    return a",
         "entry_function": "calculate",
-        "parameters": [{"name": "a", "kind": "integer", "values": ["2", "2"]}],
+        "parameters": [{"name": "a", "kind": "integer", "values": [2, 2]}],
         "answer_expression": "a",
         "distractors": [
             {"expression": "a + 1", "reason_template": "Adds one."},
@@ -146,6 +151,47 @@ def test_ollama_reports_duplicate_parameter_values_as_schema_error(
         OllamaProvider().generate(generation_request())
 
     assert error.value.category == "schema_validation"
+
+
+def test_ollama_accepts_a_schema_from_another_domain(monkeypatch) -> None:
+    class ExampleProposal(BaseModel):
+        equation: str
+
+    monkeypatch.setattr(
+        OllamaProvider,
+        "_ollama_request",
+        lambda self, messages, schema: '{"equation":"x + 1"}',
+    )
+    request = StructuredGenerationRequest(
+        messages=[{"role": "user", "content": "Create an equation"}],
+        response_model=ExampleProposal,
+        prompt_version="example-v1",
+    )
+
+    result = OllamaProvider().generate(request)
+
+    assert result == ExampleProposal(equation="x + 1")
+
+
+def test_ollama_reports_malformed_json_as_response_error(monkeypatch) -> None:
+    class ExampleProposal(BaseModel):
+        equation: str
+
+    monkeypatch.setattr(
+        OllamaProvider,
+        "_ollama_request",
+        lambda self, messages, schema: '{"equation":',
+    )
+    request = StructuredGenerationRequest(
+        messages=[{"role": "user", "content": "Create an equation"}],
+        response_model=ExampleProposal,
+        prompt_version="example-v1",
+    )
+
+    with pytest.raises(GenerationResponseError, match="malformed JSON") as error:
+        OllamaProvider().generate(request)
+
+    assert error.value.category == "invalid_response"
 
 
 def test_ollama_reports_timeout_separately(monkeypatch) -> None:

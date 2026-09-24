@@ -3,7 +3,7 @@ import os
 from typing import Any
 
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
 from edcraft_validator.llm.llm_errors import (
@@ -63,7 +63,7 @@ class OpenAICompatibleProvider:
                 raise GenerationResponseError(
                     f"{self.provider} returned an empty response"
                 )
-            return request.parse_response(content)
+            return request.response_model.model_validate_json(content)
         except GenerationError:
             raise
         except APITimeoutError as exc:
@@ -76,7 +76,11 @@ class OpenAICompatibleProvider:
             raise GenerationTransportError(
                 f"{self.provider} HTTP request failed with status {exc.status_code}"
             ) from exc
-        except ValueError as exc:
+        except ValidationError as exc:
+            if any(error["type"] == "json_invalid" for error in exc.errors()):
+                raise GenerationResponseError(
+                    f"{self.provider} returned malformed JSON: {exc}"
+                ) from exc
             raise GenerationSchemaError(
                 f"{self.provider} response failed local schema validation: {exc}"
             ) from exc

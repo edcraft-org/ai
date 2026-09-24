@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -11,11 +10,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 @dataclass(frozen=True)
 class StructuredGenerationRequest[ProposalT: BaseModel]:
-    """Domain-owned prompt, response schema, and response parser."""
+    """Domain-owned prompt and response schema."""
 
     messages: list[dict[str, str]]
-    response_model: type[BaseModel]
-    parse_response: Callable[[str], ProposalT]
+    response_model: type[ProposalT]
     prompt_version: str
     schema_name: str = "template_proposal"
 
