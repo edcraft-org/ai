@@ -11,6 +11,10 @@ from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateProposal,
     CodeTemplateRequest,
 )
+from edcraft_validator.llm.llm_errors import (
+    GenerationResponseError,
+    GenerationSchemaError,
+)
 from edcraft_validator.tools.python_execution import ExecutionResult
 from edcraft_validator.validation.validation_contracts import (
     CheckResult,
@@ -120,7 +124,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring is not None
     assert validated.authoring.provider == "stub"
     assert validated.authoring.model == "stub-model"
-    assert validated.authoring.base_prompt_version == "code-template-v8+response-v1"
+    assert validated.authoring.base_prompt_version == "code-template-v8+response-v2"
     assert validated.authoring.domain == "code"
     assert validated.authoring.request["topic"] == "arithmetic"
     assert validated.authoring.generated_at.utcoffset() is not None
@@ -178,9 +182,6 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
             return StructuredGenerationRequest(
                 messages=[{"role": "user", "content": request.topic}],
                 response_model=ExampleProposal,
-                parse_response=lambda content: ExampleProposal.model_validate_json(
-                    content
-                ),
                 prompt_version="example-v1",
             )
 
@@ -213,7 +214,7 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
         def generate(self, request):
             events.append("generate")
             assert request.response_model is ExampleProposal
-            return request.parse_response(json.dumps({"value": 12}))
+            return request.response_model.model_validate_json(json.dumps({"value": 12}))
 
     domain = ExampleDomain(ExampleTool())
     application = TemplateApplication()
@@ -237,6 +238,49 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
     assert validated.authoring.domain == "example"
     assert validated.authoring.request == {"topic": "fractions"}
     assert instance == ExampleInstance(value=24, seed=5)
+
+
+@pytest.mark.parametrize(
+    "generation_error",
+    [
+        GenerationResponseError("malformed JSON"),
+        GenerationSchemaError("schema mismatch"),
+    ],
+)
+def test_generation_failures_stop_before_candidate_building_and_validation(
+    generation_error,
+) -> None:
+    class FailingDomain:
+        name = "example"
+
+        def generation_request(self, request):
+            from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
+
+            return StructuredGenerationRequest(
+                messages=[{"role": "user", "content": request.topic}],
+                response_model=ExampleProposal,
+                prompt_version="example-v1",
+            )
+
+        def build_candidate(self, request, proposal):
+            pytest.fail("Generation failures must stop before candidate construction")
+
+        def prepare_validation(self, candidate, *, request=None):
+            pytest.fail("Generation failures must stop before validation")
+
+    class FailingProvider:
+        provider = "stub"
+        model = "stub-model"
+
+        def generate(self, request):
+            raise generation_error
+
+    with pytest.raises(type(generation_error), match=str(generation_error)):
+        TemplateApplication().create_validated_template(
+            ExampleRequest(topic="fractions"),
+            domain=FailingDomain(),
+            provider=FailingProvider(),
+        )
 
 
 def test_application_rejects_domain_without_shared_validated_contract() -> None:

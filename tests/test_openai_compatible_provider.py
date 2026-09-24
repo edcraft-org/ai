@@ -7,7 +7,10 @@ from pydantic import BaseModel
 from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
 from edcraft_validator.domains.code.prompt_builder import build_code_generation_request
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
-from edcraft_validator.llm.llm_errors import GenerationSchemaError
+from edcraft_validator.llm.llm_errors import (
+    GenerationResponseError,
+    GenerationSchemaError,
+)
 from edcraft_validator.llm.openai_compatible_provider import (
     OpenAICompatibleProvider,
     OpenAIGenerationError,
@@ -30,8 +33,8 @@ def code_response() -> dict[str, object]:
         "code": "def calculate(a, b):\n    return a + b",
         "entry_function": "calculate",
         "parameters": [
-            {"name": "a", "kind": "integer", "values": ["1", "2"]},
-            {"name": "b", "kind": "integer", "values": ["3", "4"]},
+            {"name": "a", "kind": "integer", "values": [1, 2]},
+            {"name": "b", "kind": "integer", "values": [3, 4]},
         ],
         "answer_expression": "a + b",
         "distractors": [
@@ -87,13 +90,15 @@ def test_generates_template_using_strict_structured_outputs(provider_name) -> No
     assert set(schema["required"]) == set(schema["properties"])
     assert "topic" not in schema["properties"]
     assert "question_template" not in schema["properties"]
-    parameter_schema = schema["$defs"]["CodeParameterResponse"]
-    assert parameter_schema["properties"]["values"]["items"] == {"type": "string"}
+    parameter_items = schema["properties"]["parameters"]["items"]
+    assert len(parameter_items["anyOf"]) == 4
+    integer_schema = schema["$defs"]["IntegerParameterResponse"]
+    assert integer_schema["properties"]["values"]["items"] == {"type": "integer"}
     messages = client.chat.completions.arguments["messages"]
     assert "finite Cartesian product" in messages[0]["content"]
     assert "answer_target=return_value" in messages[1]["content"]
     assert "exactly 3 distractor candidates" in messages[1]["content"]
-    assert "Use strings for every item" in messages[1]["content"]
+    assert "Use native JSON values" in messages[1]["content"]
 
 
 def test_provider_accepts_a_schema_from_another_domain() -> None:
@@ -105,7 +110,6 @@ def test_provider_accepts_a_schema_from_another_domain() -> None:
     request = StructuredGenerationRequest(
         messages=[{"role": "user", "content": "Create an equation"}],
         response_model=ExampleProposal,
-        parse_response=ExampleProposal.model_validate_json,
         prompt_version="example-v1",
     )
 
@@ -129,7 +133,7 @@ def test_reports_empty_template_response() -> None:
 
 def test_reports_duplicate_parameter_values_as_schema_error() -> None:
     payload = code_response()
-    payload["parameters"][0]["values"] = ["2", "2"]
+    payload["parameters"][0]["values"] = [2, 2]
     provider = OpenAICompatibleProvider(
         "openai", client_with_content(json.dumps(payload)), model="test-model"
     )
@@ -142,7 +146,7 @@ def test_reports_duplicate_parameter_values_as_schema_error() -> None:
     assert error.value.category == "schema_validation"
 
 
-def test_reports_invalid_parameter_encoding_as_schema_error() -> None:
+def test_reports_parameter_type_mismatch_as_schema_error() -> None:
     payload = code_response()
     payload["parameters"][0]["values"] = ["not-an-int", "2"]
     provider = OpenAICompatibleProvider(
@@ -153,6 +157,26 @@ def test_reports_invalid_parameter_encoding_as_schema_error() -> None:
         provider.generate(generation_request())
 
     assert error.value.category == "schema_validation"
+
+
+def test_reports_malformed_json_as_response_error() -> None:
+    class ExampleProposal(BaseModel):
+        equation: str
+
+    provider = OpenAICompatibleProvider(
+        "openai", client_with_content('{"equation":'), model="test-model"
+    )
+
+    with pytest.raises(GenerationResponseError, match="malformed JSON") as error:
+        provider.generate(
+            StructuredGenerationRequest(
+                messages=[{"role": "user", "content": "Create an equation"}],
+                response_model=ExampleProposal,
+                prompt_version="example-v1",
+            )
+        )
+
+    assert error.value.category == "invalid_response"
 
 
 def test_provider_uses_provider_specific_configuration(monkeypatch) -> None:

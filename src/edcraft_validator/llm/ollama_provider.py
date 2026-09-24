@@ -33,14 +33,14 @@ class OllamaProvider:
             )
             if not content:
                 raise GenerationResponseError("Ollama returned an empty response")
-            return request.parse_response(content)
+            return request.response_model.model_validate_json(content)
         except GenerationError:
             raise
-        except json.JSONDecodeError as exc:
-            raise GenerationResponseError(
-                f"Ollama returned malformed JSON: {exc}"
-            ) from exc
-        except (ValidationError, ValueError) as exc:
+        except ValidationError as exc:
+            if any(error["type"] == "json_invalid" for error in exc.errors()):
+                raise GenerationResponseError(
+                    f"Ollama returned malformed JSON: {exc}"
+                ) from exc
             raise GenerationSchemaError(
                 f"Ollama result failed local schema validation: {exc}"
             ) from exc

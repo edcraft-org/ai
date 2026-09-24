@@ -54,7 +54,6 @@ class ExampleDomain:
         return StructuredGenerationRequest(
             messages=[{"role": "user", "content": request.lesson}],
             response_model=ExampleProposal,
-            parse_response=ExampleProposal.model_validate_json,
             prompt_version="example-v1",
         )
 
@@ -85,7 +84,7 @@ class ExampleProvider:
 
     def generate(self, request):
         assert request.response_model is ExampleProposal
-        return request.parse_response('{"value":12}')
+        return request.response_model.model_validate_json('{"value":12}')
 
 
 @pytest.fixture

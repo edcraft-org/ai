@@ -69,10 +69,10 @@ uv run python -m edcraft_validator.cli author \
   --output /tmp/validated-template.json
 ```
 
-All providers use the same domain-owned response schema: parameter values arrive
-as strings and the domain parser converts them to their declared types. Templates
-and questions keep their existing typed values. Ollama sends this schema through
-its native structured endpoint:
+All providers use the same domain-owned response schema. Parameter values arrive as
+native JSON numbers, booleans, strings, or integer arrays selected by each
+parameter's `kind`; the provider validates the response through that schema. Ollama
+sends the same schema through its native structured endpoint:
 
 ```bash
 /usr/bin/time -p uv run python -m edcraft_validator.cli author \
@@ -268,7 +268,7 @@ edcraft_validator/
 │       ├── profiles.py            topic/difficulty profiles and profile rules
 │       ├── code_features.py       AST feature extraction and feature predicates
 │       ├── prompt_builder.py      code prompts and structured generation request
-│       ├── proposal_response.py   provider response schema and proposal parser
+│       ├── proposal_response.py   typed provider response schema
 │       ├── candidate_builder.py   canonical candidate construction
 │       ├── safe_expressions.py    restricted deterministic expressions
 │       ├── template_evaluator.py  repeatable real-provider evaluation
@@ -291,11 +291,10 @@ edcraft_validator/
 ```
 
 Entry points resolve a domain and provider, then pass those objects to the
-application. The domain supplies a generation specification containing messages,
-a response schema, and a parser. The provider handles its API and invokes that
-parser; it does not import domain models. The code parser converts string-encoded
-parameter values into typed proposals before candidate construction. The common
-response contract is recorded as `code-template-v8+response-v1` in provenance.
+application. The domain supplies a generation specification containing messages and
+a response schema. The provider handles its API and validates response text through
+the supplied schema; it does not import domain models. The common response contract
+is recorded as `code-template-v8+response-v2` in provenance.
 
 ```python
 domain = create_domain("code")
@@ -328,10 +327,10 @@ To add a domain:
 
 To use another model from an existing provider, pass `--model`. To add a provider,
 implement `ModelProvider.generate`, send the supplied messages/schema through its
-API, and call the supplied parser on the response text. Register its factory in
-`llm/provider_registry.py`; test transport errors and parsing with an injected client
-or mocked endpoint, then run a live compatibility check. No domain imports belong
-in the adapter.
+API, extract its response text, and validate it through the supplied response model.
+Register its factory in `llm/provider_registry.py`; test transport errors and schema
+validation with an injected client or mocked endpoint, then run a live compatibility
+check. No domain imports belong in the adapter.
 
 To add a domain check, implement `run(context)` with a name and assurance level,
 or use a function with the existing `CodeCheck` wrapper for code-domain operations.

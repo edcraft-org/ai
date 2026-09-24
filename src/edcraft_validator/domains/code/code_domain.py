@@ -33,6 +33,7 @@ from edcraft_validator.domains.code.code_schemas import (
     ValidatedTemplateCase,
 )
 from edcraft_validator.domains.code.prompt_builder import build_code_generation_request
+from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
 from edcraft_validator.domains.code.question_generator import generate_code_question
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
 from edcraft_validator.tools.python_execution import (
@@ -67,7 +68,7 @@ class CodeDomain:
 
     def generation_request(
         self, request: BaseModel
-    ) -> StructuredGenerationRequest[CodeTemplateProposal]:
+    ) -> StructuredGenerationRequest[CodeProposalResponse]:
         typed_request = _require_type(request, CodeTemplateRequest)
         return build_code_generation_request(typed_request)
 
