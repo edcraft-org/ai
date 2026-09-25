@@ -9,7 +9,7 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v9"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v10"
 
 CODE_RECOMMENDED_CHECK_NAMES = (
     "template_structure",
@@ -40,7 +40,11 @@ Checks available for recommendation: {offered}
 Choose the entry function, finite parameters, learner-facing question template, and
 one supported answer_target. The question_template must name the entry function and
 use every parameter exactly as a plain placeholder such as `{{n}}`. Its wording must
-unambiguously ask for the selected answer_target.
+unambiguously ask for the selected answer_target. The exact entry_function identifier
+must appear verbatim in question_template as a function call. For example, if
+entry_function is `calculate_expression`, write `What does
+calculate_expression({{a}}, {{b}}, {{c}}) return?`; do not replace the call with a
+description of the arithmetic expression.
 
 Return at least {request.num_distractors} distractor candidates that model real
 misconceptions and remain type-compatible, distinct from the answer, and mutually

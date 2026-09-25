@@ -135,7 +135,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring is not None
     assert validated.authoring.provider == "stub"
     assert validated.authoring.model == "stub-model"
-    assert validated.authoring.base_prompt_version == "code-template-v9+response-v3"
+    assert validated.authoring.base_prompt_version == "code-template-v10+response-v3"
     assert validated.authoring.domain == "code"
     assert validated.authoring.request["prompt"] == "Create an arithmetic question"
     assert validated.authoring.request["difficulty"] == "beginner"

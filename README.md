@@ -485,3 +485,9 @@ The issue #35 profile-free v9 prompt was also evaluated on 2026-09-25 with six
 name its selected entry function. Mean end-to-end latency was 45.8 seconds (35.3 to
 59.8 seconds). This result is retained as a model-compatibility baseline; the static
 requirement was not relaxed.
+
+After the v10 prompt added a concrete example requiring the exact entry-function
+identifier in `question_template`, one deterministic temperature-zero attempt
+validated in 36.6 seconds. Six additional attempts at temperature 0.2 all validated,
+averaging 39.9 seconds with a range of 29.8 to 49.9 seconds. The validator and
+proposal schema were unchanged between the failing v9 baseline and these v10 runs.

@@ -262,6 +262,9 @@ def test_prompt_gives_the_model_control_of_question_and_entry_function() -> None
     assert "Choose the entry function" in prompt
     assert "learner-facing question template" in prompt
     assert "one supported answer_target" in prompt
+    assert "exact entry_function identifier" in prompt
+    assert "calculate_expression({a}, {b}, {c})" in prompt
+    assert "do not replace the call" in prompt
 
 
 def test_prompt_requests_only_the_needed_model_distractors() -> None:
