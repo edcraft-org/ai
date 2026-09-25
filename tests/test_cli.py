@@ -8,7 +8,10 @@ from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.domains import domain_registry
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.llm import provider_registry
-from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
+from edcraft_validator.llm.llm_contracts import (
+    PlannedGenerationResponse,
+    StructuredGenerationRequest,
+)
 from edcraft_validator.validation.validation_contracts import (
     CheckResult,
     ValidationPlan,
@@ -53,8 +56,9 @@ class ExampleDomain:
     def generation_request(self, request):
         return StructuredGenerationRequest(
             messages=[{"role": "user", "content": request.lesson}],
-            response_model=ExampleProposal,
+            response_model=PlannedGenerationResponse[ExampleProposal],
             prompt_version="example-v1",
+            offered_tool_names=("positive_value",),
         )
 
     def build_candidate(self, request, proposal):
@@ -83,8 +87,13 @@ class ExampleProvider:
         self.model = model or "example-model"
 
     def generate(self, request):
-        assert request.response_model is ExampleProposal
-        return request.response_model.model_validate_json('{"value":12}')
+        assert request.response_model == PlannedGenerationResponse[ExampleProposal]
+        return request.response_model.model_validate(
+            {
+                "proposal": {"value": 12},
+                "checks": [{"name": "positive_value", "arguments": {}}],
+            }
+        )
 
 
 @pytest.fixture
@@ -219,18 +228,25 @@ def test_author_request_json_fails_before_provider_creation(
 
 
 @pytest.mark.parametrize(
-    "legacy_flag",
+    "request_flag",
     [
-        ("--topic", "arithmetic"),
+        ("--prompt", "Create an arithmetic question"),
         ("--difficulty", "beginner"),
         ("--num-distractors", "2"),
     ],
 )
-def test_author_rejects_request_json_with_any_legacy_request_flag(
-    legacy_flag, monkeypatch, tmp_path, capsys
+def test_author_rejects_request_json_with_any_request_flag(
+    request_flag, monkeypatch, tmp_path, capsys
 ) -> None:
     request_path = tmp_path / "request.json"
-    request_path.write_text(json.dumps({"topic": "loops", "difficulty": "advanced"}))
+    request_path.write_text(
+        json.dumps(
+            {
+                "prompt": "Create a loops question",
+                "difficulty": "advanced",
+            }
+        )
+    )
 
     def unexpected_provider(*args):
         pytest.fail("Conflicting request input must fail before provider creation")
@@ -248,7 +264,7 @@ def test_author_rejects_request_json_with_any_legacy_request_flag(
             "ollama",
             "--request-json",
             str(request_path),
-            *legacy_flag,
+            *request_flag,
         ],
     )
 
@@ -256,7 +272,7 @@ def test_author_rejects_request_json_with_any_legacy_request_flag(
     assert "--request-json cannot be combined" in capsys.readouterr().err
 
 
-def test_author_legacy_flags_report_missing_code_request_fields_before_provider(
+def test_author_flags_report_missing_code_request_fields_before_provider(
     monkeypatch, capsys
 ) -> None:
     def unexpected_provider(*args):
@@ -278,7 +294,7 @@ def test_author_legacy_flags_report_missing_code_request_fields_before_provider(
 
     assert template_cli.main() == 1
     error = capsys.readouterr().err
-    assert "topic" in error
+    assert "prompt" in error
     assert "difficulty" in error
 
 
@@ -315,8 +331,8 @@ def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> N
             "ollama",
             "--model",
             "qwen-test",
-            "--topic",
-            "loops",
+            "--prompt",
+            "Create a question about graph traversal",
             "--difficulty",
             "advanced",
         ],
@@ -330,7 +346,7 @@ def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> N
     assert captured["selection"].provider == "ollama"
     assert captured["selection"].model == "qwen-test"
     request = captured["request"]
-    assert request.topic == "loops"
+    assert request.prompt == "Create a question about graph traversal"
     assert request.difficulty == "advanced"
     assert request.num_distractors == 3
     assert json.loads(capsys.readouterr().out) == {"validated": True}
@@ -354,11 +370,11 @@ def test_evaluate_cli_writes_attempts_and_prints_summary(
 
     class Attempt:
         attempt = 1
+        topic = "loops"
         status = "validated"
         total_duration_ms = 1250.0
 
         class Request:
-            topic = "loops"
             difficulty = "beginner"
 
         request = Request()

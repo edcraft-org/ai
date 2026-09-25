@@ -19,6 +19,7 @@ from edcraft_validator.domains.code.code_schemas import (
     ValidatedCodeTemplate,
 )
 from edcraft_validator.domains.code.code_types import Difficulty, ProgrammingTopic
+from edcraft_validator.domains.code.profiles import code_template_profile
 from edcraft_validator.domains.code.prompt_builder import build_code_generation_request
 from edcraft_validator.llm.llm_contracts import ModelProvider, TemplateProviderSelection
 from edcraft_validator.llm.llm_errors import GenerationError
@@ -38,6 +39,7 @@ class TemplateEvaluationAttempt(BaseModel):
     attempt: int = Field(ge=1)
     provider: str
     model: str
+    topic: ProgrammingTopic
     request: CodeTemplateRequest
     status: Literal["validated", "failed"]
     prompt_version: str | None = None
@@ -136,8 +138,9 @@ class TemplateEvaluator:
         attempt_number = 0
         for topic in topics:
             for difficulty in difficulties:
+                profile = code_template_profile(topic, difficulty)
                 request = CodeTemplateRequest(
-                    topic=topic,
+                    prompt=(f"Create a Python MCQ about {topic}. {profile.guidance}"),
                     difficulty=difficulty,
                     num_distractors=num_distractors,
                 )
@@ -146,6 +149,7 @@ class TemplateEvaluator:
                     attempt = self._evaluate_once(
                         attempt_number,
                         TemplateProviderSelection(provider=provider, model=model),
+                        topic,
                         request,
                     )
                     attempts.append(attempt)
@@ -160,6 +164,7 @@ class TemplateEvaluator:
         self,
         attempt_number: int,
         selection: TemplateProviderSelection,
+        topic: ProgrammingTopic,
         request: CodeTemplateRequest,
     ) -> TemplateEvaluationAttempt:
         started = time.perf_counter()
@@ -183,6 +188,7 @@ class TemplateEvaluator:
                 attempt=attempt_number,
                 provider=selection.provider,
                 model=resolved_model,
+                topic=topic,
                 request=request,
                 status="failed",
                 prompt_version=prompt_version,
@@ -202,6 +208,7 @@ class TemplateEvaluator:
             attempt=attempt_number,
             provider=provenance.provider,
             model=provenance.model,
+            topic=topic,
             request=request,
             status="validated",
             prompt_version=provenance.base_prompt_version,
@@ -243,7 +250,7 @@ def _summarize(
         key = (
             attempt.provider,
             attempt.model,
-            attempt.request.topic,
+            attempt.topic,
             attempt.request.difficulty,
         )
         grouped.setdefault(key, []).append(attempt)

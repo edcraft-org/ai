@@ -14,11 +14,10 @@ from edcraft_validator.domains.code.code_schemas import (
     TemplateValidationError,
 )
 from edcraft_validator.domains.code.code_types import AnswerTarget, ParameterValue
-from edcraft_validator.domains.code.profiles import code_template_profile
 from edcraft_validator.domains.code.safe_expressions import SafeExpression
 from edcraft_validator.tools.python_execution import ExecutionResult
 from edcraft_validator.validation.validation_contracts import CheckResult
-from edcraft_validator.value_comparison import equivalent
+from edcraft_validator.value_comparison import equivalent, same_value_shape
 
 
 def check_expressions(context: CodeValidationContext) -> CheckResult:
@@ -38,8 +37,9 @@ def check_proposed_answers(context: CodeValidationContext) -> CheckResult:
     for inputs in context.inputs_cases:
         answer = context.proposed_answer.evaluate(inputs)
         require_json_value(answer, "answer")
-        validate_answer_kind(context.template, inputs, answer)
+        validate_supported_answer(inputs, answer)
         answers.append(answer)
+    _require_consistent_answer_shapes(context.inputs_cases, answers)
     context.proposed_answers = answers
     return CheckResult()
 
@@ -56,10 +56,11 @@ def check_canonical_answers(context: CodeValidationContext) -> CheckResult:
     ):
         actual_answer = _execution_answer(execution, context.template.answer_target)
         require_json_value(actual_answer, "executor answer")
-        validate_answer_kind(context.template, inputs, actual_answer)
+        validate_supported_answer(inputs, actual_answer)
         answers.append(copy.deepcopy(actual_answer))
         if not equivalent(actual_answer, proposed_answer):
             corrected_cases += 1
+    _require_consistent_answer_shapes(context.inputs_cases, answers)
     context.canonical_answers = answers
     context.corrected_cases = corrected_cases
     if corrected_cases:
@@ -78,26 +79,34 @@ def check_canonical_answers(context: CodeValidationContext) -> CheckResult:
     )
 
 
-def validate_answer_kind(
-    template: CodeTemplateCandidate,
-    inputs: dict[str, ParameterValue],
-    answer: Any,
-) -> None:
-    answer_kind = code_template_profile(template.topic, template.difficulty).answer_kind
-    valid = {
-        "number": type(answer) in {int, float},
-        "integer": type(answer) is int,
-        "integer_list": type(answer) is list
-        and all(type(item) is int for item in answer),
-    }[answer_kind]
+def validate_supported_answer(inputs: dict[str, ParameterValue], answer: Any) -> None:
+    valid = type(answer) in {int, float, str} or (
+        type(answer) is list and all(type(item) is int for item in answer)
+    )
     if not valid:
         raise TemplateValidationError(
-            f"{template.topic}/{template.difficulty} requires answer kind "
-            f"{answer_kind}; received {type(answer).__name__} for inputs {inputs}",
-            code="ANSWER_KIND_MISMATCH",
+            "answers must be numbers, strings, or integer lists; "
+            f"received {type(answer).__name__} for inputs {inputs}",
+            code="ANSWER_TYPE_UNSUPPORTED",
             field="answer_expression",
             inputs=inputs,
         )
+
+
+def _require_consistent_answer_shapes(
+    inputs_cases: list[dict[str, ParameterValue]], answers: list[Any]
+) -> None:
+    if not answers:
+        return
+    expected = answers[0]
+    for inputs, answer in zip(inputs_cases[1:], answers[1:], strict=True):
+        if not same_value_shape(answer, expected):
+            raise TemplateValidationError(
+                f"answer type changes across parameter cases for inputs {inputs}",
+                code="ANSWER_TYPE_INCONSISTENT",
+                field="answer_expression",
+                inputs=inputs,
+            )
 
 
 def require_json_value(value: Any, label: str) -> None:

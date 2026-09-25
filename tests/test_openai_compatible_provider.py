@@ -22,27 +22,34 @@ from edcraft_validator.llm.openai_compatible_provider import (
 )
 
 
-def generation_request(topic: str = "arithmetic", difficulty: str = "beginner"):
+def generation_request(
+    prompt: str = "Create an arithmetic question", difficulty: str = "beginner"
+):
     return build_code_generation_request(
-        CodeTemplateRequest(topic=topic, difficulty=difficulty)
+        CodeTemplateRequest(prompt=prompt, difficulty=difficulty)
     )
 
 
 def code_response() -> dict[str, object]:
     return {
-        "code": "def calculate(a, b):\n    return a + b",
-        "entry_function": "calculate",
-        "parameters": [
-            {"name": "a", "kind": "integer", "values": [1, 2]},
-            {"name": "b", "kind": "integer", "values": [3, 4]},
-        ],
-        "answer_expression": "a + b",
-        "distractors": [
-            {"expression": "a - b", "reason_template": "Subtracts b."},
-            {"expression": "a * b", "reason_template": "Multiplies."},
-            {"expression": "a + b + 1", "reason_template": "Adds one."},
-            {"expression": "a + b - 1", "reason_template": "Subtracts one."},
-            {"expression": "a + b + 2", "reason_template": "Adds two."},
+        "proposal": {
+            "question_template": "What does calculate({a}, {b}) return?",
+            "code": "def calculate(a, b):\n    return a + b",
+            "entry_function": "calculate",
+            "parameters": [
+                {"name": "a", "kind": "integer", "values": [1, 2]},
+                {"name": "b", "kind": "integer", "values": [3, 4]},
+            ],
+            "answer_target": "return_value",
+            "answer_expression": "a + b",
+            "distractors": [
+                {"expression": "a - b", "reason_template": "Subtracts b."},
+                {"expression": "a * b", "reason_template": "Multiplies."},
+                {"expression": "a + b + 1", "reason_template": "Adds one."},
+            ],
+        },
+        "checks": [
+            {"name": "code_execution", "arguments": {}},
         ],
     }
 
@@ -79,25 +86,35 @@ def test_generates_template_using_strict_structured_outputs(provider_name) -> No
 
     result = provider.generate(generation_request())
 
-    assert result.entry_function == "calculate"
-    assert result.parameters[0].values == [1, 2]
+    assert result.proposal.entry_function == "calculate"
+    assert result.proposal.parameters[0].values == [1, 2]
+    assert result.checks[0].name == "code_execution"
     assert client.chat.completions.arguments["model"] == "test-model"
     response_format = client.chat.completions.arguments["response_format"]
     assert response_format["type"] == "json_schema"
-    assert response_format["json_schema"]["name"] == "template_proposal"
+    assert response_format["json_schema"]["name"] == (
+        "template_proposal_and_check_plan"
+    )
     assert response_format["json_schema"]["strict"] is True
     schema = response_format["json_schema"]["schema"]
     assert set(schema["required"]) == set(schema["properties"])
-    assert "topic" not in schema["properties"]
-    assert "question_template" not in schema["properties"]
-    parameter_items = schema["properties"]["parameters"]["items"]
+    assert set(schema["properties"]) == {"proposal", "checks"}
+    proposal_schema = schema["$defs"]["CodeProposalResponse"]
+    assert "question_template" in proposal_schema["properties"]
+    assert "answer_target" in proposal_schema["properties"]
+    parameter_items = proposal_schema["properties"]["parameters"]["items"]
     assert len(parameter_items["anyOf"]) == 4
     integer_schema = schema["$defs"]["IntegerParameterResponse"]
     assert integer_schema["properties"]["values"]["items"] == {"type": "integer"}
+    check_schema = schema["$defs"]["RecommendedCheck"]
+    assert set(check_schema["required"]) == set(check_schema["properties"])
+    arguments_schema = schema["$defs"]["RecommendedCheckArguments"]
+    assert arguments_schema["additionalProperties"] is False
+    assert arguments_schema["properties"] == {}
     messages = client.chat.completions.arguments["messages"]
     assert "finite Cartesian product" in messages[0]["content"]
-    assert "answer_target=return_value" in messages[1]["content"]
-    assert "exactly 3 distractor candidates" in messages[1]["content"]
+    assert "Create an arithmetic question" in messages[1]["content"]
+    assert "at least 3 distractor candidates" in messages[1]["content"]
     assert "Use native JSON values" in messages[1]["content"]
 
 
@@ -133,7 +150,7 @@ def test_reports_empty_template_response() -> None:
 
 def test_reports_duplicate_parameter_values_as_schema_error() -> None:
     payload = code_response()
-    payload["parameters"][0]["values"] = [2, 2]
+    payload["proposal"]["parameters"][0]["values"] = [2, 2]
     provider = OpenAICompatibleProvider(
         "openai", client_with_content(json.dumps(payload)), model="test-model"
     )
@@ -148,7 +165,7 @@ def test_reports_duplicate_parameter_values_as_schema_error() -> None:
 
 def test_reports_parameter_type_mismatch_as_schema_error() -> None:
     payload = code_response()
-    payload["parameters"][0]["values"] = ["not-an-int", "2"]
+    payload["proposal"]["parameters"][0]["values"] = ["not-an-int", "2"]
     provider = OpenAICompatibleProvider(
         "openai", client_with_content(json.dumps(payload)), model="test-model"
     )

@@ -170,7 +170,9 @@ def test_code_domain_plan_contract(num_distractors):
         None
         if num_distractors is None
         else CodeTemplateRequest(
-            topic="arithmetic", difficulty="beginner", num_distractors=num_distractors
+            prompt="Create an arithmetic question",
+            difficulty="beginner",
+            num_distractors=num_distractors,
         )
     )
 

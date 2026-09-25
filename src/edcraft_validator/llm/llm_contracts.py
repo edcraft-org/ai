@@ -5,7 +5,38 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+class RecommendedCheckArguments(BaseModel):
+    """Reserved closed argument object until checks are exposed as typed tools."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+
+class RecommendedCheck(BaseModel):
+    """One model-recommended validation check in the fixed plan."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    name: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    arguments: RecommendedCheckArguments
+
+
+class PlannedGenerationResponse[ProposalT: BaseModel](BaseModel):
+    """A reusable proposal and the fixed checks recommended in the same response."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    proposal: ProposalT
+    checks: list[RecommendedCheck] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_unique_check_names(self) -> PlannedGenerationResponse[ProposalT]:
+        names = [check.name for check in self.checks]
+        if len(names) != len(set(names)):
+            raise ValueError("recommended check names must be unique")
+        return self
 
 
 @dataclass(frozen=True)
@@ -16,6 +47,7 @@ class StructuredGenerationRequest[ProposalT: BaseModel]:
     response_model: type[ProposalT]
     prompt_version: str
     schema_name: str = "template_proposal"
+    offered_tool_names: tuple[str, ...] = ()
 
 
 class ModelProvider(Protocol):

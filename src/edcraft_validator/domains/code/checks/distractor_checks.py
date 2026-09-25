@@ -10,9 +10,11 @@ from edcraft_validator.domains.code.checks.validation_context import (
 )
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
+    DistractorRecipe,
     TemplateValidationError,
 )
 from edcraft_validator.domains.code.code_types import ParameterValue
+from edcraft_validator.domains.code.safe_expressions import SafeExpression
 from edcraft_validator.domains.code.text_rendering import render_template
 from edcraft_validator.validation.validation_contracts import CheckResult
 from edcraft_validator.value_comparison import equivalent, same_value_shape
@@ -29,14 +31,90 @@ def check_selection(context: CodeValidationContext) -> CheckResult | None:
     count = selected_count(context)
     if count is None:
         return None
-    context.template, context.candidates = _select_distractors(
-        context.template,
-        context.inputs_cases,
-        context.canonical_answers,
-        context.candidates,
-        num_distractors=count,
+    try:
+        context.template, context.candidates = _select_distractors(
+            context.template,
+            context.inputs_cases,
+            context.canonical_answers,
+            context.candidates,
+            num_distractors=count,
+        )
+    except TemplateValidationError as exc:
+        if exc.code != "DISTRACTOR_SELECTION_FAILED" or context.num_distractors is None:
+            raise
+        context.fallback_distractors_added = _append_fallback_distractors(
+            context, count
+        )
+        context.template, context.candidates = _select_distractors(
+            context.template,
+            context.inputs_cases,
+            context.canonical_answers,
+            context.candidates,
+            num_distractors=count,
+        )
+    return CheckResult(details={"fallbacks_added": context.fallback_distractors_added})
+
+
+def _append_fallback_distractors(context: CodeValidationContext, count: int) -> int:
+    """Append generic, type-compatible recipes after model selection fails."""
+    answer_expression = context.template.answer_expression
+    if answer_expression is None or not context.canonical_answers:
+        return 0
+
+    answer = context.canonical_answers[0]
+    if isinstance(answer, list):
+        suffixes = ("[0]", "[1]", "[-1]")
+        proposals = [
+            (
+                f"({answer_expression}) + {suffix}",
+                "Appends an extra value to the returned list.",
+            )
+            for suffix in suffixes
+        ]
+    elif isinstance(answer, str):
+        proposals = [
+            (
+                f"({answer_expression}) + {suffix!r}",
+                "Appends an extra character to the returned string.",
+            )
+            for suffix in ("?", "!", "x")
+        ]
+    else:
+        proposals = [
+            (
+                f"({answer_expression}) {operator} {offset}",
+                "Uses an off-by-one result."
+                if offset == 1
+                else "Uses a nearby arithmetic result.",
+            )
+            for operator, offset in (("+", 1), ("-", 1), ("+", 2))
+        ]
+
+    recipes = list(context.template.distractors)
+    existing = {recipe.expression for recipe in recipes}
+    added = 0
+    for source, reason in proposals:
+        if source in existing:
+            continue
+        recipe = DistractorRecipe(expression=source, reason_template=reason)
+        recipes.append(recipe)
+        try:
+            expression = SafeExpression(source, context.names)
+        except TemplateValidationError as exc:
+            candidate = DistractorCandidate(index=len(recipes) - 1, rejection=str(exc))
+        else:
+            candidate = DistractorCandidate(
+                index=len(recipes) - 1, expression=expression
+            )
+        context.candidates.append(candidate)
+        existing.add(source)
+        added += 1
+        if added == count:
+            break
+    context.template = context.template.model_copy(
+        update={"distractors": recipes}, deep=True
     )
-    return CheckResult()
+    return added
 
 
 def check_distractors(context: CodeValidationContext) -> CheckResult:
@@ -110,7 +188,9 @@ def _precompute_candidate_vectors(
 ) -> None:
     for candidate in candidates:
         if candidate.rejection is not None:
-            candidate.rejection = f"candidate {candidate.index}: {candidate.rejection}"
+            prefix = f"candidate {candidate.index}: "
+            if not candidate.rejection.startswith(prefix):
+                candidate.rejection = f"{prefix}{candidate.rejection}"
             continue
         if candidate.expression is None:
             raise AssertionError("distractor candidate is missing its expression")

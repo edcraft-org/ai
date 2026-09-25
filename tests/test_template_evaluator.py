@@ -2,6 +2,10 @@ import json
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateProposal
 from edcraft_validator.domains.code.template_evaluator import TemplateEvaluator
+from edcraft_validator.llm.llm_contracts import (
+    PlannedGenerationResponse,
+    RecommendedCheck,
+)
 from edcraft_validator.llm.llm_errors import GenerationError
 from edcraft_validator.tools.python_execution import ExecutionResult
 
@@ -9,12 +13,14 @@ from edcraft_validator.tools.python_execution import ExecutionResult
 def proposal(*, code: str = "def add(a, b):\n    return a + b") -> CodeTemplateProposal:
     return CodeTemplateProposal.model_validate(
         {
+            "question_template": "What does add({a}, {b}) return?",
             "code": code,
             "entry_function": "add",
             "parameters": [
                 {"name": "a", "kind": "integer", "values": [1, 2]},
                 {"name": "b", "kind": "integer", "values": [3, 4]},
             ],
+            "answer_target": "return_value",
             "answer_expression": "a + b",
             "distractors": [
                 {"expression": "a + b", "reason_template": "Repeats answer."},
@@ -42,7 +48,10 @@ class StubProvider:
         self.result = result
 
     def generate(self, request):
-        return self.result
+        return PlannedGenerationResponse(
+            proposal=self.result,
+            checks=[RecommendedCheck(name="code_execution", arguments={})],
+        )
 
 
 def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> None:
@@ -63,13 +72,13 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
     assert [attempt.status for attempt in report.attempts] == ["validated", "failed"]
     assert report.attempts[0].validated_template is not None
     assert report.attempts[1].failure_stage == "validation"
-    assert report.attempts[1].failure_code == "PROFILE_MISMATCH"
+    assert report.attempts[1].failure_code == "UNUSED_PARAMETER"
     assert report.attempts[1].validation_evidence[-1].status == "failed"
     assert report.attempts[1].validation_evidence[-1].check == "template_structure"
     assert report.summary.attempts == 2
     assert report.summary.validated == 1
     assert report.summary.pass_rate == 0.5
-    assert report.summary.failure_counts == {"PROFILE_MISMATCH": 1}
+    assert report.summary.failure_counts == {"UNUSED_PARAMETER": 1}
     assert report.summary.groups[0].model == "stub-model"
 
     output = tmp_path / "evaluation.jsonl"
@@ -77,9 +86,9 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
     records = [json.loads(line) for line in output.read_text().splitlines()]
     assert len(records) == 2
     assert records[0]["validated_template"]["authoring"]["model"] == "stub-model"
-    assert records[1]["failure_code"] == "PROFILE_MISMATCH"
+    assert records[1]["failure_code"] == "UNUSED_PARAMETER"
     assert records[1]["validation_evidence"][-1]["issues"][0]["code"] == (
-        "PROFILE_MISMATCH"
+        "UNUSED_PARAMETER"
     )
 
 

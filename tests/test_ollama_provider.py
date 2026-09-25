@@ -34,28 +34,35 @@ def isolated_ollama_settings(monkeypatch):
         monkeypatch.delenv(variable, raising=False)
 
 
-def generation_request(topic: str = "arithmetic", difficulty: str = "beginner"):
+def generation_request(
+    prompt: str = "Create an arithmetic question", difficulty: str = "beginner"
+):
     return build_code_generation_request(
-        CodeTemplateRequest(topic=topic, difficulty=difficulty)
+        CodeTemplateRequest(prompt=prompt, difficulty=difficulty)
     )
 
 
 def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> None:
     captured: dict[str, object] = {}
     response = {
-        "code": "def calculate(a, b):\n    return a + b",
-        "entry_function": "calculate",
-        "parameters": [
-            {"name": "a", "kind": "integer", "values": [1, 2]},
-            {"name": "b", "kind": "integer", "values": [3, 4]},
-        ],
-        "answer_expression": "a + b",
-        "distractors": [
-            {"expression": "a - b", "reason_template": "Subtracts b."},
-            {"expression": "a * b", "reason_template": "Multiplies."},
-            {"expression": "a + b + 1", "reason_template": "Adds one."},
-            {"expression": "a + b - 1", "reason_template": "Subtracts one."},
-            {"expression": "a + b + 2", "reason_template": "Adds two."},
+        "proposal": {
+            "question_template": "What does calculate({a}, {b}) return?",
+            "code": "def calculate(a, b):\n    return a + b",
+            "entry_function": "calculate",
+            "parameters": [
+                {"name": "a", "kind": "integer", "values": [1, 2]},
+                {"name": "b", "kind": "integer", "values": [3, 4]},
+            ],
+            "answer_target": "return_value",
+            "answer_expression": "a + b",
+            "distractors": [
+                {"expression": "a - b", "reason_template": "Subtracts b."},
+                {"expression": "a * b", "reason_template": "Multiplies."},
+                {"expression": "a + b + 1", "reason_template": "Adds one."},
+            ],
+        },
+        "checks": [
+            {"name": "code_execution", "arguments": {}},
         ],
     }
 
@@ -81,33 +88,35 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
 
     result = OllamaProvider(model="qwen2.5").generate(generation_request())
 
-    assert result.entry_function == "calculate"
-    assert result.parameters[0].values == [1, 2]
+    assert result.proposal.entry_function == "calculate"
+    assert result.proposal.parameters[0].values == [1, 2]
     assert captured["url"] == "http://localhost:11434/api/chat"
     payload = captured["payload"]
     schema = payload["format"]
-    assert schema["properties"]["parameters"]["type"] == "array"
-    parameter_items = schema["properties"]["parameters"]["items"]
+    assert set(schema["properties"]) == {"proposal", "checks"}
+    proposal_schema = schema["$defs"]["CodeProposalResponse"]
+    parameter_items = proposal_schema["properties"]["parameters"]["items"]
     assert len(parameter_items["anyOf"]) == 4
     integer_schema = schema["$defs"]["IntegerParameterResponse"]
     assert integer_schema["properties"]["values"]["items"] == {"type": "integer"}
-    assert "topic" not in schema["properties"]
-    assert "question_template" not in schema["properties"]
+    assert "question_template" in proposal_schema["properties"]
     assert payload["options"]["temperature"] == 0
     assert payload["options"]["num_predict"] == 2048
     messages = payload["messages"]
     assert "finite Cartesian product" in messages[0]["content"]
-    assert "answer_target=return_value" in messages[1]["content"]
-    assert "exactly 3 distractor candidates" in messages[1]["content"]
+    assert "Create an arithmetic question" in messages[1]["content"]
+    assert "at least 3 distractor candidates" in messages[1]["content"]
     assert "Use native JSON values" in messages[1]["content"]
     assert captured["timeout"] == 300
 
 
 def test_ollama_reports_common_response_schema_failures(monkeypatch) -> None:
-    invalid = {
+    invalid_proposal = {
+        "question_template": "What does calculate({a}) return?",
         "code": "def calculate(a):\n    return a",
         "entry_function": "calculate",
         "parameters": [{"name": "a", "kind": "integer", "values": ["not-an-int", "2"]}],
+        "answer_target": "return_value",
         "answer_expression": "a",
         "distractors": [
             {"expression": "a + 1", "reason_template": "Adds one."},
@@ -118,7 +127,12 @@ def test_ollama_reports_common_response_schema_failures(monkeypatch) -> None:
     monkeypatch.setattr(
         OllamaProvider,
         "_ollama_request",
-        lambda self, messages, schema: json.dumps(invalid),
+        lambda self, messages, schema: json.dumps(
+            {
+                "proposal": invalid_proposal,
+                "checks": [{"name": "code_execution", "arguments": {}}],
+            }
+        ),
     )
 
     with pytest.raises(GenerationSchemaError, match="local schema validation"):
@@ -128,10 +142,12 @@ def test_ollama_reports_common_response_schema_failures(monkeypatch) -> None:
 def test_ollama_reports_duplicate_parameter_values_as_schema_error(
     monkeypatch,
 ) -> None:
-    duplicate = {
+    duplicate_proposal = {
+        "question_template": "What does calculate({a}) return?",
         "code": "def calculate(a):\n    return a",
         "entry_function": "calculate",
         "parameters": [{"name": "a", "kind": "integer", "values": [2, 2]}],
+        "answer_target": "return_value",
         "answer_expression": "a",
         "distractors": [
             {"expression": "a + 1", "reason_template": "Adds one."},
@@ -142,7 +158,12 @@ def test_ollama_reports_duplicate_parameter_values_as_schema_error(
     monkeypatch.setattr(
         OllamaProvider,
         "_ollama_request",
-        lambda self, messages, schema: json.dumps(duplicate),
+        lambda self, messages, schema: json.dumps(
+            {
+                "proposal": duplicate_proposal,
+                "checks": [{"name": "code_execution", "arguments": {}}],
+            }
+        ),
     )
 
     with pytest.raises(

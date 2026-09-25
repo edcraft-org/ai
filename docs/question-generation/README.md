@@ -7,8 +7,9 @@ workflow. Product scope and milestone order are in [GOALS.md](../../GOALS.md).
 
 ## Decisions
 
-1. Every request contains a domain, a free-form prompt, and a required `easy`,
-   `medium`, or `hard` difficulty. Provider and model remain separate configuration.
+1. Every request contains a domain, a free-form prompt, and a required `beginner`,
+   `intermediate`, or `advanced` difficulty. Provider and model remain separate
+   configuration.
 2. The selected domain supplies generation instructions, a proposal schema, and the
    names of MCP tools allowed for that domain.
 3. MCP is authoritative for each tool's description, input and result schemas, and
@@ -41,7 +42,7 @@ The public authoring request is:
 {
   "domain": "code",
   "prompt": "Create a Python MCQ about summing even numbers in a list. Use a loop and include accumulator mistakes as distractors.",
-  "difficulty": "medium"
+  "difficulty": "intermediate"
 }
 ```
 
@@ -72,16 +73,24 @@ model's first response contains the proposal and a nonempty fixed check plan:
 ```json
 {
   "proposal": {
-    "question_text": "What value is printed?",
+    "question_template": "What value does sum_even({values}) return?",
     "code": "...",
-    "parameters": {"values": [[1, 2, 4], [3, 6, 7]]},
-    "answer_kind": "integer"
+    "entry_function": "sum_even",
+    "parameters": [
+      {"name": "values", "kind": "integer_list", "values": [[2, 4], [6, 8]]}
+    ],
+    "answer_target": "return_value",
+    "answer_expression": "sum(values)",
+    "distractors": [
+      {"expression": "len(values)", "reason_template": "Counts values instead of adding them."},
+      {"expression": "sum(values) + 2", "reason_template": "Adds one extra even value."}
+    ]
   },
   "checks": [
     {"name": "code_verify_execution_answers", "arguments": {}},
     {"name": "code_require_feature", "arguments": {"feature": "loop"}},
     {"name": "code_check_distractors", "arguments": {}},
-    {"name": "code_assess_difficulty", "arguments": {"requested": "medium"}}
+    {"name": "code_assess_difficulty", "arguments": {"requested": "intermediate"}}
   ]
 }
 ```
@@ -91,6 +100,11 @@ tools inside that response. Subsequent model turns request calls and receive the
 actual evidence. Provider adapters normalize native tool-call formats into the
 shared application representation. Domains supply schemas and never supply parser
 callbacks.
+
+During the #35 transition, the recommendation uses the existing validation-check
+names and is recorded in provenance, while the application still runs its complete
+current validation pipeline. Issues #36 to #38 replace those interim names with the
+authoritative MCP catalogue and execute the fixed plan.
 
 ## Tool catalogue
 

@@ -12,7 +12,7 @@ It is the implementation target; the historical milestone evidence below does no
 claim that free-form input, MCP execution or model-selected checks already exist.
 
 1. The user selects a domain, supplies a free-form prompt, and chooses a required
-   `easy`, `medium`, or `hard` difficulty. Provider/model remain separate
+   `beginner`, `intermediate`, or `advanced` difficulty. Provider/model remain separate
    configuration.
 2. The domain supplies generation instructions, a proposal schema, and the names of
    tools allowed for that domain. The application obtains the corresponding tool
@@ -100,7 +100,7 @@ generate learner-facing questions.
 Build a reliable end-to-end workflow for Python code questions before expanding
 to other domains. The code domain should accept free-form learning objectives
 within documented technical capabilities, without requiring a complete topic
-catalogue. Every domain uses the common `easy`, `medium`, and `hard` request
+catalogue. Every domain uses the common `beginner`, `intermediate`, and `advanced` request
 levels, while domain-specific tools determine how those levels are assessed.
 Unsupported Python features, answer formats or validation requirements must be
 reported clearly. Existing profiles can remain presets and evaluation fixtures;
@@ -164,7 +164,7 @@ complete; its evidence is recorded below.
 ### Milestone 2: Free-form authoring and model-selected validation
 
 - Replace required topic inputs with a domain and free-form prompt while requiring
-  an `easy`, `medium`, or `hard` difficulty on every request.
+  a `beginner`, `intermediate`, or `advanced` difficulty on every request.
 - Remove domain parser callbacks; use generic JSON/schema parsing in provider adapters.
 - Return the provider-neutral proposal and recommended fixed check plan from one
   model generation attempt.
@@ -203,7 +203,8 @@ complete; its evidence is recorded below.
 ### Milestone 4: Authoring and review workflow
 
 - Let users select a domain, write a free-form prompt, and choose the required
-  `easy`, `medium`, or `hard` difficulty. Keep provider/model settings separate.
+  `beginner`, `intermediate`, or `advanced` difficulty. Keep provider/model settings
+  separate.
 - Show generation, check execution, correction attempts, errors, and `needs_review`
   without duplicating the application workflow in the frontend.
 - Present the exact artifact, provenance, validation and quality evidence, and
@@ -217,7 +218,8 @@ complete; its evidence is recorded below.
 - Add one bounded mathematics question family as an independent domain module.
 - Use symbolic checking with SymPy where appropriate; investigate Lean only where it
   adds assurance that the first pilot needs.
-- Define mathematics-specific meanings for the common `easy`, `medium`, and `hard`
+- Define mathematics-specific meanings for the common `beginner`, `intermediate`, and
+  `advanced`
   labels and evaluate them against reviewed examples.
 - Extract shared domain abstractions only when both the existing code domain and a
   real second domain demonstrate the requirement.
@@ -257,7 +259,7 @@ Milestone 2 is complete when:
 
 - Users can request concepts outside the old topic catalogue within supported
   technical limits, the original prompt is retained, and every request includes an
-  `easy`, `medium`, or `hard` difficulty.
+  `beginner`, `intermediate`, or `advanced` difficulty.
 - Every provider receives the domain-allowed tool definitions and produces the
   shared proposal and fixed check plan in one generation attempt.
 - The model requests each selected check, the application routes it to MCP, and the

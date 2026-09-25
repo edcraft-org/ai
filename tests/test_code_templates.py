@@ -239,45 +239,55 @@ def test_supports_loop_iteration_questions() -> None:
     assert instance.question.proposed_answer == instance.parameters["n"]
 
 
-def test_loop_topic_requests_iteration_count_template() -> None:
+def test_free_form_prompt_preserves_requested_topic_and_difficulty() -> None:
     prompt = build_template_prompt(
-        CodeTemplateRequest(topic="loops", difficulty="beginner")
+        CodeTemplateRequest(
+            prompt="Create a graph traversal question using a loop",
+            difficulty="beginner",
+        )
     )
 
-    assert "answer_target=loop_iterations" in prompt
-    assert "exactly one positive integer parameter named n" in prompt
-    assert "loop behavior" in prompt
-    assert "answer_expression exactly" not in prompt
+    assert "Create a graph traversal question using a loop" in prompt
+    assert "Requested difficulty: beginner" in prompt
+    assert "catalogue topic" in prompt
 
 
-def test_beginner_arithmetic_prompt_forbids_operator_parameter() -> None:
+def test_prompt_gives_the_model_control_of_question_and_entry_function() -> None:
     prompt = build_template_prompt(
-        CodeTemplateRequest(topic="arithmetic", difficulty="beginner")
+        CodeTemplateRequest(
+            prompt="Create an arithmetic question", difficulty="beginner"
+        )
     )
 
-    assert "two or three integer parameters named a, b, and optionally c" in prompt
-    assert "Do not create a parameter for the operator" in prompt
+    assert "Choose the entry function" in prompt
+    assert "learner-facing question template" in prompt
+    assert "one supported answer_target" in prompt
+    assert "exact entry_function identifier" in prompt
+    assert "calculate_expression({a}, {b}, {c})" in prompt
+    assert "do not replace the call" in prompt
 
 
 def test_prompt_requests_only_the_needed_model_distractors() -> None:
     prompt = build_template_prompt(
         CodeTemplateRequest(
-            topic="arithmetic", difficulty="beginner", num_distractors=2
+            prompt="Create an arithmetic question",
+            difficulty="beginner",
+            num_distractors=2,
         )
     )
 
-    assert "exactly 2 distractor candidates" in prompt
-    assert "will select 2" in prompt
-    assert "local application adds mechanical fallback candidates" in prompt
+    assert "at least 2 distractor candidates" in prompt
 
 
 def test_two_model_distractors_are_enough_when_two_are_requested() -> None:
     canonical = template()
     payload = canonical.model_dump(
         include={
+            "question_template",
             "code",
             "entry_function",
             "parameters",
+            "answer_target",
             "answer_expression",
             "distractors",
         }
@@ -287,43 +297,81 @@ def test_two_model_distractors_are_enough_when_two_are_requested() -> None:
 
     built = build_code_candidate(
         CodeTemplateRequest(
-            topic="arithmetic", difficulty="beginner", num_distractors=2
+            prompt="Create an arithmetic question",
+            difficulty="beginner",
+            num_distractors=2,
         ),
         proposal,
     )
 
-    assert len(built.distractors) == 5
+    assert len(built.distractors) == 2
 
 
-def test_prompt_serializes_the_exact_capability_contract() -> None:
-    prompt = build_template_prompt(
-        CodeTemplateRequest(topic="conditionals", difficulty="advanced")
+def test_candidate_builder_defers_missing_distractors_to_validation_fallbacks() -> None:
+    canonical = template()
+    payload = canonical.model_dump(
+        include={
+            "question_template",
+            "code",
+            "entry_function",
+            "parameters",
+            "answer_target",
+            "answer_expression",
+            "distractors",
+        }
+    )
+    payload["distractors"] = payload["distractors"][:2]
+    proposal = CodeTemplateProposal.model_validate(payload)
+
+    built = build_code_candidate(
+        CodeTemplateRequest(
+            prompt="Create an arithmetic question",
+            difficulty="beginner",
+            num_distractors=3,
+        ),
+        proposal,
     )
 
-    assert '"accepted_parameter_shapes"' in prompt
-    assert '"kinds": [' in prompt
-    assert '"integer"' in prompt
-    assert '"boolean"' in prompt
-    assert '"required_code_features"' in prompt
-    assert '"answer_kind": "integer"' in prompt
-    assert '"nested_conditional"' in prompt
-    assert "Do not add parameters" in prompt
+    assert built.distractors == proposal.distractors
+    domain = CodeDomain(execution_tool=ArithmeticExecutor())
+    plan = domain.prepare_validation(
+        built,
+        request=CodeTemplateRequest(
+            prompt="Create an arithmetic question",
+            difficulty="beginner",
+            num_distractors=3,
+        ),
+    )
+    report = ValidationPipeline().validate(
+        context=plan.context, checks=plan.checks, policy=plan.policy
+    )
+    report.raise_for_failure()
+    validated = domain.finalize_template(plan.context, report)
+    assert [recipe.expression for recipe in validated.template.distractors] == [
+        "a + b + c",
+        "a - b - c",
+        "(a + b - c) + 1",
+    ]
 
 
-def test_list_result_prompt_declares_the_answer_kind() -> None:
+def test_prompt_offers_current_validation_check_names() -> None:
     prompt = build_template_prompt(
-        CodeTemplateRequest(topic="lists", difficulty="intermediate")
+        CodeTemplateRequest(
+            prompt="Create a conditional question", difficulty="advanced"
+        )
     )
 
-    assert '"answer_kind": "integer_list"' in prompt
+    assert "template_structure" in prompt
+    assert "code_execution" in prompt
+    assert "do not invent names" in prompt
 
 
 def test_reason_placeholders_forbid_embedded_expressions() -> None:
     prompt = build_template_prompt(
-        CodeTemplateRequest(topic="loops", difficulty="beginner")
+        CodeTemplateRequest(prompt="Create a loop question", difficulty="beginner")
     )
 
-    assert "never put expressions such as `{n-1}` inside braces" in prompt
+    assert "never put expressions inside braces" in prompt
 
 
 @pytest.mark.parametrize("values", [[2, 2, 4], [2, 2]])
@@ -341,9 +389,11 @@ def test_provider_proposal_parser_rejects_duplicate_parameter_values() -> None:
     payload = template().model_dump(
         mode="json",
         include={
+            "question_template",
             "code",
             "entry_function",
             "parameters",
+            "answer_target",
             "answer_expression",
             "distractors",
         },
@@ -367,40 +417,43 @@ def test_template_building_derives_stable_local_fields() -> None:
     proposal = CodeTemplateProposal.model_validate(
         canonical.model_dump(
             include={
+                "question_template",
                 "code",
                 "entry_function",
                 "parameters",
+                "answer_target",
                 "answer_expression",
                 "distractors",
             }
         )
     )
-    request = CodeTemplateRequest(topic="arithmetic", difficulty="beginner")
+    request = CodeTemplateRequest(
+        prompt="Create an arithmetic question", difficulty="beginner"
+    )
 
     first = build_code_candidate(request, proposal)
     second = build_code_candidate(request, proposal)
 
     assert first == second
-    assert first.template_id.startswith("arithmetic.beginner.")
+    assert first.template_id.startswith("code.beginner.")
     assert first.answer_target == "return_value"
     assert first.question_type == "mcq"
-    assert first.question_template == (
-        "What value does calculate({a}, {b}, {c}) return?"
-    )
-    assert len(first.distractors) == 6
-    assert first.distractors[-1].expression == "(a + b - c) + 3"
+    assert first.question_template == ("What does calculate({a}, {b}, {c}) return?")
+    assert len(first.distractors) == 3
 
 
-def test_list_template_building_adds_list_shaped_fallbacks() -> None:
+def test_list_template_building_preserves_model_distractors() -> None:
     canonical = CodeTemplateCandidate.model_validate_json(
         (TEMPLATE_DIR / "list_sorted.json").read_text()
     )
     proposal = CodeTemplateProposal.model_validate(
         canonical.model_dump(
             include={
+                "question_template",
                 "code",
                 "entry_function",
                 "parameters",
+                "answer_target",
                 "answer_expression",
                 "distractors",
             }
@@ -408,14 +461,14 @@ def test_list_template_building_adds_list_shaped_fallbacks() -> None:
     )
 
     result = build_code_candidate(
-        CodeTemplateRequest(topic="lists", difficulty="intermediate"), proposal
+        CodeTemplateRequest(prompt="Create a list question", difficulty="intermediate"),
+        proposal,
     )
 
-    assert result.distractors[-3].expression == "(sorted(values)) + [0]"
-    assert result.distractors[-1].expression == "(sorted(values)) + [2]"
+    assert result.distractors == proposal.distractors
 
 
-def test_profile_rejects_the_wrong_answer_kind() -> None:
+def test_profile_free_validation_rejects_boolean_answers() -> None:
     value = template(
         code="def calculate(a, b, c):\n    return (a + b) > c",
         answer_expression="(a + b) > c",
@@ -426,9 +479,7 @@ def test_profile_rejects_the_wrong_answer_kind() -> None:
             value, domain=CodeDomain(execution_tool=TrustedBatchExecutor())
         )
 
-    assert error.value.code == "ANSWER_KIND_MISMATCH"
-    assert error.value.field == "answer_expression"
-    assert error.value.inputs is not None
+    assert error.value.code == "ANSWER_TYPE_UNSUPPORTED"
 
 
 def test_unsupported_code_is_rejected_before_execution() -> None:
@@ -452,10 +503,9 @@ def test_unsupported_code_is_rejected_before_execution() -> None:
     assert [item.check for item in error.value.evidence] == ["template_structure"]
 
 
-def test_answer_kind_error_precedes_distractor_selection() -> None:
+def test_inconsistent_answer_types_precede_distractor_selection() -> None:
     value = template(
-        code="def calculate(a, b, c):\n    return (a + b) > c",
-        answer_expression="(a + b) > c",
+        answer_expression="a if a == 2 else 'four'",
     )
 
     with pytest.raises(TemplateValidationError) as error:
@@ -463,7 +513,9 @@ def test_answer_kind_error_precedes_distractor_selection() -> None:
         plan = domain.prepare_validation(
             value,
             request=CodeTemplateRequest(
-                topic=value.topic, difficulty=value.difficulty, num_distractors=3
+                prompt="Create an arithmetic question",
+                difficulty=value.difficulty,
+                num_distractors=3,
             ),
         )
         report = ValidationPipeline().validate(
@@ -472,10 +524,10 @@ def test_answer_kind_error_precedes_distractor_selection() -> None:
         report.raise_for_failure()
         domain.finalize_template(plan.context, report)
 
-    assert error.value.code == "ANSWER_KIND_MISMATCH"
+    assert error.value.code == "ANSWER_TYPE_INCONSISTENT"
 
 
-def test_profile_features_must_be_reachable_from_the_entry_function() -> None:
+def test_profile_features_are_not_required_for_free_form_questions() -> None:
     value = CodeTemplateCandidate.model_validate_json(
         (TEMPLATE_DIR / "list_sum.json").read_text()
     ).model_copy(
@@ -492,13 +544,11 @@ def test_profile_features_must_be_reachable_from_the_entry_function() -> None:
         }
     )
 
-    with pytest.raises(TemplateValidationError) as error:
-        TemplateApplication().validate_template(
-            value, domain=CodeDomain(execution_tool=TrustedBatchExecutor())
-        )
+    validated = TemplateApplication().validate_template(
+        value, domain=CodeDomain(execution_tool=TrustedBatchExecutor())
+    )
 
-    assert error.value.code == "PROFILE_MISMATCH"
-    assert "list_aggregate" in str(error.value)
+    assert validated.validation.cases_validated > 0
 
 
 def test_rejects_an_unused_entry_parameter_before_execution() -> None:
@@ -673,126 +723,18 @@ def test_profiles_accept_alternative_programs_and_answer_formulas(
     assert instance.question.answer_target == value.answer_target
 
 
-@pytest.mark.parametrize(
-    ("filename", "code", "missing_feature"),
-    [
-        (
-            "conditional_string.json",
-            (
-                "def route(mode):\n"
-                "    if mode == 'priority':\n"
-                "        return 1\n"
-                "    return 0"
-            ),
-            "sequential_conditionals",
-        ),
-        (
-            "conditional_nested.json",
-            (
-                "def classify(score, override):\n"
-                "    if score >= 50:\n"
-                "        return 'score'\n"
-                "    if override:\n"
-                "        return 'override'\n"
-                "    return 'neither'"
-            ),
-            "nested_conditional",
-        ),
-        ("loop_iterations.json", "def accumulate(n):\n    return n + 1", "loop"),
-        (
-            "loop_sequential.json",
-            (
-                "def accumulate(n, m):\n"
-                "    total = 0\n"
-                "    for i in range(n):\n"
-                "        for j in range(m):\n"
-                "            total += i + j\n"
-                "    return total"
-            ),
-            "sequential_loops",
-        ),
-        (
-            "loop_nested.json",
-            (
-                "def accumulate(n, m):\n"
-                "    total = 0\n"
-                "    for i in range(n):\n"
-                "        total += i\n"
-                "    for j in range(m):\n"
-                "        total += j\n"
-                "    return total"
-            ),
-            "nested_loop",
-        ),
-        (
-            "function_helper.json",
-            "def calculate(value):\n    return value + 1",
-            "helper_function",
-        ),
-        (
-            "function_loop_helper.json",
-            (
-                "def increment(value):\n"
-                "    return value + 1\n\n"
-                "def calculate(n):\n"
-                "    return increment(n)"
-            ),
-            "loop",
-        ),
-        (
-            "function_nested_helpers.json",
-            (
-                "def increment(value):\n"
-                "    return value + 1\n\n"
-                "def double(value):\n"
-                "    return value * 2\n\n"
-                "def calculate(n):\n"
-                "    total = 0\n"
-                "    for i in range(n):\n"
-                "        total += increment(i) + double(i)\n"
-                "    return total"
-            ),
-            "nested_helper",
-        ),
-        (
-            "list_sum.json",
-            "def total(values):\n    return values[0] + values[-1]",
-            "list_aggregate",
-        ),
-        (
-            "list_sorted.json",
-            "def arrange(values):\n    return values",
-            "list_sort",
-        ),
-    ],
-)
-def test_profiles_still_reject_missing_broad_code_features(
-    filename: str, code: str, missing_feature: str
-) -> None:
-    data = json.loads((TEMPLATE_DIR / filename).read_text())
-    data["code"] = code
-    value = CodeTemplateCandidate.model_validate(data)
-
-    with pytest.raises(TemplateValidationError) as error:
-        TemplateApplication().validate_template(
-            value, domain=CodeDomain(execution_tool=TrustedBatchExecutor())
-        )
-
-    assert error.value.code == "PROFILE_MISMATCH"
-    assert error.value.field == "code"
-    assert missing_feature in str(error.value)
-
-
-def test_template_building_derives_target_aware_loop_wording() -> None:
+def test_template_building_preserves_model_authored_target_and_wording() -> None:
     canonical = CodeTemplateCandidate.model_validate_json(
         (TEMPLATE_DIR / "loop_iterations.json").read_text()
     )
     proposal = CodeTemplateProposal.model_validate(
         canonical.model_dump(
             include={
+                "question_template",
                 "code",
                 "entry_function",
                 "parameters",
+                "answer_target",
                 "answer_expression",
                 "distractors",
             }
@@ -800,7 +742,8 @@ def test_template_building_derives_target_aware_loop_wording() -> None:
     )
 
     result = build_code_candidate(
-        CodeTemplateRequest(topic="loops", difficulty="beginner"), proposal
+        CodeTemplateRequest(prompt="Create a loop question", difficulty="beginner"),
+        proposal,
     )
 
     assert result.question_template == (
@@ -815,23 +758,8 @@ def test_proposal_parser_rejects_locally_owned_fields() -> None:
         parse_code_template_proposal(json.dumps(canonical))
 
 
-def test_every_topic_and_difficulty_has_distinct_authoring_guidance() -> None:
-    prompts = {
-        (topic, difficulty): build_template_prompt(
-            CodeTemplateRequest(topic=topic, difficulty=difficulty)
-        )
-        for topic in CODE_TOPICS
-        for difficulty in CODE_DIFFICULTIES
-    }
-
-    assert len(set(prompts.values())) == 15
-    assert "reachable sequential loops" in prompts[("loops", "intermediate")]
-    assert "nested-loop behavior" in prompts[("loops", "advanced")]
-    assert "multi-level" in prompts[("functions", "advanced")]
-    assert "allowlisted aggregate operation" in prompts[("lists", "beginner")]
-    assert "distinct mode values" in prompts[("conditionals", "intermediate")]
-    assert "nested conditional" in prompts[("conditionals", "advanced")]
-    assert "call sorted" in prompts[("lists", "intermediate")]
+def test_profiles_remain_evaluation_fixtures_not_authoring_requirements() -> None:
+    assert len(CODE_TEMPLATE_PROFILES) == 15
     assert all(
         "answer_expression" not in profile.guidance
         for profile in CODE_TEMPLATE_PROFILES.values()
@@ -1017,15 +945,6 @@ def test_safe_expression_rejects_oversized_source_and_ast() -> None:
         SafeExpression(many_nodes, ())
 
 
-def test_list_topic_requests_an_integer_list_template() -> None:
-    prompt = build_template_prompt(
-        CodeTemplateRequest(topic="lists", difficulty="beginner")
-    )
-
-    assert "integer_list parameter named values" in prompt
-    assert "allowlisted aggregate operation" in prompt
-
-
 def test_rejects_a_distractor_that_is_correct_for_any_case() -> None:
     value = template().model_dump()
     value["distractors"][0]["expression"] = "a + b - c"
@@ -1068,7 +987,9 @@ def test_distractor_selection_is_not_dependent_on_greedy_candidate_order() -> No
     plan = domain.prepare_validation(
         item,
         request=CodeTemplateRequest(
-            topic=item.topic, difficulty=item.difficulty, num_distractors=2
+            prompt="Create an arithmetic question",
+            difficulty=item.difficulty,
+            num_distractors=2,
         ),
     )
     report = ValidationPipeline().validate(
@@ -1112,7 +1033,9 @@ def test_authoring_plan_evaluates_each_candidate_once_per_case(monkeypatch) -> N
     plan = domain.prepare_validation(
         item,
         request=CodeTemplateRequest(
-            topic=item.topic, difficulty=item.difficulty, num_distractors=2
+            prompt="Create an arithmetic question",
+            difficulty=item.difficulty,
+            num_distractors=2,
         ),
     )
     report = ValidationPipeline().validate(
@@ -1131,7 +1054,7 @@ def test_authoring_plan_evaluates_each_candidate_once_per_case(monkeypatch) -> N
     assert set(evaluation_counts.values()) == {1}
 
 
-def test_candidate_selection_rejects_pairwise_collisions_across_cases() -> None:
+def test_candidate_selection_recovers_from_pairwise_collisions_with_fallbacks() -> None:
     value = template().model_dump(mode="json")
     value["distractors"] = [
         {"expression": "0", "reason_template": "Uses zero."},
@@ -1143,115 +1066,120 @@ def test_candidate_selection_rejects_pairwise_collisions_across_cases() -> None:
     ]
     item = CodeTemplateCandidate.model_validate(value)
 
-    with pytest.raises(TemplateValidationError, match="no set of 2") as error:
-        domain = CodeDomain(execution_tool=ArithmeticExecutor())
-        plan = domain.prepare_validation(
-            item,
-            request=CodeTemplateRequest(
-                topic=item.topic, difficulty=item.difficulty, num_distractors=2
-            ),
-        )
-        report = ValidationPipeline().validate(
-            context=plan.context, checks=plan.checks, policy=plan.policy
-        )
-        report.raise_for_failure()
-        domain.finalize_template(plan.context, report)
+    domain = CodeDomain(execution_tool=ArithmeticExecutor())
+    plan = domain.prepare_validation(
+        item,
+        request=CodeTemplateRequest(
+            prompt="Create an arithmetic question",
+            difficulty=item.difficulty,
+            num_distractors=2,
+        ),
+    )
+    report = ValidationPipeline().validate(
+        context=plan.context, checks=plan.checks, policy=plan.policy
+    )
+    report.raise_for_failure()
+    validated = domain.finalize_template(plan.context, report)
 
-    assert error.value.code == "DISTRACTOR_SELECTION_FAILED"
-    assert "candidate 1 duplicates candidate 0" in str(error.value)
-    assert "candidate 2 duplicates candidate 0" in str(error.value)
-    assert "candidate 2 duplicates candidate 1" in str(error.value)
+    assert [recipe.expression for recipe in validated.template.distractors] == [
+        "0",
+        "(a + b - c) + 1",
+    ]
+    selection = next(
+        evidence
+        for evidence in validated.validation.evidence
+        if evidence.check == "distractor_selection"
+    )
+    assert selection.details["fallbacks_added"] == 2
 
 
-def test_candidate_selection_reports_when_too_few_are_globally_valid() -> None:
+def test_selection_replaces_invalid_model_distractors_with_fallbacks() -> None:
     data = template().model_dump()
     for distractor in data["distractors"]:
         distractor["expression"] = "a + b - c"
     item = CodeTemplateCandidate.model_validate(data)
 
-    with pytest.raises(TemplateValidationError, match="no set of 3") as error:
-        domain = CodeDomain(execution_tool=ArithmeticExecutor())
-        plan = domain.prepare_validation(
-            item,
-            request=CodeTemplateRequest(
-                topic=item.topic, difficulty=item.difficulty, num_distractors=3
-            ),
-        )
-        report = ValidationPipeline().validate(
-            context=plan.context, checks=plan.checks, policy=plan.policy
-        )
-        report.raise_for_failure()
-        domain.finalize_template(plan.context, report)
-
-    assert error.value.code == "DISTRACTOR_SELECTION_FAILED"
-    assert error.value.field == "distractors"
-
-
-def test_rejects_profile_answer_target_mismatch_before_execution() -> None:
-    executor = ArithmeticExecutor()
-    item = template(answer_target="loop_iterations")
-
-    with pytest.raises(TemplateValidationError, match="requires answer_target"):
-        TemplateApplication().validate_template(
-            item, domain=CodeDomain(execution_tool=executor)
-        )
-    assert executor.batch_calls == 0
-
-
-def test_rejects_profile_parameter_shape_mismatch_before_execution() -> None:
-    executor = ArithmeticExecutor()
-    data = template().model_dump()
-    data["parameters"][2] = {
-        "name": "c",
-        "kind": "boolean",
-        "values": [False, True],
-    }
-
-    with pytest.raises(TemplateValidationError, match="parameter profile requires"):
-        TemplateApplication().validate_template(
-            CodeTemplateCandidate.model_validate(data),
-            domain=CodeDomain(execution_tool=executor),
-        )
-    assert executor.batch_calls == 0
-
-
-def test_rejects_missing_profile_code_feature_before_execution() -> None:
-    executor = ArithmeticExecutor()
-    item = template(code="def calculate(a, b, c):\n    return a")
-
-    with pytest.raises(
-        TemplateValidationError, match="missing required features"
-    ) as error:
-        TemplateApplication().validate_template(
-            item, domain=CodeDomain(execution_tool=executor)
-        )
-
-    payload = error.value.as_dict()
-    assert {key: payload[key] for key in ("code", "message", "field", "inputs")} == {
-        "code": "PROFILE_MISMATCH",
-        "message": (
-            "arithmetic/beginner code is missing required features: arithmetic"
+    domain = CodeDomain(execution_tool=ArithmeticExecutor())
+    plan = domain.prepare_validation(
+        item,
+        request=CodeTemplateRequest(
+            prompt="Create an arithmetic question",
+            difficulty=item.difficulty,
+            num_distractors=3,
         ),
-        "field": "code",
-        "inputs": None,
-    }
-    assert payload["evidence"][0]["check"] == "template_structure"
-    assert payload["evidence"][0]["status"] == "failed"
-    assert executor.batch_calls == 0
+    )
+    report = ValidationPipeline().validate(
+        context=plan.context, checks=plan.checks, policy=plan.policy
+    )
+    report.raise_for_failure()
+    validated = domain.finalize_template(plan.context, report)
+
+    assert [recipe.expression for recipe in validated.template.distractors] == [
+        "(a + b - c) + 1",
+        "(a + b - c) - 1",
+        "(a + b - c) + 2",
+    ]
 
 
-def test_rejects_non_positive_profile_integer_domain_before_execution() -> None:
-    executor = ArithmeticExecutor()
-    path = TEMPLATE_DIR / "loop_iterations.json"
-    data = json.loads(path.read_text())
-    data["parameters"][0]["values"] = [0, 2]
+@pytest.mark.parametrize(
+    ("parameter", "expected_fallbacks"),
+    [
+        (
+            {"name": "text", "kind": "string", "values": ["ab", "xy"]},
+            ["(text) + '?'", "(text) + '!'", "(text) + 'x'"],
+        ),
+        (
+            {
+                "name": "values",
+                "kind": "integer_list",
+                "values": [[1], [2, 3]],
+            },
+            ["(values) + [0]", "(values) + [1]", "(values) + [-1]"],
+        ),
+    ],
+)
+def test_fallback_distractors_cover_non_numeric_answers(
+    parameter: dict[str, Any], expected_fallbacks: list[str]
+) -> None:
+    name = parameter["name"]
+    item = CodeTemplateCandidate.model_validate(
+        {
+            "template_id": f"fallback.{name}",
+            "difficulty": "beginner",
+            "code": f"def identity({name}):\n    return {name}",
+            "entry_function": "identity",
+            "parameters": [parameter],
+            "question_template": f"What does identity({{{name}}}) return?",
+            "answer_target": "return_value",
+            "answer_expression": name,
+            "distractors": [
+                {
+                    "expression": name,
+                    "reason_template": "Repeats the answer.",
+                }
+                for _ in range(3)
+            ],
+            "question_type": "mcq",
+        }
+    )
+    domain = CodeDomain(execution_tool=TrustedBatchExecutor())
+    plan = domain.prepare_validation(
+        item,
+        request=CodeTemplateRequest(
+            prompt="Create an identity question",
+            difficulty="beginner",
+            num_distractors=3,
+        ),
+    )
+    report = ValidationPipeline().validate(
+        context=plan.context, checks=plan.checks, policy=plan.policy
+    )
+    report.raise_for_failure()
+    validated = domain.finalize_template(plan.context, report)
 
-    with pytest.raises(TemplateValidationError, match="requires positive integer"):
-        TemplateApplication().validate_template(
-            CodeTemplateCandidate.model_validate(data),
-            domain=CodeDomain(execution_tool=executor),
-        )
-    assert executor.batch_calls == 0
+    assert [
+        recipe.expression for recipe in validated.template.distractors
+    ] == expected_fallbacks
 
 
 def test_rejects_non_allowlisted_expression_calls() -> None:

@@ -5,12 +5,10 @@ import ast
 from edcraft_validator.domains.code.checks.validation_context import (
     CodeValidationContext,
 )
-from edcraft_validator.domains.code.code_features import extract_code_features
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
     TemplateValidationError,
 )
-from edcraft_validator.domains.code.profiles import code_template_profile
 from edcraft_validator.domains.code.text_rendering import render_template
 from edcraft_validator.tools.python_analysis import analyze_python_subset
 from edcraft_validator.validation.validation_contracts import CheckResult
@@ -43,7 +41,6 @@ def _validate_structure(
             code="UNSUPPORTED_CODE",
             field="code",
         )
-    _validate_profile(template)
     arguments = _entry_function_arguments(template.code, template.entry_function)
     if arguments != names:
         raise TemplateValidationError(
@@ -71,69 +68,6 @@ def _validate_structure(
         {name: 0 for name in names},
         require_all=True,
     )
-
-
-def _validate_profile(template: CodeTemplateCandidate) -> None:
-    profile = code_template_profile(template.topic, template.difficulty)
-    if template.answer_target != profile.answer_target:
-        raise TemplateValidationError(
-            f"{template.topic}/{template.difficulty} requires answer_target="
-            f"{profile.answer_target}",
-            code="PROFILE_MISMATCH",
-            field="answer_target",
-        )
-
-    actual_kinds = tuple(parameter.kind for parameter in template.parameters)
-    actual_names = tuple(parameter.name for parameter in template.parameters)
-    if not any(
-        actual_kinds == shape.kinds
-        and (shape.names is None or actual_names == shape.names)
-        for shape in profile.parameter_shapes
-    ):
-        expected = " or ".join(
-            repr(shape.names or shape.kinds) for shape in profile.parameter_shapes
-        )
-        raise TemplateValidationError(
-            f"{template.topic}/{template.difficulty} parameter profile requires "
-            f"{expected}; received {actual_names} with kinds {actual_kinds}",
-            code="PROFILE_MISMATCH",
-            field="parameters",
-        )
-
-    if profile.require_positive_integers and any(
-        value <= 0
-        for parameter in template.parameters
-        if parameter.kind == "integer"
-        for value in parameter.values
-    ):
-        raise TemplateValidationError(
-            f"{template.topic}/{template.difficulty} requires positive integer "
-            "parameter values",
-            code="PROFILE_MISMATCH",
-            field="parameters",
-        )
-
-    if profile.required_parameter_values is not None:
-        actual_values = tuple(
-            tuple(parameter.values) for parameter in template.parameters
-        )
-        if actual_values != profile.required_parameter_values:
-            raise TemplateValidationError(
-                f"{template.topic}/{template.difficulty} requires parameter "
-                f"values {profile.required_parameter_values}; received {actual_values}",
-                code="PROFILE_MISMATCH",
-                field="parameters",
-            )
-
-    actual_features = extract_code_features(template.code, template.entry_function)
-    missing = profile.required_features - actual_features
-    if missing:
-        raise TemplateValidationError(
-            f"{template.topic}/{template.difficulty} code is missing required "
-            f"features: {', '.join(sorted(missing))}",
-            code="PROFILE_MISMATCH",
-            field="code",
-        )
 
 
 def _entry_function_arguments(code: str, entry_function: str) -> tuple[str, ...]:

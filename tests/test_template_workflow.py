@@ -11,6 +11,10 @@ from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateProposal,
     CodeTemplateRequest,
 )
+from edcraft_validator.llm.llm_contracts import (
+    PlannedGenerationResponse,
+    RecommendedCheck,
+)
 from edcraft_validator.llm.llm_errors import (
     GenerationResponseError,
     GenerationSchemaError,
@@ -64,12 +68,14 @@ def example_plan(candidate):
 def test_template_application_authors_once_then_generates_locally() -> None:
     proposal = CodeTemplateProposal.model_validate(
         {
+            "question_template": "What value does add({a}, {b}) return?",
             "code": "def add(a, b):\n    return a + b",
             "entry_function": "add",
             "parameters": [
                 {"name": "a", "kind": "integer", "values": [1, 2]},
                 {"name": "b", "kind": "integer", "values": [5, 6]},
             ],
+            "answer_target": "return_value",
             "answer_expression": "a + b",
             "distractors": [
                 {"expression": "a + b", "reason_template": "Repeats answer."},
@@ -89,7 +95,10 @@ def test_template_application_authors_once_then_generates_locally() -> None:
 
         def generate(self, request):
             provider_calls.append(request)
-            return proposal
+            return PlannedGenerationResponse(
+                proposal=proposal,
+                checks=[RecommendedCheck(name="code_execution", arguments={})],
+            )
 
     class SumExecutor:
         def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
@@ -102,7 +111,9 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     domain = CodeDomain(execution_tool=SumExecutor())
     application = TemplateApplication()
     validated = application.create_validated_template(
-        CodeTemplateRequest(topic="arithmetic", difficulty="beginner"),
+        CodeTemplateRequest(
+            prompt="Create an arithmetic question", difficulty="beginner"
+        ),
         domain=domain,
         provider=StubProvider(),
     )
@@ -114,7 +125,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert len(execution_calls) == 1
     assert len(provider_calls) == 1
     assert validated.validation.cases_validated == 4
-    assert validated.template.topic == "arithmetic"
+    assert validated.template.topic is None
     assert validated.template.difficulty == "beginner"
     assert validated.template.answer_target == "return_value"
     assert (
@@ -124,9 +135,13 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring is not None
     assert validated.authoring.provider == "stub"
     assert validated.authoring.model == "stub-model"
-    assert validated.authoring.base_prompt_version == "code-template-v8+response-v2"
+    assert validated.authoring.base_prompt_version == "code-template-v10+response-v3"
     assert validated.authoring.domain == "code"
-    assert validated.authoring.request["topic"] == "arithmetic"
+    assert validated.authoring.request["prompt"] == "Create an arithmetic question"
+    assert validated.authoring.request["difficulty"] == "beginner"
+    assert [check.name for check in validated.authoring.recommended_checks] == [
+        "code_execution"
+    ]
     assert validated.authoring.generated_at.utcoffset() is not None
     assert validated.authoring.generation_duration_ms >= 0
     assert [item.expression for item in validated.template.distractors] == [
@@ -181,8 +196,9 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
 
             return StructuredGenerationRequest(
                 messages=[{"role": "user", "content": request.topic}],
-                response_model=ExampleProposal,
+                response_model=PlannedGenerationResponse[ExampleProposal],
                 prompt_version="example-v1",
+                offered_tool_names=("double_value",),
             )
 
         def build_candidate(self, request, proposal):
@@ -213,8 +229,15 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
 
         def generate(self, request):
             events.append("generate")
-            assert request.response_model is ExampleProposal
-            return request.response_model.model_validate_json(json.dumps({"value": 12}))
+            assert request.response_model == PlannedGenerationResponse[ExampleProposal]
+            return request.response_model.model_validate_json(
+                json.dumps(
+                    {
+                        "proposal": {"value": 12},
+                        "checks": [{"name": "double_value", "arguments": {}}],
+                    }
+                )
+            )
 
     domain = ExampleDomain(ExampleTool())
     application = TemplateApplication()
@@ -280,6 +303,46 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
             ExampleRequest(topic="fractions"),
             domain=FailingDomain(),
             provider=FailingProvider(),
+        )
+
+
+def test_unknown_recommended_check_stops_before_candidate_validation() -> None:
+    class Domain:
+        name = "example"
+
+        def generation_request(self, request):
+            from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
+
+            return StructuredGenerationRequest(
+                messages=[{"role": "user", "content": request.topic}],
+                response_model=PlannedGenerationResponse[ExampleProposal],
+                prompt_version="example-v1",
+                offered_tool_names=("positive_value",),
+            )
+
+        def build_candidate(self, request, proposal):
+            pytest.fail(
+                "Unknown recommended checks must stop before candidate building"
+            )
+
+        def prepare_validation(self, candidate, *, request=None):
+            pytest.fail("Unknown recommended checks must stop before validation")
+
+    class Provider:
+        provider = "stub"
+        model = "stub-model"
+
+        def generate(self, request):
+            return PlannedGenerationResponse(
+                proposal=ExampleProposal(value=1),
+                checks=[RecommendedCheck(name="invented_check", arguments={})],
+            )
+
+    with pytest.raises(GenerationSchemaError, match="not offered: invented_check"):
+        TemplateApplication().create_validated_template(
+            ExampleRequest(topic="fractions"),
+            domain=Domain(),
+            provider=Provider(),
         )
 
 
