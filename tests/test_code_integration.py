@@ -12,6 +12,10 @@ from edcraft_validator.domains.code.code_schemas import (
 )
 from edcraft_validator.domains.code.question_generator import generate_code_question
 from edcraft_validator.domains.code.template_evaluator import TemplateEvaluator
+from edcraft_validator.llm.llm_contracts import (
+    PlannedGenerationResponse,
+    RecommendedCheck,
+)
 from edcraft_validator.tools.python_execution import LocalPythonTool
 
 TEMPLATE_PATHS = sorted(
@@ -76,9 +80,11 @@ def test_model_proposal_is_built_then_validated() -> None:
     proposal = CodeTemplateProposal.model_validate(
         canonical.model_dump(
             include={
+                "question_template",
                 "code",
                 "entry_function",
                 "parameters",
+                "answer_target",
                 "answer_expression",
                 "distractors",
             }
@@ -90,16 +96,21 @@ def test_model_proposal_is_built_then_validated() -> None:
         model = "stub-model"
 
         def generate(self, request):
-            return proposal
+            return PlannedGenerationResponse(
+                proposal=proposal,
+                checks=[RecommendedCheck(name="code_execution", arguments={})],
+            )
 
     validated = TemplateApplication().create_validated_template(
-        CodeTemplateRequest(topic="arithmetic", difficulty="beginner"),
+        CodeTemplateRequest(
+            prompt="Create an arithmetic question", difficulty="beginner"
+        ),
         domain=CodeDomain(),
         provider=StubProvider(),
     )
 
     assert validated.template.question_template == (
-        "What value does calculate({a}, {b}, {c}) return?"
+        "What does calculate({a}, {b}, {c}) return?"
     )
     expected_cases = 1
     for parameter in proposal.parameters:

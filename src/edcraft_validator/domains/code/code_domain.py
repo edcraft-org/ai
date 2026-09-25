@@ -32,10 +32,16 @@ from edcraft_validator.domains.code.code_schemas import (
     ValidatedCodeTemplate,
     ValidatedTemplateCase,
 )
-from edcraft_validator.domains.code.prompt_builder import build_code_generation_request
+from edcraft_validator.domains.code.prompt_builder import (
+    CODE_RECOMMENDED_CHECK_NAMES,
+    build_code_generation_request,
+)
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
 from edcraft_validator.domains.code.question_generator import generate_code_question
-from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
+from edcraft_validator.llm.llm_contracts import (
+    PlannedGenerationResponse,
+    StructuredGenerationRequest,
+)
 from edcraft_validator.tools.python_execution import (
     LocalPythonTool,
     PythonExecutionTool,
@@ -54,6 +60,7 @@ class CodeDomain:
     request_model = CodeTemplateRequest
     candidate_model = CodeTemplateCandidate
     validated_model = ValidatedCodeTemplate
+    recommended_check_names = CODE_RECOMMENDED_CHECK_NAMES
 
     def __init__(
         self,
@@ -68,9 +75,11 @@ class CodeDomain:
 
     def generation_request(
         self, request: BaseModel
-    ) -> StructuredGenerationRequest[CodeProposalResponse]:
+    ) -> StructuredGenerationRequest[PlannedGenerationResponse[CodeProposalResponse]]:
         typed_request = _require_type(request, CodeTemplateRequest)
-        return build_code_generation_request(typed_request)
+        return build_code_generation_request(
+            typed_request, offered_tool_names=self.recommended_check_names
+        )
 
     def build_candidate(
         self, request: BaseModel, proposal: BaseModel

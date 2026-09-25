@@ -31,6 +31,7 @@ class CodeValidationContext:
     executions: list[ExecutionResult] = field(default_factory=list)
     canonical_answers: list[Any] = field(default_factory=list)
     corrected_cases: int = 0
+    fallback_distractors_added: int = 0
 
     def __post_init__(self) -> None:
         # Checks may replace recipes; caller-owned candidates remain untouched.

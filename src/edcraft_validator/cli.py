@@ -45,9 +45,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="JSON file containing fields for the selected domain's request model",
     )
     author.add_argument(
-        "--topic",
-        choices=CODE_TOPICS,
-        help="code-domain request topic (cannot be combined with --request-json)",
+        "--prompt",
+        help="free-form authoring prompt (cannot be combined with --request-json)",
     )
     author.add_argument(
         "--difficulty",
@@ -117,7 +116,7 @@ def _handle_author(args: argparse.Namespace) -> int:
     request_fields = {
         name: value
         for name, value in {
-            "topic": args.topic,
+            "prompt": args.prompt,
             "difficulty": args.difficulty,
             "num_distractors": args.num_distractors,
         }.items()
@@ -171,7 +170,7 @@ def _handle_evaluate(args: argparse.Namespace) -> int:
         def record_attempt(attempt: Any) -> None:
             print(attempt.model_dump_json(), file=output, flush=True)
             print(
-                f"[{attempt.attempt}] {attempt.request.topic}/"
+                f"[{attempt.attempt}] {attempt.topic}/"
                 f"{attempt.request.difficulty}: {attempt.status} "
                 f"({attempt.total_duration_ms / 1000:.1f}s)",
                 file=sys.stderr,

@@ -1,5 +1,5 @@
 {
-  "topic": "arithmetic",
+  "prompt": "Create a Python MCQ about adding and subtracting integers.",
   "difficulty": "beginner",
   "num_distractors": 3
 }

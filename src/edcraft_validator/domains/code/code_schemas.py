@@ -54,13 +54,20 @@ class GeneratedQuestion(BaseModel):
 
 
 class CodeTemplateRequest(BaseModel):
-    """Human-selected constraints for one code template."""
+    """Free-form authoring request for one reusable code template."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    topic: ProgrammingTopic
+    prompt: str = Field(min_length=1, max_length=4000)
     difficulty: Difficulty
     num_distractors: int = Field(default=3, ge=2, le=3)
+
+    @field_validator("prompt")
+    @classmethod
+    def reject_blank_prompt(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("prompt must not be blank")
+        return value
 
 
 CODE_TEMPLATE_VALIDATOR_VERSION = "code-template-validator-v3"
@@ -148,13 +155,15 @@ class CodeTemplateProposal(BaseModel):
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
+    question_template: str = Field(min_length=1)
     code: str = Field(min_length=1)
     entry_function: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     parameters: list[FiniteParameter] = Field(min_length=1, max_length=3)
+    answer_target: AnswerTarget
     answer_expression: str = Field(min_length=1)
     distractors: list[DistractorRecipe] = Field(min_length=2, max_length=5)
 
-    @field_validator("code", "answer_expression")
+    @field_validator("question_template", "code", "answer_expression")
     @classmethod
     def reject_blank_text(cls, value: str) -> str:
         if not value.strip():
@@ -180,7 +189,7 @@ class CodeTemplateCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     template_id: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]*$")
-    topic: ProgrammingTopic
+    topic: ProgrammingTopic | None = None
     difficulty: Difficulty
     code: str = Field(min_length=1)
     entry_function: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")

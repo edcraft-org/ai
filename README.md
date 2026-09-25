@@ -7,13 +7,12 @@ questions deterministically without further AI calls.
 Direct AI-to-question generation is intentionally not supported. This keeps API
 cost proportional to the number of templates rather than the number of questions.
 
-## Agreed target workflow
+## Evolving workflow
 
-The next implementation accepts a domain and free-form prompt. The application
-passes cached MCP check descriptions and schemas to the model, which returns a
-proposal and selected checks. Domains supply schemas; provider adapters extract
-response content and invoke generic JSON/schema parsing. The validator executes the plan and assesses evidence.
-This is a documented target, not yet the behavior of the CLI shown below.
+Authoring accepts a domain, free-form prompt, and difficulty. In one structured
+response the model returns a reusable proposal plus recommended checks. The current
+validator still runs its complete deterministic pipeline; later implementation
+issues will expose those checks through MCP and execute the recommended fixed plan.
 
 - [Workflow specification and implementation order](docs/question-generation/README.md)
 - [PlantUML sequence diagram](docs/question-generation/generate-template.puml)
@@ -23,9 +22,10 @@ This is a documented target, not yet the behavior of the CLI shown below.
 ## Current workflow
 
 ```text
-domain + topic + difficulty + provider
-  -> AI proposes code, parameters, answer logic, and distractor candidates
-  -> code domain builds identity, target, wording, and question type
+domain + free-form prompt + difficulty + provider
+  -> AI proposes wording, code, entry function, answer target, parameters,
+     answer logic, distractors, and recommended checks
+  -> code domain builds identity and question type
   -> Python subset analysis
   -> all parameter combinations run through one local Python tool call
   -> globally valid distractor recipes selected from the candidates
@@ -34,8 +34,9 @@ domain + topic + difficulty + provider
   -> deterministic questions generated locally from seeds
 ```
 
-Template authoring makes one provider request for the requested misconception
-candidates. The code domain adds mechanical fallbacks without another AI call.
+Template authoring makes one provider request for the complete proposal and its
+recommended checks. The model must supply enough usable distractors; the code domain
+does not add topic-profile-specific fallbacks.
 Generating a question from a validated template uses no AI, execution tool, or
 per-question validation call.
 
@@ -76,7 +77,7 @@ uv run python -m edcraft_validator.cli author \
   --provider openai \
   --domain code \
   --model gpt-5-mini \
-  --topic arithmetic \
+  --prompt "Create an arithmetic MCQ about adding and subtracting integers." \
   --difficulty beginner \
   --num-distractors 3 \
   --output /tmp/validated-template.json
@@ -92,7 +93,7 @@ sends the same schema through its native structured endpoint:
   --provider ollama \
   --domain code \
   --model qwen2.5-coder:14b \
-  --topic loops \
+  --prompt "Create a loop-tracing MCQ about accumulating a sequence." \
   --difficulty beginner \
   --num-distractors 3 \
   --output /tmp/validated-loop-template.json
@@ -114,11 +115,11 @@ uv run python -m edcraft_validator.cli author \
 For code, that file can contain:
 
 ```json
-{"topic": "arithmetic", "difficulty": "beginner", "num_distractors": 3}
+{"prompt": "Create an arithmetic MCQ.", "difficulty": "beginner", "num_distractors": 3}
 ```
 
-`--request-json` cannot be combined with `--topic`, `--difficulty`, or
-`--num-distractors`. The existing code flags remain supported; omitting the
+`--request-json` cannot be combined with `--prompt`, `--difficulty`, or
+`--num-distractors`. Omitting the
 distractor count uses the code request model's default of three. Request data is
 validated before a model provider is created. A new domain can declare different
 request fields without changing this handler.
@@ -186,12 +187,9 @@ Rendered misconception reasons are preserved alongside their selected distractor
 
 - Domain: Python code execution-trace MCQs.
 - Providers: OpenAI, Ollama, and SocLaas.
-- Topic selections: `arithmetic`, `conditionals`, `loops`, `functions`, and
-  `lists`.
-- Difficulties: `beginner`, `intermediate`, and `advanced`, each with a distinct
-  validator-backed authoring profile per topic. Profiles enforce parameter and answer
-  contracts plus broad, reachable code features without prescribing one exact formula
-  or AST layout.
+- Prompt: free-form within the supported safe Python and reusable-MCQ contracts.
+- Difficulties: `beginner`, `intermediate`, and `advanced`. They are preserved in
+  provenance but are not yet independently calibrated by a deterministic checker.
 - Template parameters: one to three explicitly typed finite parameters. Supported
   kinds are integers, booleans, bounded printable strings, and bounded integer
   lists. Each parameter has two to four unique values.
@@ -202,10 +200,8 @@ Rendered misconception reasons are preserved alongside their selected distractor
 - Expression safety: at most 500 source characters and 100 syntax nodes; numeric
   intermediates are bounded to magnitude 1 billion, individual sequences to 100
   items, and complete nested values to a cumulative logical size of 1,000.
-- Distractors: the provider proposes the requested misconception candidates in the
-  same call. Code template construction appends type-compatible deterministic
-  fallbacks, and
-  the finite-domain validator searches candidate subsets to retain the requested two
+- Distractors: the provider proposes misconception candidates in the same call. The
+  finite-domain validator searches candidate subsets to retain the requested two
   or three globally unique expressions with reason templates. Corrected templates
   are still rejected when too few valid distractors remain.
 - Reproducibility: deterministic seed selection. AI-authored, validated artifacts
@@ -213,24 +209,21 @@ Rendered misconception reasons are preserved alongside their selected distractor
   version, generation timestamp, and generation time. API keys and other secrets are
   never stored.
 
-Topic currently selects the answer target as follows:
+The model selects one of the tracer's supported answer targets:
 
-| Topic | Answer target |
+| Target | Meaning |
 | --- | --- |
-| `arithmetic` | Entry-function return value |
-| `conditionals` | Number of evaluated `if` conditions |
-| `loops` | Total loop-body iterations |
-| `functions` | Traced function calls, including the entry call and safe built-ins |
-| `lists` | Entry-function return value |
-
-The execution tracer can also represent `loop_executions`, the number of loop
-statements encountered, although the current topic mapping uses total iterations
-for loop templates.
+| `return_value` | Entry-function return value |
+| `branch_executions` | Number of evaluated `if` conditions |
+| `loop_iterations` | Total loop-body iterations |
+| `loop_executions` | Number of loop statements encountered |
+| `function_calls` | Traced function calls, including the entry call and safe built-ins |
 
 ### Code-domain coverage matrix
 
-The repository contains one exhaustively validated template for every supported
-topic and difficulty pair (15 total):
+The repository retains one exhaustively validated template for each historical topic
+and difficulty pair (15 total). These are regression and evaluation fixtures, not an
+authoring allowlist:
 
 | Topic | Beginner | Intermediate | Advanced |
 | --- | --- | --- | --- |
@@ -278,7 +271,7 @@ edcraft_validator/
 │       ├── code_domain.py         code prompting, validation, and expansion wiring
 │       ├── code_types.py          code-domain aliases, topics, and answer targets
 │       ├── code_schemas.py        request, proposal, template, and question schemas
-│       ├── profiles.py            topic/difficulty profiles and profile rules
+│       ├── profiles.py            historical evaluation-profile fixtures
 │       ├── code_features.py       AST feature extraction and feature predicates
 │       ├── prompt_builder.py      code prompts and structured generation request
 │       ├── proposal_response.py   typed provider response schema
@@ -290,7 +283,7 @@ edcraft_validator/
 │       └── checks/
 │           ├── validation_context.py typed intermediate validation values
 │           ├── check_wrapper.py   check metadata and tool-failure outcomes
-│           ├── structure_checks.py structure, profile, and rendering checks
+│           ├── structure_checks.py safe structure and rendering checks
 │           ├── answer_checks.py   expression checks and canonical answers
 │           ├── distractor_checks.py distractor selection and consistency
 │           └── execution_check.py execution operation with an injected tool
@@ -484,3 +477,11 @@ bounded v8 prompt. Rerun the matrix before treating this as the baseline for the
 broader profile contracts. Rejected model proposals are expected evaluation
 outcomes; inspect their structured failure codes rather than treating rejection as
 a validator failure.
+
+The issue #35 profile-free v9 prompt was also evaluated on 2026-09-25 with six
+`arithmetic`/`beginner` attempts using Ollama 0.33.0 and
+`qwen2.5-coder:14b`. None validated: all six failed `template_structure` with
+`QUESTION_TEMPLATE_INVALID` because the model-authored `question_template` did not
+name its selected entry function. Mean end-to-end latency was 45.8 seconds (35.3 to
+59.8 seconds). This result is retained as a model-compatibility baseline; the static
+requirement was not relaxed.
