@@ -55,6 +55,23 @@ def check_selection(context: CodeValidationContext) -> CheckResult | None:
     return CheckResult(details={"fallbacks_added": context.fallback_distractors_added})
 
 
+def check_proposed_distractor_selection(
+    context: CodeValidationContext,
+) -> CheckResult:
+    """Select only model-proposed distractors, without adding fallbacks."""
+    count = selected_count(context)
+    if count is None:
+        raise ValueError("a required distractor count must be provided")
+    context.template, context.candidates = _select_distractors(
+        context.template,
+        context.inputs_cases,
+        context.canonical_answers,
+        context.candidates,
+        num_distractors=count,
+    )
+    return CheckResult(details={"selected": count, "fallbacks_added": 0})
+
+
 def _append_fallback_distractors(context: CodeValidationContext, count: int) -> int:
     """Append generic, type-compatible recipes after model selection fails."""
     answer_expression = context.template.answer_expression

@@ -77,6 +77,28 @@ def test_rejects_decorated_functions() -> None:
     assert any("Decorators" in error for error in result.errors)
 
 
+@pytest.mark.parametrize(
+    "local_definition",
+    [
+        "def helper(value=1):\n        return value",
+        "def helper(*, value=1):\n        return value",
+    ],
+)
+def test_rejects_defaults_on_local_functions(local_definition: str) -> None:
+    code = f"def main():\n    {local_definition}\n    return 1"
+
+    result = analyze_python_subset(code, "main")
+
+    assert not result.is_valid
+    assert any("Defaults on local functions" in error for error in result.errors)
+
+
+def test_accepts_defaults_on_module_level_helpers() -> None:
+    code = "def helper(value=1):\n    return value\n\ndef main():\n    return helper()"
+
+    assert analyze_python_subset(code, "main").is_valid
+
+
 def test_rejects_oversized_integer_literals() -> None:
     result = analyze_python_subset(
         "def allocate():\n    return [0] * 100000000", "allocate"
