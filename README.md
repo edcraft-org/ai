@@ -248,7 +248,39 @@ The default adapter in `tools/python_execution.py` sends every case for one cand
 to one `tools/python_worker.py` subprocess, which uses EdCraft's pinned `step-tracer`
 to return values and execution counts. Per-case timeouts and a 100,000 user-code
 trace-event limit bound tracing. This tool supports deterministic validation; it is
-not a security sandbox for untrusted Python.
+not a security sandbox by itself. Deployment runs the validation job inside a
+container that supplies the outer filesystem, network, process, and total-memory
+boundary. The worker subprocess adds a scrubbed environment, a host timeout, CPU
+limits, a Linux 512 MiB address-space limit, static syntax restrictions, and the
+trace-event limit as defense in depth.
+
+## MCP validation tools
+
+FastMCP is the authoritative registry for validation-tool names, descriptions,
+input/output schemas, versions, and implementations. Run the stdio server with:
+
+```bash
+uv run python -m edcraft_validator.mcp
+```
+
+The initial catalogue contains:
+
+- `code_verify_template_structure`: bounded static, expression, finite-domain, and
+  rendering checks. It does not execute code or establish answer correctness.
+- `code_validate_answers_and_distractors`: exhaustively executes the declared finite
+  domain once, rejects any proposed-answer mismatch, and then selects only a valid
+  subset of model-proposed distractors. It neither corrects answers nor inserts
+  fallback distractors.
+- `code_require_features`: checks for explicitly requested syntax features reachable
+  from the entry function. Presence does not establish pedagogical relevance or
+  difficulty.
+
+Every available tool returns the shared `ToolEvidence` contract with `passed`,
+`failed`, or `error` status. `failed` means the tool completed and disproved a
+candidate property; `error` means execution could not establish a result. Invalid
+arguments and unavailable names remain MCP protocol errors because no tool call ran.
+The FastMCP server is not yet connected to the application generation loop; catalogue
+resolution and application-mediated model calls are subsequent workflow changes.
 
 ## Architecture
 
@@ -264,6 +296,10 @@ edcraft_validator/
 │   ├── provider_registry.py       model-provider lookup
 │   ├── openai_compatible_provider.py  OpenAI and SocLaas adapter
 │   └── ollama_provider.py         Ollama adapter
+├── mcp/
+│   ├── evidence.py                shared pass/fail/error tool result contract
+│   ├── code_tools.py              authoritative code-tool implementations
+│   └── server.py                  injectable FastMCP server factory
 ├── domains/
 │   ├── domain_contract.py         contract implemented by every domain
 │   ├── domain_registry.py         domain lookup used by entry points
