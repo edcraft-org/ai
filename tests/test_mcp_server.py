@@ -70,7 +70,7 @@ async def test_catalogue_exposes_authoritative_names_descriptions_and_schemas():
 
 async def test_structure_and_feature_tools_are_independently_callable():
     template = candidate()
-    server = create_validation_server(execution_tool=ArithmeticExecutor())
+    server = create_validation_server(code_execution_tool=ArithmeticExecutor())
 
     structure = await call_tool(
         server,
@@ -215,7 +215,7 @@ async def test_mcp_deadline_returns_error_without_waiting_for_synchronous_work(
         monkeypatch.setattr(code_tools, "STATIC_TOOL_TIMEOUT_SECONDS", 0.1)
 
     server = create_validation_server(
-        execution_tool=SlowExecutor(), timeout_seconds=0.001
+        code_execution_tool=SlowExecutor(), code_execution_timeout_seconds=0.001
     )
     try:
         result = await asyncio.wait_for(
@@ -244,7 +244,7 @@ async def test_semantic_tool_executes_once_and_returns_canonical_results():
     original = template.model_copy(deep=True)
 
     result = await call_tool(
-        create_validation_server(execution_tool=executor),
+        create_validation_server(code_execution_tool=executor),
         "code_validate_answers_and_distractors",
         {
             "candidate": template.model_dump(mode="json"),
@@ -274,7 +274,7 @@ async def test_wrong_proposed_answer_fails_before_distractor_validation():
     template = candidate().model_copy(update={"answer_expression": "a + b + c"})
 
     result = await call_tool(
-        create_validation_server(execution_tool=executor),
+        create_validation_server(code_execution_tool=executor),
         "code_validate_answers_and_distractors",
         {
             "candidate": template.model_dump(mode="json"),
@@ -300,7 +300,7 @@ async def test_insufficient_model_distractors_fails_without_fallbacks():
     )
 
     result = await call_tool(
-        create_validation_server(execution_tool=executor),
+        create_validation_server(code_execution_tool=executor),
         "code_validate_answers_and_distractors",
         {
             "candidate": template.model_dump(mode="json"),
@@ -329,7 +329,7 @@ async def test_execution_infrastructure_failures_return_error_evidence(error_cod
             return [ExecutionResult(ok=False, error_code=error_code) for _ in inputs]
 
     result = await call_tool(
-        create_validation_server(execution_tool=FailingExecutor()),
+        create_validation_server(code_execution_tool=FailingExecutor()),
         "code_validate_answers_and_distractors",
         {
             "candidate": candidate().model_dump(mode="json"),
@@ -354,7 +354,7 @@ async def test_candidate_runtime_failure_is_a_validation_failure():
             ]
 
     result = await call_tool(
-        create_validation_server(execution_tool=RuntimeFailureExecutor()),
+        create_validation_server(code_execution_tool=RuntimeFailureExecutor()),
         "code_validate_answers_and_distractors",
         {
             "candidate": candidate().model_dump(mode="json"),
@@ -372,7 +372,7 @@ async def test_unexpected_execution_failure_is_masked_as_error_evidence():
             raise RuntimeError("secret internal detail")
 
     result = await call_tool(
-        create_validation_server(execution_tool=BrokenExecutor()),
+        create_validation_server(code_execution_tool=BrokenExecutor()),
         "code_validate_answers_and_distractors",
         {
             "candidate": candidate().model_dump(mode="json"),

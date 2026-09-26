@@ -11,12 +11,12 @@ from edcraft_validator.tools.python_execution import (
 
 def create_validation_server(
     *,
-    execution_tool: PythonExecutionTool | None = None,
-    timeout_seconds: float = 2.0,
+    code_execution_tool: PythonExecutionTool | None = None,
+    code_execution_timeout_seconds: float = 2.0,
 ) -> FastMCP:
-    """Build a validation server with injectable execution for tests/deployment."""
-    if timeout_seconds <= 0:
-        raise ValueError("timeout_seconds must be positive")
+    """Build the centralized server with injectable code-domain dependencies."""
+    if code_execution_timeout_seconds <= 0:
+        raise ValueError("code_execution_timeout_seconds must be positive")
     server = FastMCP(
         name="EdCraft Validation Tools",
         strict_input_validation=True,
@@ -24,8 +24,8 @@ def create_validation_server(
     )
     register_code_validation_tools(
         server,
-        execution_tool=execution_tool or LocalPythonTool(),
-        timeout_seconds=timeout_seconds,
+        execution_tool=code_execution_tool or LocalPythonTool(),
+        timeout_seconds=code_execution_timeout_seconds,
     )
     return server
 
