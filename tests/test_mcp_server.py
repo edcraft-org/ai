@@ -1,10 +1,14 @@
+import asyncio
+import threading
 from pathlib import Path
+from textwrap import indent
 
 import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
+from edcraft_validator.mcp import code_tools
 from edcraft_validator.mcp.code_tools import CODE_TOOL_VERSION
 from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.tools.python_execution import ExecutionResult
@@ -106,6 +110,132 @@ async def test_missing_required_feature_is_a_validation_failure():
     assert result["status"] == "failed"
     assert result["findings"][0]["code"] == "REQUIRED_FEATURE_MISSING"
     assert result["details"]["missing"] == ["loop"]
+
+
+@pytest.mark.parametrize(
+    "placement, expected_status",
+    [
+        ("uncalled_global", "failed"),
+        ("uncalled_local", "failed"),
+        ("called_only_by_uncalled_local", "failed"),
+        ("called_global", "passed"),
+    ],
+)
+async def test_required_nested_features_must_be_in_reachable_functions(
+    placement, expected_status
+):
+    helper = (
+        "def helper(n):\n"
+        "    for i in range(n):\n"
+        "        for j in range(n):\n"
+        "            pass\n"
+        "    if n:\n"
+        "        if n > 1:\n"
+        "            return 1\n"
+        "    return 0\n"
+    )
+    programs = {
+        "uncalled_global": (
+            "def calculate(a, b, c):\n    return a + b - c\n\n" + helper
+        ),
+        "uncalled_local": (
+            "def calculate(a, b, c):\n"
+            + indent(helper, "    ")
+            + "    return a + b - c\n"
+        ),
+        "called_only_by_uncalled_local": (
+            "def calculate(a, b, c):\n"
+            "    def unused():\n"
+            "        return helper(a)\n"
+            "    return a + b - c\n\n" + helper
+        ),
+        "called_global": (
+            "def calculate(a, b, c):\n    return a + b - c + helper(a)\n\n" + helper
+        ),
+    }
+    template = candidate().model_copy(update={"code": programs[placement]})
+
+    result = await call_tool(
+        create_validation_server(),
+        "code_require_features",
+        {
+            "candidate": template.model_dump(mode="json"),
+            "required": ["nested_loop", "nested_conditional"],
+        },
+    )
+
+    assert result["status"] == expected_status
+    if expected_status == "failed":
+        assert result["findings"][0]["code"] == "REQUIRED_FEATURE_MISSING"
+        assert result["details"]["missing"] == ["nested_conditional", "nested_loop"]
+        assert result["details"]["observed"] == ["arithmetic"]
+    else:
+        assert {"loop", "nested_loop", "conditional", "nested_conditional"} <= set(
+            result["details"]["observed"]
+        )
+
+
+@pytest.mark.parametrize(
+    "tool_name, arguments",
+    [
+        ("code_verify_template_structure", {}),
+        ("code_require_features", {"required": ["arithmetic"]}),
+        ("code_validate_answers_and_distractors", {"required_distractors": 3}),
+    ],
+)
+async def test_mcp_deadline_returns_error_without_waiting_for_synchronous_work(
+    monkeypatch, tool_name, arguments
+):
+    started = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+
+    def block():
+        started.set()
+        try:
+            release.wait(timeout=10)
+        finally:
+            finished.set()
+
+    class SlowExecutor(ArithmeticExecutor):
+        def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+            block()
+            return super().execute_batch(
+                code, entry_function, inputs, timeout_seconds=timeout_seconds
+            )
+
+    if tool_name != "code_validate_answers_and_distractors":
+        original_check = code_tools.check_structure
+
+        def slow_structure(context):
+            block()
+            return original_check(context)
+
+        monkeypatch.setattr(code_tools, "check_structure", slow_structure)
+        monkeypatch.setattr(code_tools, "STATIC_TOOL_TIMEOUT_SECONDS", 0.1)
+
+    server = create_validation_server(
+        execution_tool=SlowExecutor(), timeout_seconds=0.001
+    )
+    try:
+        result = await asyncio.wait_for(
+            call_tool(
+                server,
+                tool_name,
+                {"candidate": candidate().model_dump(mode="json"), **arguments},
+            ),
+            timeout=5,
+        )
+        assert started.is_set()
+        assert not finished.is_set()
+        assert result["status"] == "error"
+        assert result["findings"][0]["code"] == "CHECK_TIMEOUT"
+        assert result["details"] == {}
+    finally:
+        # Python cannot kill threads. Release the fake work even if the test fails.
+        release.set()
+        if started.is_set():
+            assert await asyncio.to_thread(finished.wait, 2)
 
 
 async def test_semantic_tool_executes_once_and_returns_canonical_results():

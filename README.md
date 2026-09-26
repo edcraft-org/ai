@@ -248,9 +248,10 @@ The default adapter in `tools/python_execution.py` sends every case for one cand
 to one `tools/python_worker.py` subprocess, which uses EdCraft's pinned `step-tracer`
 to return values and execution counts. Per-case timeouts and a 100,000 user-code
 trace-event limit bound tracing. This tool supports deterministic validation; it is
-not a security sandbox by itself. Deployment runs the validation job inside a
-container that supplies the outer filesystem, network, process, and total-memory
-boundary. The worker subprocess adds a scrubbed environment, a host timeout, CPU
+not a security sandbox by itself. The validation job runs in a deployment-managed
+container; this package does not create an additional container. The deployment
+configures the job's filesystem, network, process, total-memory, and lifetime limits.
+The worker subprocess adds a scrubbed environment, a host timeout, CPU
 limits, a Linux 512 MiB address-space limit, static syntax restrictions, and the
 trace-event limit as defense in depth.
 
@@ -279,6 +280,12 @@ Every available tool returns the shared `ToolEvidence` contract with `passed`,
 `failed`, or `error` status. `failed` means the tool completed and disproved a
 candidate property; `error` means execution could not establish a result. Invalid
 arguments and unavailable names remain MCP protocol errors because no tool call ran.
+MCP response deadlines are five seconds for static tools and
+`64 * per_case_timeout + 2` seconds for the execution tool. An expired deadline
+returns `error` evidence with `CHECK_TIMEOUT`; late results are discarded. This
+cancels waiting, not the synchronous worker thread. The Python subprocess retains
+its own termination limits, and the deployment-managed job supplies the outer
+resource and lifetime limits.
 The FastMCP server is not yet connected to the application generation loop; catalogue
 resolution and application-mediated model calls are subsequent workflow changes.
 

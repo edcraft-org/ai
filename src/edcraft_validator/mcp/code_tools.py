@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import time
 from collections.abc import Callable
@@ -41,7 +42,8 @@ from edcraft_validator.validation.validation_contracts import (
 )
 from edcraft_validator.value_comparison import equivalent
 
-CODE_TOOL_VERSION = "1.0.0"
+CODE_TOOL_VERSION = "1.0.1"
+STATIC_TOOL_TIMEOUT_SECONDS = 5.0
 
 
 _EXECUTION_ERROR_CODES = {
@@ -78,7 +80,6 @@ def register_code_validation_tools(
     @server.tool(
         name="code_verify_template_structure",
         version=CODE_TOOL_VERSION,
-        timeout=5.0,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -93,7 +94,9 @@ def register_code_validation_tools(
             "it does not execute the program or establish that answers are correct."
         ),
     )
-    def code_verify_template_structure(candidate: CandidateArgument) -> ToolEvidence:
+    async def code_verify_template_structure(
+        candidate: CandidateArgument,
+    ) -> ToolEvidence:
         def operation() -> dict[str, Any]:
             context = CodeValidationContext(candidate)
             check_structure(context)
@@ -109,12 +112,16 @@ def register_code_validation_tools(
                 ),
             }
 
-        return _run_tool("code_verify_template_structure", "bounded", operation)
+        return await _run_tool(
+            "code_verify_template_structure",
+            "bounded",
+            operation,
+            timeout_seconds=STATIC_TOOL_TIMEOUT_SECONDS,
+        )
 
     @server.tool(
         name="code_validate_answers_and_distractors",
         version=CODE_TOOL_VERSION,
-        timeout=execution_timeout,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -135,7 +142,7 @@ def register_code_validation_tools(
             "evidence rather than validation failure."
         ),
     )
-    def code_validate_answers_and_distractors(
+    async def code_validate_answers_and_distractors(
         candidate: CandidateArgument,
         required_distractors: Annotated[
             int,
@@ -207,14 +214,16 @@ def register_code_validation_tools(
                 ],
             }
 
-        return _run_tool(
-            "code_validate_answers_and_distractors", "exhaustive", operation
+        return await _run_tool(
+            "code_validate_answers_and_distractors",
+            "exhaustive",
+            operation,
+            timeout_seconds=execution_timeout,
         )
 
     @server.tool(
         name="code_require_features",
         version=CODE_TOOL_VERSION,
-        timeout=5.0,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -229,7 +238,7 @@ def register_code_validation_tools(
             "feature is pedagogically central or that the requested difficulty matches."
         ),
     )
-    def code_require_features(
+    async def code_require_features(
         candidate: CandidateArgument,
         required: Annotated[
             list[CodeFeature],
@@ -262,17 +271,30 @@ def register_code_validation_tools(
                 "observed": sorted(observed),
             }
 
-        return _run_tool("code_require_features", "bounded", operation)
+        return await _run_tool(
+            "code_require_features",
+            "bounded",
+            operation,
+            timeout_seconds=STATIC_TOOL_TIMEOUT_SECONDS,
+        )
 
 
-def _run_tool(
+async def _run_tool(
     name: str,
     assurance: AssuranceLevel,
     operation: Callable[[], dict[str, Any]],
+    *,
+    timeout_seconds: float,
 ) -> ToolEvidence:
+    """Bound the MCP response deadline and discard late synchronous results.
+
+    Thread cancellation cannot terminate synchronous work. Executable code retains
+    the worker's process limits; deployment supplies the outer job resource limit.
+    """
     started = time.perf_counter()
     try:
-        details = operation()
+        async with asyncio.timeout(timeout_seconds):
+            details = await asyncio.to_thread(operation)
     except ValidationFailure as exc:
         status = "error" if exc.code in _EXECUTION_ERROR_CODES else "failed"
         return ToolEvidence(
