@@ -161,7 +161,7 @@ sent to one local Python tracing subprocess to avoid repeated startup costs.
 Rejected templates raise structured diagnostics with a stable code, relevant
 field, failing parameter values, and evidence from every completed check when
 available; messages remain human-readable. Validated templates record the validator
-version, assurance level, duration, and details for each structure, expression,
+version, duration, and details for each structure, expression,
 execution, answer, distractor, and rendering check. Tool-derived answers for every
 finite input combination are stored in the validated artifact.
 
@@ -381,7 +381,7 @@ Register its factory in `llm/provider_registry.py`; test transport errors and sc
 validation with an injected client or mocked endpoint, then run a live compatibility
 check. No domain imports belong in the adapter.
 
-To add a domain check, implement `run(context)` with a name and assurance level,
+To add a domain check, implement `run(context)` with a name,
 or use a function with the existing `CodeCheck` wrapper for code-domain operations.
 Add it to the domain's ordered plan after its prerequisites and include its name
 in the required-check policy when it must run. If it needs a tool, inject that tool
@@ -404,7 +404,7 @@ validated = domain.finalize_template(plan.context, report)
 ```
 
 Each check implements `run(context)` and returns a `CheckResult`. The domain owns
-its check logic and tool dependencies. The runner records names, assurance levels,
+its check logic and tool dependencies. The runner records names,
 durations, and evidence, and applies the supplied acceptance policy. Unexpected
 programming errors propagate rather than being reported as invalid templates.
 Code check operations under `domains/code/checks/` take only the typed context and

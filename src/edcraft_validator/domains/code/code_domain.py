@@ -102,7 +102,6 @@ class CodeDomain:
         checks = (
             CodeCheck(
                 "template_structure",
-                "bounded",
                 check_structure,
                 lambda ctx: {
                     "topic": ctx.template.topic,
@@ -111,19 +110,16 @@ class CodeDomain:
             ),
             CodeCheck(
                 "expression_safety",
-                "bounded",
                 check_expressions,
                 lambda ctx: {"distractors": len(ctx.template.distractors)},
             ),
             CodeCheck(
                 "answer_domain",
-                "exhaustive",
                 check_proposed_answers,
                 lambda ctx: ctx.case_details,
             ),
             CodeCheck(
                 "code_execution",
-                "exhaustive",
                 execution_check.run,
                 lambda ctx: {
                     **ctx.case_details,
@@ -132,13 +128,11 @@ class CodeDomain:
             ),
             CodeCheck(
                 "canonical_answers",
-                "exhaustive",
                 check_canonical_answers,
                 lambda ctx: {**ctx.case_details, "source": "code_execution"},
             ),
             CodeCheck(
                 "distractor_selection",
-                "exhaustive",
                 check_selection,
                 lambda ctx: {
                     **ctx.case_details,
@@ -147,7 +141,6 @@ class CodeDomain:
             ),
             CodeCheck(
                 "distractor_consistency",
-                "exhaustive",
                 check_distractors,
                 lambda ctx: {
                     **ctx.case_details,
@@ -156,7 +149,6 @@ class CodeDomain:
             ),
             CodeCheck(
                 "template_rendering",
-                "exhaustive",
                 check_rendering,
                 lambda ctx: ctx.case_details,
             ),

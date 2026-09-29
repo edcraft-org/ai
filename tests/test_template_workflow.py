@@ -51,7 +51,6 @@ class ExampleInstance(BaseModel):
 
 class PositiveValueCheck:
     name = "positive_value"
-    assurance = "bounded"
 
     def run(self, context):
         return CheckResult(status="passed" if context.value > 0 else "failed")
@@ -172,7 +171,6 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
 
     class DoublingCheck:
         name = "double_value"
-        assurance = "exhaustive"
 
         def __init__(self, tool):
             self.tool = tool

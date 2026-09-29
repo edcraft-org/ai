@@ -9,7 +9,6 @@ from edcraft_validator.domains.code.checks.validation_context import (
 )
 from edcraft_validator.domains.code.code_schemas import TemplateValidationError
 from edcraft_validator.validation.validation_contracts import (
-    AssuranceLevel,
     CheckResult,
 )
 
@@ -26,7 +25,6 @@ _INCOMPLETE_TOOL_CODES = {
 @dataclass(frozen=True)
 class CodeCheck:
     name: str
-    assurance: AssuranceLevel
     operation: Callable[[CodeValidationContext], CheckResult | None]
     details: Callable[[CodeValidationContext], dict[str, Any]]
 

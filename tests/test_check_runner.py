@@ -13,7 +13,6 @@ from edcraft_validator.validation.validation_contracts import (
 def test_pipeline_records_success_for_any_domain() -> None:
     class SymbolicCheck:
         name = "symbolic_equivalence"
-        assurance = "proof"
 
         def run(self, context):
             context["answer"] = 42
@@ -35,7 +34,6 @@ def test_pipeline_records_success_for_any_domain() -> None:
 def test_pipeline_attaches_evidence_to_a_structured_failure() -> None:
     class DimensionalCheck:
         name = "dimensional_consistency"
-        assurance = "proof"
 
         def run(self, context):
             raise ValidationFailure(
@@ -63,6 +61,7 @@ def test_pipeline_attaches_evidence_to_a_structured_failure() -> None:
     evidence = error.value.evidence[-1]
     assert evidence.status == "failed"
     assert evidence.issues[0].code == "UNIT_MISMATCH"
+    assert "severity" not in evidence.issues[0].model_dump()
     assert evidence.details["expected_unit"] == "m/s"
     assert evidence.details["tool"] == "unit-checker"
 
@@ -71,7 +70,6 @@ def test_pipeline_attaches_evidence_to_a_structured_failure() -> None:
 class ExampleCheck:
     name: str
     outcome: str | None = "passed"
-    assurance: str = "bounded"
 
     def run(self, context):
         context.append(self.name)
@@ -142,7 +140,6 @@ def test_optional_failure_stops_checks_and_runner_is_reusable(status):
 def test_unexpected_check_bug_is_not_treated_as_template_rejection():
     class BrokenCheck:
         name = "broken"
-        assurance = "bounded"
 
         def run(self, context):
             raise RuntimeError("implementation bug")

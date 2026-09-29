@@ -57,6 +57,7 @@ async def test_catalogue_exposes_authoritative_names_descriptions_and_schemas():
             "failed",
             "error",
         ]
+        assert "assurance" not in tool.output_schema["properties"]
         assert tool.output_schema["properties"]["version"]["minLength"] == 1
     executable = next(
         tool for tool in tools if tool.name == "code_validate_answers_and_distractors"
@@ -87,7 +88,7 @@ async def test_structure_and_feature_tools_are_independently_callable():
     )
 
     assert structure["status"] == "passed"
-    assert structure["assurance"] == "bounded"
+    assert "assurance" not in structure
     assert structure["version"] == CODE_TOOL_VERSION
     assert structure["details"]["cases"] == 8
     assert features["status"] == "passed"
@@ -253,7 +254,6 @@ async def test_semantic_tool_executes_once_and_returns_canonical_results():
     )
 
     assert result["status"] == "passed"
-    assert result["assurance"] == "exhaustive"
     assert executor.calls == 1
     assert template == original
     assert [item["answer"] for item in result["details"]["canonical_answers"]] == [
@@ -385,7 +385,6 @@ async def test_unexpected_execution_failure_is_masked_as_error_evidence():
         {
             "code": "TOOL_EXECUTION_ERROR",
             "message": "Validation tool failed with RuntimeError",
-            "severity": "error",
             "field": None,
         }
     ]

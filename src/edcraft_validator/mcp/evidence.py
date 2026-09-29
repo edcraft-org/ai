@@ -4,8 +4,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from edcraft_validator.validation.validation_contracts import AssuranceLevel
-
 ToolStatus = Literal["passed", "failed", "error"]
 
 
@@ -16,7 +14,6 @@ class ToolFinding(BaseModel):
 
     code: str = Field(pattern=r"^[A-Z][A-Z0-9_]*$")
     message: str = Field(min_length=1)
-    severity: Literal["error", "warning"] = "error"
     field: str | None = None
 
 
@@ -28,7 +25,6 @@ class ToolEvidence(BaseModel):
     tool: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
     version: str = Field(min_length=1)
     status: ToolStatus
-    assurance: AssuranceLevel
     findings: list[ToolFinding] = Field(default_factory=list)
     details: dict[str, Any] = Field(default_factory=dict)
     duration_ms: float = Field(default=0, ge=0)

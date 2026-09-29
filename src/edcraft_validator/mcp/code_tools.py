@@ -36,13 +36,10 @@ from edcraft_validator.domains.code.code_schemas import (
 from edcraft_validator.domains.code.code_types import CodeFeature
 from edcraft_validator.mcp.evidence import ToolEvidence, ToolFinding
 from edcraft_validator.tools.python_execution import PythonExecutionTool
-from edcraft_validator.validation.validation_contracts import (
-    AssuranceLevel,
-    ValidationFailure,
-)
+from edcraft_validator.validation.validation_contracts import ValidationFailure
 from edcraft_validator.value_comparison import equivalent
 
-CODE_TOOL_VERSION = "1.0.1"
+CODE_TOOL_VERSION = "1.0.2"
 STATIC_TOOL_TIMEOUT_SECONDS = 5.0
 
 
@@ -114,7 +111,6 @@ def register_code_validation_tools(
 
         return await _run_tool(
             "code_verify_template_structure",
-            "bounded",
             operation,
             timeout_seconds=STATIC_TOOL_TIMEOUT_SECONDS,
         )
@@ -216,7 +212,6 @@ def register_code_validation_tools(
 
         return await _run_tool(
             "code_validate_answers_and_distractors",
-            "exhaustive",
             operation,
             timeout_seconds=execution_timeout,
         )
@@ -273,7 +268,6 @@ def register_code_validation_tools(
 
         return await _run_tool(
             "code_require_features",
-            "bounded",
             operation,
             timeout_seconds=STATIC_TOOL_TIMEOUT_SECONDS,
         )
@@ -281,7 +275,6 @@ def register_code_validation_tools(
 
 async def _run_tool(
     name: str,
-    assurance: AssuranceLevel,
     operation: Callable[[], dict[str, Any]],
     *,
     timeout_seconds: float,
@@ -301,7 +294,6 @@ async def _run_tool(
             tool=name,
             version=CODE_TOOL_VERSION,
             status=status,
-            assurance=assurance,
             findings=[
                 ToolFinding(
                     code=exc.code,
@@ -315,7 +307,6 @@ async def _run_tool(
     except TimeoutError:
         return _unexpected_error(
             name,
-            assurance,
             started,
             code="CHECK_TIMEOUT",
             message="Validation tool exceeded its execution timeout",
@@ -323,7 +314,6 @@ async def _run_tool(
     except Exception as exc:
         return _unexpected_error(
             name,
-            assurance,
             started,
             code="TOOL_EXECUTION_ERROR",
             message=f"Validation tool failed with {type(exc).__name__}",
@@ -332,7 +322,6 @@ async def _run_tool(
         tool=name,
         version=CODE_TOOL_VERSION,
         status="passed",
-        assurance=assurance,
         details=details,
         duration_ms=_elapsed_ms(started),
     )
@@ -340,7 +329,6 @@ async def _run_tool(
 
 def _unexpected_error(
     name: str,
-    assurance: AssuranceLevel,
     started: float,
     *,
     code: str,
@@ -350,7 +338,6 @@ def _unexpected_error(
         tool=name,
         version=CODE_TOOL_VERSION,
         status="error",
-        assurance=assurance,
         findings=[ToolFinding(code=code, message=message)],
         duration_ms=_elapsed_ms(started),
     )

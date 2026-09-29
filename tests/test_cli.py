@@ -41,7 +41,6 @@ class ExampleValidated(ValidatedTemplateArtifact):
 
 class PositiveValueCheck:
     name = "positive_value"
-    assurance = "bounded"
 
     def run(self, context):
         return CheckResult(status="passed" if context.value > 0 else "failed")
