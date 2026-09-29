@@ -2,7 +2,6 @@
 
 from edcraft_validator.validation.check_runner import ValidationPipeline
 from edcraft_validator.validation.validation_contracts import (
-    AssuranceLevel,
     CheckResult,
     EvidenceStatus,
     ValidationCheck,
@@ -14,7 +13,6 @@ from edcraft_validator.validation.validation_contracts import (
 )
 
 __all__ = [
-    "AssuranceLevel",
     "ValidationReport",
     "ValidationPolicy",
     "ValidationPlan",

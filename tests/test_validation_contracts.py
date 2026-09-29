@@ -11,9 +11,7 @@ from edcraft_validator.validation.validation_contracts import (
 @pytest.mark.parametrize("status", ["failed", "incomplete"])
 def test_required_check_must_pass(status):
     report = ValidationReport(
-        evidence=[
-            ValidationEvidence(check="answer", status=status, assurance="bounded")
-        ],
+        evidence=[ValidationEvidence(check="answer", status=status)],
         policy=ValidationPolicy(required_checks=frozenset({"answer"})),
     )
     assert not report.accepted
@@ -31,8 +29,8 @@ def test_missing_check_cannot_pass():
 def test_unsuccessful_optional_check_rejects_report(status):
     report = ValidationReport(
         [
-            ValidationEvidence(check="answer", status="passed", assurance="exhaustive"),
-            ValidationEvidence(check="style", status=status, assurance="heuristic"),
+            ValidationEvidence(check="answer", status="passed"),
+            ValidationEvidence(check="style", status=status),
         ],
         ValidationPolicy(frozenset({"answer"})),
     )

@@ -171,7 +171,7 @@ def test_validates_every_case_once_then_generates_without_executor() -> None:
         "template_rendering",
     ]
     assert all(item.status == "passed" for item in validated.validation.evidence)
-    assert validated.validation.evidence[2].assurance == "exhaustive"
+    assert "assurance" not in validated.validation.evidence[2].model_dump()
     assert validated.validation.evidence[2].details == {"cases": 8}
     assert executor.batch_calls == 1
     assert len(executor.calls) == 8

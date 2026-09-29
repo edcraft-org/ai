@@ -16,14 +16,10 @@ class ValidationIssue(BaseModel):
 
     code: str
     message: str
-    severity: Literal["error", "warning"] = "error"
     field: str | None = None
 
 
 EvidenceStatus = Literal["passed", "failed", "incomplete"]
-
-
-AssuranceLevel = Literal["proof", "exhaustive", "bounded", "sampled", "heuristic"]
 
 
 class ValidationFailure(ValueError):
@@ -52,7 +48,6 @@ class ValidationEvidence(BaseModel):
 
     check: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
     status: EvidenceStatus
-    assurance: AssuranceLevel
     issues: list[ValidationIssue] = Field(default_factory=list)
     details: dict[str, Any] = Field(default_factory=dict)
     duration_ms: float = Field(default=0, ge=0)
@@ -70,7 +65,6 @@ class CheckResult:
 
 class ValidationCheck[ContextT](Protocol):
     name: str
-    assurance: AssuranceLevel
 
     def run(self, context: ContextT) -> CheckResult | None:
         """Return None only when the check does not apply to this context."""

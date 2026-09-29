@@ -121,6 +121,13 @@ class PythonSubsetAnalyzer(ast.NodeVisitor):
         if node.decorator_list:
             self.errors.append(f"Decorators are not allowed (line {node.lineno})")
         previous = self._current_function
+        if previous is not None and (
+            node.args.defaults
+            or any(default is not None for default in node.args.kw_defaults)
+        ):
+            self.errors.append(
+                f"Defaults on local functions are not allowed (line {node.lineno})"
+            )
         self._current_function = node.name
         self.generic_visit(node)
         self._current_function = previous

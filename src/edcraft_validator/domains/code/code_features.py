@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Iterator
 
 from edcraft_validator.domains.code.code_types import CodeFeature
 
@@ -23,7 +24,7 @@ def extract_code_features(code: str, entry_function: str) -> frozenset[CodeFeatu
         function for name, function in all_functions.items() if name in reachable_names
     ]
     helper_names = reachable_names - {entry_function}
-    nodes = [node for function in functions for node in ast.walk(function)]
+    nodes = [node for function in functions for node in _function_nodes(function)]
     features: set[CodeFeature] = set()
 
     if helper_names:
@@ -44,7 +45,7 @@ def extract_code_features(code: str, entry_function: str) -> frozenset[CodeFeatu
     if "sorted" in called_names:
         features.add("list_sort")
 
-    if_nodes = [node for node in ast.walk(tree) if isinstance(node, ast.If)]
+    if_nodes = [node for node in nodes if isinstance(node, ast.If)]
     if any(_has_ancestor(node, ast.If, parents) for node in if_nodes):
         features.add("nested_conditional")
     if any(
@@ -55,7 +56,7 @@ def extract_code_features(code: str, entry_function: str) -> frozenset[CodeFeatu
     if _has_sequential_nodes(functions, ast.If, parents):
         features.add("sequential_conditionals")
 
-    for_nodes = [node for node in ast.walk(tree) if isinstance(node, ast.For)]
+    for_nodes = [node for node in nodes if isinstance(node, ast.For)]
     if any(_has_ancestor(node, ast.For, parents) for node in for_nodes):
         features.add("nested_loop")
     if _has_sequential_nodes(functions, ast.For, parents):
@@ -71,6 +72,17 @@ def extract_code_features(code: str, entry_function: str) -> frozenset[CodeFeatu
     return frozenset(features)
 
 
+def _function_nodes(function: ast.FunctionDef) -> Iterator[ast.AST]:
+    """Walk one function without treating local function definitions as calls."""
+    pending: list[ast.AST] = [function]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, ast.FunctionDef) and node is not function:
+            continue
+        yield node
+        pending.extend(ast.iter_child_nodes(node))
+
+
 def _reachable_function_names(
     functions: dict[str, ast.FunctionDef], entry_function: str
 ) -> set[str]:
@@ -83,7 +95,7 @@ def _reachable_function_names(
         reachable.add(name)
         called = {
             node.func.id
-            for node in ast.walk(functions[name])
+            for node in _function_nodes(functions[name])
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
         }
         pending.extend(called - reachable)
@@ -118,7 +130,7 @@ def _has_sequential_nodes(
     for function in functions:
         top_level = [
             node
-            for node in ast.walk(function)
+            for node in _function_nodes(function)
             if isinstance(node, kind)
             and _nearest_function(node, parents) == function.name
             and not _has_ancestor(node, kind, parents)

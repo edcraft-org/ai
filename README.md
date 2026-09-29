@@ -161,7 +161,7 @@ sent to one local Python tracing subprocess to avoid repeated startup costs.
 Rejected templates raise structured diagnostics with a stable code, relevant
 field, failing parameter values, and evidence from every completed check when
 available; messages remain human-readable. Validated templates record the validator
-version, assurance level, duration, and details for each structure, expression,
+version, duration, and details for each structure, expression,
 execution, answer, distractor, and rendering check. Tool-derived answers for every
 finite input combination are stored in the validated artifact.
 
@@ -248,7 +248,46 @@ The default adapter in `tools/python_execution.py` sends every case for one cand
 to one `tools/python_worker.py` subprocess, which uses EdCraft's pinned `step-tracer`
 to return values and execution counts. Per-case timeouts and a 100,000 user-code
 trace-event limit bound tracing. This tool supports deterministic validation; it is
-not a security sandbox for untrusted Python.
+not a security sandbox by itself. The validation job runs in a deployment-managed
+container; this package does not create an additional container. The deployment
+configures the job's filesystem, network, process, total-memory, and lifetime limits.
+The worker subprocess adds a scrubbed environment, a host timeout, CPU
+limits, a Linux 512 MiB address-space limit, static syntax restrictions, and the
+trace-event limit as defense in depth.
+
+## MCP validation tools
+
+FastMCP is the authoritative registry for validation-tool names, descriptions,
+input/output schemas, versions, and implementations. Run the stdio server with:
+
+```bash
+uv run python -m edcraft_validator.mcp
+```
+
+The initial catalogue contains:
+
+- `code_verify_template_structure`: bounded static, expression, finite-domain, and
+  rendering checks. It does not execute code or establish answer correctness.
+- `code_validate_answers_and_distractors`: exhaustively executes the declared finite
+  domain once, rejects any proposed-answer mismatch, and then selects only a valid
+  subset of model-proposed distractors. It neither corrects answers nor inserts
+  fallback distractors.
+- `code_require_features`: checks for explicitly requested syntax features reachable
+  from the entry function. Presence does not establish pedagogical relevance or
+  difficulty.
+
+Every available tool returns the shared `ToolEvidence` contract with `passed`,
+`failed`, or `error` status. `failed` means the tool completed and disproved a
+candidate property; `error` means execution could not establish a result. Invalid
+arguments and unavailable names remain MCP protocol errors because no tool call ran.
+MCP response deadlines are five seconds for static tools and
+`64 * per_case_timeout + 2` seconds for the execution tool. An expired deadline
+returns `error` evidence with `CHECK_TIMEOUT`; late results are discarded. This
+cancels waiting, not the synchronous worker thread. The Python subprocess retains
+its own termination limits, and the deployment-managed job supplies the outer
+resource and lifetime limits.
+The FastMCP server is not yet connected to the application generation loop; catalogue
+resolution and application-mediated model calls are subsequent workflow changes.
 
 ## Architecture
 
@@ -264,6 +303,10 @@ edcraft_validator/
 │   ├── provider_registry.py       model-provider lookup
 │   ├── openai_compatible_provider.py  OpenAI and SocLaas adapter
 │   └── ollama_provider.py         Ollama adapter
+├── mcp/
+│   ├── evidence.py                shared pass/fail/error tool result contract
+│   ├── code_tools.py              authoritative code-tool implementations
+│   └── server.py                  injectable FastMCP server factory
 ├── domains/
 │   ├── domain_contract.py         contract implemented by every domain
 │   ├── domain_registry.py         domain lookup used by entry points
@@ -338,7 +381,7 @@ Register its factory in `llm/provider_registry.py`; test transport errors and sc
 validation with an injected client or mocked endpoint, then run a live compatibility
 check. No domain imports belong in the adapter.
 
-To add a domain check, implement `run(context)` with a name and assurance level,
+To add a domain check, implement `run(context)` with a name,
 or use a function with the existing `CodeCheck` wrapper for code-domain operations.
 Add it to the domain's ordered plan after its prerequisites and include its name
 in the required-check policy when it must run. If it needs a tool, inject that tool
@@ -361,7 +404,7 @@ validated = domain.finalize_template(plan.context, report)
 ```
 
 Each check implements `run(context)` and returns a `CheckResult`. The domain owns
-its check logic and tool dependencies. The runner records names, assurance levels,
+its check logic and tool dependencies. The runner records names,
 durations, and evidence, and applies the supplied acceptance policy. Unexpected
 programming errors propagate rather than being reported as invalid templates.
 Code check operations under `domains/code/checks/` take only the typed context and

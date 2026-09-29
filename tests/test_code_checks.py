@@ -64,7 +64,6 @@ def test_unfinished_tool_check_is_incomplete_and_retains_domain_error(failure_co
     operation = ExecutionCheck(execution_tool=Executor())
     check = CodeCheck(
         "code_execution",
-        "exhaustive",
         operation.run,
         lambda context: {
             **context.case_details,

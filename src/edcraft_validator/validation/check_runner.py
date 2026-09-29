@@ -59,7 +59,6 @@ class ValidationPipeline:
                 ValidationEvidence(
                     check=check.name,
                     status=result.status,
-                    assurance=check.assurance,
                     issues=issues,
                     details=copy.deepcopy(result.details),
                     duration_ms=duration_ms,
