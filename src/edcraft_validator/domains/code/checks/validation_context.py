@@ -24,20 +24,16 @@ class CodeValidationContext:
     num_distractors: int | None = None
     names: tuple[str, ...] = field(init=False)
     inputs_cases: list[dict[str, ParameterValue]] = field(init=False)
-    original_distractor_count: int = field(init=False)
     proposed_answer: SafeExpression | None = None
     candidates: list[DistractorCandidate] = field(default_factory=list)
     proposed_answers: list[Any] = field(default_factory=list)
     executions: list[ExecutionResult] = field(default_factory=list)
     canonical_answers: list[Any] = field(default_factory=list)
-    corrected_cases: int = 0
-    fallback_distractors_added: int = 0
 
     def __post_init__(self) -> None:
         # Checks may replace recipes; caller-owned candidates remain untouched.
         self.template = self.template.model_copy(deep=True)
         self.names = tuple(parameter.name for parameter in self.template.parameters)
-        self.original_distractor_count = len(self.template.distractors)
         self.inputs_cases = [
             dict(zip(self.names, values, strict=True))
             for values in itertools.product(

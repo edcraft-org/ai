@@ -1,18 +1,15 @@
 """Contract implemented by every EdCraft question domain."""
 
-from typing import Protocol
+from typing import Any, Protocol
 
 from pydantic import BaseModel
 
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
-from edcraft_validator.validation.validation_contracts import (
-    ValidationPlan,
-    ValidationReport,
-)
+from edcraft_validator.mcp.evidence import ToolEvidence
 
 
-class DomainModule[ContextT](Protocol):
+class DomainModule(Protocol):
     """Domain-specific behavior used by the generic application workflow."""
 
     name: str
@@ -23,14 +20,18 @@ class DomainModule[ContextT](Protocol):
 
     def generation_request(self, request: BaseModel) -> StructuredGenerationRequest: ...
 
+    def validation_request(
+        self, candidate: BaseModel
+    ) -> StructuredGenerationRequest: ...
+
     def build_candidate(self, request: BaseModel, proposal: BaseModel) -> BaseModel: ...
 
-    def prepare_validation(
-        self, candidate: BaseModel, *, request: BaseModel | None = None
-    ) -> ValidationPlan[ContextT]: ...
+    def tool_bindings(
+        self, request: BaseModel | None, candidate: BaseModel, tool_name: str
+    ) -> dict[str, Any]: ...
 
-    def finalize_template(
-        self, context: ContextT, report: ValidationReport
+    def finalize_checked_template(
+        self, candidate: BaseModel, evidence: list[ToolEvidence]
     ) -> ValidatedTemplateArtifact: ...
 
     def generate_question(

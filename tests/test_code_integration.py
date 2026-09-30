@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from authoring_helpers import RequestPendingTools, SelectSemanticCheck
 
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.domains.code.code_domain import CodeDomain
@@ -59,7 +60,11 @@ def test_template_is_exhaustively_validated(template_path: Path) -> None:
 
     application = TemplateApplication()
     domain = CodeDomain()
-    validated = application.validate_template(template, domain=domain)
+    result = application.validate_template(
+        template, domain=domain, provider=SelectSemanticCheck()
+    )
+    assert result.status == "checked", result.reason
+    validated = result.artifact
     reloaded = ValidatedCodeTemplate.model_validate_json(validated.model_dump_json())
     for seed in (0, 1, 42, 999):
         question = application.generate_question(reloaded, domain=domain, seed=seed)
@@ -91,7 +96,7 @@ def test_model_proposal_is_built_then_validated() -> None:
         )
     )
 
-    class StubProvider:
+    class StubProvider(RequestPendingTools):
         provider = "stub"
         model = "stub-model"
 

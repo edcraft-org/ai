@@ -1,37 +1,48 @@
 import pytest
 
-from edcraft_validator.validation.validation_contracts import (
-    ValidationEvidence,
-    ValidationFailure,
-    ValidationPolicy,
-    ValidationReport,
-)
+from edcraft_validator.application.authoring_contracts import CheckExecution
+from edcraft_validator.mcp.evidence import ToolEvidence
+from edcraft_validator.validation.validation_contracts import ValidationFailure
 
 
-@pytest.mark.parametrize("status", ["failed", "incomplete"])
-def test_required_check_must_pass(status):
-    report = ValidationReport(
-        evidence=[ValidationEvidence(check="answer", status=status)],
-        policy=ValidationPolicy(required_checks=frozenset({"answer"})),
+@pytest.mark.parametrize("status", ["failed", "error"])
+def test_unsuccessful_tool_evidence_never_passes(status):
+    execution = CheckExecution(
+        call_id="1",
+        tool="answer",
+        candidate_digest="abc",
+        requested_arguments="{}",
+        evidence=ToolEvidence(
+            tool="answer",
+            version="1",
+            status=status,
+            findings=[{"code": "TEST_FAILURE", "message": "failed"}],
+        ),
     )
-    assert not report.accepted
-    with pytest.raises(ValidationFailure):
-        report.raise_for_failure()
+    assert not execution.passed
 
 
-def test_missing_check_cannot_pass():
-    report = ValidationReport([], ValidationPolicy(frozenset({"answer"})))
-    assert report.missing_checks == {"answer"}
-    assert not report.accepted
+def test_missing_evidence_never_passes():
+    assert not CheckExecution(
+        call_id="1", tool="answer", candidate_digest="abc", requested_arguments="{}"
+    ).passed
 
 
-@pytest.mark.parametrize("status", ["failed", "incomplete"])
-def test_unsuccessful_optional_check_rejects_report(status):
-    report = ValidationReport(
-        [
-            ValidationEvidence(check="answer", status="passed"),
-            ValidationEvidence(check="style", status=status),
-        ],
-        ValidationPolicy(frozenset({"answer"})),
+def test_protocol_error_cannot_be_overridden_by_passing_evidence():
+    execution = CheckExecution(
+        call_id="1",
+        tool="answer",
+        candidate_digest="abc",
+        requested_arguments="{}",
+        error="version mismatch",
+        evidence=ToolEvidence(tool="answer", version="1", status="passed"),
     )
-    assert not report.accepted
+    assert not execution.passed
+
+
+def test_domain_failure_owns_its_context():
+    context = {"inputs": {"a": 1}}
+    failure = ValidationFailure("bad answer", code="ANSWER_MISMATCH", context=context)
+    context["inputs"]["a"] = 2
+    assert failure.context == {"inputs": {"a": 1}}
+    assert failure.code == "ANSWER_MISMATCH"

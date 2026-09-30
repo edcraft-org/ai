@@ -298,3 +298,76 @@ def test_ollama_rejects_invalid_generation_bounds(
 
     with pytest.raises(GenerationError, match=message):
         reader()
+
+
+def test_native_tool_calls_and_tool_name_feedback_round_trip(monkeypatch):
+    from edcraft_validator.llm.llm_contracts import ModelTurn
+
+    payloads = []
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "message": {
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "function": {
+                                    "name": "check",
+                                    "arguments": {"required": ["loop"]},
+                                }
+                            }
+                        ],
+                    }
+                }
+            ).encode()
+
+    def request(req, timeout):
+        payloads.append(json.loads(req.data))
+        return Response()
+
+    monkeypatch.setattr("edcraft_validator.llm.ollama_provider.urlopen", request)
+    provider = OllamaProvider(model="tool-model")
+    tools = [
+        {
+            "type": "function",
+            "function": {"name": "check", "parameters": {"type": "object"}},
+        }
+    ]
+    turn = provider.tool_turn([], tools)
+    assert isinstance(turn, ModelTurn)
+    assert json.loads(turn.calls[0].arguments_json) == {"required": ["loop"]}
+    messages = [
+        turn.message(),
+        {
+            "role": "tool",
+            "tool_call_id": turn.calls[0].id,
+            "name": "check",
+            "content": '{"status":"failed"}',
+        },
+    ]
+    provider.tool_turn(messages, tools)
+    assert payloads[0]["tools"] == tools
+    assert "format" not in payloads[0]
+    native = payloads[1]["messages"]
+    assert native[0]["tool_calls"][0]["function"]["arguments"] == {"required": ["loop"]}
+    assert native[1]["tool_name"] == "check"
+    assert "tool_call_id" not in native[1]
+    assert messages[1]["tool_call_id"] == turn.calls[0].id
+
+
+def test_ollama_malformed_tool_call_fails_closed(monkeypatch):
+    monkeypatch.setattr(
+        OllamaProvider,
+        "_chat",
+        lambda *args, **kwargs: {"tool_calls": [{"function": {"arguments": {}}}]},
+    )
+    with pytest.raises(GenerationResponseError, match="invalid tool turn"):
+        OllamaProvider().tool_turn([], [])

@@ -2,8 +2,8 @@
 
 Status: agreed target design, 23 September 2026. This document and
 [the sequence diagram](generate-template.puml) define the target workflow.
-Implementation through catalogue resolution (#37) is in place; model-directed
-execution and retries (#38) are next. Product scope and milestone order are in
+Implementation includes catalogue resolution, model-directed MCP execution and
+three-attempt correction (#38). Artifact approval/persistence remains follow-up work. Product scope and milestone order are in
 [GOALS.md](../../GOALS.md).
 
 ## Decisions
@@ -14,7 +14,7 @@ execution and retries (#38) are next. Product scope and milestone order are in
 2. The selected domain supplies generation instructions, a proposal schema, and the
    names of MCP tools allowed for that domain.
 3. MCP is authoritative for each tool's description, input and result schemas, and
-   implementation. The application resolves the domain's names against MCP and
+   version. Domain modules implement the operations exposed by those tools. The application resolves the domain's names against MCP and
    freezes those definitions for the generation job.
 4. In its first response, the model returns both a complete proposal and a fixed
    recommended check plan selected from the offered tools.
@@ -30,7 +30,7 @@ execution and retries (#38) are next. Product scope and milestone order are in
    or MCP calls.
 
 There is no central validator. The application owns orchestration and permission
-checks, MCP tools own domain-specific validation algorithms, and the model owns
+checks, domain modules own validation algorithms exposed through MCP, and the model owns
 check selection and correction. Provider-managed MCP execution is outside the
 initial scope because the application must preserve permissions, limits, evidence,
 and consistent behavior across local and hosted models.
@@ -59,10 +59,9 @@ The domain returns a generation specification such as:
   "instructions": "Generate one reusable Python multiple-choice template.",
   "proposal_schema": "CodeTemplateProposalV1",
   "allowed_tool_names": [
-    "code_verify_execution_answers",
-    "code_require_feature",
-    "code_check_distractors",
-    "code_assess_difficulty"
+    "code_verify_template_structure",
+    "code_validate_answers_and_distractors",
+    "code_require_features"
   ]
 }
 ```
@@ -88,10 +87,9 @@ model's first response contains the proposal and a nonempty fixed check plan:
     ]
   },
   "checks": [
-    {"name": "code_verify_execution_answers", "arguments": {}},
-    {"name": "code_require_feature", "arguments": {"feature": "loop"}},
-    {"name": "code_check_distractors", "arguments": {}},
-    {"name": "code_assess_difficulty", "arguments": {"requested": "intermediate"}}
+    {"name": "code_verify_template_structure", "arguments": {}},
+    {"name": "code_validate_answers_and_distractors", "arguments": {}},
+    {"name": "code_require_features", "arguments": {}}
   ]
 }
 ```
@@ -103,9 +101,11 @@ shared application representation. Domains supply schemas and never supply parse
 callbacks.
 
 The recommendation now uses names resolved from the authoritative MCP catalogue,
-and provenance records the complete frozen definitions. The application still runs
-its complete current validation pipeline. Issue #38 will execute the fixed plan
-through MCP and collect model-directed tool arguments.
+and provenance records the complete frozen definitions. The application executes only the fixed plan through MCP. Initial planning
+arguments are empty; later native calls supply check-specific values such as
+`{"required": ["loop"]}`. The application removes candidate and request-owned inputs
+from callable schemas, rejects attempted overrides, and inserts the canonical
+candidate and original distractor count before dispatch.
 
 ## Tool catalogue
 
@@ -132,15 +132,39 @@ or scaling requirements justify separate servers.
 | Component | Responsibility |
 | --- | --- |
 | Application | Validate the request, resolve the domain and MCP definitions, call the model, mediate allowed tool calls, enforce the attempt limit, record evidence, and coordinate review. |
-| Domain | Own generation instructions, proposal schema, allowed MCP tool names, deterministic finalization, and deterministic question expansion. |
+| Domain | Own generation instructions, proposal schema, allowed MCP tool names, validation operations, deterministic finalization, and deterministic question expansion. |
 | Model | Return the proposal and fixed check plan, request each check, and revise failed proposals using returned evidence. |
 | Provider adapter | Translate provider-specific structured responses and tool calls into the shared model interface and parse against supplied schemas. |
-| MCP | Own authoritative tool definitions, deterministic implementations, technical limits, and structured evidence. |
+| MCP | Expose authoritative tool definitions; invoke domain operations; enforce response deadlines and format structured evidence. |
 
 The application contains no code-, mathematics-, or physics-specific checking
 algorithm. Adding a provider changes only its adapter. Adding a domain supplies a
 new domain module and appropriate MCP tools without adding domain branches to the
 application loop.
+
+The model selects checks using the domain prompt and MCP catalogue. No check is
+automatically added. The domain still enforces finalization requirements: in the
+code domain, missing execution-derived canonical answers or checked distractors
+prevents a reusable artifact. A passing but insufficient plan returns `needs_review`;
+it is not expanded or retried with new check membership.
+
+Code operations live in `domains/code/validation_operations.py`. MCP wrappers in
+`mcp/code_tools.py` supply dependencies and translate returned details or failures
+into timed, versioned evidence. The operations can also be called directly without
+an MCP client or server. Existing low-level algorithms remain in `domains/code/checks`.
+
+## Checking an existing candidate
+
+The `validate` command uses the same MCP discovery, dispatch, argument binding and
+evidence handling as authoring. It requires a provider and model configuration.
+The model returns a `CheckPlanResponse` containing only selected checks. The
+application binds the supplied candidate, runs every selected check once, and
+attempts domain finalization. It does not rewrite the candidate or automatically
+add missing checks. A failed or insufficient plan returns `needs_review`.
+
+The old `ValidationPipeline`, domain-built fixed plans, and automatic answer repair
+and distractor fallbacks have been removed. Approval and durable version binding
+remain Issue 39 work. This command checks a candidate; it does not approve it.
 
 ## Checking and correction
 
@@ -169,6 +193,14 @@ reviewed evaluation fixtures in issues #40 and #56. Evidence from deterministic
 correctness or safety tools remains authoritative and cannot be overridden by model
 confidence or a heuristic quality score.
 
+Incomplete conversations are bounded by `2 * plan_size + 2` tool turns per attempt;
+exhausting that limit returns `error` with pending names and partial evidence. Invalid
+arguments consume a selected check's unsuccessful slot; they can be revised in the
+next attempt. Every selected name must have a terminal result, and no check can
+execute twice in an attempt. Provider/MCP calls retain their configured deadlines.
+Final results are sent back to the model; failure of that final acknowledgement is
+recorded as `feedback_error` without discarding completed checking results.
+
 ## Finalization, review, and reuse
 
 Domain finalization may package checked values into the reusable template and build
@@ -177,7 +209,12 @@ deterministic transformation and must not change the checked semantic content. I
 that constraint proves unnecessary, finalization can be folded into application
 artifact construction later without changing the model/MCP loop.
 
-The review screen presents the exact artifact, original prompt and difficulty,
+For code, finalization requires canonical answers and selected distractors returned
+by a passing `code_validate_answers_and_distractors` call. A passing structure-only
+plan returns `needs_review` with the successful attempt retained and no artifact.
+Finalization never reruns the old validator or inserts answer/distractor repairs.
+
+The planned review screen presents the exact artifact, original prompt and difficulty,
 fixed plan, evidence history, limitations, and representative deterministic
 questions. Approval and rejection are bound to its stable identity. Any material
 revision creates a new version that requires fresh checks and approval.

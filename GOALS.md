@@ -245,6 +245,16 @@ mathematics, authoring, or evaluation work.
 
 ## Current Priority
 
+Implementation status (30 September 2026): the application now runs model-requested
+MCP checks against an application-supplied candidate, preserves fixed plan membership
+across at most three complete attempts, and returns reviewable failures. Code
+finalization packages canonical answers from successful execution evidence. The old
+validation pipeline has been removed. Existing-candidate `validate` now requires a
+model provider, selects checks through the model, and runs one MCP checking attempt
+without rewriting the supplied candidate.
+Durable artifact/approval binding (#39) and broader provider evaluation (#40) remain
+Milestone 2 follow-ups; technical success does not imply human approval.
+
 The original Milestone 1 is complete. The immediate priority is implementing
 Milestone 2's free-form authoring and model-selected validation workflow. Follow the
 [implementation order](docs/question-generation/README.md#implementation-order-and-completion-criteria).

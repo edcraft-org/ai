@@ -1,23 +1,23 @@
 import json
 
 import pytest
+from authoring_helpers import RequestPendingTools
+from fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
 
 from edcraft_validator import cli as template_cli
+from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.domains import domain_registry
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.llm import provider_registry
 from edcraft_validator.llm.llm_contracts import (
+    CheckPlanResponse,
     PlannedGenerationResponse,
     StructuredGenerationRequest,
 )
-from edcraft_validator.mcp.catalogue import FastMcpToolCatalogue
-from edcraft_validator.validation.validation_contracts import (
-    CheckResult,
-    ValidationPlan,
-    ValidationPolicy,
-)
+from edcraft_validator.mcp.client import FastMcpToolClient
+from edcraft_validator.mcp.evidence import ToolEvidence
 
 
 class ExampleRequest(BaseModel):
@@ -40,13 +40,6 @@ class ExampleValidated(ValidatedTemplateArtifact):
     value: int
 
 
-class PositiveValueCheck:
-    name = "positive_value"
-
-    def run(self, context):
-        return CheckResult(status="passed" if context.value > 0 else "failed")
-
-
 class ExampleDomain:
     name = "example"
     allowed_tool_names = ("positive_value",)
@@ -65,29 +58,35 @@ class ExampleDomain:
     def build_candidate(self, request, proposal):
         return ExampleCandidate(lesson=request.lesson, value=proposal.value)
 
-    def prepare_validation(self, candidate, *, request=None):
-        assert request is not None
-        return ValidationPlan(
-            context=candidate,
-            checks=(PositiveValueCheck(),),
-            policy=ValidationPolicy(required_checks=frozenset({"positive_value"})),
-        )
+    def tool_bindings(self, request, candidate, tool_name):
+        return {"value": candidate.value}
 
-    def finalize_template(self, context, report):
-        assert report.accepted
-        return ExampleValidated(lesson=context.lesson, value=context.value)
+    def finalize_checked_template(self, candidate, evidence):
+        assert evidence[0].status == "passed"
+        return ExampleValidated(lesson=candidate.lesson, value=candidate.value)
+
+    def validation_request(self, candidate):
+        return StructuredGenerationRequest(
+            messages=[{"role": "user", "content": candidate.model_dump_json()}],
+            response_model=CheckPlanResponse,
+            prompt_version="example-validation-v1",
+        )
 
     def generate_question(self, validated, *, seed):
         raise NotImplementedError
 
 
-class ExampleProvider:
+class ExampleProvider(RequestPendingTools):
     provider = "example-provider"
 
     def __init__(self, model):
         self.model = model or "example-model"
 
     def generate(self, request):
+        if request.response_model is CheckPlanResponse:
+            return CheckPlanResponse.model_validate(
+                {"checks": [{"name": "positive_value", "arguments": {}}]}
+            )
         assert request.response_model == PlannedGenerationResponse[ExampleProposal]
         return request.response_model.model_validate(
             {
@@ -111,23 +110,23 @@ def example_registry(monkeypatch):
         "example-provider",
         create_provider,
     )
+    server = FastMCP("CLI example")
+
+    @server.tool(description="Check positive values", version="1")
+    def positive_value(value: int) -> ToolEvidence:
+        assert value > 0
+        return ToolEvidence(tool="positive_value", version="1", status="passed")
+
     monkeypatch.setattr(
-        FastMcpToolCatalogue,
-        "list_tools",
-        lambda self: [
-            {
-                "name": "positive_value",
-                "description": "Check positive values",
-                "inputSchema": {"type": "object"},
-            }
-        ],
+        template_cli,
+        "TemplateApplication",
+        lambda: TemplateApplication(tool_client=FastMcpToolClient(server)),
     )
     return provider_models
 
 
-@pytest.mark.parametrize("command", ["validate", "generate"])
-def test_local_cli_commands_pass_domain_without_creating_provider(
-    command, monkeypatch, tmp_path, capsys
+def test_generate_cli_passes_domain_without_creating_provider(
+    monkeypatch, tmp_path, capsys
 ):
     from types import SimpleNamespace
 
@@ -149,10 +148,6 @@ def test_local_cli_commands_pass_domain_without_creating_provider(
             return {"success": True}
 
     class Application:
-        def validate_template(self, candidate, *, domain):
-            calls.append((candidate, domain))
-            return Result()
-
         def generate_question(self, validated, *, domain, seed):
             assert seed == 7
             calls.append((validated, domain))
@@ -165,9 +160,15 @@ def test_local_cli_commands_pass_domain_without_creating_provider(
     monkeypatch.setattr(template_cli, "create_model_provider", unexpected_provider)
     monkeypatch.setattr(template_cli, "TemplateApplication", Application)
     monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
-    args = ["edcraft-template", command, "--domain", "code", str(source)]
-    if command == "generate":
-        args += ["--seed", "7"]
+    args = [
+        "edcraft-template",
+        "generate",
+        "--domain",
+        "code",
+        str(source),
+        "--seed",
+        "7",
+    ]
     monkeypatch.setattr("sys.argv", args)
 
     assert template_cli.main() == 0
@@ -201,6 +202,8 @@ def test_author_cli_uses_registered_domain_request_json_end_to_end(
 
     assert example_registry == ["example-test-model"]
     result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "checked"
+    result = result["artifact"]
     assert result["lesson"] == "fractions"
     assert result["value"] == 12
     assert result["authoring"]["domain"] == "example"
@@ -314,12 +317,14 @@ def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> N
     captured: dict[str, object] = {}
 
     class Result:
+        status = "checked"
+
         def model_dump(self, *, mode: str) -> dict[str, bool]:
             assert mode == "json"
             return {"validated": True}
 
     class StubApplication:
-        def create_validated_template(self, request, *, domain, provider):
+        def author_template(self, request, *, domain, provider):
             captured.update(request=request, domain=domain, provider=provider)
             return Result()
 
@@ -447,3 +452,131 @@ def test_evaluate_cli_writes_attempts_and_prints_summary(
         "validated": 2,
         "failed": 0,
     }
+
+
+@pytest.mark.parametrize("status", ["needs_review", "error"])
+def test_author_cli_preserves_unsuccessful_result_and_returns_nonzero(
+    monkeypatch, capsys, status
+):
+    class Result:
+        def __init__(self):
+            self.status = status
+
+        def model_dump(self, *, mode):
+            return {
+                "status": self.status,
+                "artifact": None,
+                "attempts": [{"number": 1}],
+            }
+
+    class Application:
+        def author_template(self, request, *, domain, provider):
+            return Result()
+
+    monkeypatch.setattr(template_cli, "TemplateApplication", Application)
+    monkeypatch.setattr(
+        template_cli, "create_model_provider", lambda selection: object()
+    )
+    monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "edcraft-template",
+            "author",
+            "--domain",
+            "code",
+            "--provider",
+            "openai",
+            "--prompt",
+            "Addition",
+            "--difficulty",
+            "beginner",
+        ],
+    )
+    assert template_cli.main() == 2
+    assert json.loads(capsys.readouterr().out) == {
+        "status": status,
+        "artifact": None,
+        "attempts": [{"number": 1}],
+    }
+
+
+@pytest.mark.parametrize("command", ["author", "validate"])
+def test_checking_commands_require_a_provider(command):
+    with pytest.raises(SystemExit):
+        template_cli.build_parser().parse_args([command, "--domain", "code"])
+
+
+def test_validate_cli_selects_checks_through_provider_and_mcp(
+    example_registry, monkeypatch, tmp_path, capsys
+):
+    source = tmp_path / "candidate.json"
+    source.write_text(json.dumps({"lesson": "fractions", "value": 7}))
+    monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "edcraft-template",
+            "validate",
+            "--domain",
+            "example",
+            "--provider",
+            "example-provider",
+            "--model",
+            "selector",
+            str(source),
+        ],
+    )
+    assert template_cli.main() == 0
+    result = json.loads(capsys.readouterr().out)
+    assert example_registry == ["selector"]
+    assert result["status"] == "checked"
+    assert result["artifact"]["value"] == 7
+    assert result["fixed_plan"] == ["positive_value"]
+    assert len(result["attempts"]) == 1
+    assert json.loads(source.read_text()) == {"lesson": "fractions", "value": 7}
+
+
+@pytest.mark.parametrize("status", ["needs_review", "error"])
+def test_validate_cli_preserves_unsuccessful_evidence(
+    monkeypatch, tmp_path, capsys, status
+):
+    from pathlib import Path
+
+    from edcraft_validator.application.authoring_contracts import AuthoringResult
+
+    source = Path("examples/templates/arithmetic_linear.json")
+
+    class Application:
+        def validate_template(self, candidate, *, domain, provider):
+            return AuthoringResult(
+                status=status,
+                provider="stub",
+                model="stub",
+                request={},
+                prompt_version="test",
+                proposal=candidate.model_dump(mode="json"),
+                fixed_plan=["code_verify_template_structure"],
+                tool_catalogue=[],
+                reason="failed",
+            )
+
+    monkeypatch.setattr(template_cli, "TemplateApplication", Application)
+    monkeypatch.setattr(
+        template_cli, "create_model_provider", lambda selection: object()
+    )
+    monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "edcraft-template",
+            "validate",
+            "--domain",
+            "code",
+            "--provider",
+            "openai",
+            str(source),
+        ],
+    )
+    assert template_cli.main() == 2
+    assert json.loads(capsys.readouterr().out)["status"] == status

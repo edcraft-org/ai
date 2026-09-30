@@ -10,27 +10,24 @@ from edcraft_validator.domains.code.checks.validation_context import (
 )
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
-    DistractorRecipe,
     TemplateValidationError,
 )
 from edcraft_validator.domains.code.code_types import AnswerTarget, ParameterValue
 from edcraft_validator.domains.code.safe_expressions import SafeExpression
 from edcraft_validator.tools.python_execution import ExecutionResult
-from edcraft_validator.validation.validation_contracts import CheckResult
-from edcraft_validator.value_comparison import equivalent, same_value_shape
+from edcraft_validator.value_comparison import same_value_shape
 
 
-def check_expressions(context: CodeValidationContext) -> CheckResult:
+def check_expressions(context: CodeValidationContext) -> None:
     """Parse the answer and distractor expressions for later checks."""
     context.proposed_answer, context.candidates = _parse_expressions(
         context.template,
         context.names,
         allow_candidate_rejections=context.num_distractors is not None,
     )
-    return CheckResult()
 
 
-def check_proposed_answers(context: CodeValidationContext) -> CheckResult:
+def check_proposed_answers(context: CodeValidationContext) -> None:
     """Evaluate the proposed answer over the complete finite input domain."""
     assert context.proposed_answer is not None
     answers = []
@@ -41,42 +38,18 @@ def check_proposed_answers(context: CodeValidationContext) -> CheckResult:
         answers.append(answer)
     _require_consistent_answer_shapes(context.inputs_cases, answers)
     context.proposed_answers = answers
-    return CheckResult()
 
 
-def check_canonical_answers(context: CodeValidationContext) -> CheckResult:
-    """Derive canonical answers and preserve an incorrect proposal as a distractor."""
+def check_canonical_answers(context: CodeValidationContext) -> None:
+    """Derive canonical answers without changing the supplied proposal or recipes."""
     answers = []
-    corrected_cases = 0
-    for inputs, execution, proposed_answer in zip(
-        context.inputs_cases,
-        context.executions,
-        context.proposed_answers,
-        strict=True,
-    ):
+    for inputs, execution in zip(context.inputs_cases, context.executions, strict=True):
         actual_answer = _execution_answer(execution, context.template.answer_target)
         require_json_value(actual_answer, "executor answer")
         validate_supported_answer(inputs, actual_answer)
         answers.append(copy.deepcopy(actual_answer))
-        if not equivalent(actual_answer, proposed_answer):
-            corrected_cases += 1
     _require_consistent_answer_shapes(context.inputs_cases, answers)
     context.canonical_answers = answers
-    context.corrected_cases = corrected_cases
-    if corrected_cases:
-        assert context.proposed_answer is not None
-        context.template, context.candidates = _promote_proposed_answer_to_distractor(
-            context.template,
-            context.proposed_answer,
-            context.proposed_answers,
-            context.candidates,
-        )
-    return CheckResult(
-        details={
-            "corrected_cases": corrected_cases,
-            "proposal_matched": corrected_cases == 0,
-        }
-    )
 
 
 def validate_supported_answer(inputs: dict[str, ParameterValue], answer: Any) -> None:
@@ -140,52 +113,6 @@ def _parse_expressions(
         else:
             candidates.append(DistractorCandidate(index=index, expression=expression))
     return answer, candidates
-
-
-def _promote_proposed_answer_to_distractor(
-    template: CodeTemplateCandidate,
-    proposed_answer: SafeExpression,
-    proposed_values: list[Any],
-    candidates: list[DistractorCandidate],
-) -> tuple[CodeTemplateCandidate, list[DistractorCandidate]]:
-    if template.answer_expression is None:
-        raise AssertionError("proposed answer expression is missing")
-
-    recipes = list(template.distractors)
-    existing_index = next(
-        (
-            index
-            for index, recipe in enumerate(recipes)
-            if recipe.expression == template.answer_expression
-        ),
-        None,
-    )
-    if existing_index is None:
-        promoted_recipe = DistractorRecipe(
-            expression=template.answer_expression,
-            reason_template=(
-                "Uses the original predicted answer instead of the execution result."
-            ),
-        )
-        promoted_candidate = DistractorCandidate(
-            index=0,
-            expression=proposed_answer,
-            values=copy.deepcopy(proposed_values),
-        )
-    else:
-        promoted_recipe = recipes.pop(existing_index)
-        candidates.pop(existing_index)
-        promoted_candidate = DistractorCandidate(
-            index=0,
-            expression=proposed_answer,
-            values=copy.deepcopy(proposed_values),
-        )
-
-    recipes.insert(0, promoted_recipe)
-    candidates.insert(0, promoted_candidate)
-    for index, candidate in enumerate(candidates):
-        candidate.index = index
-    return template.model_copy(update={"distractors": recipes}, deep=True), candidates
 
 
 def _execution_answer(execution: ExecutionResult, target: AnswerTarget) -> Any:

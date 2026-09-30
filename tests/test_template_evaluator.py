@@ -1,5 +1,7 @@
 import json
 
+from authoring_helpers import RequestPendingTools
+
 from edcraft_validator.domains.code.code_schemas import CodeTemplateProposal
 from edcraft_validator.domains.code.template_evaluator import TemplateEvaluator
 from edcraft_validator.llm.llm_contracts import (
@@ -40,7 +42,7 @@ class SumExecutor:
         ]
 
 
-class StubProvider:
+class StubProvider(RequestPendingTools):
     provider = "stub"
     model = "stub-model"
 
@@ -78,7 +80,10 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
     assert report.attempts[1].failure_stage == "validation"
     assert report.attempts[1].failure_code == "UNUSED_PARAMETER"
     assert report.attempts[1].validation_evidence[-1].status == "failed"
-    assert report.attempts[1].validation_evidence[-1].check == "template_structure"
+    assert (
+        report.attempts[1].validation_evidence[-1].check
+        == "code_validate_answers_and_distractors"
+    )
     assert [tool["name"] for tool in report.attempts[1].tool_catalogue] == [
         "code_verify_template_structure",
         "code_validate_answers_and_distractors",

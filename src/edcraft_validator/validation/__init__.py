@@ -1,25 +1,9 @@
-"""Structured evidence for domain-specific template validation."""
+"""Shared domain failures and artifact evidence."""
 
-from edcraft_validator.validation.check_runner import ValidationPipeline
 from edcraft_validator.validation.validation_contracts import (
-    CheckResult,
     EvidenceStatus,
-    ValidationCheck,
     ValidationEvidence,
     ValidationFailure,
-    ValidationPlan,
-    ValidationPolicy,
-    ValidationReport,
 )
 
-__all__ = [
-    "ValidationReport",
-    "ValidationPolicy",
-    "ValidationPlan",
-    "ValidationCheck",
-    "CheckResult",
-    "EvidenceStatus",
-    "ValidationEvidence",
-    "ValidationFailure",
-    "ValidationPipeline",
-]
+__all__ = ["EvidenceStatus", "ValidationEvidence", "ValidationFailure"]

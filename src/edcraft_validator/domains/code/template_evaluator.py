@@ -11,6 +11,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from edcraft_validator.application.authoring_contracts import (
+    AuthoringFailure,
+    AuthoringResult,
+)
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import (
@@ -29,8 +33,13 @@ from edcraft_validator.llm.llm_contracts import (
 from edcraft_validator.llm.llm_errors import GenerationError
 from edcraft_validator.llm.provider_registry import create_model_provider
 from edcraft_validator.mcp.catalogue import ToolCatalogueError
+from edcraft_validator.mcp.client import FastMcpToolClient
+from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.tools.python_execution import PythonExecutionTool
-from edcraft_validator.validation.validation_contracts import ValidationEvidence
+from edcraft_validator.validation.validation_contracts import (
+    ValidationEvidence,
+    ValidationIssue,
+)
 
 ProviderFactory = Callable[[TemplateProviderSelection], ModelProvider]
 AttemptObserver = Callable[["TemplateEvaluationAttempt"], None]
@@ -65,6 +74,7 @@ class TemplateEvaluationAttempt(BaseModel):
     tool_catalogue: list[dict[str, Any]] = Field(default_factory=list)
     validation_evidence: list[ValidationEvidence] = Field(default_factory=list)
     validated_template: ValidatedCodeTemplate | None = None
+    authoring_result: AuthoringResult | None = None
 
 
 class TemplateEvaluationGroup(BaseModel):
@@ -119,9 +129,13 @@ class TemplateEvaluator:
         timeout_seconds: float = 2.0,
     ) -> None:
         self.provider_factory = provider_factory
-        self.domain = CodeDomain(
-            execution_tool=execution_tool, timeout_seconds=timeout_seconds
+        self.tool_client = FastMcpToolClient(
+            create_validation_server(
+                code_execution_tool=execution_tool,
+                code_execution_timeout_seconds=timeout_seconds,
+            )
         )
+        self.domain = CodeDomain()
 
     def evaluate(
         self,
@@ -188,12 +202,54 @@ class TemplateEvaluator:
             resolved_model = model_provider.model
             generation_request = build_code_generation_request(request)
             prompt_version = generation_request.prompt_version
-            application = TemplateApplication()
+            application = TemplateApplication(tool_client=self.tool_client)
             validated = application.create_validated_template(
                 request,
                 domain=self.domain,
                 provider=model_provider,
                 on_catalogue_resolved=record_catalogue,
+            )
+        except AuthoringFailure as exc:
+            result = exc.result
+            evidence = [
+                execution.evidence
+                for attempt in result.attempts
+                for execution in attempt.executions
+                if execution.evidence is not None
+            ]
+            findings = [
+                finding
+                for item in evidence
+                for finding in item.findings
+                if item.status != "passed"
+            ]
+            return TemplateEvaluationAttempt(
+                attempt=attempt_number,
+                provider=selection.provider,
+                model=resolved_model,
+                topic=topic,
+                request=request,
+                status="failed",
+                prompt_version=prompt_version,
+                total_duration_ms=(time.perf_counter() - started) * 1000,
+                failure_stage="validation",
+                failure_code=findings[0].code if findings else result.status,
+                error=result.reason,
+                tool_catalogue=result.tool_catalogue,
+                validation_evidence=[
+                    ValidationEvidence(
+                        check=item.tool,
+                        status="incomplete" if item.status == "error" else item.status,
+                        issues=[
+                            ValidationIssue(**finding.model_dump())
+                            for finding in item.findings
+                        ],
+                        details=item.details,
+                        duration_ms=item.duration_ms,
+                    )
+                    for item in evidence
+                ],
+                authoring_result=result,
             )
         except Exception as exc:
             stage, code = _classify_failure(exc, model_provider is not None)

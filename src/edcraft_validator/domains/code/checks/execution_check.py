@@ -7,7 +7,6 @@ from edcraft_validator.domains.code.checks.validation_context import (
 )
 from edcraft_validator.domains.code.code_schemas import TemplateValidationError
 from edcraft_validator.tools.python_execution import PythonExecutionTool
-from edcraft_validator.validation.validation_contracts import CheckResult
 
 
 @dataclass(frozen=True)
@@ -17,7 +16,7 @@ class ExecutionCheck:
     execution_tool: PythonExecutionTool
     timeout_seconds: float = 2.0
 
-    def run(self, context: CodeValidationContext) -> CheckResult:
+    def run(self, context: CodeValidationContext) -> None:
         executions = self.execution_tool.execute_batch(
             context.template.code,
             context.template.entry_function,
@@ -41,4 +40,3 @@ class ExecutionCheck:
                 inputs=inputs,
             )
         context.executions = executions
-        return CheckResult()

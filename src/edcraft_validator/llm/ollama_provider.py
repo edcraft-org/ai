@@ -1,12 +1,18 @@
+import copy
 import json
 import math
 import os
+import uuid
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from pydantic import BaseModel, ValidationError
 
-from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
+from edcraft_validator.llm.llm_contracts import (
+    ModelTurn,
+    StructuredGenerationRequest,
+    ToolCall,
+)
 from edcraft_validator.llm.llm_errors import (
     GenerationError,
     GenerationResponseError,
@@ -49,18 +55,50 @@ class OllamaProvider:
     def _ollama_request(
         self, messages: list[dict[str, str]], schema: dict[str, object]
     ) -> str:
+        return self._chat(messages, schema=schema)["content"]
+
+    def tool_turn(self, messages, tools) -> ModelTurn:
+        message = self._chat(messages, tools=tools)
+        try:
+            return ModelTurn(
+                content=message.get("content", ""),
+                calls=[
+                    ToolCall(
+                        id=str(uuid.uuid4()),
+                        name=call["function"]["name"],
+                        arguments_json=json.dumps(call["function"]["arguments"]),
+                    )
+                    for call in message.get("tool_calls", [])
+                ],
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise GenerationResponseError(
+                "Ollama returned an invalid tool turn"
+            ) from exc
+
+    def _chat(self, messages, *, schema=None, tools=None):
         base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
         native_url = base_url.removesuffix("/v1").rstrip("/") + "/api/chat"
+        native_messages = copy.deepcopy(messages)
+        for message in native_messages:
+            if message.get("role") == "tool":
+                message.pop("tool_call_id", None)
+                message["tool_name"] = message.pop("name")
+            for call in message.get("tool_calls", []):
+                call.pop("id", None)
+                call["function"]["arguments"] = json.loads(
+                    call["function"]["arguments"]
+                )
         payload = {
             "model": self.model,
-            "messages": messages,
+            "messages": native_messages,
             "stream": False,
-            "format": schema,
-            "options": {
-                "temperature": _temperature(),
-                "num_predict": _num_predict(),
-            },
+            "options": {"temperature": _temperature(), "num_predict": _num_predict()},
         }
+        if schema is not None:
+            payload["format"] = schema
+        if tools:
+            payload["tools"] = tools
         request = Request(
             native_url,
             data=json.dumps(payload).encode(),
@@ -71,7 +109,7 @@ class OllamaProvider:
             timeout = _timeout_seconds()
             with urlopen(request, timeout=timeout) as response:
                 body = json.load(response)
-            return body["message"]["content"]
+            return body["message"]
         except TimeoutError as exc:
             raise GenerationTimeoutError(
                 f"Ollama request timed out after {timeout:g} seconds"
