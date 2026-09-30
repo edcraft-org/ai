@@ -154,9 +154,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring.domain == "code"
     assert validated.authoring.request["prompt"] == "Create an arithmetic question"
     assert validated.authoring.request["difficulty"] == "beginner"
-    assert [check.name for check in validated.authoring.recommended_checks] == [
-        "code_validate_answers_and_distractors"
-    ]
+    assert validated.authoring.fixed_plan == ["code_validate_answers_and_distractors"]
     assert list(provider_calls[0].tool_catalogue.names) == list(
         domain.allowed_tool_names
     )

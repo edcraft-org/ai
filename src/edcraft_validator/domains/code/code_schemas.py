@@ -267,7 +267,6 @@ class ValidatedCodeTemplate(ValidatedTemplateArtifact):
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    generator_version: Literal["code-question-v1"] = "code-question-v1"
     template: CodeTemplateCandidate
     validation: TemplateValidationSummary
 

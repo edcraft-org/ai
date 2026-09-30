@@ -55,22 +55,17 @@ per-question validation call.
 approved the content. The future frontend will present the validated template for a
 human approve/reject decision before allowing question generation.
 
-Successful authoring and existing-candidate checking assign an `artifact_id`
-(`sha256:...`) after finalization. This hashes the complete serialized artifact and
-its provenance, excluding only the ID itself. The record includes the final proposal,
-original fixed plan, frozen catalogue, every attempt and its evidence, original
-request, initial model messages, response schema, and non-secret provider settings.
-Timings and call IDs are part of the record, so a new check run can produce a new ID
-even for unchanged content. This ID identifies the saved record; it is not an approval
-or a signature, and generation does not perform tamper verification.
+Successful authoring and existing-candidate checking assign a new `artifact_id`
+after finalization. The record includes the final proposal, original fixed plan,
+frozen catalogue, every attempt and its evidence, original request, and provider/model
+settings. A fresh check run receives a new ID even when its proposal is unchanged.
+This ID can identify the record that a user later approves; it is not a signature.
 
-Code artifacts record `generator_version: "code-question-v1"`. To preview an artifact,
-use the same `generate` command with representative seeds and keep the returned
-`artifact_id` and `seed`. Loading that saved artifact and using the same seed reproduces
-the question locally. Its existing template ID still controls parameter selection,
-so adding provenance does not change seed behavior. Domain finalization packages
+To preview an artifact, use the same `generate` command with representative seeds.
+Loading the saved artifact and using the same seed reproduces the question locally.
+The existing template ID controls parameter selection. Domain finalization packages
 checked answers and selected recipes without changing code or question wording.
-The final model acknowledgement belongs to checking, before this local finalization.
+The final model acknowledgement belongs to checking, before local finalization.
 
 Approval and revision enforcement are deferred to Issue 40. Internal artifacts are
 trusted application data. Old authoring records missing required provenance fields
@@ -234,10 +229,10 @@ Rendered misconception reasons are preserved alongside their selected distractor
   finite-domain validator searches candidate subsets to retain the requested two
   or three globally unique expressions with reason templates. Too few valid
   distractors fail the check; no fallback recipes are added.
-- Reproducibility: deterministic seed selection and a stable saved-artifact identity.
+- Reproducibility: deterministic seed selection and an ID for each checked artifact.
   Artifacts retain the resolved provider/model, non-secret request settings, domain,
-  prompt/difficulty, prompt version and messages, response schema, fixed plan,
-  catalogue, and complete attempt evidence. Ollama snapshots temperature and token
+  prompt/difficulty, prompt version, final proposal, fixed plan, catalogue, and
+  complete attempt evidence. Ollama snapshots temperature and token
   limits when constructed; OpenAI-compatible adapters record that sampling uses
   provider defaults rather than claiming an unspecified temperature or seed.
   API keys and other secrets are never stored.

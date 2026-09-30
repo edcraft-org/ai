@@ -4,6 +4,7 @@ import copy
 import hashlib
 import json
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -153,7 +154,6 @@ class TemplateApplication:
                 tool_catalogue=snapshot.definitions(),
             )
             messages = generation_messages(generation_request)
-            initial_messages = copy.deepcopy(messages)
             messages.append(
                 {"role": "assistant", "content": response.model_dump_json()}
             )
@@ -268,9 +268,6 @@ class TemplateApplication:
                             request=copy.deepcopy(request_payload),
                             proposal=copy.deepcopy(result.proposal),
                             fixed_plan=list(plan),
-                            generation_messages=initial_messages,
-                            response_schema=generation_request.response_model.model_json_schema(),
-                            recommended_checks=response.checks,
                             tool_catalogue=snapshot.definitions(),
                             attempts=[
                                 item.model_dump(mode="json") for item in result.attempts
@@ -278,7 +275,12 @@ class TemplateApplication:
                             generated_at=datetime.now(UTC),
                             generation_duration_ms=generation_duration_ms,
                         )
-                        result.artifact = artifact.with_authoring(provenance)
+                        result.artifact = artifact.model_copy(
+                            update={
+                                "artifact_id": uuid.uuid4().hex,
+                                "authoring": provenance,
+                            }
+                        )
                         result.status = "checked"
                         return result
                     messages.append(
