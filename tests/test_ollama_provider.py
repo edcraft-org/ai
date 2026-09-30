@@ -1,11 +1,15 @@
 import json
+from dataclasses import replace
 
 import pytest
 from pydantic import BaseModel
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
 from edcraft_validator.domains.code.prompt_builder import build_code_generation_request
-from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
+from edcraft_validator.llm.llm_contracts import (
+    StructuredGenerationRequest,
+    ToolCatalogueSnapshot,
+)
 from edcraft_validator.llm.llm_errors import (
     GenerationError,
     GenerationResponseError,
@@ -108,6 +112,47 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     assert "at least 3 distractor candidates" in messages[1]["content"]
     assert "Use native JSON values" in messages[1]["content"]
     assert captured["timeout"] == 300
+
+
+def test_ollama_receives_complete_frozen_mcp_definition(monkeypatch) -> None:
+    tool = {
+        "name": "code_require_features",
+        "description": "Check requested features",
+        "inputSchema": {"type": "object", "properties": {"required": {}}},
+        "outputSchema": {"type": "object", "properties": {"status": {}}},
+        "_meta": {"fastmcp": {"version": "1.0"}},
+    }
+    captured = {}
+
+    def fake_request(self, messages, schema):
+        captured["messages"] = messages
+        return json.dumps(
+            {
+                "proposal": {
+                    "question_template": "What does f({a}) return?",
+                    "code": "def f(a):\n    return a",
+                    "entry_function": "f",
+                    "parameters": [{"name": "a", "kind": "integer", "values": [1, 2]}],
+                    "answer_target": "return_value",
+                    "answer_expression": "a",
+                    "distractors": [
+                        {"expression": "a + 1", "reason_template": "Adds one."},
+                        {"expression": "a - 1", "reason_template": "Subtracts one."},
+                    ],
+                },
+                "checks": [{"name": "code_require_features", "arguments": {}}],
+            }
+        )
+
+    monkeypatch.setattr(OllamaProvider, "_ollama_request", fake_request)
+    OllamaProvider().generate(
+        replace(
+            generation_request(),
+            tool_catalogue=ToolCatalogueSnapshot.from_definitions((tool,)),
+        )
+    )
+
+    assert json.loads(captured["messages"][1]["content"].split("\n", 1)[1]) == [tool]
 
 
 def test_ollama_reports_common_response_schema_failures(monkeypatch) -> None:

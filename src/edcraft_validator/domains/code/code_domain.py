@@ -33,7 +33,7 @@ from edcraft_validator.domains.code.code_schemas import (
     ValidatedTemplateCase,
 )
 from edcraft_validator.domains.code.prompt_builder import (
-    CODE_RECOMMENDED_CHECK_NAMES,
+    CODE_ALLOWED_TOOL_NAMES,
     build_code_generation_request,
 )
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
@@ -60,7 +60,7 @@ class CodeDomain:
     request_model = CodeTemplateRequest
     candidate_model = CodeTemplateCandidate
     validated_model = ValidatedCodeTemplate
-    recommended_check_names = CODE_RECOMMENDED_CHECK_NAMES
+    allowed_tool_names = CODE_ALLOWED_TOOL_NAMES
 
     def __init__(
         self,
@@ -78,7 +78,7 @@ class CodeDomain:
     ) -> StructuredGenerationRequest[PlannedGenerationResponse[CodeProposalResponse]]:
         typed_request = _require_type(request, CodeTemplateRequest)
         return build_code_generation_request(
-            typed_request, offered_tool_names=self.recommended_check_names
+            typed_request, offered_tool_names=self.allowed_tool_names
         )
 
     def build_candidate(

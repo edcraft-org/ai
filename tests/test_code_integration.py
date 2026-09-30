@@ -98,7 +98,11 @@ def test_model_proposal_is_built_then_validated() -> None:
         def generate(self, request):
             return PlannedGenerationResponse(
                 proposal=proposal,
-                checks=[RecommendedCheck(name="code_execution", arguments={})],
+                checks=[
+                    RecommendedCheck(
+                        name="code_validate_answers_and_distractors", arguments={}
+                    )
+                ],
             )
 
     validated = TemplateApplication().create_validated_template(

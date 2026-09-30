@@ -19,6 +19,7 @@ from edcraft_validator.llm.llm_errors import (
     GenerationResponseError,
     GenerationSchemaError,
 )
+from edcraft_validator.mcp.catalogue import FastMcpToolCatalogue
 from edcraft_validator.tools.python_execution import ExecutionResult
 from edcraft_validator.validation.validation_contracts import (
     CheckResult,
@@ -54,6 +55,19 @@ class PositiveValueCheck:
 
     def run(self, context):
         return CheckResult(status="passed" if context.value > 0 else "failed")
+
+
+class ExampleCatalogue:
+    def list_tools(self):
+        return [
+            {
+                "name": name,
+                "description": f"Check {name}",
+                "inputSchema": {"type": "object"},
+                "outputSchema": {"type": "object"},
+            }
+            for name in ("double_value", "positive_value")
+        ]
 
 
 def example_plan(candidate):
@@ -96,7 +110,11 @@ def test_template_application_authors_once_then_generates_locally() -> None:
             provider_calls.append(request)
             return PlannedGenerationResponse(
                 proposal=proposal,
-                checks=[RecommendedCheck(name="code_execution", arguments={})],
+                checks=[
+                    RecommendedCheck(
+                        name="code_validate_answers_and_distractors", arguments={}
+                    )
+                ],
             )
 
     class SumExecutor:
@@ -108,7 +126,16 @@ def test_template_application_authors_once_then_generates_locally() -> None:
             ]
 
     domain = CodeDomain(execution_tool=SumExecutor())
-    application = TemplateApplication()
+
+    class CountingCatalogue:
+        calls = 0
+
+        def list_tools(self):
+            self.calls += 1
+            return FastMcpToolCatalogue().list_tools()
+
+    catalogue = CountingCatalogue()
+    application = TemplateApplication(tool_catalogue=catalogue)
     validated = application.create_validated_template(
         CodeTemplateRequest(
             prompt="Create an arithmetic question", difficulty="beginner"
@@ -119,6 +146,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     instance = application.generate_question(validated, domain=domain, seed=7)
 
     assert len(provider_calls) == 1
+    assert catalogue.calls == 1
     assert instance.seed == 7
     assert instance == application.generate_question(validated, domain=domain, seed=7)
     assert len(execution_calls) == 1
@@ -134,13 +162,20 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring is not None
     assert validated.authoring.provider == "stub"
     assert validated.authoring.model == "stub-model"
-    assert validated.authoring.base_prompt_version == "code-template-v10+response-v3"
+    assert validated.authoring.base_prompt_version == "code-template-v11+response-v3"
     assert validated.authoring.domain == "code"
     assert validated.authoring.request["prompt"] == "Create an arithmetic question"
     assert validated.authoring.request["difficulty"] == "beginner"
     assert [check.name for check in validated.authoring.recommended_checks] == [
-        "code_execution"
+        "code_validate_answers_and_distractors"
     ]
+    assert list(provider_calls[0].tool_catalogue.names) == list(
+        domain.allowed_tool_names
+    )
+    assert (
+        validated.authoring.tool_catalogue
+        == provider_calls[0].tool_catalogue.definitions()
+    )
     assert validated.authoring.generated_at.utcoffset() is not None
     assert validated.authoring.generation_duration_ms >= 0
     assert [item.expression for item in validated.template.distractors] == [
@@ -182,6 +217,7 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
 
     class ExampleDomain:
         name = "example"
+        allowed_tool_names = ("double_value",)
         request_model = ExampleRequest
         candidate_model = ExampleTemplate
         validated_model = ExampleValidated
@@ -238,7 +274,7 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
             )
 
     domain = ExampleDomain(ExampleTool())
-    application = TemplateApplication()
+    application = TemplateApplication(tool_catalogue=ExampleCatalogue())
     validated = application.create_validated_template(
         ExampleRequest(topic="fractions"),
         domain=domain,
@@ -273,6 +309,7 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
 ) -> None:
     class FailingDomain:
         name = "example"
+        allowed_tool_names = ("positive_value",)
 
         def generation_request(self, request):
             from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
@@ -296,17 +333,24 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
         def generate(self, request):
             raise generation_error
 
+    captured_catalogues = []
     with pytest.raises(type(generation_error), match=str(generation_error)):
-        TemplateApplication().create_validated_template(
+        TemplateApplication(
+            tool_catalogue=ExampleCatalogue()
+        ).create_validated_template(
             ExampleRequest(topic="fractions"),
             domain=FailingDomain(),
             provider=FailingProvider(),
+            on_catalogue_resolved=captured_catalogues.append,
         )
+    assert len(captured_catalogues) == 1
+    assert captured_catalogues[0].names == ("positive_value",)
 
 
 def test_unknown_recommended_check_stops_before_candidate_validation() -> None:
     class Domain:
         name = "example"
+        allowed_tool_names = ("positive_value",)
 
         def generation_request(self, request):
             from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
@@ -337,7 +381,9 @@ def test_unknown_recommended_check_stops_before_candidate_validation() -> None:
             )
 
     with pytest.raises(GenerationSchemaError, match="not offered: invented_check"):
-        TemplateApplication().create_validated_template(
+        TemplateApplication(
+            tool_catalogue=ExampleCatalogue()
+        ).create_validated_template(
             ExampleRequest(topic="fractions"),
             domain=Domain(),
             provider=Provider(),

@@ -13,6 +13,7 @@ from edcraft_validator.llm.llm_errors import (
     GenerationTimeoutError,
     GenerationTransportError,
 )
+from edcraft_validator.llm.tool_context import generation_messages
 
 DEFAULT_OPENAI_MODEL = "gpt-5-mini"
 OpenAIGenerationError = GenerationError
@@ -48,7 +49,7 @@ class OpenAICompatibleProvider:
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=request.messages,
+                messages=generation_messages(request),
                 response_format={
                     "type": "json_schema",
                     "json_schema": {

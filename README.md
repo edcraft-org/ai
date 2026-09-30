@@ -10,9 +10,11 @@ cost proportional to the number of templates rather than the number of questions
 ## Evolving workflow
 
 Authoring accepts a domain, free-form prompt, and difficulty. In one structured
-response the model returns a reusable proposal plus recommended checks. The current
-validator still runs its complete deterministic pipeline; later implementation
-issues will expose those checks through MCP and execute the recommended fixed plan.
+response the model returns a reusable proposal plus recommended checks. The
+application resolves the domain's allowed tools from MCP once per authoring job and
+supplies their full definitions to the model. The current validator still runs its
+complete deterministic pipeline; the next implementation issue will execute the
+recommended fixed plan through MCP.
 
 - [Workflow specification and implementation order](docs/question-generation/README.md)
 - [PlantUML sequence diagram](docs/question-generation/generate-template.puml)
@@ -37,6 +39,10 @@ domain + free-form prompt + difficulty + provider
 Template authoring makes one provider request for the complete proposal and its
 recommended checks. The model must supply enough usable distractors; the code domain
 does not add topic-profile-specific fallbacks.
+The authoring provenance includes the frozen MCP tool catalogue used for that
+request. A missing or ambiguous allowed tool fails before the provider is called.
+Evaluation records retain the same catalogue snapshot for failed attempts, so the
+model's available tools can be inspected even when a template does not validate.
 Generating a question from a validated template uses no AI, execution tool, or
 per-question validation call.
 

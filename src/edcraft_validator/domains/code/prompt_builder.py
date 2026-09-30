@@ -9,24 +9,18 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v10"
-
-CODE_RECOMMENDED_CHECK_NAMES = (
-    "template_structure",
-    "expression_safety",
-    "answer_domain",
-    "code_execution",
-    "canonical_answers",
-    "distractor_selection",
-    "distractor_consistency",
-    "template_rendering",
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v11"
+CODE_ALLOWED_TOOL_NAMES = (
+    "code_verify_template_structure",
+    "code_validate_answers_and_distractors",
+    "code_require_features",
 )
 
 
 def build_template_prompt(
     request: CodeTemplateRequest,
     *,
-    offered_tool_names: tuple[str, ...] = CODE_RECOMMENDED_CHECK_NAMES,
+    offered_tool_names: tuple[str, ...] = CODE_ALLOWED_TOOL_NAMES,
 ) -> str:
     offered = ", ".join(offered_tool_names)
     return f"""\
@@ -51,10 +45,11 @@ misconceptions and remain type-compatible, distinct from the answer, and mutuall
 distinct for the complete Cartesian product. In reason_template, use only plain
 parameter placeholders such as `{{n}}`; never put expressions inside braces.
 
-Recommend a nonempty fixed subset of the available checks. Use each check name at
-most once, do not invent names, and return an empty `arguments` object for every
-check. The current application still runs its complete validation pipeline; this
-recommendation is recorded for the later tool workflow.
+Recommend a nonempty fixed subset of the available MCP tools using their supplied
+descriptions and schemas. Use each tool name at most once and do not invent names.
+Return an empty `arguments` object for every check in this first response. Tool
+arguments and execution are handled in a later model turn. The current application
+still runs its complete validation pipeline.
 """
 
 
@@ -117,7 +112,7 @@ JSON arrays of numbers. Do not encode numbers, booleans, or arrays as strings.
 def build_code_generation_request(
     request: CodeTemplateRequest,
     *,
-    offered_tool_names: tuple[str, ...] = CODE_RECOMMENDED_CHECK_NAMES,
+    offered_tool_names: tuple[str, ...] = CODE_ALLOWED_TOOL_NAMES,
 ) -> StructuredGenerationRequest[PlannedGenerationResponse[CodeProposalResponse]]:
     """Return the provider-independent code proposal contract."""
     system_message = {"role": "system", "content": CODE_TEMPLATE_SYSTEM_PROMPT}
