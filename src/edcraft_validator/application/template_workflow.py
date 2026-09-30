@@ -136,6 +136,7 @@ class TemplateApplication:
             response = provider.generate(generation_request)
             generation_duration_ms = (time.perf_counter() - started) * 1000
             self._validate_response(response, snapshot.names, plan_only=validating)
+            provider_settings = copy.deepcopy(provider.generation_settings())
             plan = tuple(check.name for check in response.checks)
             result = AuthoringResult(
                 status="error",
@@ -152,6 +153,7 @@ class TemplateApplication:
                 tool_catalogue=snapshot.definitions(),
             )
             messages = generation_messages(generation_request)
+            initial_messages = copy.deepcopy(messages)
             messages.append(
                 {"role": "assistant", "content": response.model_dump_json()}
             )
@@ -260,9 +262,14 @@ class TemplateApplication:
                         provenance = TemplateAuthoringProvenance(
                             provider=provider.provider,
                             model=provider.model,
+                            provider_settings=provider_settings,
                             domain=domain.name,
                             base_prompt_version=generation_request.prompt_version,
                             request=copy.deepcopy(request_payload),
+                            proposal=copy.deepcopy(result.proposal),
+                            fixed_plan=list(plan),
+                            generation_messages=initial_messages,
+                            response_schema=generation_request.response_model.model_json_schema(),
                             recommended_checks=response.checks,
                             tool_catalogue=snapshot.definitions(),
                             attempts=[
@@ -271,9 +278,7 @@ class TemplateApplication:
                             generated_at=datetime.now(UTC),
                             generation_duration_ms=generation_duration_ms,
                         )
-                        result.artifact = artifact.model_copy(
-                            update={"authoring": provenance}
-                        )
+                        result.artifact = artifact.with_authoring(provenance)
                         result.status = "checked"
                         return result
                     messages.append(

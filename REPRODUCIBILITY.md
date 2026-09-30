@@ -98,4 +98,18 @@ uv run --env-file .env python -m edcraft_validator.cli validate \
 Exit 0 means a reusable artifact is present; exit 2 preserves unsuccessful checking
 results. Extract `artifact` for seeded generation. Candidate validation and authoring
 both use MCP; the old pipeline and silent answer/distractor repair are removed.
-Human approval and version binding are tracked separately in Issue 39.
+Successful checks now produce an artifact ID covering the complete saved record,
+including proposal, plan, catalogue, per-attempt evidence, initial model messages,
+response schema, and non-secret provider settings. JSON serialization preserves this
+ID. Code question instances carry the artifact ID and seed for later replay; previews
+use the same local generator as subsequent questions. No model/MCP work occurs during
+finalization or replay. The final evidence acknowledgement remains part of checking.
+
+The artifact hash includes timestamps, durations, and tool call IDs, so independent
+checking jobs need not have the same ID. The template ID still controls seeded input
+selection. The code generator's version is recorded in the artifact.
+
+Human approval and revision enforcement are deferred to Issue 40. No defenses against
+direct internal-record editing or migrations of old development data are provided.
+Regenerate artifacts that fail the new provenance schema; reset development storage
+when integrating that schema into the full workflow.

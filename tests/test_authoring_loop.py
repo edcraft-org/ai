@@ -57,6 +57,9 @@ class Provider:
     provider = "scripted"
     model = "scripted-v1"
 
+    def generation_settings(self):
+        return {"mode": "scripted"}
+
     def __init__(self, proposals=None, plan=(SEMANTIC, STRUCTURE), call_factory=None):
         self.proposals = proposals or [proposal()]
         self.plan = plan

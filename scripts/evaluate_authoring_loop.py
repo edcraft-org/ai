@@ -26,6 +26,9 @@ class ObservedProvider:
         self.tool_turns = 0
         self.original_proposal = None
 
+    def generation_settings(self):
+        return self.delegate.generation_settings()
+
     def generate(self, request):
         self.generation_calls += 1
         response = self.delegate.generate(request)

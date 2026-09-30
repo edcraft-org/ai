@@ -86,6 +86,10 @@ class ModelProvider(Protocol):
     provider: str
     model: str
 
+    def generation_settings(self) -> dict[str, Any]:
+        """Return non-secret effective settings used by this provider instance."""
+        ...
+
     def generate[ProposalT: BaseModel](
         self, request: StructuredGenerationRequest[ProposalT]
     ) -> ProposalT: ...

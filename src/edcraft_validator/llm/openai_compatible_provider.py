@@ -47,6 +47,17 @@ class OpenAICompatibleProvider:
         self.client = client
         self.model = model or _model(provider)
 
+    def generation_settings(self) -> dict[str, Any]:
+        # Sampling parameters are deliberately omitted from API requests. Do not
+        # claim a temperature/seed for defaults controlled by the remote provider.
+        return {
+            "sampling": "provider_defaults",
+            "response_format": "json_schema",
+            "strict": True,
+            "tool_choice": "required",
+            "parallel_tool_calls": False,
+        }
+
     def generate[ProposalT: BaseModel](
         self, request: StructuredGenerationRequest[ProposalT]
     ) -> ProposalT:

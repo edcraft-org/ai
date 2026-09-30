@@ -120,6 +120,12 @@ def test_generates_template_using_strict_structured_outputs(provider_name) -> No
     assert "Create an arithmetic question" in messages[1]["content"]
     assert "at least 3 distractor candidates" in messages[1]["content"]
     assert "Use native JSON values" in messages[1]["content"]
+    settings = provider.generation_settings()
+    assert settings["response_format"] == response_format["type"]
+    assert settings["strict"] == response_format["json_schema"]["strict"]
+    assert settings["sampling"] == "provider_defaults"
+    assert "temperature" not in client.chat.completions.arguments
+    assert "api_key" not in settings
 
 
 def test_openai_receives_complete_frozen_mcp_definition() -> None:
@@ -351,6 +357,9 @@ def test_native_calls_and_correlated_results_are_preserved(provider_name):
     assert captured[0]["tools"] == tools
     assert captured[0]["tool_choice"] == "required"
     assert captured[0]["parallel_tool_calls"] is False
+    settings = provider.generation_settings()
+    assert settings["tool_choice"] == captured[0]["tool_choice"]
+    assert settings["parallel_tool_calls"] == captured[0]["parallel_tool_calls"]
     assert captured[1]["messages"][0]["tool_calls"][0]["id"] == "call-1"
     assert captured[1]["messages"][1]["tool_call_id"] == "call-1"
     assert "name" not in captured[1]["messages"][1]

@@ -29,6 +29,14 @@ class OllamaProvider:
     def __init__(self, *, model: str | None = None) -> None:
         self.provider = "ollama"
         self.model = model or os.getenv("OLLAMA_MODEL") or "qwen2.5"
+        self._options = {"temperature": _temperature(), "num_predict": _num_predict()}
+        self._timeout = _timeout_seconds()
+
+    def generation_settings(self) -> dict:
+        return {
+            "options": copy.deepcopy(self._options),
+            "timeout_seconds": self._timeout,
+        }
 
     def generate[ProposalT: BaseModel](
         self, request: StructuredGenerationRequest[ProposalT]
@@ -93,7 +101,7 @@ class OllamaProvider:
             "model": self.model,
             "messages": native_messages,
             "stream": False,
-            "options": {"temperature": _temperature(), "num_predict": _num_predict()},
+            "options": self._options,
         }
         if schema is not None:
             payload["format"] = schema
@@ -106,7 +114,7 @@ class OllamaProvider:
             method="POST",
         )
         try:
-            timeout = _timeout_seconds()
+            timeout = self._timeout
             with urlopen(request, timeout=timeout) as response:
                 body = json.load(response)
             return body["message"]
