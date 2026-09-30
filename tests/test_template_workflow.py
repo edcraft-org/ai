@@ -1,7 +1,8 @@
 import json
-from dataclasses import dataclass
 
 import pytest
+from authoring_helpers import RequestPendingTools
+from fastmcp import FastMCP
 from pydantic import BaseModel
 
 from edcraft_validator.application.template_workflow import TemplateApplication
@@ -20,13 +21,10 @@ from edcraft_validator.llm.llm_errors import (
     GenerationSchemaError,
 )
 from edcraft_validator.mcp.catalogue import FastMcpToolCatalogue
+from edcraft_validator.mcp.client import FastMcpToolClient
+from edcraft_validator.mcp.evidence import ToolEvidence
+from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.tools.python_execution import ExecutionResult
-from edcraft_validator.validation.validation_contracts import (
-    CheckResult,
-    ValidationFailure,
-    ValidationPlan,
-    ValidationPolicy,
-)
 
 
 class ExampleRequest(BaseModel):
@@ -50,13 +48,6 @@ class ExampleInstance(BaseModel):
     seed: int
 
 
-class PositiveValueCheck:
-    name = "positive_value"
-
-    def run(self, context):
-        return CheckResult(status="passed" if context.value > 0 else "failed")
-
-
 class ExampleCatalogue:
     def list_tools(self):
         return [
@@ -68,14 +59,6 @@ class ExampleCatalogue:
             }
             for name in ("double_value", "positive_value")
         ]
-
-
-def example_plan(candidate):
-    return ValidationPlan(
-        context=candidate,
-        checks=(PositiveValueCheck(),),
-        policy=ValidationPolicy(frozenset({"positive_value"})),
-    )
 
 
 def test_template_application_authors_once_then_generates_locally() -> None:
@@ -102,7 +85,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     provider_calls = []
     execution_calls: list[str] = []
 
-    class StubProvider:
+    class StubProvider(RequestPendingTools):
         provider = "stub"
         model = "stub-model"
 
@@ -125,7 +108,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
                 for item in inputs
             ]
 
-    domain = CodeDomain(execution_tool=SumExecutor())
+    domain = CodeDomain()
 
     class CountingCatalogue:
         calls = 0
@@ -135,7 +118,12 @@ def test_template_application_authors_once_then_generates_locally() -> None:
             return FastMcpToolCatalogue().list_tools()
 
     catalogue = CountingCatalogue()
-    application = TemplateApplication(tool_catalogue=catalogue)
+    application = TemplateApplication(
+        tool_catalogue=catalogue,
+        tool_client=FastMcpToolClient(
+            create_validation_server(code_execution_tool=SumExecutor())
+        ),
+    )
     validated = application.create_validated_template(
         CodeTemplateRequest(
             prompt="Create an arithmetic question", difficulty="beginner"
@@ -162,7 +150,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring is not None
     assert validated.authoring.provider == "stub"
     assert validated.authoring.model == "stub-model"
-    assert validated.authoring.base_prompt_version == "code-template-v11+response-v3"
+    assert validated.authoring.base_prompt_version == "code-template-v13+response-v3"
     assert validated.authoring.domain == "code"
     assert validated.authoring.request["prompt"] == "Create an arithmetic question"
     assert validated.authoring.request["difficulty"] == "beginner"
@@ -194,26 +182,17 @@ def test_template_application_authors_once_then_generates_locally() -> None:
 def test_application_can_run_a_non_code_domain_without_provider_changes() -> None:
     events = []
 
-    @dataclass
-    class ExampleContext:
-        candidate: ExampleTemplate
-        checked_value: int | None = None
+    server = FastMCP("Example")
 
-    class ExampleTool:
-        def double(self, value):
-            events.append("tool")
-            return value * 2
-
-    class DoublingCheck:
-        name = "double_value"
-
-        def __init__(self, tool):
-            self.tool = tool
-
-        def run(self, context):
-            events.append("check")
-            context.checked_value = self.tool.double(context.candidate.value)
-            return CheckResult(details={"input": context.candidate.value})
+    @server.tool(description="Double a value", version="1")
+    def double_value(value: int) -> ToolEvidence:
+        events.append("tool")
+        return ToolEvidence(
+            tool="double_value",
+            version="1",
+            status="passed",
+            details={"input": value, "value": value * 2},
+        )
 
     class ExampleDomain:
         name = "example"
@@ -221,9 +200,6 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
         request_model = ExampleRequest
         candidate_model = ExampleTemplate
         validated_model = ExampleValidated
-
-        def __init__(self, tool):
-            self.tool = tool
 
         def generation_request(self, request):
             from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
@@ -239,25 +215,19 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
             events.append("build")
             return ExampleTemplate(value=proposal.value)
 
-        def prepare_validation(self, candidate, *, request=None):
-            events.append("plan")
-            return ValidationPlan(
-                context=ExampleContext(candidate),
-                checks=(DoublingCheck(self.tool),),
-                policy=ValidationPolicy(frozenset({"double_value"})),
-            )
+        def tool_bindings(self, request, candidate, tool_name):
+            return {"value": candidate.value}
 
-        def finalize_template(self, context, report):
+        def finalize_checked_template(self, candidate, evidence):
             events.append("finalize")
-            assert report.accepted
-            assert report.evidence[0].details == {"input": 12}
-            return ExampleValidated(value=context.checked_value)
+            assert evidence[0].details == {"input": 12, "value": 24}
+            return ExampleValidated(value=evidence[0].details["value"])
 
         def generate_question(self, validated, *, seed):
             events.append("question")
             return ExampleInstance(value=validated.value, seed=seed)
 
-    class ExampleProvider:
+    class ExampleProvider(RequestPendingTools):
         provider = "stub"
         model = "stub-model"
 
@@ -273,8 +243,8 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
                 )
             )
 
-    domain = ExampleDomain(ExampleTool())
-    application = TemplateApplication(tool_catalogue=ExampleCatalogue())
+    domain = ExampleDomain()
+    application = TemplateApplication(tool_client=FastMcpToolClient(server))
     validated = application.create_validated_template(
         ExampleRequest(topic="fractions"),
         domain=domain,
@@ -285,8 +255,6 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
     assert events == [
         "generate",
         "build",
-        "plan",
-        "check",
         "tool",
         "finalize",
         "question",
@@ -323,7 +291,7 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
         def build_candidate(self, request, proposal):
             pytest.fail("Generation failures must stop before candidate construction")
 
-        def prepare_validation(self, candidate, *, request=None):
+        def tool_bindings(self, request, candidate, tool_name):
             pytest.fail("Generation failures must stop before validation")
 
     class FailingProvider:
@@ -367,7 +335,7 @@ def test_unknown_recommended_check_stops_before_candidate_validation() -> None:
                 "Unknown recommended checks must stop before candidate building"
             )
 
-        def prepare_validation(self, candidate, *, request=None):
+        def tool_bindings(self, request, candidate, tool_name):
             pytest.fail("Unknown recommended checks must stop before validation")
 
     class Provider:
@@ -388,36 +356,3 @@ def test_unknown_recommended_check_stops_before_candidate_validation() -> None:
             domain=Domain(),
             provider=Provider(),
         )
-
-
-def test_application_rejects_domain_without_shared_validated_contract() -> None:
-    class InvalidDomain:
-        name = "invalid"
-
-        def prepare_validation(self, candidate, *, request=None):
-            return example_plan(candidate)
-
-        def finalize_template(self, context, report):
-            return ExampleTemplate(value=context.value)
-
-    application = TemplateApplication()
-
-    with pytest.raises(TypeError, match="shared authoring contract"):
-        application.validate_template(ExampleTemplate(value=1), domain=InvalidDomain())
-
-
-def test_application_does_not_finalize_rejected_candidate():
-    class ExampleDomain:
-        name = "example"
-
-        def prepare_validation(self, candidate, *, request=None):
-            return example_plan(candidate)
-
-        def finalize_template(self, context, report):
-            pytest.fail("Rejected candidates must never be finalized")
-
-    application = TemplateApplication()
-    with pytest.raises(ValidationFailure) as error:
-        application.validate_template(ExampleTemplate(value=-1), domain=ExampleDomain())
-    assert error.value.evidence[0].check == "positive_value"
-    assert error.value.evidence[0].status == "failed"

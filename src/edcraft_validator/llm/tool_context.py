@@ -17,7 +17,7 @@ def generation_messages(request: StructuredGenerationRequest) -> list[dict[str, 
             "Available MCP validation tools for this generation job follow as JSON. "
             "Their names, descriptions, input schemas, output schemas, annotations, "
             "and metadata are authoritative. Recommend checks only from these tools. "
-            "Return the combined proposal and check plan now; tool calls occur in "
+            "Return the response matching the supplied schema now; tool calls occur in "
             "later turns.\n" + catalogue
         ),
     }

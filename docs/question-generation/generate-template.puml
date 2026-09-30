@@ -1,48 +1,52 @@
 @startuml TemplateGeneration
-title Template generation with model-directed checks
+title Model-selected MCP checking: author or existing candidate
 autonumber
-
 actor User
 participant Application as App
 participant Domain
-participant Model
+participant "Provider / model" as Model
 participant MCP
-
-User -> App: Generate template(domain, prompt, difficulty)
-App -> Domain: Get generation specification
-Domain --> App: Instructions + schema + allowed tool names
-
-App -> MCP: Get definitions for allowed tools
-MCP --> App: Tool descriptions and schemas
-App -> Model: Generate proposal and recommend checks\n(prompt, difficulty, instructions, schema, tools)
-Model --> App: Proposal + fixed check plan
-
-loop Run checks (maximum 3 attempts)
-    loop Each selected check
-        Model --> App: Request check for current proposal
-        App -> MCP: Run check
-        MCP --> App: Pass/fail + validation evidence
-        App --> Model: Validation evidence
+User -> App: Domain + authoring request or existing candidate
+App -> Domain: Generation or check-planning instructions, schema, allowed names
+App -> MCP: List definitions once per job
+MCP --> App: Frozen schemas and versions
+App -> Model: Author: proposal + plan; validate: plan only
+Model --> App: Requested response with nonempty fixed plan
+loop Author: up to 3 attempts; validate: 1 attempt
+    App -> Domain: Build generated candidate or retain supplied candidate; bind inputs
+    App -> App: Freeze candidate identity; reset pending names
+    loop Bounded native tool turns until no checks pending
+        App -> Model: Pending callable schemas + prior evidence
+        Model --> App: Tool name + check-specific arguments
+        App -> App: Enforce plan; reject overrides; inject candidate
+        App -> MCP: Validated arguments, pinned tool version
+        MCP -> Domain: Run selected validation operation
+        Domain --> MCP: Result details or validation failure
+        MCP --> App: Structured evidence or protocol error
+        App -> App: Record result; continue after failures
     end
-
-    alt All checks passed
-        App -> App: Mark proposal as checked
-        break Stop retrying
-    else A check failed and attempts remain
-        App -> Model: Revise proposal using validation evidence
-        Model --> App: Revised proposal
-    else A check failed on attempt 3
-        App -> App: Mark proposal as needs_review
+    alt All selected checks passed
+        App -> Model: Final evidence; acknowledgement only
+        App -> Domain: Finalize from candidate and evidence
+        Domain --> App: Artifact, or missing canonical evidence
+        App -> App: Stop retrying
+    else Author failed and attempts remain
+        App -> Model: Complete evidence + request revision
+        Model --> App: Revised proposal, same check membership
+    else Attempts exhausted or supplied candidate failed
+        App -> Model: Final evidence; acknowledgement only
+        App -> App: needs_review; no reusable artifact
     end
 end
-
-alt All checks passed
-    App -> Domain: Finalize proposal
-    Domain --> App: Reviewable template
-    App --> User: Template + validation evidence
-    User -> App: Approve or reject
-else Three attempts failed
-    App --> User: Latest proposal + validation evidence + needs_review
-end
-
+App --> User: Status, latest proposal, complete history, optional artifact
+note over App, User
+checked is technical success, not user approval.
+Missing canonical data: needs_review.
+Incomplete/protocol conversation: error with partial history.
+Final acknowledgement failures are recorded separately.
+Human approval persistence remains follow-up work.
+end note
+User -> App: Generate preview from reusable artifact and seed
+App -> Domain: Deterministic expansion
+Domain --> User: Question; no AI or MCP call
 @enduml

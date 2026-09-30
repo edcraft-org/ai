@@ -1,6 +1,6 @@
 # EdCraft AI Question Templates
 
-EdCraft uses an AI model once to author a reusable Python question template. It
+EdCraft uses AI during authoring to create a reusable Python question template. It
 then validates the template's complete finite input domain and generates concrete
 questions deterministically without further AI calls.
 
@@ -12,9 +12,9 @@ cost proportional to the number of templates rather than the number of questions
 Authoring accepts a domain, free-form prompt, and difficulty. In one structured
 response the model returns a reusable proposal plus recommended checks. The
 application resolves the domain's allowed tools from MCP once per authoring job and
-supplies their full definitions to the model. The current validator still runs its
-complete deterministic pipeline; the next implementation issue will execute the
-recommended fixed plan through MCP.
+supplies their full definitions to the model. The model then requests the selected
+checks through an application-mediated MCP loop. Failed proposals can be revised
+for at most three complete attempts, with fixed check membership.
 
 - [Workflow specification and implementation order](docs/question-generation/README.md)
 - [PlantUML sequence diagram](docs/question-generation/generate-template.puml)
@@ -25,24 +25,29 @@ recommended fixed plan through MCP.
 
 ```text
 domain + free-form prompt + difficulty + provider
-  -> AI proposes wording, code, entry function, answer target, parameters,
-     answer logic, distractors, and recommended checks
-  -> code domain builds identity and question type
-  -> Python subset analysis
-  -> all parameter combinations run through one local Python tool call
-  -> globally valid distractor recipes selected from the candidates
-  -> answers and selected distractors checked for every combination
-  -> validated template + structured validation evidence
-  -> deterministic questions generated locally from seeds
+  -> freeze domain-allowed MCP catalogue
+  -> model returns proposal + fixed check plan
+  -> model requests checks; application inserts the current candidate
+  -> MCP returns evidence for every selected check
+  -> failures return to the model for revision (at most three complete attempts)
+  -> all checks pass: package canonical answers and selected distractors
+  -> otherwise: needs_review/error with latest proposal and full evidence history
+  -> deterministic questions generated locally from a reusable artifact
 ```
 
-Template authoring makes one provider request for the complete proposal and its
-recommended checks. The model must supply enough usable distractors; the code domain
-does not add topic-profile-specific fallbacks.
-The authoring provenance includes the frozen MCP tool catalogue used for that
-request. A missing or ambiguous allowed tool fails before the provider is called.
-Evaluation records retain the same catalogue snapshot for failed attempts, so the
-model's available tools can be inspected even when a template does not validate.
+The initial proposal and plan use one structured model response. Checking, correction,
+and final evidence acknowledgement use subsequent model calls. The application
+supplies the current candidate and request-owned distractor count, so model tool
+arguments cannot substitute a different template. Only model-selected tools run.
+The code domain requires execution-derived canonical answers and selected distractors
+before it can finalize a reusable template. A structure-only plan cannot supply them.
+Authoring does not repair answers or add fallback distractors behind the model's back.
+
+Results include `status`, `proposal`, `fixed_plan`, the frozen catalogue, all attempt
+snapshots and tool evidence, and an optional `artifact`. `checked` includes a reusable
+artifact; `needs_review` includes three failed attempts or missing finalization data;
+`error` records an interrupted/incomplete conversation. Model acknowledgement failure
+is recorded separately as `feedback_error`; it cannot erase completed evidence.
 Generating a question from a validated template uses no AI, execution tool, or
 per-question validation call.
 
@@ -89,6 +94,16 @@ uv run python -m edcraft_validator.cli author \
   --output /tmp/validated-template.json
 ```
 
+The `author` command writes the full authoring result. Exit code 0 means `checked`,
+2 means `needs_review` or a recorded workflow error, and 1 means an initial
+configuration/request/generation failure. Extract its `artifact` before passing it
+to `generate`; failed results have no reusable artifact:
+
+```bash
+jq -e '.artifact // error("No reusable artifact")' /tmp/validated-template.json \
+  > /tmp/reusable-template.json
+```
+
 All providers use the same domain-owned response schema. Parameter values arrive as
 native JSON numbers, booleans, strings, or integer arrays selected by each
 parameter's `kind`; the provider validates the response through that schema. Ollama
@@ -130,46 +145,35 @@ distractor count uses the code request model's default of three. Request data is
 validated before a model provider is created. A new domain can declare different
 request fields without changing this handler.
 
-## Validate an existing raw template
+## Check an existing candidate through MCP
 
-The repository includes examples for integers, booleans, strings, and integer
-lists:
+`validate` requires a provider: the model selects relevant checks and requests their
+execution through MCP. It does not regenerate or revise the supplied candidate.
+Every selected check runs once, even when another selected check fails. There is no
+user-selected check list or fixed validation pipeline.
 
 ```bash
 uv run python -m edcraft_validator.cli validate \
-  --domain code \
+  --domain code --provider openai --model gpt-5-mini \
   examples/templates/arithmetic_linear.json \
-  --output /tmp/validated-arithmetic-template.json
-
-uv run python -m edcraft_validator.cli validate \
-  --domain code \
-  examples/templates/loop_iterations.json \
-  --output /tmp/validated-loop-template.json
-
-uv run python -m edcraft_validator.cli validate \
-  --domain code \
-  examples/templates/conditional_boolean.json \
-  --output /tmp/validated-boolean-template.json
-
-uv run python -m edcraft_validator.cli validate \
-  --domain code \
-  examples/templates/conditional_string.json \
-  --output /tmp/validated-string-template.json
-
-uv run python -m edcraft_validator.cli validate \
-  --domain code \
-  examples/templates/list_sum.json \
-  --output /tmp/validated-list-template.json
+  --output /tmp/arithmetic-check-result.json
+jq -e '.artifact // error("No reusable artifact")' /tmp/arithmetic-check-result.json \
+  > /tmp/validated-arithmetic-template.json
 ```
 
-Validation checks every value in the template's Cartesian product. All cases are
-sent to one local Python tracing subprocess to avoid repeated startup costs.
-Rejected templates raise structured diagnostics with a stable code, relevant
-field, failing parameter values, and evidence from every completed check when
-available; messages remain human-readable. Validated templates record the validator
-version, duration, and details for each structure, expression,
-execution, answer, distractor, and rendering check. Tool-derived answers for every
-finite input combination are stored in the validated artifact.
+The output envelope and exit codes match `author`: `checked`/0, `needs_review` or a
+recorded error/2, and initial input/configuration/planning failure/1. The report
+retains the exact candidate, model-selected plan, catalogue and execution evidence.
+A reusable artifact is produced only when all selected checks pass and domain
+finalization succeeds. Missing execution-derived answers yields `needs_review`;
+the application does not insert the omitted check. Human approval is separate
+Issue 39 work; `checked` does not mean approved.
+
+For code candidates, the application requires two distractors when two are supplied,
+and three when three or more are supplied. The semantic MCP operation executes every
+finite input combination in a single local Python batch and selects only supplied
+recipes. Wrong answers or insufficient valid distractors fail without automatic
+repair or fallback recipes. Use `author` for the model's bounded correction loop.
 
 ## Generate concrete questions locally
 
@@ -200,16 +204,15 @@ Rendered misconception reasons are preserved alongside their selected distractor
   kinds are integers, booleans, bounded printable strings, and bounded integer
   lists. Each parameter has two to four unique values.
 - Exhaustive validation: at most 64 total parameter combinations.
-- Answers: the Python execution tool's result is canonical. If the provider's proposed
-  answer differs, the validator stores the corrected answers and considers the old
-  answer as a distractor candidate.
+- Answers: Python execution supplies canonical answers. A differing proposed answer
+  fails the check; only the model's explicit authoring revision can correct it.
 - Expression safety: at most 500 source characters and 100 syntax nodes; numeric
   intermediates are bounded to magnitude 1 billion, individual sequences to 100
   items, and complete nested values to a cumulative logical size of 1,000.
 - Distractors: the provider proposes misconception candidates in the same call. The
   finite-domain validator searches candidate subsets to retain the requested two
-  or three globally unique expressions with reason templates. Corrected templates
-  are still rejected when too few valid distractors remain.
+  or three globally unique expressions with reason templates. Too few valid
+  distractors fail the check; no fallback recipes are added.
 - Reproducibility: deterministic seed selection. AI-authored, validated artifacts
   also record the resolved provider and model, domain, authoring request, base prompt
   version, generation timestamp, and generation time. API keys and other secrets are
@@ -264,7 +267,8 @@ trace-event limit as defense in depth.
 ## MCP validation tools
 
 FastMCP is the authoritative registry for validation-tool names, descriptions,
-input/output schemas, versions, and implementations. Run the stdio server with:
+input/output schemas, and versions. Code-domain operations implement the checks;
+MCP wraps them with response deadlines and structured evidence. Run the stdio server with:
 
 ```bash
 uv run python -m edcraft_validator.mcp
@@ -292,15 +296,18 @@ returns `error` evidence with `CHECK_TIMEOUT`; late results are discarded. This
 cancels waiting, not the synchronous worker thread. The Python subprocess retains
 its own termination limits, and the deployment-managed job supplies the outer
 resource and lifetime limits.
-The FastMCP server is not yet connected to the application generation loop; catalogue
-resolution and application-mediated model calls are subsequent workflow changes.
+The application uses a job-scoped in-process MCP client for discovery and execution.
+Calls validate against frozen schemas and tool versions; model calls cannot override
+application-owned inputs. Both `author` and `validate` use this MCP path; no legacy
+pipeline remains.
 
 ## Architecture
 
 ```text
 edcraft_validator/
 ├── application/
-│   └── template_workflow.py       domain-agnostic authoring and expansion workflow
+│   ├── authoring_contracts.py     attempts, execution records and reviewable results
+│   └── template_workflow.py       bounded MCP authoring loop and local expansion
 ├── artifact_contracts.py          shared artifact and provenance contracts
 ├── value_comparison.py            typed answer and distractor comparison
 ├── llm/
@@ -311,7 +318,8 @@ edcraft_validator/
 │   └── ollama_provider.py         Ollama adapter
 ├── mcp/
 │   ├── evidence.py                shared pass/fail/error tool result contract
-│   ├── code_tools.py              authoritative code-tool implementations
+│   ├── client.py                  job-scoped MCP list/call adapter
+│   ├── code_tools.py              tool registrations, deadlines, and evidence
 │   └── server.py                  injectable FastMCP server factory
 ├── domains/
 │   ├── domain_contract.py         contract implemented by every domain
@@ -321,6 +329,7 @@ edcraft_validator/
 │       ├── code_types.py          code-domain aliases, topics, and answer targets
 │       ├── code_schemas.py        request, proposal, template, and question schemas
 │       ├── profiles.py            historical evaluation-profile fixtures
+│       ├── validation_operations.py domain check sequences and result details
 │       ├── code_features.py       AST feature extraction and feature predicates
 │       ├── prompt_builder.py      code prompts and structured generation request
 │       ├── proposal_response.py   typed provider response schema
@@ -331,14 +340,12 @@ edcraft_validator/
 │       ├── text_rendering.py      safe question and reason-template rendering
 │       └── checks/
 │           ├── validation_context.py typed intermediate validation values
-│           ├── check_wrapper.py   check metadata and tool-failure outcomes
 │           ├── structure_checks.py safe structure and rendering checks
 │           ├── answer_checks.py   expression checks and canonical answers
 │           ├── distractor_checks.py distractor selection and consistency
 │           └── execution_check.py execution operation with an injected tool
 ├── validation/
-│   ├── validation_contracts.py    shared validation contracts
-│   └── check_runner.py            central runner for domain-supplied checks
+│   └── validation_contracts.py    shared validation contracts
 └── tools/
     ├── python_analysis.py         supported-Python static analysis
     ├── python_execution.py        local Python tool adapter
@@ -349,7 +356,7 @@ Entry points resolve a domain and provider, then pass those objects to the
 application. The domain supplies a generation specification containing messages and
 a response schema. The provider handles its API and validates response text through
 the supplied schema; it does not import domain models. The common response contract
-is recorded as `code-template-v8+response-v2` in provenance.
+is recorded as `code-template-v13+response-v3` in provenance.
 
 ```python
 domain = create_domain("code")
@@ -357,13 +364,13 @@ request = domain.request_model.model_validate_json(request_json)
 provider = create_model_provider(
     TemplateProviderSelection(provider="openai", model="gpt-5-mini")
 )
-validated = TemplateApplication().create_validated_template(
+result = TemplateApplication().author_template(
     request, domain=domain, provider=provider
 )
 ```
 
-The [PlantUML sequence diagram](https://github.com/edcraft-org/ai/blob/docs/template-generation-flow/docs/question-generation/generate-template.puml)
-is maintained on the separate `docs/template-generation-flow` branch.
+The [sequence diagram](docs/question-generation/generate-template.puml) describes
+the implemented checking loop. User approval remains a separate planned integration.
 
 ### Adding a domain, provider, or check
 
@@ -371,103 +378,48 @@ To add a domain:
 
 1. Define its request, proposal, candidate, validated artifact, and question schemas.
    The validated artifact extends `ValidatedTemplateArtifact` for provenance.
-2. Implement `DomainModule`: build the generation specification and candidate,
-   assemble the validation context/checks/policy, finalize accepted results, and
-   generate questions. Keep the specification independent of provider names.
+2. Implement `DomainModule`: build generation and existing-candidate check-planning
+   specifications, build candidates, declare allowed MCP names and application-owned
+   tool bindings, finalize from successful evidence, and generate questions. Keep
+   these methods independent of provider names. Existing-candidate bindings receive
+   `request=None` and derive required values from the candidate.
 3. Register its factory in `domains/domain_registry.py`. Supply its request data through
    `--request-json`; the application and generic CLI handler need no changes.
 4. Test a successful workflow and rejection before finalization. The example domain
-   in `tests/test_template_workflow.py` demonstrates its own context, check, and tool;
+   in `tests/test_template_workflow.py` demonstrates its own MCP tool and finalizer;
    `tests/test_cli.py` demonstrates registration and request parsing.
 
 To use another model from an existing provider, pass `--model`. To add a provider,
-implement `ModelProvider.generate`, send the supplied messages/schema through its
-API, extract its response text, and validate it through the supplied response model.
+implement `ModelProvider.generate` and `tool_turn`: parse structured proposals,
+normalize native tool calls, and deliver correlated results through its API.
 Register its factory in `llm/provider_registry.py`; test transport errors and schema
 validation with an injected client or mocked endpoint, then run a live compatibility
 check. No domain imports belong in the adapter.
 
-To add a domain check, implement `run(context)` with a name,
-or use a function with the existing `CodeCheck` wrapper for code-domain operations.
-Add it to the domain's ordered plan after its prerequisites and include its name
-in the required-check policy when it must run. If it needs a tool, inject that tool
-into the check operation when assembling the plan. Tool adapters live under
-`tools/`; the runner never selects or calls them directly. Test tool failures as
-well as successful results. A class is useful when storing dependencies, as in
-`ExecutionCheck`; pure operations can remain functions.
+To add an authoring check, register an independent MCP tool with input/output
+schemas, a version, bounded execution, and `ToolEvidence`. Add its name to the domain
+allowlist. Tools own any internal prerequisites; the application does not construct
+a second correctness plan. Test successful results, invalid inputs and failures.
 
-### Central validation flow
+### Shared MCP checking
 
-The application asks the selected domain for a `ValidationPlan`: a typed context,
-ordered checks, and a policy listing required checks. It passes those directly to
-`ValidationPipeline.validate`, which has no code-domain imports or domain switches.
+`TemplateApplication.author_template` generates a proposal and check plan, then
+permits up to three complete checking/correction attempts. `validate_template`
+requires a provider and asks only for a check plan for its existing candidate, then
+runs one complete checking attempt. Both return the same result envelope and share
+catalogue freezing, native tool turns, argument binding, schema validation, evidence
+recording and domain finalization. Neither path automatically adds checks.
 
-```python
-plan = domain.prepare_validation(candidate, request=request)
-report = pipeline.validate(context=plan.context, checks=plan.checks, policy=plan.policy)
-report.raise_for_failure()
-validated = domain.finalize_template(plan.context, report)
-```
+Domain operations invoke low-level algorithms in their prerequisite order using a
+fresh context. They return result details or raise a structured domain failure.
+MCP translates those into `passed`, `failed`, or `error` evidence. The application
+continues through the model-selected plan after individual failures. There is no
+`ValidationPipeline`, required-check policy, fail-fast runner, or `CodeCheck` wrapper.
 
-Each check implements `run(context)` and returns a `CheckResult`. The domain owns
-its check logic and tool dependencies. The runner records names,
-durations, and evidence, and applies the supplied acceptance policy. Unexpected
-programming errors propagate rather than being reported as invalid templates.
-Code check operations under `domains/code/checks/` take only the typed context and
-return their findings.
-The small `CodeCheck` wrapper attaches metadata and preserves tool-error diagnostics;
-substantial algorithms such as distractor selection remain separate helpers.
+Unit tests exercise the domain operations directly; integration tests use actual
+MCP clients/servers with scripted model responses, alongside opt-in live evaluation.
+Execution dependencies are injected into the MCP server, not into `CodeDomain`.
 
-The code context carries parsed expressions, execution results, canonical answers,
-and selected distractors between checks. Its order is explicit: structure and
-expression checks precede execution; canonical answers precede distractor checks.
-Domain contract tests verify unique check names, required-check registration,
-prerequisite ordering, and the context type. These internally supplied plan
-invariants are not rechecked on every run. Caller-supplied models and tool outputs
-still receive boundary validation.
-There is no automatic dependency discovery or parallel check execution. Contexts
-are created fresh for each validation and are not intended to be reused.
-
-A check can return `None` when it does not apply. A required check must have a
-passing result; a missing or inapplicable required check cannot produce acceptance.
-For manual code templates, distractor selection is conditional on answer correction;
-distractor consistency is always required. Authoring also requires selection of the
-requested distractor count.
-
-Any failed or incomplete check stops subsequent checks and rejects the candidate,
-even if that check is not in the required set. Required checks must additionally
-be present in the completed evidence. There is no configurable continuation or
-advisory acceptance mode; add that only alongside a concrete quality-check workflow.
-
-Tool timeouts, trace/resource limits, and tool infrastructure failures are recorded
-as `incomplete`, preserving their diagnostic codes. Both failed and incomplete
-required checks reject the candidate. The code domain still corrects proposed
-answers using execution results and stores every canonical answer. Finalization
-packages only checked content and refuses an unaccepted report.
-
-`TemplateApplication` coordinates validation for normal application callers.
-Callers pass domain and provider objects directly; CLI and evaluation entry points
-resolve names and configuration through the registries. Validation and question
-generation need only the domain object.
-Tests use `TemplateApplication.validate_template` for end-to-end validation and
-domain plans with `ValidationPipeline.validate` for focused check behavior.
-`CodeDomain` directly assembles plans and finalizes artifacts; it does not run
-validation itself. Check operations live in focused code-domain modules, and
-`ExecutionCheck` receives its execution tool and timeout directly. Each domain calls
-its own deterministic question-generation function; model providers and tools remain
-injectable. The central runner exposes only the plan-based `validate` method.
-Individual operations should be supplied as checks; evidence belongs to the returned
-report rather than mutable runner state.
-
-### Import-path migration
-
-This layout refactor changes internal Python import paths. Update integrations that
-import implementation modules directly to the paths shown above; for example, model
-provider contracts now live in `edcraft_validator.llm.llm_contracts`, the code domain
-in `edcraft_validator.domains.code.code_domain`, and validation contracts in
-`edcraft_validator.validation.validation_contracts`. Class and function names are
-unchanged. CLI commands, flags, and serialized template/question artifacts remain
-compatible.
 
 ## Tests
 
@@ -499,7 +451,7 @@ environment details.
 
 ## Evaluate a real provider
 
-The evaluation command runs the complete authoring and local validation workflow,
+The evaluation command runs the complete model-authoring and MCP validation workflow,
 writes and flushes one JSONL record after each attempt (so completed work survives
 an interruption), reports progress on stderr, and prints pass rate, failure codes,
 and latency grouped by provider, resolved model, topic, and difficulty:

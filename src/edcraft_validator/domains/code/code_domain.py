@@ -1,33 +1,17 @@
 """Code-domain implementation of the generic domain contract."""
 
+import itertools
+import json
+
 from pydantic import BaseModel
 
 from edcraft_validator.domains.code.candidate_builder import build_code_candidate
-from edcraft_validator.domains.code.checks.answer_checks import (
-    check_canonical_answers,
-    check_expressions,
-    check_proposed_answers,
-)
-from edcraft_validator.domains.code.checks.check_wrapper import CodeCheck
-from edcraft_validator.domains.code.checks.distractor_checks import (
-    check_distractors,
-    check_selection,
-    selected_count,
-)
-from edcraft_validator.domains.code.checks.execution_check import ExecutionCheck
-from edcraft_validator.domains.code.checks.structure_checks import (
-    check_rendering,
-    check_structure,
-)
-from edcraft_validator.domains.code.checks.validation_context import (
-    CodeValidationContext,
-)
 from edcraft_validator.domains.code.code_schemas import (
-    CODE_TEMPLATE_VALIDATOR_VERSION,
     CodeQuestionInstance,
     CodeTemplateCandidate,
     CodeTemplateProposal,
     CodeTemplateRequest,
+    DistractorRecipe,
     TemplateValidationSummary,
     ValidatedCodeTemplate,
     ValidatedTemplateCase,
@@ -35,6 +19,7 @@ from edcraft_validator.domains.code.code_schemas import (
 from edcraft_validator.domains.code.prompt_builder import (
     CODE_ALLOWED_TOOL_NAMES,
     build_code_generation_request,
+    build_code_validation_request,
 )
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
 from edcraft_validator.domains.code.question_generator import generate_code_question
@@ -42,15 +27,8 @@ from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     StructuredGenerationRequest,
 )
-from edcraft_validator.tools.python_execution import (
-    LocalPythonTool,
-    PythonExecutionTool,
-)
-from edcraft_validator.validation.validation_contracts import (
-    ValidationPlan,
-    ValidationPolicy,
-    ValidationReport,
-)
+from edcraft_validator.mcp.evidence import ToolEvidence
+from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
 
 class CodeDomain:
@@ -62,23 +40,17 @@ class CodeDomain:
     validated_model = ValidatedCodeTemplate
     allowed_tool_names = CODE_ALLOWED_TOOL_NAMES
 
-    def __init__(
-        self,
-        *,
-        execution_tool: PythonExecutionTool | None = None,
-        timeout_seconds: float = 2.0,
-    ) -> None:
-        self.execution_tool = (
-            execution_tool if execution_tool is not None else LocalPythonTool()
-        )
-        self.timeout_seconds = timeout_seconds
-
     def generation_request(
         self, request: BaseModel
     ) -> StructuredGenerationRequest[PlannedGenerationResponse[CodeProposalResponse]]:
         typed_request = _require_type(request, CodeTemplateRequest)
         return build_code_generation_request(
             typed_request, offered_tool_names=self.allowed_tool_names
+        )
+
+    def validation_request(self, candidate: BaseModel) -> StructuredGenerationRequest:
+        return build_code_validation_request(
+            _require_type(candidate, CodeTemplateCandidate)
         )
 
     def build_candidate(
@@ -89,114 +61,91 @@ class CodeDomain:
             _require_type(proposal, CodeTemplateProposal),
         )
 
-    def prepare_validation(
-        self, candidate: BaseModel, *, request: BaseModel | None = None
-    ) -> ValidationPlan[CodeValidationContext]:
-        typed_candidate = _require_type(candidate, CodeTemplateCandidate)
-        num_distractors = None
-        if request is not None:
-            num_distractors = _require_type(
-                request, CodeTemplateRequest
-            ).num_distractors
-        execution_check = ExecutionCheck(self.execution_tool, self.timeout_seconds)
-        checks = (
-            CodeCheck(
-                "template_structure",
-                check_structure,
-                lambda ctx: {
-                    "topic": ctx.template.topic,
-                    "difficulty": ctx.template.difficulty,
-                },
-            ),
-            CodeCheck(
-                "expression_safety",
-                check_expressions,
-                lambda ctx: {"distractors": len(ctx.template.distractors)},
-            ),
-            CodeCheck(
-                "answer_domain",
-                check_proposed_answers,
-                lambda ctx: ctx.case_details,
-            ),
-            CodeCheck(
-                "code_execution",
-                execution_check.run,
-                lambda ctx: {
-                    **ctx.case_details,
-                    "tool": type(execution_check.execution_tool).__name__,
-                },
-            ),
-            CodeCheck(
-                "canonical_answers",
-                check_canonical_answers,
-                lambda ctx: {**ctx.case_details, "source": "code_execution"},
-            ),
-            CodeCheck(
-                "distractor_selection",
-                check_selection,
-                lambda ctx: {
-                    **ctx.case_details,
-                    "selected": selected_count(ctx),
-                },
-            ),
-            CodeCheck(
-                "distractor_consistency",
-                check_distractors,
-                lambda ctx: {
-                    **ctx.case_details,
-                    "distractors": len(ctx.candidates),
-                },
-            ),
-            CodeCheck(
-                "template_rendering",
-                check_rendering,
-                lambda ctx: ctx.case_details,
-            ),
-        )
-
-        # Manual candidates only need selection when execution corrects their answer.
-        # Consistency is always required, even when selection is inapplicable.
-        required = frozenset(
-            {
-                "template_structure",
-                "expression_safety",
-                "answer_domain",
-                "code_execution",
-                "canonical_answers",
-                "distractor_consistency",
-                "template_rendering",
-            }
-        )
-        if num_distractors is not None:
-            required |= {"distractor_selection"}
-        return ValidationPlan(
-            context=CodeValidationContext(
-                typed_candidate, num_distractors=num_distractors
-            ),
-            checks=checks,
-            policy=ValidationPolicy(required_checks=required),
-        )
-
-    def finalize_template(
-        self, context: CodeValidationContext, report: ValidationReport
-    ) -> ValidatedCodeTemplate:
-        """Package checked values only; no generation or tool calls happen here."""
-        report.raise_for_failure()
-        cases = [
-            ValidatedTemplateCase(inputs=inputs, answer=answer)
-            for inputs, answer in zip(
-                context.inputs_cases, context.canonical_answers, strict=True
+    def tool_bindings(self, request, candidate, tool_name):
+        """Application-owned values never come from model tool arguments."""
+        bindings = {
+            "candidate": _require_type(candidate, CodeTemplateCandidate).model_dump(
+                mode="json"
             )
+        }
+        if tool_name == "code_validate_answers_and_distractors":
+            bindings["required_distractors"] = (
+                min(3, len(candidate.distractors))
+                if request is None
+                else _require_type(request, CodeTemplateRequest).num_distractors
+            )
+        return bindings
+
+    def finalize_checked_template(
+        self, candidate: BaseModel, evidence: list[ToolEvidence]
+    ) -> ValidatedCodeTemplate:
+        """Package actual MCP outputs without re-execution or answer repair."""
+        template = _require_type(candidate, CodeTemplateCandidate)
+        if not evidence or any(item.status != "passed" for item in evidence):
+            raise ValueError("All selected checks must pass")
+        semantic = next(
+            (
+                item
+                for item in evidence
+                if item.tool == "code_validate_answers_and_distractors"
+            ),
+            None,
+        )
+        if semantic is None:
+            raise ValueError(
+                "Missing execution-derived canonical answers and distractors"
+            )
+        cases = [
+            ValidatedTemplateCase(inputs=item["inputs"], answer=item["answer"])
+            for item in semantic.details["canonical_answers"]
         ]
+        selected = [
+            DistractorRecipe.model_validate(item)
+            for item in semantic.details["selected_distractors"]
+        ]
+        expected_inputs = [
+            dict(
+                zip(
+                    (parameter.name for parameter in template.parameters),
+                    values,
+                    strict=True,
+                )
+            )
+            for values in itertools.product(*(p.values for p in template.parameters))
+        ]
+
+        def case_key(inputs):
+            return json.dumps(inputs, sort_keys=True)
+
+        if len(cases) != len(expected_inputs) or {
+            case_key(case.inputs) for case in cases
+        } != {case_key(inputs) for inputs in expected_inputs}:
+            raise ValueError("Canonical answers do not cover the complete input domain")
+        if len(selected) < 2 or any(
+            recipe not in template.distractors for recipe in selected
+        ):
+            raise ValueError("Selected distractors are not checked proposal recipes")
         return ValidatedCodeTemplate(
-            template=context.template.model_copy(
-                update={"answer_expression": None}, deep=True
+            template=template.model_copy(
+                update={
+                    "answer_expression": None,
+                    "distractors": selected,
+                },
+                deep=True,
             ),
             validation=TemplateValidationSummary(
-                validator_version=CODE_TEMPLATE_VALIDATOR_VERSION,
+                validator_version="mcp-code-template-v1",
                 cases_validated=len(cases),
                 validated_cases=cases,
-                evidence=report.evidence,
+                evidence=[
+                    ValidationEvidence(
+                        check=item.tool,
+                        status="passed",
+                        duration_ms=item.duration_ms,
+                        details={"tool_version": item.version, **item.details},
+                    )
+                    for item in evidence
+                ],
             ),
         )
 

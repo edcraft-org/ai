@@ -70,9 +70,6 @@ class CodeTemplateRequest(BaseModel):
         return value
 
 
-CODE_TEMPLATE_VALIDATOR_VERSION = "code-template-validator-v3"
-
-
 MAX_TEMPLATE_CASES = 64
 
 

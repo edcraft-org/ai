@@ -61,9 +61,14 @@ def build_parser() -> argparse.ArgumentParser:
     author.add_argument("--output", type=Path)
 
     validate = commands.add_parser(
-        "validate", help="exhaustively validate a raw template JSON file"
+        "validate",
+        help="model-select MCP checks for an existing candidate (no rewriting)",
     )
     validate.add_argument("--domain", choices=available_domains(), required=True)
+    validate.add_argument(
+        "--provider", choices=available_model_providers(), required=True
+    )
+    validate.add_argument("--model")
     validate.add_argument("template", type=Path)
     validate.add_argument("--output", type=Path)
 
@@ -136,19 +141,24 @@ def _handle_author(args: argparse.Namespace) -> int:
     provider = create_model_provider(
         TemplateProviderSelection(provider=args.provider, model=args.model)
     )
-    result = TemplateApplication().create_validated_template(
+    result = TemplateApplication().author_template(
         request, domain=domain, provider=provider
     )
     _write_json(result.model_dump(mode="json"), args.output)
-    return 0
+    return 0 if result.status == "checked" else 2
 
 
 def _handle_validate(args: argparse.Namespace) -> int:
     domain = create_domain(args.domain)
     candidate = domain.candidate_model.model_validate_json(args.template.read_text())
-    result = TemplateApplication().validate_template(candidate, domain=domain)
+    provider = create_model_provider(
+        TemplateProviderSelection(provider=args.provider, model=args.model)
+    )
+    result = TemplateApplication().validate_template(
+        candidate, domain=domain, provider=provider
+    )
     _write_json(result.model_dump(mode="json"), args.output)
-    return 0
+    return 0 if result.status == "checked" else 2
 
 
 def _handle_generate(args: argparse.Namespace) -> int:

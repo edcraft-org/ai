@@ -294,3 +294,106 @@ def test_openai_rejects_invalid_request_bounds(
 
     with pytest.raises(OpenAIGenerationError, match=message):
         reader("openai")
+
+
+@pytest.mark.parametrize("provider_name", ["openai", "soclaas"])
+def test_native_calls_and_correlated_results_are_preserved(provider_name):
+    from edcraft_validator.llm.llm_contracts import ModelTurn, ToolCall
+
+    captured = []
+
+    def create(**kwargs):
+        captured.append(kwargs)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content=None,
+                        tool_calls=[
+                            SimpleNamespace(
+                                id="call-1",
+                                function=SimpleNamespace(
+                                    name="check", arguments='{"required":["loop"]}'
+                                ),
+                            )
+                        ],
+                    )
+                )
+            ]
+        )
+
+    client = SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+    )
+    provider = OpenAICompatibleProvider(provider_name, client, model="tool-model")
+    tools = [
+        {
+            "type": "function",
+            "function": {"name": "check", "parameters": {"type": "object"}},
+        }
+    ]
+    turn = provider.tool_turn([{"role": "user", "content": "Check it"}], tools)
+    assert turn == ModelTurn(
+        calls=[
+            ToolCall(id="call-1", name="check", arguments_json='{"required":["loop"]}')
+        ]
+    )
+    messages = [
+        turn.message(),
+        {
+            "role": "tool",
+            "tool_call_id": "call-1",
+            "name": "check",
+            "content": '{"status":"failed"}',
+        },
+    ]
+    provider.tool_turn(messages, [])
+    assert captured[0]["tools"] == tools
+    assert captured[0]["tool_choice"] == "required"
+    assert captured[0]["parallel_tool_calls"] is False
+    assert captured[1]["messages"][0]["tool_calls"][0]["id"] == "call-1"
+    assert captured[1]["messages"][1]["tool_call_id"] == "call-1"
+    assert "name" not in captured[1]["messages"][1]
+    assert messages[1]["name"] == "check"  # Adapter does not mutate the transcript.
+    assert "tools" not in captured[1]
+
+
+def test_native_tool_timeout_is_normalized():
+    import httpx
+    from openai import APITimeoutError
+
+    from edcraft_validator.llm.llm_errors import GenerationTimeoutError
+
+    def create(**kwargs):
+        raise APITimeoutError(request=httpx.Request("POST", "https://api.example/chat"))
+
+    client = SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+    )
+    with pytest.raises(GenerationTimeoutError):
+        OpenAICompatibleProvider("openai", client, model="test").tool_turn([], [])
+
+
+def test_strict_tool_arguments_preserve_mcp_required_fields():
+    from edcraft_validator.llm.openai_compatible_provider import _strict_tools
+
+    tool = {
+        "type": "function",
+        "function": {
+            "name": "features",
+            "parameters": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "required": {"type": "array", "items": {"type": "string"}}
+                },
+                "required": ["required"],
+            },
+        },
+    }
+    strict = _strict_tools([tool])[0]
+    assert strict["function"]["strict"] is True
+    assert strict["function"]["parameters"]["required"] == ["required"]
+    assert "strict" not in tool["function"]
+    tool["function"]["parameters"]["required"] = []
+    assert "strict" not in _strict_tools([tool])[0]["function"]

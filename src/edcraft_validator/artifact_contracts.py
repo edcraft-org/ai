@@ -20,6 +20,7 @@ class TemplateAuthoringProvenance(BaseModel):
     request: dict[str, Any]
     recommended_checks: list[RecommendedCheck] = Field(default_factory=list)
     tool_catalogue: list[dict[str, Any]] = Field(default_factory=list)
+    attempts: list[dict[str, Any]] = Field(default_factory=list)
     generated_at: datetime
     generation_duration_ms: float = Field(ge=0)
 

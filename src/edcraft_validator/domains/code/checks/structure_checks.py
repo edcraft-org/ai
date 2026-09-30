@@ -11,24 +11,21 @@ from edcraft_validator.domains.code.code_schemas import (
 )
 from edcraft_validator.domains.code.text_rendering import render_template
 from edcraft_validator.tools.python_analysis import analyze_python_subset
-from edcraft_validator.validation.validation_contracts import CheckResult
 
 
-def check_structure(context: CodeValidationContext) -> CheckResult:
+def check_structure(context: CodeValidationContext) -> None:
     """Validate code, profile, parameters, and the question template."""
     _validate_structure(context.template, context.names)
     if context.num_distractors is not None and not 2 <= context.num_distractors <= 3:
         raise ValueError("num_distractors must be 2 or 3")
-    return CheckResult()
 
 
-def check_rendering(context: CodeValidationContext) -> CheckResult:
+def check_rendering(context: CodeValidationContext) -> None:
     """Render every learner-facing template for every input case."""
     for inputs in context.inputs_cases:
         render_template(context.template.question_template, inputs, require_all=True)
         for recipe in context.template.distractors:
             render_template(recipe.reason_template, inputs)
-    return CheckResult()
 
 
 def _validate_structure(

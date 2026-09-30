@@ -7,6 +7,7 @@ import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
+from edcraft_validator.domains.code import validation_operations
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.mcp import code_tools
 from edcraft_validator.mcp.code_tools import CODE_TOOL_VERSION
@@ -206,13 +207,13 @@ async def test_mcp_deadline_returns_error_without_waiting_for_synchronous_work(
             )
 
     if tool_name != "code_validate_answers_and_distractors":
-        original_check = code_tools.check_structure
+        original_check = validation_operations.check_structure
 
         def slow_structure(context):
             block()
             return original_check(context)
 
-        monkeypatch.setattr(code_tools, "check_structure", slow_structure)
+        monkeypatch.setattr(validation_operations, "check_structure", slow_structure)
         monkeypatch.setattr(code_tools, "STATIC_TOOL_TIMEOUT_SECONDS", 0.1)
 
     server = create_validation_server(

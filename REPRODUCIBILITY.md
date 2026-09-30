@@ -44,10 +44,25 @@ available. Mocked adapter tests verify request/schema/parser wiring; only a live
 verifies endpoint compatibility. Inspect the recorded failure stage and code to
 distinguish transport failures, malformed responses, and rejected model proposals.
 
-## Target workflow evaluation
+## Model-directed workflow evaluation
 
-The [agreed workflow](docs/question-generation/README.md) adds free-form prompts and
-model-selected check plans; it is not implemented on this docs branch yet.
+The [workflow](docs/question-generation/README.md) implements free-form prompts,
+model-selected checks, application-owned candidate injection, and three-attempt
+correction. Durable approval remains a separate integration.
+
+Run the small real-provider set (three difficulties) and an explicitly labelled
+correction drill. The drill replaces the first real proposal's answer expression
+with `(original_expression) + 1`, then uses real model calls and MCP evidence for correction. It is
+not an unbiased model-quality measurement.
+
+```bash
+uv run python scripts/evaluate_authoring_loop.py --env-file .env \
+  --provider openai --model gpt-5-mini \
+  --output .artifacts/authoring-natural.jsonl
+uv run python scripts/evaluate_authoring_loop.py --env-file .env \
+  --provider openai --model gpt-5-mini --correction-drill \
+  --output .artifacts/authoring-correction.jsonl
+```
 
 For each future evaluation attempt, retain the original prompt, domain, exact model
 and provider settings, prompt/response-schema versions, allowed capability catalogue
@@ -66,3 +81,21 @@ Test the planner with recorded catalogues and the validator with saved plans/res
 then run live end-to-end evaluations through the MCP server and each supported model.
 Changing the candidate requires new evidence. Replaying generation is not guaranteed
 to reproduce model output, but stored artifacts and seeds must reproduce questions.
+
+
+## Existing-candidate MCP validation
+
+`validate` now requires a provider and returns a result envelope. It uses one
+model-selected checking attempt on the exact supplied candidate, without revisions:
+
+```bash
+uv run --env-file .env python -m edcraft_validator.cli validate \
+  --domain code --provider openai --model gpt-5-mini \
+  examples/templates/arithmetic_linear.json \
+  --output .artifacts/existing-candidate-result.json
+```
+
+Exit 0 means a reusable artifact is present; exit 2 preserves unsuccessful checking
+results. Extract `artifact` for seeded generation. Candidate validation and authoring
+both use MCP; the old pipeline and silent answer/distractor repair are removed.
+Human approval and version binding are tracked separately in Issue 39.
