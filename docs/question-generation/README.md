@@ -1,9 +1,10 @@
 # Template generation workflow
 
-Status: agreed target design before implementation, 23 September 2026.
-This document and [the sequence diagram](generate-template.puml) define the target
-workflow. The code on this documentation branch still implements the earlier
-workflow. Product scope and milestone order are in [GOALS.md](../../GOALS.md).
+Status: agreed target design, 23 September 2026. This document and
+[the sequence diagram](generate-template.puml) define the target workflow.
+Implementation through catalogue resolution (#37) is in place; model-directed
+execution and retries (#38) are next. Product scope and milestone order are in
+[GOALS.md](../../GOALS.md).
 
 ## Decisions
 
@@ -101,10 +102,10 @@ actual evidence. Provider adapters normalize native tool-call formats into the
 shared application representation. Domains supply schemas and never supply parser
 callbacks.
 
-During the #35 transition, the recommendation uses the existing validation-check
-names and is recorded in provenance, while the application still runs its complete
-current validation pipeline. Issues #36 to #38 replace those interim names with the
-authoritative MCP catalogue and execute the fixed plan.
+The recommendation now uses names resolved from the authoritative MCP catalogue,
+and provenance records the complete frozen definitions. The application still runs
+its complete current validation pipeline. Issue #38 will execute the fixed plan
+through MCP and collect model-directed tool arguments.
 
 ## Tool catalogue
 

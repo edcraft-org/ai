@@ -12,6 +12,7 @@ from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     StructuredGenerationRequest,
 )
+from edcraft_validator.mcp.catalogue import FastMcpToolCatalogue
 from edcraft_validator.validation.validation_contracts import (
     CheckResult,
     ValidationPlan,
@@ -48,6 +49,7 @@ class PositiveValueCheck:
 
 class ExampleDomain:
     name = "example"
+    allowed_tool_names = ("positive_value",)
     request_model = ExampleRequest
     candidate_model = ExampleCandidate
     validated_model = ExampleValidated
@@ -108,6 +110,17 @@ def example_registry(monkeypatch):
         provider_registry._MODEL_PROVIDER_FACTORIES,
         "example-provider",
         create_provider,
+    )
+    monkeypatch.setattr(
+        FastMcpToolCatalogue,
+        "list_tools",
+        lambda self: [
+            {
+                "name": "positive_value",
+                "description": "Check positive values",
+                "inputSchema": {"type": "object"},
+            }
+        ],
     )
     return provider_models
 

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -39,6 +40,29 @@ class PlannedGenerationResponse[ProposalT: BaseModel](BaseModel):
         return self
 
 
+@dataclass(frozen=True, slots=True)
+class ToolCatalogueSnapshot:
+    """Immutable MCP definitions offered for one authoring job."""
+
+    definitions_json: str
+    names: tuple[str, ...]
+
+    @classmethod
+    def from_definitions(
+        cls, definitions: tuple[dict[str, Any], ...]
+    ) -> ToolCatalogueSnapshot:
+        return cls(
+            definitions_json=json.dumps(
+                definitions, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            ),
+            names=tuple(definition["name"] for definition in definitions),
+        )
+
+    def definitions(self) -> list[dict[str, Any]]:
+        """Return a writable copy for JSON provenance and external consumers."""
+        return json.loads(self.definitions_json)
+
+
 @dataclass(frozen=True)
 class StructuredGenerationRequest[ProposalT: BaseModel]:
     """Domain-owned prompt and response schema."""
@@ -48,6 +72,7 @@ class StructuredGenerationRequest[ProposalT: BaseModel]:
     prompt_version: str
     schema_name: str = "template_proposal"
     offered_tool_names: tuple[str, ...] = ()
+    tool_catalogue: ToolCatalogueSnapshot | None = None
 
 
 class ModelProvider(Protocol):

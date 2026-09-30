@@ -50,7 +50,11 @@ class StubProvider:
     def generate(self, request):
         return PlannedGenerationResponse(
             proposal=self.result,
-            checks=[RecommendedCheck(name="code_execution", arguments={})],
+            checks=[
+                RecommendedCheck(
+                    name="code_validate_answers_and_distractors", arguments={}
+                )
+            ],
         )
 
 
@@ -75,6 +79,11 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
     assert report.attempts[1].failure_code == "UNUSED_PARAMETER"
     assert report.attempts[1].validation_evidence[-1].status == "failed"
     assert report.attempts[1].validation_evidence[-1].check == "template_structure"
+    assert [tool["name"] for tool in report.attempts[1].tool_catalogue] == [
+        "code_verify_template_structure",
+        "code_validate_answers_and_distractors",
+        "code_require_features",
+    ]
     assert report.summary.attempts == 2
     assert report.summary.validated == 1
     assert report.summary.pass_rate == 0.5
@@ -87,6 +96,7 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
     assert len(records) == 2
     assert records[0]["validated_template"]["authoring"]["model"] == "stub-model"
     assert records[1]["failure_code"] == "UNUSED_PARAMETER"
+    assert records[1]["tool_catalogue"] == report.attempts[1].tool_catalogue
     assert records[1]["validation_evidence"][-1]["issues"][0]["code"] == (
         "UNUSED_PARAMETER"
     )
@@ -137,3 +147,31 @@ def test_evaluation_classifies_provider_setup_failure() -> None:
     assert attempt.status == "failed"
     assert attempt.failure_stage == "configuration"
     assert attempt.failure_code == "generation_error"
+    assert attempt.tool_catalogue == []
+
+
+def test_evaluation_retains_catalogue_when_model_generation_fails() -> None:
+    class FailingProvider:
+        provider = "stub"
+        model = "stub-model"
+
+        def generate(self, request):
+            raise GenerationError("generation failed")
+
+    report = TemplateEvaluator(
+        provider_factory=lambda selection: FailingProvider()
+    ).evaluate(
+        provider="stub",
+        model="stub-model",
+        topics=("arithmetic",),
+        difficulties=("beginner",),
+        repetitions=1,
+    )
+
+    attempt = report.attempts[0]
+    assert attempt.failure_stage == "generation"
+    assert [tool["name"] for tool in attempt.tool_catalogue] == [
+        "code_verify_template_structure",
+        "code_validate_answers_and_distractors",
+        "code_require_features",
+    ]

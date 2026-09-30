@@ -361,8 +361,8 @@ def test_prompt_offers_current_validation_check_names() -> None:
         )
     )
 
-    assert "template_structure" in prompt
-    assert "code_execution" in prompt
+    assert "code_verify_template_structure" in prompt
+    assert "code_validate_answers_and_distractors" in prompt
     assert "do not invent names" in prompt
 
 

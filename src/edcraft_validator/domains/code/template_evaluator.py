@@ -7,7 +7,7 @@ import time
 from collections import Counter
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -21,9 +21,14 @@ from edcraft_validator.domains.code.code_schemas import (
 from edcraft_validator.domains.code.code_types import Difficulty, ProgrammingTopic
 from edcraft_validator.domains.code.profiles import code_template_profile
 from edcraft_validator.domains.code.prompt_builder import build_code_generation_request
-from edcraft_validator.llm.llm_contracts import ModelProvider, TemplateProviderSelection
+from edcraft_validator.llm.llm_contracts import (
+    ModelProvider,
+    TemplateProviderSelection,
+    ToolCatalogueSnapshot,
+)
 from edcraft_validator.llm.llm_errors import GenerationError
 from edcraft_validator.llm.provider_registry import create_model_provider
+from edcraft_validator.mcp.catalogue import ToolCatalogueError
 from edcraft_validator.tools.python_execution import PythonExecutionTool
 from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
@@ -57,6 +62,7 @@ class TemplateEvaluationAttempt(BaseModel):
     ) = None
     failure_code: str | None = None
     error: str | None = None
+    tool_catalogue: list[dict[str, Any]] = Field(default_factory=list)
     validation_evidence: list[ValidationEvidence] = Field(default_factory=list)
     validated_template: ValidatedCodeTemplate | None = None
 
@@ -171,6 +177,12 @@ class TemplateEvaluator:
         model_provider: ModelProvider | None = None
         prompt_version = None
         resolved_model = selection.model or "<provider-default>"
+        catalogue_snapshot: ToolCatalogueSnapshot | None = None
+
+        def record_catalogue(snapshot: ToolCatalogueSnapshot) -> None:
+            nonlocal catalogue_snapshot
+            catalogue_snapshot = snapshot
+
         try:
             model_provider = self.provider_factory(selection)
             resolved_model = model_provider.model
@@ -181,6 +193,7 @@ class TemplateEvaluator:
                 request,
                 domain=self.domain,
                 provider=model_provider,
+                on_catalogue_resolved=record_catalogue,
             )
         except Exception as exc:
             stage, code = _classify_failure(exc, model_provider is not None)
@@ -196,6 +209,9 @@ class TemplateEvaluator:
                 failure_stage=stage,
                 failure_code=code,
                 error=str(exc),
+                tool_catalogue=(
+                    catalogue_snapshot.definitions() if catalogue_snapshot else []
+                ),
                 validation_evidence=(
                     exc.evidence if isinstance(exc, TemplateValidationError) else []
                 ),
@@ -214,6 +230,9 @@ class TemplateEvaluator:
             prompt_version=provenance.base_prompt_version,
             generation_duration_ms=provenance.generation_duration_ms,
             total_duration_ms=(time.perf_counter() - started) * 1000,
+            tool_catalogue=(
+                catalogue_snapshot.definitions() if catalogue_snapshot else []
+            ),
             validation_evidence=validated.validation.evidence,
             validated_template=validated,
         )
@@ -227,6 +246,8 @@ def _classify_failure(
     ],
     str,
 ]:
+    if isinstance(error, ToolCatalogueError):
+        return "configuration", "MCP_CATALOGUE_ERROR"
     if isinstance(error, GenerationError):
         stage = "generation" if generator_created else "configuration"
         return stage, error.category

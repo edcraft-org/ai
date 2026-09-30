@@ -1,6 +1,8 @@
 """Domain-agnostic template authoring, validation, and expansion."""
 
 import time
+from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime
 
 from pydantic import BaseModel
@@ -13,8 +15,14 @@ from edcraft_validator.domains.domain_contract import DomainModule
 from edcraft_validator.llm.llm_contracts import (
     ModelProvider,
     PlannedGenerationResponse,
+    ToolCatalogueSnapshot,
 )
 from edcraft_validator.llm.llm_errors import GenerationSchemaError
+from edcraft_validator.mcp.catalogue import (
+    FastMcpToolCatalogue,
+    ToolCatalogue,
+    resolve_allowed_tools,
+)
 from edcraft_validator.validation.check_runner import ValidationPipeline
 
 
@@ -25,8 +33,12 @@ class TemplateApplication:
         self,
         *,
         validator: ValidationPipeline | None = None,
+        tool_catalogue: ToolCatalogue | None = None,
     ) -> None:
         self.validator = validator if validator is not None else ValidationPipeline()
+        self.tool_catalogue = (
+            tool_catalogue if tool_catalogue is not None else FastMcpToolCatalogue()
+        )
 
     def create_validated_template(
         self,
@@ -34,8 +46,17 @@ class TemplateApplication:
         *,
         domain: DomainModule,
         provider: ModelProvider,
+        on_catalogue_resolved: Callable[[ToolCatalogueSnapshot], None] | None = None,
     ) -> ValidatedTemplateArtifact:
-        generation_request = domain.generation_request(request)
+        tools = resolve_allowed_tools(domain.allowed_tool_names, self.tool_catalogue)
+        snapshot = ToolCatalogueSnapshot.from_definitions(tools)
+        if on_catalogue_resolved is not None:
+            on_catalogue_resolved(snapshot)
+        generation_request = replace(
+            domain.generation_request(request),
+            offered_tool_names=snapshot.names,
+            tool_catalogue=snapshot,
+        )
         generation_started = time.perf_counter()
         response = provider.generate(generation_request)
         generation_duration_ms = (time.perf_counter() - generation_started) * 1000
@@ -57,6 +78,7 @@ class TemplateApplication:
             base_prompt_version=generation_request.prompt_version,
             request=request.model_dump(mode="json"),
             recommended_checks=response.checks,
+            tool_catalogue=snapshot.definitions(),
             generated_at=datetime.now(UTC),
             generation_duration_ms=generation_duration_ms,
         )

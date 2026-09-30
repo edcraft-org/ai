@@ -14,6 +14,7 @@ from edcraft_validator.llm.llm_errors import (
     GenerationTimeoutError,
     GenerationTransportError,
 )
+from edcraft_validator.llm.tool_context import generation_messages
 
 
 class OllamaProvider:
@@ -28,7 +29,7 @@ class OllamaProvider:
     ) -> ProposalT:
         try:
             content = self._ollama_request(
-                request.messages,
+                generation_messages(request),
                 request.response_model.model_json_schema(),
             )
             if not content:

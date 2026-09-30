@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -6,7 +7,10 @@ from pydantic import BaseModel
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
 from edcraft_validator.domains.code.prompt_builder import build_code_generation_request
-from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
+from edcraft_validator.llm.llm_contracts import (
+    StructuredGenerationRequest,
+    ToolCatalogueSnapshot,
+)
 from edcraft_validator.llm.llm_errors import (
     GenerationResponseError,
     GenerationSchemaError,
@@ -116,6 +120,29 @@ def test_generates_template_using_strict_structured_outputs(provider_name) -> No
     assert "Create an arithmetic question" in messages[1]["content"]
     assert "at least 3 distractor candidates" in messages[1]["content"]
     assert "Use native JSON values" in messages[1]["content"]
+
+
+def test_openai_receives_complete_frozen_mcp_definition() -> None:
+    tool = {
+        "name": "code_verify_template_structure",
+        "description": "Check structure",
+        "inputSchema": {"type": "object", "properties": {"candidate": {}}},
+        "outputSchema": {"type": "object", "properties": {"status": {}}},
+        "_meta": {"fastmcp": {"version": "1.0"}},
+    }
+    client = client_with(code_response())
+    provider = OpenAICompatibleProvider("openai", client, model="test-model")
+
+    provider.generate(
+        replace(
+            generation_request(),
+            tool_catalogue=ToolCatalogueSnapshot.from_definitions((tool,)),
+        )
+    )
+
+    messages = client.chat.completions.arguments["messages"]
+    assert json.loads(messages[1]["content"].split("\n", 1)[1]) == [tool]
+    assert messages[1]["role"] == "system"
 
 
 def test_provider_accepts_a_schema_from_another_domain() -> None:
