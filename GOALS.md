@@ -252,7 +252,6 @@ finalization packages canonical answers from successful execution evidence. The 
 validation pipeline has been removed. Existing-candidate `validate` now requires a
 model provider, selects checks through the model, and runs one MCP checking attempt
 without rewriting the supplied candidate.
-See the [Issue 38 implementation report](docs/question-generation/issue-38-results.md).
 Durable artifact/approval binding (#39) and broader provider evaluation (#40) remain
 Milestone 2 follow-ups; technical success does not imply human approval.
 

@@ -6,10 +6,6 @@ Implementation includes catalogue resolution, model-directed MCP execution and
 three-attempt correction (#38). Artifact approval/persistence remains follow-up work. Product scope and milestone order are in
 [GOALS.md](../../GOALS.md).
 
-The [Issue 38 code trace and migration proposal](issue-38-architecture.md) maps the
-pre-change implementation to this target. See the [implementation report](issue-38-results.md)
-for the delivered behavior and verification.
-
 ## Decisions
 
 1. Every request contains a domain, a free-form prompt, and a required `beginner`,
