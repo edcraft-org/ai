@@ -55,6 +55,22 @@ per-question validation call.
 approved the content. The future frontend will present the validated template for a
 human approve/reject decision before allowing question generation.
 
+Successful authoring and existing-candidate checking assign a new `artifact_id`
+after finalization. The record includes the final proposal, original fixed plan,
+frozen catalogue, every attempt and its evidence, original request, and provider/model
+settings. A fresh check run receives a new ID even when its proposal is unchanged.
+This ID can identify the record that a user later approves; it is not a signature.
+
+To preview an artifact, use the same `generate` command with representative seeds.
+Loading the saved artifact and using the same seed reproduces the question locally.
+The existing template ID controls parameter selection. Domain finalization packages
+checked answers and selected recipes without changing code or question wording.
+The final model acknowledgement belongs to checking, before local finalization.
+
+Approval and revision enforcement are deferred to Issue 40. Internal artifacts are
+trusted application data. Old authoring records missing required provenance fields
+must be regenerated; there is no schema migration during development.
+
 ## Setup
 
 ```bash
@@ -167,7 +183,7 @@ retains the exact candidate, model-selected plan, catalogue and execution eviden
 A reusable artifact is produced only when all selected checks pass and domain
 finalization succeeds. Missing execution-derived answers yields `needs_review`;
 the application does not insert the omitted check. Human approval is separate
-Issue 39 work; `checked` does not mean approved.
+Issue 40 work; `checked` does not mean approved.
 
 For code candidates, the application requires two distractors when two are supplied,
 and three when three or more are supplied. The semantic MCP operation executes every
@@ -213,10 +229,13 @@ Rendered misconception reasons are preserved alongside their selected distractor
   finite-domain validator searches candidate subsets to retain the requested two
   or three globally unique expressions with reason templates. Too few valid
   distractors fail the check; no fallback recipes are added.
-- Reproducibility: deterministic seed selection. AI-authored, validated artifacts
-  also record the resolved provider and model, domain, authoring request, base prompt
-  version, generation timestamp, and generation time. API keys and other secrets are
-  never stored.
+- Reproducibility: deterministic seed selection and an ID for each checked artifact.
+  Artifacts retain the resolved provider/model, non-secret request settings, domain,
+  prompt/difficulty, prompt version, final proposal, fixed plan, catalogue, and
+  complete attempt evidence. Ollama snapshots temperature and token
+  limits when constructed; OpenAI-compatible adapters record that sampling uses
+  provider defaults rather than claiming an unspecified temperature or seed.
+  API keys and other secrets are never stored.
 
 The model selects one of the tracer's supported answer targets:
 
@@ -390,8 +409,10 @@ To add a domain:
    `tests/test_cli.py` demonstrates registration and request parsing.
 
 To use another model from an existing provider, pass `--model`. To add a provider,
-implement `ModelProvider.generate` and `tool_turn`: parse structured proposals,
-normalize native tool calls, and deliver correlated results through its API.
+implement `ModelProvider.generate`, `tool_turn`, and `generation_settings`: parse
+structured proposals, normalize native tool calls, deliver correlated results,
+and report only non-secret effective settings. Keep resolved settings consistent
+across generation and checking turns.
 Register its factory in `llm/provider_registry.py`; test transport errors and schema
 validation with an injected client or mocked endpoint, then run a live compatibility
 check. No domain imports belong in the adapter.

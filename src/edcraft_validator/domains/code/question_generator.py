@@ -73,6 +73,7 @@ def generate_code_question(
     )
     return CodeQuestionInstance(
         template_id=template.template_id,
+        artifact_id=validated.artifact_id,
         seed=seed,
         parameters=inputs,
         question=question,

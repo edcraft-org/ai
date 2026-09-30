@@ -4,6 +4,7 @@ import copy
 import hashlib
 import json
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -136,6 +137,7 @@ class TemplateApplication:
             response = provider.generate(generation_request)
             generation_duration_ms = (time.perf_counter() - started) * 1000
             self._validate_response(response, snapshot.names, plan_only=validating)
+            provider_settings = copy.deepcopy(provider.generation_settings())
             plan = tuple(check.name for check in response.checks)
             result = AuthoringResult(
                 status="error",
@@ -260,10 +262,12 @@ class TemplateApplication:
                         provenance = TemplateAuthoringProvenance(
                             provider=provider.provider,
                             model=provider.model,
+                            provider_settings=provider_settings,
                             domain=domain.name,
                             base_prompt_version=generation_request.prompt_version,
                             request=copy.deepcopy(request_payload),
-                            recommended_checks=response.checks,
+                            proposal=copy.deepcopy(result.proposal),
+                            fixed_plan=list(plan),
                             tool_catalogue=snapshot.definitions(),
                             attempts=[
                                 item.model_dump(mode="json") for item in result.attempts
@@ -272,7 +276,10 @@ class TemplateApplication:
                             generation_duration_ms=generation_duration_ms,
                         )
                         result.artifact = artifact.model_copy(
-                            update={"authoring": provenance}
+                            update={
+                                "artifact_id": uuid.uuid4().hex,
+                                "authoring": provenance,
+                            }
                         )
                         result.status = "checked"
                         return result

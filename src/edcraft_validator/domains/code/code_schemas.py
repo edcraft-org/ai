@@ -283,6 +283,7 @@ class CodeQuestionInstance(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     template_id: str
+    artifact_id: str | None = None
     seed: int
     parameters: dict[str, ParameterValue]
     question: GeneratedQuestion

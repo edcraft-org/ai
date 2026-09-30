@@ -6,6 +6,9 @@ from edcraft_validator.llm.llm_contracts import CheckPlanResponse, ModelTurn, To
 
 
 class RequestPendingTools:
+    def generation_settings(self):
+        return {"mode": "scripted"}
+
     def tool_turn(self, messages, tools):
         return ModelTurn(
             calls=[

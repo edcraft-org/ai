@@ -90,7 +90,8 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
     monkeypatch.delenv("OLLAMA_TEMPERATURE", raising=False)
 
-    result = OllamaProvider(model="qwen2.5").generate(generation_request())
+    provider = OllamaProvider(model="qwen2.5")
+    result = provider.generate(generation_request())
 
     assert result.proposal.entry_function == "calculate"
     assert result.proposal.parameters[0].values == [1, 2]
@@ -111,6 +112,20 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     assert "Create an arithmetic question" in messages[1]["content"]
     assert "at least 3 distractor candidates" in messages[1]["content"]
     assert "Use native JSON values" in messages[1]["content"]
+    assert captured["timeout"] == 300
+    assert provider.generation_settings() == {
+        "options": payload["options"],
+        "timeout_seconds": captured["timeout"],
+    }
+
+    # The check loop and its provenance use the same resolved settings even if
+    # process configuration changes between model turns.
+    monkeypatch.setenv("OLLAMA_TEMPERATURE", "1")
+    monkeypatch.setenv("OLLAMA_NUM_PREDICT", "4096")
+    monkeypatch.setenv("OLLAMA_TIMEOUT_SECONDS", "10")
+    provider.tool_turn([], [])
+    assert captured["payload"]["options"] == provider.generation_settings()["options"]
+    assert captured["payload"]["options"]["temperature"] == 0
     assert captured["timeout"] == 300
 
 
