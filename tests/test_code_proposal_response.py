@@ -35,7 +35,7 @@ def test_generation_request_uses_one_typed_response_contract() -> None:
     )
 
     assert request.response_model == PlannedGenerationResponse[CodeProposalResponse]
-    assert request.prompt_version == "code-template-v15+response-v3"
+    assert request.prompt_version == "code-template-v16+response-v3"
     assert "Create a question about arithmetic" in request.messages[1]["content"]
     assert "Use native JSON values" in request.messages[1]["content"]
     assert (

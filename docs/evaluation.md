@@ -4,15 +4,22 @@ This guide covers live model calls and workflow evaluation. Run commands from th
 repository root. Keep local settings in `.env` and results in `.artifacts/`;
 neither should be committed. Basic test commands are in the [README](../README.md#tests).
 
-## Live OpenAI smoke test
+## Live workflow smoke tests
 
 ```bash
 RUN_OPENAI_LIVE_TESTS=1 uv run --env-file .env pytest -m openai_live -q
+
+RUN_OLLAMA_LIVE_TESTS=1 uv run --env-file .env pytest -m ollama_live -q
 ```
 
-This requires `OPENAI_API_KEY`. Same-repository PRs also run a live OpenAI evaluation
-in CI and upload its JSONL record. A smoke test verifies one real workflow; it does
-not establish general provider reliability.
+OpenAI requires `OPENAI_API_KEY`; Ollama requires a running server and `OLLAMA_MODEL`.
+Both tests author a template, save and replay it, edit its wording, check the edited
+template, and generate a question from it. Ollama uses reviewed finite inputs
+to test the workflow separately from unconstrained question quality; the original
+OpenAI smoke request leaves parameter selection to the model.
+Same-repository PRs also run a live OpenAI
+evaluation in CI and upload its JSONL record. A smoke test verifies one real workflow;
+it does not establish general provider reliability.
 
 ## Workflow evaluation
 
@@ -42,7 +49,7 @@ For the historical topic/difficulty fixtures, use the CLI evaluator:
 
 ```bash
 uv run python -m edcraft_validator.cli evaluate \
-  --domain code --provider ollama --model qwen2.5-coder:14b \
+  --domain code --provider ollama --model qwen3.5:9b \
   --topic arithmetic --difficulty easy --repetitions 1 \
   --output .artifacts/ollama-arithmetic-easy.jsonl
 ```

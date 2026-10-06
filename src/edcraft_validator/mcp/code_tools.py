@@ -39,7 +39,7 @@ from edcraft_validator.tools.python_execution import PythonExecutionTool
 from edcraft_validator.validation.validation_contracts import ValidationFailure
 from edcraft_validator.value_comparison import equivalent
 
-CODE_TOOL_VERSION = "1.0.3"
+CODE_TOOL_VERSION = "1.0.4"
 STATIC_TOOL_TIMEOUT_SECONDS = 5.0
 
 

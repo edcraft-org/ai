@@ -13,7 +13,7 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v15"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v16"
 
 
 def build_template_prompt(
@@ -40,9 +40,13 @@ Return at least {request.num_distractors} distractor candidates that model real
 misconceptions and remain type-compatible, distinct from the answer, and mutually
 distinct for the complete Cartesian product. In reason_template, use only plain
 parameter placeholders such as `{{n}}`; never put expressions inside braces.
+Choose parameter values that keep the proposed misconceptions distinct. Values
+such as zero, one, or equal operands can make a wrong operation yield the right
+answer. You may change finite parameter values when consistent with the author
+request, or supply extra distractor candidates (up to five), to avoid collisions.
 
 Recommend a nonempty fixed subset of the available MCP tools using their supplied
-descriptions and schemas. Use each tool name at most once and do not invent names.
+descriptions. Use each tool name at most once and do not invent names.
 Return an empty `arguments` object for every check in this first response. Tool
 arguments and execution are handled in later model turns. The application supplies
 the current candidate and required distractor count. Select tools that obtain
@@ -86,7 +90,8 @@ Rules:
   numeric constants, arithmetic, comparisons, boolean operators, or a conditional
   expression. String constants, list literals, indexing, and the one-argument functions
   len, sum, min, max, sorted, all, and any are also supported. Do not use methods or
-  other function calls.
+  other function calls. Expressions use bare parameter names, for example `a + b`.
+  Placeholder braces belong only in question_template and reason_template.
 - question_template must name the entry function and use plain placeholders for every
   declared parameter. Its wording must match answer_target.
 - Each distractor candidate must represent a specific misconception. The local
@@ -94,11 +99,16 @@ Rules:
   the answer for every parameter combination. Supply enough usable candidates.
   No fallback distractors or answer corrections are inserted. Failed checks return
   evidence so you can revise the proposal; check membership stays fixed.
+  A revision may change distractor recipes and finite parameter values while
+  preserving the author request. Check the entire Cartesian product, not only the
+  failing example reported by a tool.
 - reason_template explains its misconception and may use only a bare parameter
   placeholder such as `{n}`. Do not place arithmetic or any other expression inside
   braces.
-- During proposal generation/revision, return the combined proposal-and-check-plan
-  schema without locally derived fields. During checking turns, use native tool
+- During initial generation, return the combined proposal-and-check-plan schema.
+  During revision, return only proposal fields matching the supplied schema; the
+  application keeps the original check plan. Do not include locally derived fields.
+  During checking turns, use native tool
   calls and supply their required arguments. After checking ends, acknowledge evidence.
 """
 
@@ -107,6 +117,11 @@ RESPONSE_GUIDANCE = """\
 Use native JSON values matching each parameter's `kind`: integers use JSON numbers;
 booleans use JSON booleans; strings use JSON strings; integer_list values use nested
 JSON arrays of numbers. Do not encode numbers, booleans, or arrays as strings.
+
+Expression field examples: "answer_expression": "a + b" and a distractor's
+"expression": "a - b". Only text templates use placeholders, for example
+"question_template": "What does add({a}, {b}) return?". Expressions are evaluated
+as Python using the parameter values, while text templates are formatted as text.
 """
 
 

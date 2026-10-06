@@ -60,6 +60,21 @@ def test_checking_rejects_wrong_answers_without_repair(candidate):
     assert candidate.answer_expression == "a + b + c"
 
 
+@pytest.mark.parametrize("field", ["answer_expression", "distractors[0].expression"])
+def test_expression_syntax_feedback_names_the_field_and_source(candidate, field):
+    source = "{a} + {b}"
+    if field == "answer_expression":
+        candidate.answer_expression = source
+    else:
+        candidate.distractors[0].expression = source
+    with pytest.raises(ValidationFailure) as caught:
+        verify_template_structure(candidate)
+    assert caught.value.field == field
+    assert source in str(caught.value)
+    assert "bare parameter names" in str(caught.value)
+    assert "Placeholder braces belong only in text templates" in str(caught.value)
+
+
 def test_checking_reports_missing_features(candidate):
     with pytest.raises(ValidationFailure) as caught:
         require_features(candidate, ["loop"])

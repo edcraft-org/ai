@@ -17,6 +17,17 @@ class CheckExecution(BaseModel):
     evidence: ToolEvidence | None = None
     error: str | None = None
 
+    def model_feedback(self) -> dict[str, Any]:
+        """Send verdicts and repair context; retain full records in the application."""
+        evidence = None
+        if self.evidence is not None:
+            evidence = self.evidence.model_dump(
+                mode="json", include={"status", "findings", "details"}
+            )
+            if self.evidence.status == "passed":
+                evidence.pop("details")
+        return {"tool": self.tool, "error": self.error, "evidence": evidence}
+
     @property
     def passed(self) -> bool:
         return (

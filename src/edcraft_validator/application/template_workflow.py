@@ -31,7 +31,7 @@ from edcraft_validator.llm.llm_contracts import (
     ToolCatalogueSnapshot,
 )
 from edcraft_validator.llm.llm_errors import GenerationSchemaError
-from edcraft_validator.llm.tool_context import generation_messages
+from edcraft_validator.llm.tool_context import callable_tool, generation_messages
 from edcraft_validator.mcp.catalogue import (
     ToolCatalogue,
     resolve_domain_tools,
@@ -281,22 +281,41 @@ class TemplateApplication:
                         )
                         result.status = "checked"
                         return result
-                    messages.append(
+                    # Structured revisions need the latest proposal and explicit
+                    # feedback, rather than a growing native-tool conversation.
+                    messages = generation_messages(generation_request) + [
+                        {"role": "assistant", "content": response.model_dump_json()},
                         {
                             "role": "user",
-                            "content": (
-                                "The attempt failed. Revise using all tool evidence. "
-                                "Return the combined proposal/check-plan schema again, "
-                                "with exactly "
-                                "the same check names and empty planning arguments. "
-                                "Fixed plan: " + json.dumps(plan)
+                            "content": json.dumps(
+                                {
+                                    "instruction": (
+                                        "The current proposal failed. Fix each failure "
+                                        "reported below. "
+                                        "Treat results as authoritative. "
+                                        "Revise any authored fields needed to fix "
+                                        "the failures; preserve the author request. "
+                                        "Do not repeat "
+                                        "the failed proposal. Return only the revised "
+                                        "proposal fields matching the supplied schema. "
+                                        "Do not return checks; the application keeps "
+                                        "the original check plan."
+                                    ),
+                                    "fixed_plan": list(plan),
+                                    "check_results": [
+                                        execution.model_feedback()
+                                        for execution in attempt.executions
+                                    ],
+                                }
                             ),
-                        }
-                    )
+                        },
+                    ]
                     generation_started = time.perf_counter()
-                    response = provider.generate(
+                    revised_proposal = provider.generate(
                         replace(
                             generation_request,
+                            response_model=type(response.proposal),
+                            schema_name="template_revision",
                             messages=copy.deepcopy(messages),
                             tool_catalogue=None,
                         )
@@ -304,11 +323,13 @@ class TemplateApplication:
                     generation_duration_ms += (
                         time.perf_counter() - generation_started
                     ) * 1000
-                    self._validate_response(response, snapshot.names)
-                    if {check.name for check in response.checks} != set(plan):
+                    if not isinstance(revised_proposal, type(response.proposal)):
                         raise GenerationSchemaError(
-                            "Model changed the fixed check plan"
+                            "Revision must return only the proposal"
                         )
+                    response = response.model_copy(
+                        update={"proposal": revised_proposal}
+                    )
                     result.proposal = response.proposal.model_dump(mode="json")
                     messages.append(
                         {"role": "assistant", "content": response.model_dump_json()}
@@ -342,28 +363,10 @@ class TemplateApplication:
                 attempt.complete = True
                 attempt.passed = all(item.passed for item in attempt.executions)
                 return
-            callable_tools = []
-            for name in attempt.pending:
-                definition = definitions[name]
-                schema = copy.deepcopy(definition["inputSchema"])
-                for field in bindings[name]:
-                    schema.get("properties", {}).pop(field, None)
-                schema["required"] = [
-                    field
-                    for field in schema.get("required", [])
-                    if field not in bindings[name]
-                ]
-                schema["additionalProperties"] = False
-                callable_tools.append(
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": name,
-                            "description": definition["description"],
-                            "parameters": schema,
-                        },
-                    }
-                )
+            callable_tools = [
+                callable_tool(definitions[name], bindings[name])
+                for name in attempt.pending
+            ]
             turn = provider.tool_turn(copy.deepcopy(messages), callable_tools)
             if len(turn.calls) > len(plan):
                 raise ValueError("Too many tool calls in one turn")
@@ -389,9 +392,13 @@ class TemplateApplication:
                     arguments = json.loads(call.arguments_json)
                     if not isinstance(arguments, dict):
                         raise ValueError("Tool arguments must be a JSON object")
-                    if set(arguments) & set(bindings[call.name]):
+                    owned = set(arguments) & set(bindings[call.name])
+                    if owned:
                         raise ValueError(
-                            "Model cannot override application-owned arguments"
+                            "Do not supply application-owned arguments: "
+                            + ", ".join(sorted(owned))
+                            + ". Use only the callable schema; "
+                            "use {} if it has no arguments."
                         )
                     effective = {**arguments, **copy.deepcopy(bindings[call.name])}
                     execution.effective_arguments = effective
@@ -424,7 +431,7 @@ class TemplateApplication:
                         "role": "tool",
                         "tool_call_id": call.id,
                         "name": call.name,
-                        "content": execution.model_dump_json(),
+                        "content": json.dumps(execution.model_feedback()),
                     }
                 )
             if not turn.calls:

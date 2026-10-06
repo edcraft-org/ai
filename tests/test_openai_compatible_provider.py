@@ -128,7 +128,10 @@ def test_generates_template_using_strict_structured_outputs(provider_name) -> No
     assert "api_key" not in settings
 
 
-def test_openai_receives_complete_frozen_mcp_definition() -> None:
+@pytest.mark.parametrize("provider_name", ["openai", "soclaas"])
+def test_openai_receives_check_purposes_without_internal_mcp_schemas(
+    provider_name,
+) -> None:
     tool = {
         "name": "code_verify_template_structure",
         "description": "Check structure",
@@ -137,7 +140,7 @@ def test_openai_receives_complete_frozen_mcp_definition() -> None:
         "_meta": {"fastmcp": {"version": "1.0"}},
     }
     client = client_with(code_response())
-    provider = OpenAICompatibleProvider("openai", client, model="test-model")
+    provider = OpenAICompatibleProvider(provider_name, client, model="test-model")
 
     provider.generate(
         replace(
@@ -147,7 +150,9 @@ def test_openai_receives_complete_frozen_mcp_definition() -> None:
     )
 
     messages = client.chat.completions.arguments["messages"]
-    assert json.loads(messages[1]["content"].split("\n", 1)[1]) == [tool]
+    assert json.loads(messages[1]["content"].split("\n", 1)[1]) == [
+        {"name": tool["name"], "description": tool["description"]}
+    ]
     assert messages[1]["role"] == "system"
 
 

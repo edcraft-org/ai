@@ -143,7 +143,10 @@ class DistractorRecipe(BaseModel):
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    expression: str = Field(min_length=1)
+    expression: str = Field(
+        min_length=1,
+        description="Python expression using bare parameter names, for example a - b.",
+    )
     reason_template: str = Field(min_length=1)
 
 
@@ -157,7 +160,10 @@ class CodeTemplateProposal(BaseModel):
     entry_function: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     parameters: list[FiniteParameter] = Field(min_length=1, max_length=3)
     answer_target: AnswerTarget
-    answer_expression: str = Field(min_length=1)
+    answer_expression: str = Field(
+        min_length=1,
+        description="Python expression using bare parameter names, for example a + b.",
+    )
     distractors: list[DistractorRecipe] = Field(min_length=2, max_length=5)
 
     @field_validator("question_template", "code", "answer_expression")

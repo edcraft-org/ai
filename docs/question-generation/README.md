@@ -43,6 +43,18 @@ carry multiple domain tags. There is no separate tool-name list in the domain.
 The application saves the discovered catalogue once per job, and the model chooses
 its fixed check plan from that catalogue.
 
+The model sees check names and purposes when choosing its plan. During checking,
+it receives only the arguments it must supply; the application supplies the current
+template and request settings. The same contract is used by every provider.
+Feedback includes verdicts and actionable failure details. Full tool definitions,
+execution records, and canonical answers stay in the saved result rather than being
+repeated in model context after successful checks.
+Each revision receives the original request, latest proposal, and explicit check
+feedback. Earlier attempts remain in the saved history without accumulating in the
+revision prompt.
+Revisions contain only template fields. The application retains the original check
+plan, so the model does not select the checks again while fixing a template.
+
 ## Available code checks
 
 | Tool | What it checks |

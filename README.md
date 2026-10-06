@@ -32,6 +32,11 @@ Edit `.env` for the provider you want to use. For OpenAI, set `OPENAI_API_KEY` a
 `OPENAI_MODEL`. For Ollama, run the local server and set `OLLAMA_MODEL`.
 The remaining settings are listed in [.env.example](.env.example).
 
+Ollama thinking defaults to off so its output budget goes to proposals and tool
+calls. Set `OLLAMA_THINK=true` to enable it, `default` to use the model's setting,
+or a supported level such as `low` for models that require a named thinking level.
+Enabled thinking may require a larger `OLLAMA_NUM_PREDICT` budget.
+
 Always select a provider with `--provider`. Use `--model` to override its configured
 model. OpenAI and Ollama are the active providers; the SocLaas adapter is available
 but currently unused.

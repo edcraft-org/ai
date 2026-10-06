@@ -21,6 +21,7 @@ from edcraft_validator.llm.ollama_provider import (
     OllamaProvider,
     _num_predict,
     _temperature,
+    _thinking,
     _timeout_seconds,
 )
 
@@ -34,6 +35,7 @@ def isolated_ollama_settings(monkeypatch):
         "OLLAMA_TIMEOUT_SECONDS",
         "OLLAMA_TEMPERATURE",
         "OLLAMA_NUM_PREDICT",
+        "OLLAMA_THINK",
     ):
         monkeypatch.delenv(variable, raising=False)
 
@@ -98,6 +100,7 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     assert captured["url"] == "http://localhost:11434/api/chat"
     payload = captured["payload"]
     schema = payload["format"]
+    assert json.loads(payload["messages"][-1]["content"].split("\n", 1)[1]) == schema
     assert set(schema["properties"]) == {"proposal", "checks"}
     proposal_schema = schema["$defs"]["CodeProposalResponse"]
     parameter_items = proposal_schema["properties"]["parameters"]["items"]
@@ -107,6 +110,7 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     assert "question_template" in proposal_schema["properties"]
     assert payload["options"]["temperature"] == 0
     assert payload["options"]["num_predict"] == 2048
+    assert payload["think"] is False
     messages = payload["messages"]
     assert "finite Cartesian product" in messages[0]["content"]
     assert "Create an arithmetic question" in messages[1]["content"]
@@ -116,6 +120,7 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     assert provider.generation_settings() == {
         "options": payload["options"],
         "timeout_seconds": captured["timeout"],
+        "think": False,
     }
 
     # The check loop and its provenance use the same resolved settings even if
@@ -123,13 +128,17 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     monkeypatch.setenv("OLLAMA_TEMPERATURE", "1")
     monkeypatch.setenv("OLLAMA_NUM_PREDICT", "4096")
     monkeypatch.setenv("OLLAMA_TIMEOUT_SECONDS", "10")
+    monkeypatch.setenv("OLLAMA_THINK", "true")
     provider.tool_turn([], [])
     assert captured["payload"]["options"] == provider.generation_settings()["options"]
     assert captured["payload"]["options"]["temperature"] == 0
     assert captured["timeout"] == 300
+    assert captured["payload"]["think"] is False
 
 
-def test_ollama_receives_complete_frozen_mcp_definition(monkeypatch) -> None:
+def test_ollama_receives_check_purposes_without_internal_mcp_schemas(
+    monkeypatch,
+) -> None:
     tool = {
         "name": "code_require_features",
         "description": "Check requested features",
@@ -167,7 +176,9 @@ def test_ollama_receives_complete_frozen_mcp_definition(monkeypatch) -> None:
         )
     )
 
-    assert json.loads(captured["messages"][1]["content"].split("\n", 1)[1]) == [tool]
+    assert json.loads(captured["messages"][1]["content"].split("\n", 1)[1]) == [
+        {"name": tool["name"], "description": tool["description"]}
+    ]
 
 
 def test_ollama_reports_common_response_schema_failures(monkeypatch) -> None:
@@ -285,6 +296,43 @@ def test_ollama_reports_timeout_separately(monkeypatch) -> None:
         OllamaProvider().generate(generation_request())
 
 
+@pytest.mark.parametrize("value", ["true", "false", "default", "low", "medium", "high"])
+def test_thinking_setting_is_used_for_generation_and_native_calls(monkeypatch, value):
+    import io
+
+    captured = []
+
+    def fake_urlopen(request, timeout):
+        captured.append(json.loads(request.data))
+        return io.BytesIO(b'{"message":{"content":"ok"},"done_reason":"stop"}')
+
+    monkeypatch.setenv("OLLAMA_THINK", value)
+    monkeypatch.setattr("edcraft_validator.llm.ollama_provider.urlopen", fake_urlopen)
+    provider = OllamaProvider()
+    provider._ollama_request([], {})
+    provider.tool_turn([], [])
+    expected = {"true": True, "false": False, "default": None}.get(value, value)
+    assert provider.generation_settings()["think"] == expected
+    for payload in captured:
+        if expected is None:
+            assert "think" not in payload
+        else:
+            assert payload["think"] == expected
+
+
+def test_thinking_budget_exhaustion_has_actionable_error(monkeypatch):
+    import io
+
+    monkeypatch.setattr(
+        "edcraft_validator.llm.ollama_provider.urlopen",
+        lambda *args, **kwargs: io.BytesIO(
+            b'{"done_reason":"length","message":{"content":"","thinking":"..."}}'
+        ),
+    )
+    with pytest.raises(GenerationResponseError, match="OLLAMA_THINK=false"):
+        OllamaProvider().generate(generation_request())
+
+
 def test_ollama_reports_connection_reset_as_transport_failure(monkeypatch) -> None:
     def reset(request, timeout):
         raise ConnectionResetError("peer restarted")
@@ -304,6 +352,7 @@ def test_ollama_reports_connection_reset_as_transport_failure(monkeypatch) -> No
         ("OLLAMA_TEMPERATURE", "warm", _temperature, "must be a number"),
         ("OLLAMA_NUM_PREDICT", "127", _num_predict, "between 128 and 4096"),
         ("OLLAMA_NUM_PREDICT", "many", _num_predict, "must be an integer"),
+        ("OLLAMA_THINK", "sometimes", _thinking, "must be false, true"),
     ],
 )
 def test_ollama_rejects_invalid_generation_bounds(

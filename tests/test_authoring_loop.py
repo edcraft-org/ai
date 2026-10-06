@@ -11,6 +11,7 @@ from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
 from edcraft_validator.llm.llm_contracts import (
+    CheckPlanResponse,
     ModelTurn,
     PlannedGenerationResponse,
     ToolCall,
@@ -67,10 +68,13 @@ class Provider:
 
     def generate(self, request):
         self.generations.append(copy.deepcopy(request.messages))
+        current = self.proposals[
+            min(len(self.generations) - 1, len(self.proposals) - 1)
+        ]
+        if not issubclass(request.response_model, PlannedGenerationResponse):
+            return request.response_model.model_validate(current.model_dump())
         return PlannedGenerationResponse(
-            proposal=self.proposals[
-                min(len(self.generations) - 1, len(self.proposals) - 1)
-            ],
+            proposal=current,
             checks=[{"name": name, "arguments": {}} for name in self.plan],
         )
 
@@ -127,11 +131,18 @@ def test_failure_runs_whole_plan_then_corrects_with_same_catalogue_and_fresh_evi
     assert first.executions[1].passed  # No fail-fast exit.
     assert first.candidate_digest != second.candidate_digest
     assert len(executor.calls) == 2  # Finalization does not execute again.
-    feedback = [
-        json.loads(m["content"]) for m in provider.generations[1] if m["role"] == "tool"
-    ]
+    assert not any(m["role"] == "tool" for m in provider.generations[1])
+    revision = json.loads(provider.generations[1][-1]["content"])
+    assert revision["fixed_plan"] == list(provider.plan)
+    feedback = revision["check_results"]
     assert feedback[0]["evidence"]["status"] == "failed"
     assert feedback[1]["evidence"]["status"] == "passed"
+    assert feedback[0]["evidence"]["details"] == (first.executions[0].evidence.details)
+    assert feedback[0]["evidence"]["findings"][0]["code"] == (
+        "PROPOSED_ANSWER_MISMATCH"
+    )
+    assert "details" not in feedback[1]["evidence"]
+    assert all(set(item) == {"tool", "error", "evidence"} for item in feedback)
     assert (
         result.artifact.authoring.attempts[0]["proposal"]["answer_expression"]
         == "a - b"
@@ -160,6 +171,12 @@ def test_third_failure_returns_latest_proposal_full_history_and_never_attempt_fo
     assert all(attempt.complete and not attempt.passed for attempt in result.attempts)
     assert result.proposal == result.attempts[-1].proposal
     assert provider.turns[-1][1] == []
+    assert len(provider.generations[1]) == len(provider.generations[2])
+    assert provider.generations[2][-2]["role"] == "assistant"
+    feedback = json.loads(provider.generations[2][-1]["content"])["check_results"]
+    assert feedback == [
+        execution.model_feedback() for execution in result.attempts[1].executions
+    ]
 
 
 @pytest.mark.parametrize(
@@ -218,16 +235,33 @@ def test_missing_tool_calls_terminate_with_pending_checks():
     assert not client.dispatches
 
 
-def test_model_cannot_change_plan_after_failed_attempt():
+def test_revision_schema_cannot_change_plan_after_failed_attempt():
     class ChangingProvider(Provider):
         def generate(self, request):
             if self.generations:
-                self.plan = (STRUCTURE,)
+                assert "checks" not in request.response_model.model_fields
+                assert request.schema_name == "template_revision"
+                self.plan = (STRUCTURE,)  # Does not affect the application's plan.
             return super().generate(request)
 
-    result, client = run(ChangingProvider([wrong_answer()]))
+    result, client = run(ChangingProvider([wrong_answer(), proposal()]))
+    assert result.status == "checked"
+    assert [name for name, _ in client.dispatches] == [SEMANTIC, STRUCTURE] * 2
+    assert result.fixed_plan == [SEMANTIC, STRUCTURE]
+
+
+def test_revision_cannot_return_another_combined_plan_response():
+    class WrongRevision(Provider):
+        def generate(self, request):
+            if self.generations:
+                return PlannedGenerationResponse(
+                    proposal=proposal(), checks=[{"name": STRUCTURE, "arguments": {}}]
+                )
+            return super().generate(request)
+
+    result, client = run(WrongRevision([wrong_answer()]))
     assert result.status == "error"
-    assert "changed the fixed check plan" in result.reason
+    assert "Revision must return only the proposal" in result.reason
     assert len(client.dispatches) == 2
     assert result.fixed_plan == [SEMANTIC, STRUCTURE]
 
@@ -278,6 +312,38 @@ def test_application_injects_exact_candidate_and_original_request_count():
     assert arguments["candidate"] == result.attempts[0].candidate
     assert arguments["required_distractors"] == REQUEST.num_distractors
     assert result.status == "checked"
+
+
+def test_callable_schemas_do_not_expose_hidden_candidate_definitions():
+    provider = Provider()
+    result, _ = run(provider)
+    assert result.status == "checked"
+    for tool in provider.turns[0][1]:
+        assert tool["function"]["parameters"] == {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        }
+    # Full execution records and canonical answers remain available locally.
+    execution = result.attempts[0].executions[0]
+    assert execution.effective_arguments["candidate"] == result.attempts[0].candidate
+    assert execution.evidence.details["canonical_answers"]
+
+
+def test_live_workflow_assertions_cover_authoring_editing_and_replay():
+    from live_provider_helpers import check_live_workflow
+
+    class WorkflowProvider(Provider):
+        def generate(self, request):
+            if request.response_model is CheckPlanResponse:
+                return CheckPlanResponse(checks=[{"name": SEMANTIC, "arguments": {}}])
+            return super().generate(request)
+
+    fixture = proposal().model_copy(deep=True)
+    fixture.parameters[0].values = [2, 3]
+    fixture.parameters[1].values = [4, 5]
+    check_live_workflow(WorkflowProvider([fixture]), reviewed_inputs=True)
 
 
 def test_model_argument_revision_keeps_membership_and_reruns_semantic_check():
