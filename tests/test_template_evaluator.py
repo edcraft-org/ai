@@ -71,7 +71,7 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
         provider="stub",
         model="stub-model",
         topics=("arithmetic",),
-        difficulties=("beginner",),
+        difficulties=("easy",),
         repetitions=2,
     )
 
@@ -128,7 +128,7 @@ def test_evaluation_notifies_before_starting_the_next_attempt() -> None:
         provider="stub",
         model="stub-model",
         topics=("arithmetic",),
-        difficulties=("beginner",),
+        difficulties=("easy",),
         repetitions=2,
         on_attempt=record,
     )
@@ -144,7 +144,7 @@ def test_evaluation_classifies_provider_setup_failure() -> None:
         provider="missing",
         model=None,
         topics=("arithmetic",),
-        difficulties=("beginner",),
+        difficulties=("easy",),
         repetitions=1,
     )
 
@@ -169,7 +169,7 @@ def test_evaluation_retains_catalogue_when_model_generation_fails() -> None:
         provider="stub",
         model="stub-model",
         topics=("arithmetic",),
-        difficulties=("beginner",),
+        difficulties=("easy",),
         repetitions=1,
     )
 

@@ -22,9 +22,7 @@ from edcraft_validator.tools.python_execution import ExecutionResult
 SEMANTIC = "code_validate_answers_and_distractors"
 STRUCTURE = "code_verify_template_structure"
 FEATURES = "code_require_features"
-REQUEST = CodeTemplateRequest(
-    prompt="Create an addition question", difficulty="beginner"
-)
+REQUEST = CodeTemplateRequest(prompt="Create an addition question", difficulty="easy")
 
 
 class Executor:

@@ -27,7 +27,7 @@ from edcraft_validator.llm.openai_compatible_provider import (
 
 
 def generation_request(
-    prompt: str = "Create an arithmetic question", difficulty: str = "beginner"
+    prompt: str = "Create an arithmetic question", difficulty: str = "easy"
 ):
     return build_code_generation_request(
         CodeTemplateRequest(prompt=prompt, difficulty=difficulty)

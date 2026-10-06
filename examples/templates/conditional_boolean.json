@@ -1,7 +1,7 @@
 {
   "template_id": "conditionals.boolean_branch_count",
   "topic": "conditionals",
-  "difficulty": "beginner",
+  "difficulty": "easy",
   "code": "def decide(enabled):\n    if enabled:\n        if 3 > 2:\n            return 1\n    return 0",
   "entry_function": "decide",
   "parameters": [

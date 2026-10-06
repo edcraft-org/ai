@@ -246,7 +246,7 @@ def test_author_request_json_fails_before_provider_creation(
     "request_flag",
     [
         ("--prompt", "Create an arithmetic question"),
-        ("--difficulty", "beginner"),
+        ("--difficulty", "easy"),
         ("--num-distractors", "2"),
     ],
 )
@@ -258,7 +258,7 @@ def test_author_rejects_request_json_with_any_request_flag(
         json.dumps(
             {
                 "prompt": "Create a loops question",
-                "difficulty": "advanced",
+                "difficulty": "hard",
             }
         )
     )
@@ -351,7 +351,7 @@ def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> N
             "--prompt",
             "Create a question about graph traversal",
             "--difficulty",
-            "advanced",
+            "hard",
         ],
     )
 
@@ -364,7 +364,7 @@ def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> N
     assert captured["selection"].model == "qwen-test"
     request = captured["request"]
     assert request.prompt == "Create a question about graph traversal"
-    assert request.difficulty == "advanced"
+    assert request.difficulty == "hard"
     assert request.num_distractors == 3
     assert json.loads(capsys.readouterr().out) == {"validated": True}
 
@@ -392,7 +392,7 @@ def test_evaluate_cli_writes_attempts_and_prints_summary(
         total_duration_ms = 1250.0
 
         class Request:
-            difficulty = "beginner"
+            difficulty = "easy"
 
         request = Request()
 
@@ -424,7 +424,7 @@ def test_evaluate_cli_writes_attempts_and_prints_summary(
             "--topic",
             "loops",
             "--difficulty",
-            "beginner",
+            "easy",
             "--repetitions",
             "2",
             "--output",
@@ -438,15 +438,15 @@ def test_evaluate_cli_writes_attempts_and_prints_summary(
     assert captured["provider"] == "ollama"
     assert captured["model"] == "qwen-test"
     assert captured["topics"] == ("loops",)
-    assert captured["difficulties"] == ("beginner",)
+    assert captured["difficulties"] == ("easy",)
     assert captured["repetitions"] == 2
     assert [json.loads(line) for line in output.read_text().splitlines()] == [
         {"attempt": 1, "status": "validated"},
         {"attempt": 2, "status": "validated"},
     ]
     captured_output = capsys.readouterr()
-    assert "[1] loops/beginner: validated (1.2s)" in captured_output.err
-    assert "[2] loops/beginner: validated (1.2s)" in captured_output.err
+    assert "[1] loops/easy: validated (1.2s)" in captured_output.err
+    assert "[2] loops/easy: validated (1.2s)" in captured_output.err
     assert json.loads(captured_output.out) == {
         "attempts": 2,
         "validated": 2,
@@ -490,7 +490,7 @@ def test_author_cli_preserves_unsuccessful_result_and_returns_nonzero(
             "--prompt",
             "Addition",
             "--difficulty",
-            "beginner",
+            "easy",
         ],
     )
     assert template_cli.main() == 2

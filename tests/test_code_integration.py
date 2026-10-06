@@ -111,9 +111,7 @@ def test_model_proposal_is_built_then_validated() -> None:
             )
 
     validated = TemplateApplication().create_validated_template(
-        CodeTemplateRequest(
-            prompt="Create an arithmetic question", difficulty="beginner"
-        ),
+        CodeTemplateRequest(prompt="Create an arithmetic question", difficulty="easy"),
         domain=CodeDomain(),
         provider=StubProvider(),
     )
@@ -132,7 +130,7 @@ def test_model_proposal_is_built_then_validated() -> None:
         provider="stub",
         model="stub-model",
         topics=("arithmetic",),
-        difficulties=("beginner",),
+        difficulties=("easy",),
         repetitions=1,
     )
     assert report.summary.validated == 1

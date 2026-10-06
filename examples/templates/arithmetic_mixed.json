@@ -1,7 +1,7 @@
 {
   "template_id": "arithmetic.mixed_parameters",
   "topic": "arithmetic",
-  "difficulty": "intermediate",
+  "difficulty": "medium",
   "code": "def adjust(a, b, use_bonus):\n    total = a * 2 + b\n    if use_bonus:\n        total += 3\n    return total",
   "entry_function": "adjust",
   "parameters": [

@@ -64,17 +64,17 @@ def main():
         load_dotenv(args.env_file)
     prompts = [
         (
-            "beginner",
+            "easy",
             "Create a Python MCQ about adding two integers. "
             "Use two finite integer parameters.",
         ),
         (
-            "intermediate",
+            "medium",
             "Create a Python MCQ about accumulating a total in a for loop. "
             "Use finite integer parameters and ask for the return value.",
         ),
         (
-            "advanced",
+            "hard",
             "Create a Python MCQ about a helper function called inside a loop. "
             "Use finite integer parameters and ask for the return value.",
         ),

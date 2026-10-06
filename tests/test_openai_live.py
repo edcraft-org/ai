@@ -20,7 +20,7 @@ def test_real_openai_template_authoring() -> None:
     validated = TemplateApplication().create_validated_template(
         CodeTemplateRequest(
             prompt="Create an arithmetic question about adding integers",
-            difficulty="beginner",
+            difficulty="easy",
         ),
         domain=CodeDomain(),
         provider=provider,
@@ -29,7 +29,7 @@ def test_real_openai_template_authoring() -> None:
     assert validated.validation.cases_validated >= 4
     assert len(validated.template.distractors) == 3
     assert validated.template.topic is None
-    assert validated.template.difficulty == "beginner"
+    assert validated.template.difficulty == "easy"
     assert validated.authoring is not None
     assert validated.authoring.provider == "openai"
     assert validated.authoring.model

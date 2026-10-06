@@ -125,9 +125,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
         ),
     )
     validated = application.create_validated_template(
-        CodeTemplateRequest(
-            prompt="Create an arithmetic question", difficulty="beginner"
-        ),
+        CodeTemplateRequest(prompt="Create an arithmetic question", difficulty="easy"),
         domain=domain,
         provider=StubProvider(),
     )
@@ -141,7 +139,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert len(provider_calls) == 1
     assert validated.validation.cases_validated == 4
     assert validated.template.topic is None
-    assert validated.template.difficulty == "beginner"
+    assert validated.template.difficulty == "easy"
     assert validated.template.answer_target == "return_value"
     assert (
         validated.template.question_template == "What value does add({a}, {b}) return?"
@@ -153,7 +151,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring.base_prompt_version == "code-template-v13+response-v3"
     assert validated.authoring.domain == "code"
     assert validated.authoring.request["prompt"] == "Create an arithmetic question"
-    assert validated.authoring.request["difficulty"] == "beginner"
+    assert validated.authoring.request["difficulty"] == "easy"
     assert validated.authoring.fixed_plan == ["code_validate_answers_and_distractors"]
     assert list(provider_calls[0].tool_catalogue.names) == list(
         domain.allowed_tool_names
