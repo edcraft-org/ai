@@ -54,6 +54,108 @@ def test_generated_code_trace_limit_is_enforced() -> None:
     assert result.error_code == "TRACE_LIMIT_EXCEEDED"
 
 
+@pytest.mark.parametrize(
+    "code",
+    [
+        (
+            "def total(n):\n"
+            "    if n <= 0:\n"
+            "        return 0\n"
+            "    return n + total(n - 1)"
+        ),
+        (
+            "def helper(n):\n"
+            "    if n <= 0:\n"
+            "        return 0\n"
+            "    return n + total(n - 1)\n\n"
+            "def total(n):\n"
+            "    if n <= 0:\n"
+            "        return 0\n"
+            "    return n + helper(n - 1)"
+        ),
+    ],
+    ids=["direct", "mutual"],
+)
+@pytest.mark.parametrize(
+    "target, expression, expected",
+    [
+        ("return_value", "n * (n + 1) // 2", [3, 6, 10]),
+        ("function_calls", "n + 1", [3, 4, 5]),
+        ("branch_executions", "n + 1", [3, 4, 5]),
+    ],
+)
+def test_recursive_templates_are_checked_and_replayed(
+    code, target, expression, expected
+):
+    candidate = CodeTemplateCandidate.model_validate(
+        {
+            "template_id": "recursive.total",
+            "difficulty": "medium",
+            "code": code,
+            "entry_function": "total",
+            "parameters": [{"name": "n", "kind": "integer", "values": [2, 3, 4]}],
+            "question_template": f"What is the {target} of total({{n}})?",
+            "answer_target": target,
+            "answer_expression": expression,
+            "distractors": [
+                {
+                    "expression": f"({expression}) + {offset}",
+                    "reason_template": "Overcounts.",
+                }
+                for offset in (1, 2, 3)
+            ],
+            "question_type": "mcq",
+        }
+    )
+    application = TemplateApplication()
+    domain = CodeDomain()
+
+    result = application.validate_template(
+        candidate, domain=domain, provider=SelectSemanticCheck()
+    )
+
+    assert result.status == "checked", result.reason
+    assert [
+        case.answer for case in result.artifact.validation.validated_cases
+    ] == expected
+    saved = ValidatedCodeTemplate.model_validate_json(result.artifact.model_dump_json())
+    for seed in (0, 42):
+        preview = application.generate_question(saved, domain=domain, seed=seed)
+        assert preview == application.generate_question(saved, domain=domain, seed=seed)
+        assert preview.question.proposed_answer == expected[preview.parameters["n"] - 2]
+
+
+def test_nonterminating_recursion_cannot_produce_a_checked_artifact() -> None:
+    candidate = CodeTemplateCandidate.model_validate(
+        {
+            "template_id": "recursive.nonterminating",
+            "difficulty": "medium",
+            "code": "def total(n):\n    return total(n)",
+            "entry_function": "total",
+            "parameters": [{"name": "n", "kind": "integer", "values": [1, 2]}],
+            "question_template": "What does total({n}) return?",
+            "answer_target": "return_value",
+            "answer_expression": "n",
+            "distractors": [
+                {"expression": f"n + {offset}", "reason_template": "Overcounts."}
+                for offset in (1, 2, 3)
+            ],
+            "question_type": "mcq",
+        }
+    )
+
+    result = TemplateApplication().validate_template(
+        candidate, domain=CodeDomain(), provider=SelectSemanticCheck()
+    )
+
+    assert result.status == "needs_review"
+    assert result.artifact is None
+    execution = result.attempts[0].executions[0]
+    assert execution.evidence.status == "failed"
+    assert execution.evidence.findings[0].code == "EXECUTION_FAILED"
+    assert "RecursionError" in execution.evidence.findings[0].message
+
+
 @pytest.mark.parametrize("template_path", TEMPLATE_PATHS, ids=lambda path: path.stem)
 def test_template_is_exhaustively_validated(template_path: Path) -> None:
     template = CodeTemplateCandidate.model_validate_json(template_path.read_text())

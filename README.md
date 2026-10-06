@@ -110,14 +110,15 @@ Generate questions from the new artifact after checking succeeds.
 ## Supported questions
 
 - Python execution questions about return values, branches, loops, and function calls.
-- Basic expressions, assignments, `if`, bounded `for` loops, and helper functions.
+- Basic expressions, assignments, `if`, bounded `for` loops, helper functions, and
+  recursion that completes within the execution limits for every allowed input.
 - One to three parameters containing finite sets of integers, booleans, strings,
   or integer lists. Each parameter has two to four values, with at most 64 total
   combinations.
 - Two or three wrong-answer options, distinct from the correct answer and each other
   across every allowed input combination.
 
-Imports, file access, networking, recursion, and other unsupported Python features
+Imports, file access, networking, and other unsupported Python features
 are rejected. Difficulty is currently the requested label; technical checking does
 not measure educational difficulty or question quality.
 

@@ -154,8 +154,6 @@ class PythonSubsetAnalyzer(ast.NodeVisitor):
                 self.errors.append(
                     f"Call to '{called}' is not allowed (line {node.lineno})"
                 )
-            if called == self._current_function:
-                self.errors.append(f"Recursion is not allowed (line {node.lineno})")
         self.generic_visit(node)
 
 

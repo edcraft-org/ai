@@ -39,7 +39,7 @@ from edcraft_validator.tools.python_execution import PythonExecutionTool
 from edcraft_validator.validation.validation_contracts import ValidationFailure
 from edcraft_validator.value_comparison import equivalent
 
-CODE_TOOL_VERSION = "1.0.2"
+CODE_TOOL_VERSION = "1.0.3"
 STATIC_TOOL_TIMEOUT_SECONDS = 5.0
 
 
@@ -120,7 +120,9 @@ def register_code_validation_tools(
             "and never equal the answer. A wrong proposed answer or insufficient "
             "valid distractors fails the call; no correction or fallback is inserted. "
             "Evidence is exhaustive only over the declared finite parameter domain. "
-            "Execution is limited to the supported Python subset and a bounded trace; "
+            "Recursion is supported when every finite input case completes within "
+            "the execution limits. Execution uses the supported Python subset and "
+            "a bounded trace; "
             "timeout, trace-limit, or resource-limit termination produces error "
             "evidence rather than validation failure."
         ),

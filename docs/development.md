@@ -54,6 +54,9 @@ supplied by the MCP wrapper. The default tool sends all cases to one worker proc
 - Scrubbed worker environment, host timeout, CPU limits, and a Linux 512 MiB
   address-space limit.
 - Restricted Python syntax and a small set of allowed built-ins.
+- Direct and mutual recursion are supported when every input case finishes within
+  the existing limits. The tracer counts recursive calls and branch evaluations.
+  Non-terminating or excessively deep recursion returns execution failure.
 - Expressions limited to 500 source characters and 100 syntax nodes; numeric values
   bounded to magnitude 1 billion, sequences to 100 items, and nested values to
   a total logical size of 1,000.

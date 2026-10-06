@@ -57,6 +57,8 @@ even if its selected check passes. The application does not add omitted checks.
 Check-selection mistakes are measured during evaluation.
 
 These tools establish technical properties within the supported input domain.
+Recursive code is supported when every allowed input completes within the execution
+limits. Checking does not prove termination for inputs outside that finite domain.
 Feature presence does not establish that a question teaches the intended concept
 well or has the right difficulty.
 

@@ -13,7 +13,7 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v14"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v15"
 
 
 def build_template_prompt(
@@ -70,9 +70,10 @@ Rules:
   distractor candidates as separate schema fields.
 - Define one module-level entry function whose positional arguments exactly match the
   parameter names and order. Use every parameter in executed learner-facing behavior.
-  Helper functions are allowed. The code must work for every parameter combination.
+  Helper functions and recursion are allowed. Recursive code must have a base case
+  and terminate within the execution limits for every parameter combination.
 - Use only expressions, assignments, if statements, and for loops. Do not use imports,
-  attributes, classes, decorators, recursion, comprehensions, while loops, lambdas,
+  attributes, classes, decorators, comprehensions, while loops, lambdas,
   exceptions, file access, networking, input, eval, or exec.
 - Every parameter declares a kind and two to four distinct finite values. Supported
   kinds are integer (-100 through 100), boolean, string (non-empty short printable
