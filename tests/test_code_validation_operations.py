@@ -1,11 +1,11 @@
-"""Exercise domain operations directly, without an MCP server or client."""
+"""Exercise MCP checking operations directly, without a server or client."""
 
 from pathlib import Path
 
 import pytest
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
-from edcraft_validator.domains.code.validation_operations import (
+from edcraft_validator.mcp.code_tools import (
     require_features,
     validate_answers_and_distractors,
     verify_template_structure,
@@ -21,7 +21,7 @@ def candidate():
     )
 
 
-def test_domain_operations_produce_reusable_values_without_mutating_candidate(
+def test_checking_operations_produce_reusable_values_without_mutating_candidate(
     candidate,
 ):
     original = candidate.model_copy(deep=True)
@@ -49,7 +49,7 @@ def test_domain_operations_produce_reusable_values_without_mutating_candidate(
     assert candidate == original
 
 
-def test_domain_rejects_wrong_answers_without_repair(candidate):
+def test_checking_rejects_wrong_answers_without_repair(candidate):
     candidate.answer_expression = "a + b + c"
     with pytest.raises(ValidationFailure) as caught:
         validate_answers_and_distractors(
@@ -60,7 +60,7 @@ def test_domain_rejects_wrong_answers_without_repair(candidate):
     assert candidate.answer_expression == "a + b + c"
 
 
-def test_domain_reports_missing_features(candidate):
+def test_checking_reports_missing_features(candidate):
     with pytest.raises(ValidationFailure) as caught:
         require_features(candidate, ["loop"])
     assert caught.value.code == "REQUIRED_FEATURE_MISSING"

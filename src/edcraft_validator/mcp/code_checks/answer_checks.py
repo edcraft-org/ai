@@ -4,16 +4,16 @@ import copy
 import json
 from typing import Any
 
-from edcraft_validator.domains.code.checks.validation_context import (
-    CodeValidationContext,
-    DistractorCandidate,
-)
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
     TemplateValidationError,
 )
 from edcraft_validator.domains.code.code_types import AnswerTarget, ParameterValue
 from edcraft_validator.domains.code.safe_expressions import SafeExpression
+from edcraft_validator.mcp.code_checks.validation_context import (
+    CodeValidationContext,
+    DistractorCandidate,
+)
 from edcraft_validator.tools.python_execution import ExecutionResult
 from edcraft_validator.value_comparison import same_value_shape
 

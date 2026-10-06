@@ -20,7 +20,8 @@ later work. The difficulty values are `easy`, `medium`, and `hard`.
 - Create templates once and reuse them for many questions.
 - Use actual tool results to establish technical correctness.
 - Let the model choose checks and revise proposals using their results.
-- Keep domain algorithms separate from model-provider communication.
+- Keep template authoring in domains, checking implementations in MCP, and provider
+  communication in provider adapters.
 - Save enough information to explain checking and reproduce questions.
 - Keep the workflow simple; add tools and abstractions when a demonstrated need arises.
 - Give users a clear review and approval step when the product workflow is built.
@@ -48,7 +49,7 @@ The implemented workflow must be tested and evaluated for:
 
 - Free-form requests within the supported Python limits, with the original prompt
   and requested difficulty preserved.
-- Model-selected checks from the domain's allowed tools.
+- Model-selected checks from tools tagged for the selected domain.
 - Results returned to the model and used for correction.
 - Three total attempts, with unresolved failures returned as `needs_review`.
 - Answers and distractors checked across every declared input combination.

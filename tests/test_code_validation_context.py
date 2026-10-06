@@ -1,10 +1,10 @@
 import json
 from pathlib import Path
 
-from edcraft_validator.domains.code.checks.validation_context import (
+from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
+from edcraft_validator.mcp.code_checks.validation_context import (
     CodeValidationContext,
 )
-from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 
 
 def test_context_enumerates_cases_without_mutating_candidate():

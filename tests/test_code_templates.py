@@ -331,13 +331,13 @@ def test_candidate_builder_leaves_missing_distractors_for_check_failure() -> Non
     assert built == original
 
 
-def test_prompt_offers_current_validation_check_names() -> None:
+def test_prompt_selects_checks_from_supplied_catalogue() -> None:
     prompt = build_template_prompt(
         CodeTemplateRequest(prompt="Create a conditional question", difficulty="hard")
     )
 
-    assert "code_verify_template_structure" in prompt
-    assert "code_validate_answers_and_distractors" in prompt
+    assert "supplied MCP catalogue" in prompt
+    assert "execution-derived answers and checked distractors" in prompt
     assert "do not invent names" in prompt
 
 

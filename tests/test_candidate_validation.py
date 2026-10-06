@@ -82,7 +82,11 @@ def test_model_selects_checks_for_exact_candidate_and_finalizes(candidate):
     assert result.status == "checked", result.reason
     assert len(provider.requests) == 1
     assert candidate.model_dump_json() in provider.requests[0].messages[-1]["content"]
-    assert provider.requests[0].tool_catalogue.names == CodeDomain.allowed_tool_names
+    assert provider.requests[0].tool_catalogue.names == (
+        "code_require_features",
+        "code_validate_answers_and_distractors",
+        "code_verify_template_structure",
+    )
     messages = generation_messages(provider.requests[0])
     assert "matching the supplied schema" in messages[1]["content"]
     assert "combined proposal" not in messages[1]["content"]
@@ -176,7 +180,7 @@ def test_existing_candidate_flow_is_domain_independent(outcome):
 
     server = FastMCP("example")
 
-    @server.tool(description="Check a value", version="1")
+    @server.tool(description="Check a value", version="1", tags={"domain:example"})
     def positive(value: int) -> ToolEvidence:
         return ToolEvidence(
             tool="positive",
@@ -190,7 +194,6 @@ def test_existing_candidate_flow_is_domain_independent(outcome):
     class Domain:
         name = "example"
         candidate_model = Candidate
-        allowed_tool_names = ("positive",)
 
         def validation_request(self, candidate):
             return StructuredGenerationRequest(

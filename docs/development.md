@@ -18,14 +18,16 @@ All paths below are under `src/edcraft_validator/`.
 | MCP | `mcp/server.py`, `mcp/code_tools.py`, `mcp/client.py` | Tool registration, deadlines, evidence, and calls. |
 | Domain interface | `domains/domain_contract.py`, `domains/domain_registry.py` | Domain contract and lookup. |
 | Code domain | `domains/code/code_domain.py`, schemas, prompts, and candidate builder | Code-specific authoring and finalization. |
-| Checking algorithms | `domains/code/validation_operations.py`, `domains/code/checks/` | Structure, execution, answers, and distractors. |
+| Checking algorithms | `mcp/code_tools.py`, `mcp/code_checks/` | Structure, execution, answers, distractors, and feature detection. |
 | Question generation | `domains/code/question_generator.py`, expressions and rendering | Local expansion from saved answers and recipes. |
 | Python tools | `tools/python_analysis.py`, `tools/python_execution.py`, `tools/python_worker.py` | Supported syntax and batched tracing. |
 
 ## Model and tool calls
 
-The application resolves allowed tool definitions once and keeps them for the whole
-job. The first model response contains a proposal and nonempty check plan. Planning
+The application lists MCP tools once, selects those tagged `domain:<domain name>`,
+and keeps their definitions for the whole job. Tools with multiple domain tags can
+be shared; untagged tools are not offered. There is no domain-owned tool-name list.
+The first model response contains a proposal and nonempty check plan. Planning
 arguments are empty; later tool calls supply check-specific arguments, such as the
 features to require. The application supplies the candidate and distractor count.
 
@@ -74,12 +76,15 @@ uv run python -m edcraft_validator.mcp
 
 1. Define request, proposal, candidate, saved-template, and question schemas. Extend
    `ValidatedTemplateArtifact` for saved templates.
-2. Implement `DomainModule`: prompts, allowed tools, candidate construction, tool
+2. Implement `DomainModule`: prompts, candidate construction, tool
    bindings, finalization, and question generation.
 3. Register the domain factory. Supply requests through `--request-json`.
-4. Add the needed MCP tools and test success and failure paths.
+4. Register the needed MCP tools with tags matching the domain's `name` and test
+   success and failure paths.
 
-Domain algorithms belong in the domain. Providers should not import domain models.
+Checking algorithms belong under MCP. Template schemas, finalization, generation,
+and their shared expression/rendering helpers remain in the domain. Providers should
+not import domain models.
 See the example domain in `tests/test_template_workflow.py` and request handling in
 `tests/test_cli.py`.
 
@@ -90,10 +95,12 @@ registers its factory. Parse responses against the supplied schema, normalize to
 calls, and report non-secret settings. Test the adapter with a mocked client before
 live verification. To use another model from an existing provider, pass `--model`.
 
-A check consists of a domain operation and an MCP wrapper with a description, input
-and output schemas, version, deadline, and `ToolEvidence` result. Add its name to the
-domain's allowed tools. Test success, invalid inputs, and failures. Any prerequisite
-checks belong inside the operation; the application does not construct another plan.
+A check keeps its operation and MCP tool definition together, with a description,
+input and output schemas, version, domain tags, deadline, and `ToolEvidence` result.
+For code, add it to `mcp/code_tools.py` with `tags={"domain:code"}`; checking-only
+helpers belong in `mcp/code_checks/`. Test success, invalid inputs, and failures.
+Any prerequisite checks belong inside the operation; the application does not
+construct another plan.
 
 The 15 historical topic/difficulty fixtures remain regression tests and evaluation
 examples. They do not restrict free-form authoring or select its checks.

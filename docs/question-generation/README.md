@@ -7,8 +7,8 @@ For commands, see the [README](../../README.md).
 ## From a request to a reusable template
 
 1. The user supplies a domain, prompt, and `easy`, `medium`, or `hard` difficulty.
-2. The application gets the selected domain's allowed tools from MCP. MCP is the
-   interface that lists checking tools and runs them when requested.
+2. The application gets tools tagged for the selected domain from MCP. For example,
+   code tools have the tag `domain:code`. MCP lists the tools and runs their checks.
 3. The model returns a template proposal and the checks it wants to run.
 4. The model requests those checks. The application supplies the current candidate,
    calls MCP, and returns the results to the model.
@@ -31,12 +31,17 @@ correct the proposal and rerun its selected checks.
 | --- | --- |
 | Model | Propose the template, select and request checks, and revise failures. |
 | Application | Coordinate model and tool calls, limit attempts, and save results. |
-| Domain | Define the question format, allowed tools, checking algorithms, and question generation. |
-| MCP | Publish tool descriptions and schemas, run domain operations, and return checking results. |
+| Domain | Define the question format, prompts, template construction, finalization, and question generation. |
+| MCP | Own tool definitions, domain tags, checking algorithms, and checking results. |
 | Provider adapter | Translate requests and responses for OpenAI, Ollama, or another provider. |
 
 The old fixed validation pipeline has been removed. Historical topic profiles are
 examples and test fixtures; they do not decide which checks run.
+
+Tagging a new tool for a domain makes it available automatically. A shared tool can
+carry multiple domain tags. There is no separate tool-name list in the domain.
+The application saves the discovered catalogue once per job, and the model chooses
+its fixed check plan from that catalogue.
 
 ## Available code checks
 

@@ -34,7 +34,7 @@ from edcraft_validator.llm.llm_errors import GenerationSchemaError
 from edcraft_validator.llm.tool_context import generation_messages
 from edcraft_validator.mcp.catalogue import (
     ToolCatalogue,
-    resolve_allowed_tools,
+    resolve_domain_tools,
 )
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.evidence import ToolEvidence
@@ -118,9 +118,7 @@ class TemplateApplication:
             else request.model_dump(mode="json")
         )
         with self.tool_client as client:
-            tools = resolve_allowed_tools(
-                domain.allowed_tool_names, self.tool_catalogue or client
-            )
+            tools = resolve_domain_tools(domain.name, self.tool_catalogue or client)
             snapshot = ToolCatalogueSnapshot.from_definitions(tools)
             if on_catalogue_resolved is not None:
                 on_catalogue_resolved(snapshot)

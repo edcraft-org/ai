@@ -8,8 +8,8 @@ participant Model
 participant MCP
 
 User -> App: Prompt and easy/medium/hard difficulty
-App -> Domain: Get instructions, schema, and allowed tools
-App -> MCP: Get tool definitions once
+App -> Domain: Get instructions and schema
+App -> MCP: Get tools tagged for this domain once
 App -> Model: Request proposal and selected checks
 Model --> App: Proposal and check plan
 
@@ -19,8 +19,7 @@ loop Until success, at most 3 attempts
         App -> Model: Request tool calls
         Model --> App: Tool names and arguments
         App -> MCP: Call with current candidate
-        MCP -> Domain: Run checking operation
-        Domain --> MCP: Checked values or failure
+        MCP -> MCP: Run checking operation
         MCP --> App: Results
         App -> Model: Return results
     end

@@ -56,6 +56,7 @@ class ExampleCatalogue:
                 "description": f"Check {name}",
                 "inputSchema": {"type": "object"},
                 "outputSchema": {"type": "object"},
+                "_meta": {"fastmcp": {"tags": ["domain:example"]}},
             }
             for name in ("double_value", "positive_value")
         ]
@@ -148,13 +149,15 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring is not None
     assert validated.authoring.provider == "stub"
     assert validated.authoring.model == "stub-model"
-    assert validated.authoring.base_prompt_version == "code-template-v13+response-v3"
+    assert validated.authoring.base_prompt_version == "code-template-v14+response-v3"
     assert validated.authoring.domain == "code"
     assert validated.authoring.request["prompt"] == "Create an arithmetic question"
     assert validated.authoring.request["difficulty"] == "easy"
     assert validated.authoring.fixed_plan == ["code_validate_answers_and_distractors"]
-    assert list(provider_calls[0].tool_catalogue.names) == list(
-        domain.allowed_tool_names
+    assert provider_calls[0].tool_catalogue.names == (
+        "code_require_features",
+        "code_validate_answers_and_distractors",
+        "code_verify_template_structure",
     )
     assert (
         validated.authoring.tool_catalogue
@@ -180,7 +183,11 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
 
     server = FastMCP("Example")
 
-    @server.tool(description="Double a value", version="1")
+    @server.tool(
+        description="Double a value",
+        version="1",
+        tags={"domain:example", "domain:math"},
+    )
     def double_value(value: int) -> ToolEvidence:
         events.append("tool")
         return ToolEvidence(
@@ -190,9 +197,13 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
             details={"input": value, "value": value * 2},
         )
 
+    @server.tool(description="Math-only check", version="1", tags={"domain:math"})
+    def math_only(value: int) -> ToolEvidence:
+        pytest.fail("Another domain's tools must not be offered or executed")
+
     class ExampleDomain:
         name = "example"
-        allowed_tool_names = ("double_value",)
+
         request_model = ExampleRequest
         candidate_model = ExampleTemplate
         validated_model = ExampleValidated
@@ -204,7 +215,6 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
                 messages=[{"role": "user", "content": request.topic}],
                 response_model=PlannedGenerationResponse[ExampleProposal],
                 prompt_version="example-v1",
-                offered_tool_names=("double_value",),
             )
 
         def build_candidate(self, request, proposal):
@@ -230,6 +240,7 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
         def generate(self, request):
             events.append("generate")
             assert request.response_model == PlannedGenerationResponse[ExampleProposal]
+            assert request.offered_tool_names == ("double_value",)
             return request.response_model.model_validate_json(
                 json.dumps(
                     {
@@ -273,7 +284,6 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
 ) -> None:
     class FailingDomain:
         name = "example"
-        allowed_tool_names = ("positive_value",)
 
         def generation_request(self, request):
             from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
@@ -308,13 +318,12 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
             on_catalogue_resolved=captured_catalogues.append,
         )
     assert len(captured_catalogues) == 1
-    assert captured_catalogues[0].names == ("positive_value",)
+    assert captured_catalogues[0].names == ("double_value", "positive_value")
 
 
 def test_unknown_recommended_check_stops_before_candidate_validation() -> None:
     class Domain:
         name = "example"
-        allowed_tool_names = ("positive_value",)
 
         def generation_request(self, request):
             from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
@@ -323,7 +332,6 @@ def test_unknown_recommended_check_stops_before_candidate_validation() -> None:
                 messages=[{"role": "user", "content": request.topic}],
                 response_model=PlannedGenerationResponse[ExampleProposal],
                 prompt_version="example-v1",
-                offered_tool_names=("positive_value",),
             )
 
         def build_candidate(self, request, proposal):

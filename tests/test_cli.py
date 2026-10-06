@@ -42,7 +42,7 @@ class ExampleValidated(ValidatedTemplateArtifact):
 
 class ExampleDomain:
     name = "example"
-    allowed_tool_names = ("positive_value",)
+
     request_model = ExampleRequest
     candidate_model = ExampleCandidate
     validated_model = ExampleValidated
@@ -52,7 +52,6 @@ class ExampleDomain:
             messages=[{"role": "user", "content": request.lesson}],
             response_model=PlannedGenerationResponse[ExampleProposal],
             prompt_version="example-v1",
-            offered_tool_names=("positive_value",),
         )
 
     def build_candidate(self, request, proposal):
@@ -112,7 +111,9 @@ def example_registry(monkeypatch):
     )
     server = FastMCP("CLI example")
 
-    @server.tool(description="Check positive values", version="1")
+    @server.tool(
+        description="Check positive values", version="1", tags={"domain:example"}
+    )
     def positive_value(value: int) -> ToolEvidence:
         assert value > 0
         return ToolEvidence(tool="positive_value", version="1", status="passed")
