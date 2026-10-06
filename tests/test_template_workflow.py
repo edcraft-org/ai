@@ -20,7 +20,6 @@ from edcraft_validator.llm.llm_errors import (
     GenerationResponseError,
     GenerationSchemaError,
 )
-from edcraft_validator.mcp.catalogue import FastMcpToolCatalogue
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.evidence import ToolEvidence
 from edcraft_validator.mcp.server import create_validation_server
@@ -111,20 +110,15 @@ def test_template_application_authors_once_then_generates_locally() -> None:
 
     domain = CodeDomain()
 
-    class CountingCatalogue:
-        calls = 0
+    class CountingClient(FastMcpToolClient):
+        listings = 0
 
         def list_tools(self):
-            self.calls += 1
-            return FastMcpToolCatalogue().list_tools()
+            self.listings += 1
+            return super().list_tools()
 
-    catalogue = CountingCatalogue()
-    application = TemplateApplication(
-        tool_catalogue=catalogue,
-        tool_client=FastMcpToolClient(
-            create_validation_server(code_execution_tool=SumExecutor())
-        ),
-    )
+    client = CountingClient(create_validation_server(code_execution_tool=SumExecutor()))
+    application = TemplateApplication(tool_client=client)
     validated = application.create_validated_template(
         CodeTemplateRequest(prompt="Create an arithmetic question", difficulty="easy"),
         domain=domain,
@@ -133,7 +127,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     instance = application.generate_question(validated, domain=domain, seed=7)
 
     assert len(provider_calls) == 1
-    assert catalogue.calls == 1
+    assert client.listings == 1
     assert instance.seed == 7
     assert instance == application.generate_question(validated, domain=domain, seed=7)
     assert len(execution_calls) == 1

@@ -1,12 +1,7 @@
 """Discover domain-tagged tools from one MCP catalogue listing."""
 
-import asyncio
 import copy
 from typing import Any, Protocol
-
-from fastmcp import Client, FastMCP
-
-from edcraft_validator.mcp.server import mcp
 
 
 class ToolCatalogueError(ValueError):
@@ -15,27 +10,6 @@ class ToolCatalogueError(ValueError):
 
 class ToolCatalogue(Protocol):
     def list_tools(self) -> list[dict[str, Any]]: ...
-
-
-class FastMcpToolCatalogue:
-    """Use MCP tools/list without exposing the server's internal registry."""
-
-    def __init__(self, server: FastMCP | None = None) -> None:
-        self.server = server if server is not None else mcp
-
-    def list_tools(self) -> list[dict[str, Any]]:
-        async def fetch() -> list[dict[str, Any]]:
-            async with Client(self.server) as client:
-                tools = await client.list_tools(cache_mode="refresh")
-            return [
-                tool.model_dump(mode="json", by_alias=True, exclude_none=True)
-                for tool in tools
-            ]
-
-        try:
-            return asyncio.run(fetch())
-        except Exception as exc:
-            raise ToolCatalogueError(f"Could not list MCP tools: {exc}") from exc
 
 
 def resolve_domain_tools(

@@ -9,10 +9,10 @@ from pydantic import BaseModel
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.llm.llm_contracts import ToolCatalogueSnapshot
 from edcraft_validator.mcp.catalogue import (
-    FastMcpToolCatalogue,
     ToolCatalogueError,
     resolve_domain_tools,
 )
+from edcraft_validator.mcp.client import FastMcpToolClient
 
 
 class RecordingCatalogue:
@@ -45,7 +45,8 @@ def definition(name, domains=("code",)):
 
 
 def test_code_domain_resolves_real_tagged_mcp_definitions():
-    tools = resolve_domain_tools("code", FastMcpToolCatalogue())
+    with FastMcpToolClient() as client:
+        tools = resolve_domain_tools("code", client)
 
     assert [tool["name"] for tool in tools] == [
         "code_require_features",
