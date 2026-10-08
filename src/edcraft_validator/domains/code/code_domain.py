@@ -17,7 +17,6 @@ from edcraft_validator.domains.code.code_schemas import (
     ValidatedTemplateCase,
 )
 from edcraft_validator.domains.code.prompt_builder import (
-    CODE_ALLOWED_TOOL_NAMES,
     build_code_generation_request,
     build_code_validation_request,
 )
@@ -38,15 +37,12 @@ class CodeDomain:
     request_model = CodeTemplateRequest
     candidate_model = CodeTemplateCandidate
     validated_model = ValidatedCodeTemplate
-    allowed_tool_names = CODE_ALLOWED_TOOL_NAMES
 
     def generation_request(
         self, request: BaseModel
     ) -> StructuredGenerationRequest[PlannedGenerationResponse[CodeProposalResponse]]:
         typed_request = _require_type(request, CodeTemplateRequest)
-        return build_code_generation_request(
-            typed_request, offered_tool_names=self.allowed_tool_names
-        )
+        return build_code_generation_request(typed_request)
 
     def validation_request(self, candidate: BaseModel) -> StructuredGenerationRequest:
         return build_code_validation_request(
@@ -142,7 +138,7 @@ class CodeDomain:
                         check=item.tool,
                         status="passed",
                         duration_ms=item.duration_ms,
-                        details={"tool_version": item.version, **item.details},
+                        details={"tool_version": item.version},
                     )
                     for item in evidence
                 ],

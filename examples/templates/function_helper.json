@@ -1,7 +1,7 @@
 {
   "template_id": "functions.single_helper",
   "topic": "functions",
-  "difficulty": "beginner",
+  "difficulty": "easy",
   "code": "def increment(value):\n    return value + 1\n\ndef calculate(value):\n    return increment(value)",
   "entry_function": "calculate",
   "parameters": [

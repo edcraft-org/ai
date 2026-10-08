@@ -4,16 +4,16 @@ import copy
 import json
 from typing import Any
 
-from edcraft_validator.domains.code.checks.validation_context import (
-    CodeValidationContext,
-    DistractorCandidate,
-)
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
     TemplateValidationError,
 )
 from edcraft_validator.domains.code.code_types import AnswerTarget, ParameterValue
 from edcraft_validator.domains.code.safe_expressions import SafeExpression
+from edcraft_validator.mcp.code_checks.validation_context import (
+    CodeValidationContext,
+    DistractorCandidate,
+)
 from edcraft_validator.tools.python_execution import ExecutionResult
 from edcraft_validator.value_comparison import same_value_shape
 
@@ -101,11 +101,13 @@ def _parse_expressions(
             code="ANSWER_EXPRESSION_MISSING",
             field="answer_expression",
         )
-    answer = SafeExpression(template.answer_expression, names)
+    answer = _parse_expression(template.answer_expression, names, "answer_expression")
     candidates: list[DistractorCandidate] = []
     for index, recipe in enumerate(template.distractors):
         try:
-            expression = SafeExpression(recipe.expression, names)
+            expression = _parse_expression(
+                recipe.expression, names, f"distractors[{index}].expression"
+            )
         except TemplateValidationError as exc:
             if not allow_candidate_rejections:
                 raise
@@ -113,6 +115,20 @@ def _parse_expressions(
         else:
             candidates.append(DistractorCandidate(index=index, expression=expression))
     return answer, candidates
+
+
+def _parse_expression(
+    source: str, names: tuple[str, ...], field: str
+) -> SafeExpression:
+    try:
+        return SafeExpression(source, names)
+    except TemplateValidationError as exc:
+        raise TemplateValidationError(
+            f"{field} {source!r}: {exc}. Expressions use bare parameter names, "
+            "for example a + b. Placeholder braces belong only in text templates.",
+            code=exc.code,
+            field=field,
+        ) from exc
 
 
 def _execution_answer(execution: ExecutionResult, target: AnswerTarget) -> Any:

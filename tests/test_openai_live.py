@@ -1,10 +1,8 @@
 import os
 
 import pytest
+from live_provider_helpers import check_live_workflow
 
-from edcraft_validator.application.template_workflow import TemplateApplication
-from edcraft_validator.domains.code.code_domain import CodeDomain
-from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
 from edcraft_validator.llm.llm_contracts import TemplateProviderSelection
 from edcraft_validator.llm.provider_registry import create_model_provider
 
@@ -17,19 +15,4 @@ def test_real_openai_template_authoring() -> None:
         pytest.skip("OPENAI_API_KEY is not configured")
 
     provider = create_model_provider(TemplateProviderSelection(provider="openai"))
-    validated = TemplateApplication().create_validated_template(
-        CodeTemplateRequest(
-            prompt="Create an arithmetic question about adding integers",
-            difficulty="beginner",
-        ),
-        domain=CodeDomain(),
-        provider=provider,
-    )
-
-    assert validated.validation.cases_validated >= 4
-    assert len(validated.template.distractors) == 3
-    assert validated.template.topic is None
-    assert validated.template.difficulty == "beginner"
-    assert validated.authoring is not None
-    assert validated.authoring.provider == "openai"
-    assert validated.authoring.model
+    check_live_workflow(provider)

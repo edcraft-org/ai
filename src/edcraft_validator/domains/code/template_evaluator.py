@@ -9,11 +9,19 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    model_serializer,
+    model_validator,
+)
 
 from edcraft_validator.application.authoring_contracts import (
     AuthoringFailure,
     AuthoringResult,
+    FailureStage,
 )
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.domains.code.code_domain import CodeDomain
@@ -59,22 +67,52 @@ class TemplateEvaluationAttempt(BaseModel):
     prompt_version: str | None = None
     generation_duration_ms: float | None = Field(default=None, ge=0)
     total_duration_ms: float = Field(ge=0)
-    failure_stage: (
-        Literal[
-            "configuration",
-            "generation",
-            "template_building",
-            "validation",
-            "unexpected",
-        ]
-        | None
-    ) = None
+    failure_stage: FailureStage | None = None
     failure_code: str | None = None
     error: str | None = None
     tool_catalogue: list[dict[str, Any]] = Field(default_factory=list)
     validation_evidence: list[ValidationEvidence] = Field(default_factory=list)
     validated_template: ValidatedCodeTemplate | None = None
     authoring_result: AuthoringResult | None = None
+
+    @model_validator(mode="after")
+    def restore_report_views(self):
+        """Derive Python convenience fields from the one saved authoring report."""
+        result = self.authoring_result
+        if result is None:
+            return self
+        self.tool_catalogue = result.tool_catalogue
+        if result.artifact is not None:
+            self.validated_template = ValidatedCodeTemplate.model_validate_json(
+                result.artifact.model_dump_json()
+            )
+            self.validation_evidence = self.validated_template.validation.evidence
+        else:
+            self.validation_evidence = [
+                ValidationEvidence(
+                    check=item.tool,
+                    status="incomplete" if item.status == "error" else item.status,
+                    issues=[
+                        ValidationIssue(**finding.model_dump())
+                        for finding in item.findings
+                    ],
+                    details=item.details,
+                    duration_ms=item.duration_ms,
+                )
+                for attempt in result.attempts
+                for execution in attempt.executions
+                if (item := execution.evidence) is not None
+            ]
+        return self
+
+    @model_serializer(mode="wrap")
+    def serialize_report_once(self, handler):
+        """Keep convenience fields in memory without duplicating saved content."""
+        payload = handler(self)
+        if payload.get("authoring_result") is not None:
+            for key in ("validated_template", "tool_catalogue", "validation_evidence"):
+                payload.pop(key, None)
+        return payload
 
 
 class TemplateEvaluationGroup(BaseModel):
@@ -203,26 +241,18 @@ class TemplateEvaluator:
             generation_request = build_code_generation_request(request)
             prompt_version = generation_request.prompt_version
             application = TemplateApplication(tool_client=self.tool_client)
-            validated = application.create_validated_template(
+            result = application.author_template(
                 request,
                 domain=self.domain,
                 provider=model_provider,
                 on_catalogue_resolved=record_catalogue,
             )
+            if result.artifact is None:
+                raise AuthoringFailure(result)
+            validated = result.artifact
         except AuthoringFailure as exc:
             result = exc.result
-            evidence = [
-                execution.evidence
-                for attempt in result.attempts
-                for execution in attempt.executions
-                if execution.evidence is not None
-            ]
-            findings = [
-                finding
-                for item in evidence
-                for finding in item.findings
-                if item.status != "passed"
-            ]
+            stage, code = _terminal_failure(result)
             return TemplateEvaluationAttempt(
                 attempt=attempt_number,
                 provider=selection.provider,
@@ -231,24 +261,11 @@ class TemplateEvaluator:
                 request=request,
                 status="failed",
                 prompt_version=prompt_version,
+                generation_duration_ms=result.generation_duration_ms,
                 total_duration_ms=(time.perf_counter() - started) * 1000,
-                failure_stage="validation",
-                failure_code=findings[0].code if findings else result.status,
+                failure_stage=stage,
+                failure_code=code,
                 error=result.reason,
-                tool_catalogue=result.tool_catalogue,
-                validation_evidence=[
-                    ValidationEvidence(
-                        check=item.tool,
-                        status="incomplete" if item.status == "error" else item.status,
-                        issues=[
-                            ValidationIssue(**finding.model_dump())
-                            for finding in item.findings
-                        ],
-                        details=item.details,
-                        duration_ms=item.duration_ms,
-                    )
-                    for item in evidence
-                ],
                 authoring_result=result,
             )
         except Exception as exc:
@@ -266,7 +283,7 @@ class TemplateEvaluator:
                 failure_code=code,
                 error=str(exc),
                 tool_catalogue=(
-                    catalogue_snapshot.definitions() if catalogue_snapshot else []
+                    catalogue_snapshot.summaries() if catalogue_snapshot else []
                 ),
                 validation_evidence=(
                     exc.evidence if isinstance(exc, TemplateValidationError) else []
@@ -286,22 +303,29 @@ class TemplateEvaluator:
             prompt_version=provenance.base_prompt_version,
             generation_duration_ms=provenance.generation_duration_ms,
             total_duration_ms=(time.perf_counter() - started) * 1000,
-            tool_catalogue=(
-                catalogue_snapshot.definitions() if catalogue_snapshot else []
-            ),
-            validation_evidence=validated.validation.evidence,
-            validated_template=validated,
+            authoring_result=result,
         )
+
+
+def _terminal_failure(result: AuthoringResult) -> tuple[FailureStage, str]:
+    if result.failure is not None:
+        return result.failure.stage, result.failure.code
+    if result.attempts:
+        for execution in result.attempts[-1].executions:
+            if execution.passed:
+                continue
+            if execution.evidence is not None and execution.evidence.findings:
+                stage = (
+                    "checking" if execution.evidence.status == "error" else "validation"
+                )
+                return stage, execution.evidence.findings[0].code
+            return "checking", "TOOL_CALL_ERROR"
+    return "validation", result.status
 
 
 def _classify_failure(
     error: Exception, generator_created: bool
-) -> tuple[
-    Literal[
-        "configuration", "generation", "template_building", "validation", "unexpected"
-    ],
-    str,
-]:
+) -> tuple[FailureStage, str]:
     if isinstance(error, ToolCatalogueError):
         return "configuration", "MCP_CATALOGUE_ERROR"
     if isinstance(error, GenerationError):

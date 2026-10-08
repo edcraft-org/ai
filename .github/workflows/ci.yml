@@ -55,14 +55,14 @@ jobs:
             echo "::error::OPENAI_API_KEY repository secret is not configured"
             exit 1
           fi
-      - name: Evaluate live OpenAI template approval
+      - name: Evaluate live OpenAI template checking
         run: >-
           uv run python -m edcraft_validator.cli evaluate
           --domain code
           --provider openai
           --model "$OPENAI_MODEL"
           --topic arithmetic
-          --difficulty beginner
+          --difficulty easy
           --repetitions 1
           --output .artifacts/openai-pr-smoke.jsonl
       - name: Upload live evaluation record

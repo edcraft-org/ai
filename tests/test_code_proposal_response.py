@@ -30,13 +30,12 @@ def response_with_parameter(kind: str, values: list[object]) -> dict[str, object
 def test_generation_request_uses_one_typed_response_contract() -> None:
     request = build_code_generation_request(
         CodeTemplateRequest(
-            prompt="Create a question about arithmetic", difficulty="beginner"
+            prompt="Create a question about arithmetic", difficulty="easy"
         )
     )
 
     assert request.response_model == PlannedGenerationResponse[CodeProposalResponse]
-    assert request.prompt_version == "code-template-v13+response-v3"
-    assert request.offered_tool_names
+    assert request.prompt_version == "code-template-v16+response-v3"
     assert "Create a question about arithmetic" in request.messages[1]["content"]
     assert "Use native JSON values" in request.messages[1]["content"]
     assert (
@@ -48,7 +47,7 @@ def test_generation_request_uses_one_typed_response_contract() -> None:
 def test_free_form_prompt_agrees_with_the_typed_response_schema() -> None:
     request = build_code_generation_request(
         CodeTemplateRequest(
-            prompt="Create a question with a boolean parameter", difficulty="beginner"
+            prompt="Create a question with a boolean parameter", difficulty="easy"
         )
     )
     user_prompt = request.messages[1]["content"]

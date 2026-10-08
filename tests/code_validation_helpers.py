@@ -1,10 +1,10 @@
-"""Direct domain-operation helpers; workflow integration tests use actual MCP."""
+"""Direct checking-operation helpers; workflow integration tests use actual MCP."""
 
 from edcraft_validator.domains.code.code_domain import CodeDomain
-from edcraft_validator.domains.code.validation_operations import (
+from edcraft_validator.mcp.code_tools import (
+    CODE_TOOL_VERSION,
     validate_answers_and_distractors,
 )
-from edcraft_validator.mcp.code_tools import CODE_TOOL_VERSION
 from edcraft_validator.mcp.evidence import ToolEvidence
 
 

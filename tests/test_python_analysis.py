@@ -27,14 +27,23 @@ def test_rejects_missing_entry_function() -> None:
     assert any("not defined" in error for error in result.errors)
 
 
-def test_rejects_recursion() -> None:
-    # Recursion is blocked to keep generated execution bounded and predictable.
+def test_accepts_recursion_for_execution_checking() -> None:
     result = analyze_python_subset(
         "def countdown(n):\n    return 0 if n == 0 else countdown(n - 1)",
         "countdown",
     )
-    assert not result.is_valid
-    assert any("Recursion" in error for error in result.errors)
+    assert result.is_valid
+
+
+def test_accepts_mutual_recursion_for_execution_checking() -> None:
+    code = (
+        "def first(n):\n"
+        "    return 0 if n <= 0 else second(n - 1)\n\n"
+        "def second(n):\n"
+        "    return 0 if n <= 0 else first(n - 1)"
+    )
+
+    assert analyze_python_subset(code, "first").is_valid
 
 
 def test_accepts_helpers_conditionals_and_for_loops() -> None:

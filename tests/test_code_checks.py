@@ -3,15 +3,15 @@ from pathlib import Path
 import pytest
 from code_validation_helpers import validate_code
 
-from edcraft_validator.domains.code.checks.answer_checks import check_canonical_answers
-from edcraft_validator.domains.code.checks.execution_check import ExecutionCheck
-from edcraft_validator.domains.code.checks.validation_context import (
-    CodeValidationContext,
-)
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
     ValidatedCodeTemplate,
+)
+from edcraft_validator.mcp.code_checks.answer_checks import check_canonical_answers
+from edcraft_validator.mcp.code_checks.execution_check import ExecutionCheck
+from edcraft_validator.mcp.code_checks.validation_context import (
+    CodeValidationContext,
 )
 from edcraft_validator.mcp.evidence import ToolEvidence
 from edcraft_validator.tools.python_execution import ExecutionResult

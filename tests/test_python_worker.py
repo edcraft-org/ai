@@ -76,6 +76,31 @@ def test_executes_a_batch_of_inputs() -> None:
     assert [result["answer"] for result in response["results"]] == [4, 9]
 
 
+def test_branching_recursion_preserves_outer_answer_and_trace_counts() -> None:
+    response = execute_batch_request(
+        {
+            "code": (
+                "def fib(n):\n"
+                "    if n <= 1:\n"
+                "        return n\n"
+                "    return fib(n - 1) + fib(n - 2)"
+            ),
+            "entry_function": "fib",
+            "cases": [{"inputs": {"n": 4}}, {"inputs": {"n": 5}}],
+            "timeout_seconds": 2,
+        }
+    )
+
+    assert all(result["ok"] for result in response["results"])
+    assert [result["answer"] for result in response["results"]] == [3, 5]
+    assert [
+        result["trace_summary"]["function_calls"] for result in response["results"]
+    ] == [9, 15]
+    assert [
+        result["trace_summary"]["branch_executions"] for result in response["results"]
+    ] == [9, 15]
+
+
 def test_reports_runtime_failures_without_raising() -> None:
     # User-generated code failures must become structured results for callers.
     response = execute_request(

@@ -1,5 +1,6 @@
 """Evidence retained for successful, failed and incomplete authoring jobs."""
 
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, SerializeAsAny
@@ -7,15 +8,43 @@ from pydantic import BaseModel, Field, SerializeAsAny
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.mcp.evidence import ToolEvidence
 
+FailureStage = Literal[
+    "configuration",
+    "generation",
+    "template_building",
+    "checking",
+    "validation",
+    "finalization",
+    "unexpected",
+]
+
+
+class AuthoringError(BaseModel):
+    """The terminal workflow error, separate from earlier check findings."""
+
+    stage: FailureStage
+    code: str
+
 
 class CheckExecution(BaseModel):
     call_id: str
     tool: str
-    candidate_digest: str
-    requested_arguments: str
-    effective_arguments: dict[str, Any] | None = None
+    # The enclosing attempt stores the candidate supplied to this call.
+    requested_arguments: dict[str, Any] | str
+    application_arguments: dict[str, Any] | None = None
     evidence: ToolEvidence | None = None
     error: str | None = None
+
+    def model_feedback(self) -> dict[str, Any]:
+        """Send verdicts and repair context; retain full records in the application."""
+        evidence = None
+        if self.evidence is not None:
+            evidence = self.evidence.model_dump(
+                mode="json", include={"status", "findings", "details"}
+            )
+            if self.evidence.status == "passed":
+                evidence.pop("details")
+        return {"tool": self.tool, "error": self.error, "evidence": evidence}
 
     @property
     def passed(self) -> bool:
@@ -28,9 +57,7 @@ class CheckExecution(BaseModel):
 
 class GenerationAttempt(BaseModel):
     number: int
-    proposal: dict[str, Any]
     candidate: dict[str, Any]
-    candidate_digest: str
     executions: list[CheckExecution] = Field(default_factory=list)
     pending: list[str]
     complete: bool = False
@@ -41,11 +68,15 @@ class AuthoringResult(BaseModel):
     status: Literal["checked", "needs_review", "error"]
     provider: str
     model: str
+    domain: str
+    provider_settings: dict[str, Any] = Field(default_factory=dict)
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     request: dict[str, Any]
     prompt_version: str
     duration_ms: float = 0
+    generation_duration_ms: float = 0
     feedback_error: str | None = None
-    proposal: dict[str, Any]
+    failure: AuthoringError | None = None
     fixed_plan: list[str]
     tool_catalogue: list[dict[str, Any]]
     attempts: list[GenerationAttempt] = Field(default_factory=list)

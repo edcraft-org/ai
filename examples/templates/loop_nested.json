@@ -1,7 +1,7 @@
 {
   "template_id": "loops.nested",
   "topic": "loops",
-  "difficulty": "advanced",
+  "difficulty": "hard",
   "code": "def accumulate(n, m):\n    total = 0\n    for i in range(n):\n        for j in range(m):\n            total += i + j\n    return total",
   "entry_function": "accumulate",
   "parameters": [

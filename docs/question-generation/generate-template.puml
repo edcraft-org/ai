@@ -1,52 +1,53 @@
 @startuml TemplateGeneration
-title Model-selected MCP checking: author or existing candidate
+title Create, check, and reuse a template
 autonumber
 actor User
 participant Application as App
 participant Domain
-participant "Provider / model" as Model
+participant Model
 participant MCP
-User -> App: Domain + authoring request or existing candidate
-App -> Domain: Generation or check-planning instructions, schema, allowed names
-App -> MCP: List definitions once per job
-MCP --> App: Frozen schemas and versions
-App -> Model: Author: proposal + plan; validate: plan only
-Model --> App: Requested response with nonempty fixed plan
-loop Author: up to 3 attempts; validate: 1 attempt
-    App -> Domain: Build generated candidate or retain supplied candidate; bind inputs
-    App -> App: Freeze candidate identity; reset pending names
-    loop Bounded native tool turns until no checks pending
-        App -> Model: Pending callable schemas + prior evidence
-        Model --> App: Tool name + check-specific arguments
-        App -> App: Enforce plan; reject overrides; inject candidate
-        App -> MCP: Validated arguments, pinned tool version
-        MCP -> Domain: Run selected validation operation
-        Domain --> MCP: Result details or validation failure
-        MCP --> App: Structured evidence or protocol error
-        App -> App: Record result; continue after failures
+
+User -> App: Prompt and easy/medium/hard difficulty
+App -> Domain: Get instructions and schema
+App -> MCP: Get tools tagged for this domain once
+App -> Model: Request proposal and selected checks
+Model --> App: Proposal and check plan
+
+loop Until success, at most 3 attempts
+    App -> Domain: Build candidate
+    loop Selected checks
+        App -> Model: Request tool calls
+        Model --> App: Tool names and arguments
+        App -> MCP: Call with current candidate
+        MCP -> MCP: Run checking operation
+        MCP --> App: Results
+        App -> Model: Return results
     end
-    alt All selected checks passed
-        App -> Model: Final evidence; acknowledgement only
-        App -> Domain: Finalize from candidate and evidence
-        Domain --> App: Artifact, or missing canonical evidence
-        App -> App: Stop retrying
-    else Author failed and attempts remain
-        App -> Model: Complete evidence + request revision
-        Model --> App: Revised proposal, same check membership
-    else Attempts exhausted or supplied candidate failed
-        App -> Model: Final evidence; acknowledgement only
-        App -> App: needs_review; no reusable artifact
+    alt All checks passed
+        App -> Model: Final results; acknowledgement only
+        App -> Domain: Package checked answers and distractors
+        Domain --> App: Artifact, or missing required data
+        App -> App: checked, or needs_review if data is missing
+    else Failed and attempts remain
+        App -> Model: Request revision using all results
+        Model --> App: Revised proposal, same selected checks
+    else Third attempt failed
+        App -> Model: Final results; acknowledgement only
+        App -> App: needs_review
     end
 end
-App --> User: Status, latest proposal, complete history, optional artifact
+App --> User: One report with all attempts; small artifact if available
+
 note over App, User
-checked is technical success, not user approval.
-Missing canonical data: needs_review.
-Incomplete/protocol conversation: error with partial history.
-Final acknowledgement failures are recorded separately.
-Human approval persistence remains follow-up work.
+Saved artifacts get a new ID.
+Reports keep history; artifacts keep content and checked answers.
+Existing-candidate validation checks once without revisions.
+Interrupted conversations return error.
+Human approval is future product work.
 end note
-User -> App: Generate preview from reusable artifact and seed
-App -> Domain: Deterministic expansion
-Domain --> User: Question; no AI or MCP call
+
+User -> App: Saved artifact and seed
+App -> Domain: Generate question locally
+Domain --> App: Question
+App --> User: Question; no model or MCP calls
 @enduml

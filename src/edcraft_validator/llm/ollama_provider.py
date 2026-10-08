@@ -31,11 +31,13 @@ class OllamaProvider:
         self.model = model or os.getenv("OLLAMA_MODEL") or "qwen2.5"
         self._options = {"temperature": _temperature(), "num_predict": _num_predict()}
         self._timeout = _timeout_seconds()
+        self._think = _thinking()
 
     def generation_settings(self) -> dict:
         return {
             "options": copy.deepcopy(self._options),
             "timeout_seconds": self._timeout,
+            "think": self._think,
         }
 
     def generate[ProposalT: BaseModel](
@@ -63,6 +65,18 @@ class OllamaProvider:
     def _ollama_request(
         self, messages: list[dict[str, str]], schema: dict[str, object]
     ) -> str:
+        # Ollama's format constrains JSON syntax; the prompt also needs to show
+        # the field meanings, especially when a revision uses a different schema.
+        messages = copy.deepcopy(messages) + [
+            {
+                "role": "user",
+                "content": (
+                    "Satisfy the request and any check feedback above. Return only "
+                    "a JSON object matching this response schema:\n"
+                    + json.dumps(schema)
+                ),
+            }
+        ]
         return self._chat(messages, schema=schema)["content"]
 
     def tool_turn(self, messages, tools) -> ModelTurn:
@@ -103,6 +117,8 @@ class OllamaProvider:
             "stream": False,
             "options": self._options,
         }
+        if self._think is not None:
+            payload["think"] = self._think
         if schema is not None:
             payload["format"] = schema
         if tools:
@@ -117,6 +133,12 @@ class OllamaProvider:
             timeout = self._timeout
             with urlopen(request, timeout=timeout) as response:
                 body = json.load(response)
+            if body.get("done_reason") == "length":
+                raise GenerationResponseError(
+                    "Ollama exhausted OLLAMA_NUM_PREDICT before completing its "
+                    "response. Disable thinking with OLLAMA_THINK=false "
+                    "or increase the output budget."
+                )
             return body["message"]
         except TimeoutError as exc:
             raise GenerationTimeoutError(
@@ -142,6 +164,23 @@ class OllamaProvider:
             raise GenerationResponseError(
                 "Ollama endpoint response did not contain message.content"
             ) from exc
+
+
+def _thinking() -> bool | str | None:
+    raw = os.getenv("OLLAMA_THINK", "false").strip().lower()
+    values = {
+        "false": False,
+        "true": True,
+        "default": None,
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+    }
+    if raw not in values:
+        raise GenerationError(
+            "OLLAMA_THINK must be false, true, default, low, medium, or high"
+        )
+    return values[raw]
 
 
 def _timeout_seconds() -> float:

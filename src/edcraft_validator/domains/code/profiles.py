@@ -48,7 +48,7 @@ def _shape(
 _PROFILES = (
     CodeTemplateProfile(
         "arithmetic",
-        "beginner",
+        "easy",
         "return_value",
         (
             _shape("integer", "integer", names=("a", "b")),
@@ -62,7 +62,7 @@ _PROFILES = (
     ),
     CodeTemplateProfile(
         "arithmetic",
-        "intermediate",
+        "medium",
         "return_value",
         (_shape("integer", "integer", "boolean"),),
         frozenset({"arithmetic", "conditional"}),
@@ -72,7 +72,7 @@ _PROFILES = (
     ),
     CodeTemplateProfile(
         "arithmetic",
-        "advanced",
+        "hard",
         "return_value",
         (_shape("integer_list", "string"),),
         frozenset({"arithmetic", "conditional", "list_aggregate"}),
@@ -82,7 +82,7 @@ _PROFILES = (
     ),
     CodeTemplateProfile(
         "conditionals",
-        "beginner",
+        "easy",
         "branch_executions",
         (_shape("boolean"),),
         frozenset({"conditional"}),
@@ -92,7 +92,7 @@ _PROFILES = (
     ),
     CodeTemplateProfile(
         "conditionals",
-        "intermediate",
+        "medium",
         "branch_executions",
         (_shape("string", names=("mode",)),),
         frozenset({"conditional", "early_return", "sequential_conditionals"}),
@@ -103,7 +103,7 @@ _PROFILES = (
     ),
     CodeTemplateProfile(
         "conditionals",
-        "advanced",
+        "hard",
         "branch_executions",
         (_shape("integer", "boolean", names=("score", "override")),),
         frozenset({"conditional", "early_return", "nested_conditional"}),
@@ -114,7 +114,7 @@ _PROFILES = (
     ),
     CodeTemplateProfile(
         "loops",
-        "beginner",
+        "easy",
         "loop_iterations",
         (_shape("integer", names=("n",)),),
         frozenset({"loop"}),
@@ -125,7 +125,7 @@ _PROFILES = (
     ),
     CodeTemplateProfile(
         "loops",
-        "intermediate",
+        "medium",
         "loop_iterations",
         (_shape("integer", "integer", names=("n", "m")),),
         frozenset({"loop", "sequential_loops"}),
@@ -137,7 +137,7 @@ _PROFILES = (
     ),
     CodeTemplateProfile(
         "loops",
-        "advanced",
+        "hard",
         "loop_iterations",
         (_shape("integer", "integer", names=("n", "m")),),
         frozenset({"loop", "nested_loop"}),
@@ -149,7 +149,7 @@ _PROFILES = (
     ),
     CodeTemplateProfile(
         "functions",
-        "beginner",
+        "easy",
         "function_calls",
         (_shape("integer"),),
         frozenset({"helper_function"}),
@@ -160,7 +160,7 @@ _PROFILES = (
     ),
     CodeTemplateProfile(
         "functions",
-        "intermediate",
+        "medium",
         "function_calls",
         (_shape("integer", names=("n",)),),
         frozenset({"helper_function", "loop"}),
@@ -172,7 +172,7 @@ _PROFILES = (
     ),
     CodeTemplateProfile(
         "functions",
-        "advanced",
+        "hard",
         "function_calls",
         (_shape("integer", names=("n",)),),
         frozenset({"helper_function", "loop", "nested_helper"}),
@@ -184,7 +184,7 @@ _PROFILES = (
     ),
     CodeTemplateProfile(
         "lists",
-        "beginner",
+        "easy",
         "return_value",
         (_shape("integer_list", names=("values",)),),
         frozenset({"list_aggregate"}),
@@ -195,7 +195,7 @@ _PROFILES = (
     ),
     CodeTemplateProfile(
         "lists",
-        "intermediate",
+        "medium",
         "return_value",
         (_shape("integer_list", names=("values",)),),
         frozenset({"list_sort"}),
@@ -206,7 +206,7 @@ _PROFILES = (
     ),
     CodeTemplateProfile(
         "lists",
-        "advanced",
+        "hard",
         "return_value",
         (_shape("integer_list", names=("values",)),),
         frozenset({"arithmetic", "list_index"}),

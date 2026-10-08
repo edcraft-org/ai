@@ -2,10 +2,10 @@
 
 from dataclasses import dataclass
 
-from edcraft_validator.domains.code.checks.validation_context import (
+from edcraft_validator.domains.code.code_schemas import TemplateValidationError
+from edcraft_validator.mcp.code_checks.validation_context import (
     CodeValidationContext,
 )
-from edcraft_validator.domains.code.code_schemas import TemplateValidationError
 from edcraft_validator.tools.python_execution import PythonExecutionTool
 
 

@@ -38,7 +38,7 @@ def template(**changes: Any) -> CodeTemplateCandidate:
     data = {
         "template_id": "arithmetic.linear_sum",
         "topic": "arithmetic",
-        "difficulty": "beginner",
+        "difficulty": "easy",
         "code": "def calculate(a, b, c):\n    return a + b - c",
         "entry_function": "calculate",
         "parameters": [
@@ -167,7 +167,8 @@ def test_validates_every_case_once_then_generates_without_executor() -> None:
     ]
     assert all(item.status == "passed" for item in validated.validation.evidence)
     assert "assurance" not in validated.validation.evidence[0].model_dump()
-    assert validated.validation.evidence[0].details["cases"] == 8
+    assert validated.validation.cases_validated == 8
+    assert "cases" not in validated.validation.evidence[0].details
     assert executor.batch_calls == 1
     assert len(executor.calls) == 8
 
@@ -189,7 +190,7 @@ def test_supports_loop_iteration_questions() -> None:
         {
             "template_id": "loops.iteration_count",
             "topic": "loops",
-            "difficulty": "beginner",
+            "difficulty": "easy",
             "code": (
                 "def accumulate(n):\n"
                 "    total = 0\n"
@@ -236,20 +237,18 @@ def test_free_form_prompt_preserves_requested_topic_and_difficulty() -> None:
     prompt = build_template_prompt(
         CodeTemplateRequest(
             prompt="Create a graph traversal question using a loop",
-            difficulty="beginner",
+            difficulty="easy",
         )
     )
 
     assert "Create a graph traversal question using a loop" in prompt
-    assert "Requested difficulty: beginner" in prompt
+    assert "Requested difficulty: easy" in prompt
     assert "catalogue topic" in prompt
 
 
 def test_prompt_gives_the_model_control_of_question_and_entry_function() -> None:
     prompt = build_template_prompt(
-        CodeTemplateRequest(
-            prompt="Create an arithmetic question", difficulty="beginner"
-        )
+        CodeTemplateRequest(prompt="Create an arithmetic question", difficulty="easy")
     )
 
     assert "Choose the entry function" in prompt
@@ -264,7 +263,7 @@ def test_prompt_requests_only_the_needed_model_distractors() -> None:
     prompt = build_template_prompt(
         CodeTemplateRequest(
             prompt="Create an arithmetic question",
-            difficulty="beginner",
+            difficulty="easy",
             num_distractors=2,
         )
     )
@@ -291,7 +290,7 @@ def test_two_model_distractors_are_enough_when_two_are_requested() -> None:
     built = build_code_candidate(
         CodeTemplateRequest(
             prompt="Create an arithmetic question",
-            difficulty="beginner",
+            difficulty="easy",
             num_distractors=2,
         ),
         proposal,
@@ -319,7 +318,7 @@ def test_candidate_builder_leaves_missing_distractors_for_check_failure() -> Non
     built = build_code_candidate(
         CodeTemplateRequest(
             prompt="Create an arithmetic question",
-            difficulty="beginner",
+            difficulty="easy",
             num_distractors=3,
         ),
         proposal,
@@ -333,21 +332,19 @@ def test_candidate_builder_leaves_missing_distractors_for_check_failure() -> Non
     assert built == original
 
 
-def test_prompt_offers_current_validation_check_names() -> None:
+def test_prompt_selects_checks_from_supplied_catalogue() -> None:
     prompt = build_template_prompt(
-        CodeTemplateRequest(
-            prompt="Create a conditional question", difficulty="advanced"
-        )
+        CodeTemplateRequest(prompt="Create a conditional question", difficulty="hard")
     )
 
-    assert "code_verify_template_structure" in prompt
-    assert "code_validate_answers_and_distractors" in prompt
+    assert "supplied MCP catalogue" in prompt
+    assert "execution-derived answers and checked distractors" in prompt
     assert "do not invent names" in prompt
 
 
 def test_reason_placeholders_forbid_embedded_expressions() -> None:
     prompt = build_template_prompt(
-        CodeTemplateRequest(prompt="Create a loop question", difficulty="beginner")
+        CodeTemplateRequest(prompt="Create a loop question", difficulty="easy")
     )
 
     assert "never put expressions inside braces" in prompt
@@ -407,14 +404,14 @@ def test_template_building_derives_stable_local_fields() -> None:
         )
     )
     request = CodeTemplateRequest(
-        prompt="Create an arithmetic question", difficulty="beginner"
+        prompt="Create an arithmetic question", difficulty="easy"
     )
 
     first = build_code_candidate(request, proposal)
     second = build_code_candidate(request, proposal)
 
     assert first == second
-    assert first.template_id.startswith("code.beginner.")
+    assert first.template_id.startswith("code.easy.")
     assert first.answer_target == "return_value"
     assert first.question_type == "mcq"
     assert first.question_template == ("What does calculate({a}, {b}, {c}) return?")
@@ -440,7 +437,7 @@ def test_list_template_building_preserves_model_distractors() -> None:
     )
 
     result = build_code_candidate(
-        CodeTemplateRequest(prompt="Create a list question", difficulty="intermediate"),
+        CodeTemplateRequest(prompt="Create a list question", difficulty="medium"),
         proposal,
     )
 
@@ -654,16 +651,16 @@ def test_rejects_an_unused_entry_parameter_before_execution() -> None:
         ),
     ],
     ids=[
-        "conditional-intermediate",
-        "conditional-advanced",
-        "loop-beginner",
-        "loop-intermediate",
-        "loop-advanced",
-        "function-beginner",
-        "function-intermediate",
-        "function-advanced",
-        "list-beginner",
-        "list-intermediate",
+        "conditional-medium",
+        "conditional-hard",
+        "loop-easy",
+        "loop-medium",
+        "loop-hard",
+        "function-easy",
+        "function-medium",
+        "function-hard",
+        "list-easy",
+        "list-medium",
     ],
 )
 def test_profiles_accept_alternative_programs_and_answer_formulas(
@@ -698,7 +695,7 @@ def test_template_building_preserves_model_authored_target_and_wording() -> None
     )
 
     result = build_code_candidate(
-        CodeTemplateRequest(prompt="Create a loop question", difficulty="beginner"),
+        CodeTemplateRequest(prompt="Create a loop question", difficulty="easy"),
         proposal,
     )
 
@@ -1030,7 +1027,7 @@ def test_invalid_non_numeric_distractors_fail_without_fallbacks(
     item = CodeTemplateCandidate.model_validate(
         {
             "template_id": f"fallback.{name}",
-            "difficulty": "beginner",
+            "difficulty": "easy",
             "code": f"def identity({name}):\n    return {name}",
             "entry_function": "identity",
             "parameters": [parameter],

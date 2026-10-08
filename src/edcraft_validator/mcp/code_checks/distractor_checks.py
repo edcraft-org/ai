@@ -3,17 +3,17 @@
 import itertools
 from typing import Any
 
-from edcraft_validator.domains.code.checks.answer_checks import require_json_value
-from edcraft_validator.domains.code.checks.validation_context import (
-    CodeValidationContext,
-    DistractorCandidate,
-)
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
     TemplateValidationError,
 )
 from edcraft_validator.domains.code.code_types import ParameterValue
 from edcraft_validator.domains.code.text_rendering import render_template
+from edcraft_validator.mcp.code_checks.answer_checks import require_json_value
+from edcraft_validator.mcp.code_checks.validation_context import (
+    CodeValidationContext,
+    DistractorCandidate,
+)
 from edcraft_validator.value_comparison import equivalent, same_value_shape
 
 

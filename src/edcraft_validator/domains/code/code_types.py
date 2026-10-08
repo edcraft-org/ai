@@ -22,7 +22,7 @@ ProgrammingTopic = Literal[
 ]
 
 
-Difficulty = Literal["beginner", "intermediate", "advanced"]
+Difficulty = Literal["easy", "medium", "hard"]
 
 
 ParameterKind = Literal["integer", "boolean", "string", "integer_list"]

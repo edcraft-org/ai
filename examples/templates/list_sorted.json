@@ -1,7 +1,7 @@
 {
   "template_id": "lists.sorted_result",
   "topic": "lists",
-  "difficulty": "intermediate",
+  "difficulty": "medium",
   "code": "def arrange(values):\n    return sorted(values)",
   "entry_function": "arrange",
   "parameters": [

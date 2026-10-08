@@ -1,4 +1,4 @@
-"""The application resolves one authoritative tool catalogue per authoring job."""
+"""Discover tools by domain tags and retain one catalogue per authoring job."""
 
 import copy
 from dataclasses import FrozenInstanceError
@@ -7,13 +7,12 @@ import pytest
 from pydantic import BaseModel
 
 from edcraft_validator.application.template_workflow import TemplateApplication
-from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.llm.llm_contracts import ToolCatalogueSnapshot
 from edcraft_validator.mcp.catalogue import (
-    FastMcpToolCatalogue,
     ToolCatalogueError,
-    resolve_allowed_tools,
+    resolve_domain_tools,
 )
+from edcraft_validator.mcp.client import FastMcpToolClient
 
 
 class RecordingCatalogue:
@@ -30,51 +29,81 @@ class EmptyRequest(BaseModel):
     pass
 
 
-def definition(name):
+def definition(name, domains=("code",)):
     return {
         "name": name,
         "description": f"Check {name}",
         "inputSchema": {"type": "object", "properties": {"candidate": {}}},
         "outputSchema": {"type": "object", "properties": {"status": {}}},
-        "_meta": {"fastmcp": {"version": "1.0"}},
+        "_meta": {
+            "fastmcp": {
+                "version": "1.0",
+                "tags": [f"domain:{domain}" for domain in domains],
+            }
+        },
     }
 
 
-def test_code_domain_resolves_real_mcp_definitions():
-    domain = CodeDomain()
-    tools = resolve_allowed_tools(domain.allowed_tool_names, FastMcpToolCatalogue())
+def test_code_domain_resolves_real_tagged_mcp_definitions():
+    with FastMcpToolClient() as client:
+        tools = resolve_domain_tools("code", client)
 
-    assert [tool["name"] for tool in tools] == list(domain.allowed_tool_names)
+    assert [tool["name"] for tool in tools] == [
+        "code_require_features",
+        "code_validate_answers_and_distractors",
+        "code_verify_template_structure",
+    ]
     assert all(tool["description"] for tool in tools)
     assert all("candidate" in tool["inputSchema"]["properties"] for tool in tools)
     assert all("status" in tool["outputSchema"]["properties"] for tool in tools)
     assert all(tool["_meta"]["fastmcp"]["version"] for tool in tools)
 
 
+def test_domain_tags_filter_tools_and_allow_shared_tools():
+    catalogue = RecordingCatalogue(
+        [
+            definition("math_only", ("math",)),
+            definition("shared", ("code", "math")),
+            definition("untagged", ()),
+            definition("code_only"),
+        ]
+    )
+    assert [tool["name"] for tool in resolve_domain_tools("code", catalogue)] == [
+        "code_only",
+        "shared",
+    ]
+    assert [tool["name"] for tool in resolve_domain_tools("math", catalogue)] == [
+        "math_only",
+        "shared",
+    ]
+
+
+def test_new_tagged_tool_is_discovered_without_a_domain_tool_list():
+    catalogue = RecordingCatalogue([definition("original")])
+    assert [tool["name"] for tool in resolve_domain_tools("code", catalogue)] == [
+        "original"
+    ]
+    catalogue.tools.append(definition("new_check"))
+    assert [tool["name"] for tool in resolve_domain_tools("code", catalogue)] == [
+        "new_check",
+        "original",
+    ]
+
+
 @pytest.mark.parametrize(
-    ("allowed", "listed", "message", "calls"),
+    ("listed", "message"),
     [
-        (("missing",), [], "missing MCP tools: missing", 1),
-        (
-            ("check",),
-            [definition("check"), definition("check")],
-            "duplicate MCP tools: check",
-            1,
-        ),
-        (
-            ("check", "check"),
-            [definition("check")],
-            "duplicate allowed MCP tool names",
-            0,
-        ),
-        ((), [], "no allowed MCP tool names", 0),
+        ([], "no MCP tools tagged for domain: code"),
+        ([definition("math_only", ("math",))], "no MCP tools tagged for domain: code"),
+        ([definition("untagged", ())], "no MCP tools tagged for domain: code"),
+        ([definition("check"), definition("check")], "duplicate MCP tools: check"),
     ],
 )
-def test_bad_allowlist_stops_before_generation(allowed, listed, message, calls):
+def test_bad_catalogue_stops_before_generation(listed, message):
     catalogue = RecordingCatalogue(listed)
 
     class Domain:
-        allowed_tool_names = allowed
+        name = "code"
 
         def generation_request(self, request):
             pytest.fail("invalid catalogues must stop before prompt construction")
@@ -87,13 +116,13 @@ def test_bad_allowlist_stops_before_generation(allowed, listed, message, calls):
         TemplateApplication(tool_catalogue=catalogue).create_validated_template(
             EmptyRequest(), domain=Domain(), provider=Provider()
         )
-    assert catalogue.calls == calls
+    assert catalogue.calls == 1
 
 
 def test_resolution_reads_once_and_copies_full_definitions():
     original = definition("check")
     catalogue = RecordingCatalogue([original])
-    resolved = resolve_allowed_tools(("check",), catalogue)
+    resolved = resolve_domain_tools("code", catalogue)
     expected = copy.deepcopy(original)
     original["description"] = "changed after resolution"
     original["inputSchema"]["properties"].clear()
