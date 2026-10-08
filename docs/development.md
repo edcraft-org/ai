@@ -13,7 +13,7 @@ All paths below are under `src/edcraft_validator/`.
 | Area | Main files | Purpose |
 | --- | --- | --- |
 | Application | `application/template_workflow.py`, `application/authoring_contracts.py` | Checking loop, attempts, and final results. |
-| Saved records | `artifact_contracts.py` | Artifact ID and checking history. |
+| Saved records | `artifact_contracts.py` | Artifact ID and small origin record. |
 | Providers | `llm/llm_contracts.py`, provider adapters and registry | Shared interface and provider communication. |
 | MCP | `mcp/server.py`, `mcp/code_tools.py`, `mcp/client.py` | Tool registration, deadlines, evidence, and calls. |
 | Domain interface | `domains/domain_contract.py`, `domains/domain_registry.py` | Domain contract and lookup. |
@@ -43,6 +43,38 @@ the saved schemas and versions. Final acknowledgement failures are recorded sepa
 The code finalizer stores execution-derived answers, clears the proposed answer
 expression, and retains selected supplied distractors. It leaves code and wording
 unchanged and does not execute the template again.
+
+## Saved output
+
+`AuthoringResult` is one report per job. It stores the request, provider settings,
+compact tool catalogue, selected plan, timings and all attempts. Each attempt owns
+one candidate; its executions store requested arguments, additional application
+arguments and full `ToolEvidence`. Valid argument JSON is saved as an object;
+malformed argument JSON is retained as text so failures remain explainable.
+
+The shared report envelope preserves domain-specific artifact fields on reload.
+Before using a reloaded artifact, parse its JSON through the selected domain's
+`validated_model`; that schema owns validation of its content. The code domain's
+schema still rejects unknown fields. Report `failure` records the terminal error's
+stage and code, independently of findings from earlier attempts. Generation timing
+includes correction requests that time out or return invalid responses.
+
+`ValidatedCodeTemplate` stores the reusable content and canonical input/answer
+cases. Its check summaries retain names, versions and timings without copying
+canonical answers or trace summaries again. `TemplateAuthoringProvenance` is only
+small origin metadata; it does not contain the report. Question generation needs
+neither the history nor the diagnostic schemas.
+
+The CLI's `--template-output` writes the artifact only on success. The optional
+`--tool-schemas` writes the complete discovered catalogue for diagnostics. Normal
+reports omit schemas, but dispatch still validates against the original definitions.
+Regenerate older development artifacts that fail the new schema.
+
+Evaluation JSON stores the authoring report once under `authoring_result`.
+`TemplateEvaluationAttempt` derives its Python convenience fields from that report
+when loading, so `validated_template`, `tool_catalogue`, and `validation_evidence`
+remain available without repeating them in saved records. Initial failures before
+an authoring report exists retain their catalogue and evidence directly.
 
 ## Execution limits
 

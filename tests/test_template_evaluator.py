@@ -3,7 +3,10 @@ import json
 from authoring_helpers import RequestPendingTools
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateProposal
-from edcraft_validator.domains.code.template_evaluator import TemplateEvaluator
+from edcraft_validator.domains.code.template_evaluator import (
+    TemplateEvaluationReport,
+    TemplateEvaluator,
+)
 from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     RecommendedCheck,
@@ -50,6 +53,8 @@ class StubProvider(RequestPendingTools):
         self.result = result
 
     def generate(self, request):
+        if not issubclass(request.response_model, PlannedGenerationResponse):
+            return request.response_model.model_validate(self.result.model_dump())
         return PlannedGenerationResponse(
             proposal=self.result,
             checks=[
@@ -99,12 +104,37 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
     report.write_jsonl(output)
     records = [json.loads(line) for line in output.read_text().splitlines()]
     assert len(records) == 2
-    assert records[0]["validated_template"]["authoring"]["model"] == "stub-model"
-    assert records[1]["failure_code"] == "UNUSED_PARAMETER"
-    assert records[1]["tool_catalogue"] == report.attempts[1].tool_catalogue
-    assert records[1]["validation_evidence"][-1]["issues"][0]["code"] == (
-        "UNUSED_PARAMETER"
+    assert (
+        records[0]["authoring_result"]["artifact"]["authoring"]["model"] == "stub-model"
     )
+    assert records[1]["failure_code"] == "UNUSED_PARAMETER"
+    assert (
+        records[1]["authoring_result"]["tool_catalogue"]
+        == report.attempts[1].tool_catalogue
+    )
+    assert records[1]["authoring_result"]["attempts"][-1]["executions"][-1]["evidence"][
+        "findings"
+    ][0]["code"] == ("UNUSED_PARAMETER")
+    for record in records:
+        assert (
+            not {"validated_template", "tool_catalogue", "validation_evidence"}
+            & record.keys()
+        )
+    # Saved evaluation records still expose the same Python convenience fields.
+    loaded = TemplateEvaluationReport.model_validate_json(report.model_dump_json())
+    assert loaded.model_dump(mode="json") == report.model_dump(mode="json")
+    assert (
+        loaded.attempts[0].validated_template == report.attempts[0].validated_template
+    )
+    assert loaded.attempts[1].tool_catalogue == report.attempts[1].tool_catalogue
+    assert (
+        loaded.attempts[1].validation_evidence == report.attempts[1].validation_evidence
+    )
+    # Explicitly requesting a convenience field still works without the report.
+    selected = report.attempts[0].model_dump(
+        mode="json", include={"validated_template"}
+    )
+    assert selected["validated_template"] == records[0]["authoring_result"]["artifact"]
 
 
 def test_evaluation_notifies_before_starting_the_next_attempt() -> None:
@@ -180,3 +210,124 @@ def test_evaluation_retains_catalogue_when_model_generation_fails() -> None:
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",
     ]
+
+
+def test_successful_evaluation_keeps_failed_attempt_evidence_in_the_report():
+    class CorrectingProvider(StubProvider):
+        def generate(self, request):
+            if issubclass(request.response_model, PlannedGenerationResponse):
+                wrong = proposal().model_copy(update={"answer_expression": "a - b"})
+                return PlannedGenerationResponse(
+                    proposal=wrong,
+                    checks=[
+                        {
+                            "name": "code_validate_answers_and_distractors",
+                            "arguments": {},
+                        }
+                    ],
+                )
+            return request.response_model.model_validate(proposal().model_dump())
+
+    report = TemplateEvaluator(
+        provider_factory=lambda selection: CorrectingProvider(proposal()),
+        execution_tool=SumExecutor(),
+    ).evaluate(
+        provider="stub",
+        model="stub-model",
+        topics=("arithmetic",),
+        difficulties=("easy",),
+        repetitions=1,
+    )
+    attempt = report.attempts[0]
+    assert attempt.status == "validated"
+    history = attempt.authoring_result.attempts
+    assert len(history) == 2
+    assert not history[0].passed and history[1].passed
+    assert (
+        history[0].executions[0].evidence.findings[0].code == "PROPOSED_ANSWER_MISMATCH"
+    )
+    assert "attempts" not in attempt.validated_template.authoring.model_dump()
+
+
+def test_evaluation_attributes_failure_to_the_final_attempt():
+    class ChangingFailures(StubProvider):
+        def generate(self, request):
+            if issubclass(request.response_model, PlannedGenerationResponse):
+                wrong = proposal().model_copy(update={"answer_expression": "a - b"})
+                return PlannedGenerationResponse(
+                    proposal=wrong,
+                    checks=[
+                        {
+                            "name": "code_validate_answers_and_distractors",
+                            "arguments": {},
+                        }
+                    ],
+                )
+            payload = proposal().model_dump()
+            payload["distractors"] = [
+                {"expression": "a + b", "reason_template": "Repeats answer."}
+            ] * 3
+            return request.response_model.model_validate(payload)
+
+    report = TemplateEvaluator(
+        provider_factory=lambda selection: ChangingFailures(proposal()),
+        execution_tool=SumExecutor(),
+    ).evaluate(
+        provider="stub",
+        model="stub-model",
+        topics=("arithmetic",),
+        difficulties=("easy",),
+        repetitions=1,
+    )
+    attempt = report.attempts[0]
+    assert attempt.failure_stage == "validation"
+    assert attempt.failure_code == "DISTRACTOR_SELECTION_FAILED"
+    assert report.summary.failure_counts == {"DISTRACTOR_SELECTION_FAILED": 1}
+    history = attempt.authoring_result.attempts
+    assert len(history) == 3
+    assert (
+        history[0].executions[0].evidence.findings[0].code == "PROPOSED_ANSWER_MISMATCH"
+    )
+    assert (
+        history[-1].executions[0].evidence.findings[0].code
+        == "DISTRACTOR_SELECTION_FAILED"
+    )
+
+
+def test_evaluation_distinguishes_revision_transport_errors_from_check_failures():
+    from edcraft_validator.llm.llm_errors import GenerationTransportError
+
+    class InterruptedCorrection(StubProvider):
+        def generate(self, request):
+            if issubclass(request.response_model, PlannedGenerationResponse):
+                wrong = proposal().model_copy(update={"answer_expression": "a - b"})
+                return PlannedGenerationResponse(
+                    proposal=wrong,
+                    checks=[
+                        {
+                            "name": "code_validate_answers_and_distractors",
+                            "arguments": {},
+                        }
+                    ],
+                )
+            raise GenerationTransportError("Connection failed during correction")
+
+    report = TemplateEvaluator(
+        provider_factory=lambda selection: InterruptedCorrection(proposal()),
+        execution_tool=SumExecutor(),
+    ).evaluate(
+        provider="stub",
+        model="stub-model",
+        topics=("arithmetic",),
+        difficulties=("easy",),
+        repetitions=1,
+    )
+    attempt = report.attempts[0]
+    assert attempt.failure_stage == "generation"
+    assert attempt.failure_code == "transport"
+    assert report.summary.failure_counts == {"transport": 1}
+    assert attempt.authoring_result.status == "error"
+    assert (
+        attempt.authoring_result.attempts[0].executions[0].evidence.findings[0].code
+        == "PROPOSED_ANSWER_MISMATCH"
+    )

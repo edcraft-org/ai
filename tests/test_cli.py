@@ -204,11 +204,15 @@ def test_author_cli_uses_registered_domain_request_json_end_to_end(
     assert example_registry == ["example-test-model"]
     result = json.loads(capsys.readouterr().out)
     assert result["status"] == "checked"
+    from edcraft_validator.application.authoring_contracts import AuthoringResult
+
+    reloaded = AuthoringResult.model_validate_json(json.dumps(result))
+    assert reloaded.model_dump(mode="json") == result
     result = result["artifact"]
     assert result["lesson"] == "fractions"
     assert result["value"] == 12
     assert result["authoring"]["domain"] == "example"
-    assert result["authoring"]["request"] == {"lesson": "fractions"}
+    assert "request" not in result["authoring"]
 
 
 @pytest.mark.parametrize(
@@ -547,6 +551,7 @@ def test_validate_cli_preserves_unsuccessful_evidence(
     from edcraft_validator.application.authoring_contracts import AuthoringResult
 
     source = Path("examples/templates/arithmetic_linear.json")
+    template_output = tmp_path / "template.json"
 
     class Application:
         def validate_template(self, candidate, *, domain, provider):
@@ -554,9 +559,9 @@ def test_validate_cli_preserves_unsuccessful_evidence(
                 status=status,
                 provider="stub",
                 model="stub",
+                domain="code",
                 request={},
                 prompt_version="test",
-                proposal=candidate.model_dump(mode="json"),
                 fixed_plan=["code_verify_template_structure"],
                 tool_catalogue=[],
                 reason="failed",
@@ -577,7 +582,81 @@ def test_validate_cli_preserves_unsuccessful_evidence(
             "--provider",
             "openai",
             str(source),
+            "--template-output",
+            str(template_output),
         ],
     )
     assert template_cli.main() == 2
     assert json.loads(capsys.readouterr().out)["status"] == status
+    assert not template_output.exists()
+
+
+@pytest.mark.parametrize("command", ["author", "validate"])
+def test_cli_writes_one_report_and_small_template_with_optional_schema_file(
+    command, example_registry, monkeypatch, tmp_path
+):
+    report_path = tmp_path / "report.json"
+    template_path = tmp_path / "template.json"
+    schemas_path = tmp_path / "schemas.json"
+    args = [
+        "edcraft-template",
+        command,
+        "--domain",
+        "example",
+        "--provider",
+        "example-provider",
+        "--output",
+        str(report_path),
+        "--template-output",
+        str(template_path),
+        "--tool-schemas",
+        str(schemas_path),
+    ]
+    source = tmp_path / "input.json"
+    if command == "author":
+        source.write_text(json.dumps({"lesson": "fractions"}))
+        args += ["--request-json", str(source)]
+    else:
+        source.write_text(json.dumps({"lesson": "fractions", "value": 7}))
+        args += [str(source)]
+    monkeypatch.setattr("sys.argv", args)
+    monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
+
+    assert template_cli.main() == 0
+    report = json.loads(report_path.read_text())
+    artifact = json.loads(template_path.read_text())
+    schemas = json.loads(schemas_path.read_text())
+    assert report["artifact"] == artifact
+    assert len(report["attempts"]) == 1
+    assert "attempts" not in artifact["authoring"]
+    assert set(report["tool_catalogue"][0]) == {"name", "version", "description"}
+    assert "inputSchema" in schemas["tools"][0]
+    assert "outputSchema" in schemas["tools"][0]
+    loaded = ExampleValidated.model_validate_json(template_path.read_text())
+    assert loaded.value == (12 if command == "author" else 7)
+
+
+def test_cli_rejects_overlapping_report_and_template_paths_before_model_call(
+    example_registry, monkeypatch, tmp_path, capsys
+):
+    path = tmp_path / "output.json"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "edcraft-template",
+            "author",
+            "--domain",
+            "example",
+            "--provider",
+            "example-provider",
+            "--output",
+            str(path),
+            "--template-output",
+            str(path),
+        ],
+    )
+    monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
+    assert template_cli.main() == 1
+    assert "output paths must differ" in capsys.readouterr().err
+    assert not path.exists()
+    assert example_registry == []

@@ -36,10 +36,11 @@ loop Until success, at most 3 attempts
         App -> App: needs_review
     end
 end
-App --> User: Status, history, and artifact if available
+App --> User: One report with all attempts; small artifact if available
 
 note over App, User
 Saved artifacts get a new ID.
+Reports keep history; artifacts keep content and checked answers.
 Existing-candidate validation checks once without revisions.
 Interrupted conversations return error.
 Human approval is future product work.

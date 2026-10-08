@@ -90,15 +90,14 @@ def test_model_selects_checks_for_exact_candidate_and_finalizes(candidate):
     messages = generation_messages(provider.requests[0])
     assert "matching the supplied schema" in messages[1]["content"]
     assert "combined proposal" not in messages[1]["content"]
-    assert result.request == {"candidate": original.model_dump(mode="json")}
-    assert result.proposal == original.model_dump(mode="json")
+    assert result.request == {"operation": "validate"}
+    assert result.attempts[0].candidate == original.model_dump(mode="json")
     assert len(result.attempts) == 1
-    assert result.attempts[0].executions[0].effective_arguments == {
-        "candidate": original.model_dump(mode="json"),
+    assert result.attempts[0].executions[0].application_arguments == {
         "required_distractors": 3,
     }
     assert result.artifact.template.template_id == original.template_id
-    assert result.artifact.authoring.request == result.request
+    assert result.artifact.authoring.domain == "code"
     assert result.artifact.validation.cases_validated == 8
     assert candidate == original
     assert executor.calls == 1
@@ -134,7 +133,7 @@ def test_failed_candidate_is_not_rewritten_and_remaining_checks_run(candidate):
     assert len(result.attempts) == 1
     assert len(provider.requests) == 1
     assert executor.calls == 1
-    assert result.proposal == original.model_dump(mode="json")
+    assert result.attempts[0].candidate == original.model_dump(mode="json")
     assert candidate == original
     executions = result.attempts[0].executions
     assert [x.tool for x in executions] == [SEMANTIC, STRUCTURE]

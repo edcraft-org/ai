@@ -48,12 +48,19 @@ uv run python -m edcraft_validator.cli author \
   --domain code --provider openai --model gpt-5-mini \
   --prompt "Create a question about adding and subtracting integers." \
   --difficulty easy --num-distractors 3 \
-  --output /tmp/authoring-result.json
+  --output /tmp/authoring-result.json \
+  --template-output /tmp/reusable-template.json
 ```
 
-The output contains the latest proposal, the checks and results from each attempt,
-and a reusable `artifact` if checking succeeded. Here, an artifact means the saved
-checked template together with its answers and checking record.
+One job produces one report, even when it takes three attempts. Each attempt stores
+its candidate once, followed by its tool arguments and results. The report also
+contains the request, model settings, selected checks, timings, and a reusable
+`artifact` if checking succeeded.
+
+`--template-output` saves that small artifact separately: the template, checked
+answers, a short check summary, and origin metadata. It contains no attempt history
+or tool schemas. This file is written only when checking succeeds; on failure, any
+existing file at that path is left unchanged.
 
 | Status | Meaning |
 | --- | --- |
@@ -65,7 +72,7 @@ checked template together with its answers and checking record.
 The command exits with 0 for success, 2 for an unsuccessful recorded result, or 1
 for an initial input, configuration, or generation failure.
 
-Save the artifact separately for question generation:
+If you did not use `--template-output`, extract the artifact from the report:
 
 ```bash
 jq -e '.artifact // error("No reusable artifact")' /tmp/authoring-result.json \
@@ -76,6 +83,18 @@ You can use Ollama by changing the provider and model. You can also supply reque
 fields through `--request-json examples/code-request.json` instead of `--prompt`,
 `--difficulty`, and `--num-distractors`. The default distractor count is three;
 two is also supported.
+
+For diagnostics, add `--tool-schemas /tmp/tool-schemas.json` to save full MCP tool
+definitions separately. The normal report lists only tool names, versions and
+descriptions. Full schemas are still used when checking tool arguments and results.
+
+Read the report in smaller pieces:
+
+```bash
+jq '{status, fixed_plan, reason}' /tmp/authoring-result.json
+jq '.attempts[] | {number, passed, candidate}' /tmp/authoring-result.json
+jq '.attempts[].executions[] | {tool, error, evidence}' /tmp/authoring-result.json
+```
 
 ## Generate questions
 
@@ -103,9 +122,8 @@ again:
 ```bash
 uv run python -m edcraft_validator.cli validate \
   --domain code --provider openai --model gpt-5-mini \
-  /tmp/candidate.json --output /tmp/check-result.json
-jq -e '.artifact // error("No reusable artifact")' /tmp/check-result.json \
-  > /tmp/reusable-template.json
+  /tmp/candidate.json --output /tmp/check-result.json \
+  --template-output /tmp/reusable-template.json
 ```
 
 `validate` checks the supplied candidate once. It does not rewrite it. If you change

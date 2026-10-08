@@ -64,8 +64,19 @@ class ToolCatalogueSnapshot:
         )
 
     def definitions(self) -> list[dict[str, Any]]:
-        """Return a writable copy for JSON provenance and external consumers."""
+        """Return a writable copy for tool dispatch and optional diagnostics."""
         return json.loads(self.definitions_json)
+
+    def summaries(self) -> list[dict[str, Any]]:
+        """Describe the available checks without saving their large schemas."""
+        return [
+            {
+                "name": tool["name"],
+                "version": tool.get("_meta", {}).get("fastmcp", {}).get("version"),
+                "description": tool["description"],
+            }
+            for tool in self.definitions()
+        ]
 
 
 @dataclass(frozen=True)

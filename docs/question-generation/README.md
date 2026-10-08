@@ -15,7 +15,7 @@ For commands, see the [README](../../README.md).
 5. If a check fails, the model can revise the proposal and try again. The selected
    check names stay the same throughout the job.
 6. If all checks pass and the domain has the answers it needs, the application saves
-   a reusable artifact. Otherwise, it returns the latest proposal and checking history.
+   a reusable artifact. Otherwise, it returns the checked candidates and history.
 
 There are at most three complete attempts: the initial proposal plus two revisions.
 Each attempt runs the whole selected plan, even if one check fails. Checks must all
@@ -46,9 +46,11 @@ its fixed check plan from that catalogue.
 The model sees check names and purposes when choosing its plan. During checking,
 it receives only the arguments it must supply; the application supplies the current
 template and request settings. The same contract is used by every provider.
-Feedback includes verdicts and actionable failure details. Full tool definitions,
-execution records, and canonical answers stay in the saved result rather than being
-repeated in model context after successful checks.
+Feedback includes verdicts and actionable failure details. Execution records and
+canonical answers stay in the report rather than being repeated in model context
+after successful checks. Full tool definitions are kept in memory for dispatch and
+can be exported separately with `--tool-schemas`; the report contains a compact
+catalogue of names, versions and descriptions.
 Each revision receives the original request, latest proposal, and explicit check
 feedback. Earlier attempts remain in the saved history without accumulating in the
 revision prompt.
@@ -83,11 +85,15 @@ well or has the right difficulty.
 | `error` | The workflow was interrupted or could not complete the tool conversation. |
 
 An initial configuration or generation failure can stop the command before a result
-exists. Later errors retain the available proposal and attempt history.
+exists. Later errors retain the candidates already built and their attempt history.
 
 Each tool result is `passed`, `failed`, or `error`. A successful tool call alone is
 not a passing check. Calls are bounded and checked against the allowed plan and tool
 schemas. The application supplies the candidate and required distractor count.
+
+If the workflow is interrupted after a proposal exists, `failure` identifies the
+terminal stage and error code. Earlier check failures remain in the attempts and do
+not replace the final error. Timings include failed correction requests.
 
 The final results are also sent to the model for acknowledgement. If that call fails,
 `feedback_error` records it; the completed checking outcome is preserved.
@@ -98,10 +104,17 @@ The finalizer packages checked answers and selected distractors. It does not cha
 the code or question wording. Later question generation reads the saved answers and
 uses the seed to select inputs; it makes no model, MCP, or tracing calls.
 
-Every successful checking job gets a new artifact ID. Its saved checking record
-(called provenance in the code) contains the request, final proposal, provider/model
-settings, tool definitions, selected plan, and results from every attempt. This
-explains how the template was checked and gives future approval a record to refer to.
+Every job produces one report with all its attempts. Each attempt stores its
+candidate once. Tool records contain model-requested arguments, additional
+application arguments, and full evidence; the tools still receive the complete
+candidate when running. Failed attempts remain available for evaluation.
+
+Every successful checking job gets a new artifact ID. The reusable artifact stores
+the template, checked answers, and short passing-check summaries. Its small origin
+record (called provenance in the code) contains the provider/model settings, domain,
+prompt version and generation time. Detailed history belongs in the report, which
+includes the artifact once. Use `--template-output` to save the artifact directly
+for question generation.
 
 Users can edit candidates and recheck them through the library or CLI, as shown in
 the [README](../../README.md#edit-and-check-a-template). Internal saved records are

@@ -145,18 +145,12 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring.model == "stub-model"
     assert validated.authoring.base_prompt_version == "code-template-v16+response-v3"
     assert validated.authoring.domain == "code"
-    assert validated.authoring.request["prompt"] == "Create an arithmetic question"
-    assert validated.authoring.request["difficulty"] == "easy"
-    assert validated.authoring.fixed_plan == ["code_validate_answers_and_distractors"]
     assert provider_calls[0].tool_catalogue.names == (
         "code_require_features",
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",
     )
-    assert (
-        validated.authoring.tool_catalogue
-        == provider_calls[0].tool_catalogue.definitions()
-    )
+    assert "tool_catalogue" not in validated.authoring.model_dump()
     assert validated.authoring.generated_at.utcoffset() is not None
     assert validated.authoring.generation_duration_ms >= 0
     assert [item.expression for item in validated.template.distractors] == [
@@ -262,7 +256,7 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
     ]
     assert validated.value == 24
     assert validated.authoring.domain == "example"
-    assert validated.authoring.request == {"topic": "fractions"}
+    assert "request" not in validated.authoring.model_dump()
     assert instance == ExampleInstance(value=24, seed=5)
 
 

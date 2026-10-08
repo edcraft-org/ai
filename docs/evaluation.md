@@ -70,6 +70,21 @@ preview seeds. Report selection mistakes, correction success, false
 acceptance/rejection, and latency separately from schema or tool-call failures.
 The smoke scripts need additional reviewed cases to complete this evaluation.
 
+Keep the authoring report as the evaluation record: it contains every candidate and
+full tool evidence, including failed attempts before a successful correction.
+The reusable template contains only checked content, answer cases and short check
+summaries. Full tool schemas are optional diagnostic output (`--tool-schemas` on
+`author` or `validate`), rather than repeated in normal reports.
+
+Evaluation JSONL contains summary fields and one `authoring_result` per completed
+job. Read its reusable template at `authoring_result.artifact` and its check evidence
+at `authoring_result.attempts[].executions[].evidence`. Initial failures may have no
+authoring report; their available catalogue is recorded directly.
+
+Failure counts describe the final outcome. Earlier repaired errors stay in the
+attempt history. Provider failures during correction are reported separately from
+failed question checks, and generation time includes unsuccessful correction calls.
+
 See the [workflow guide](question-generation/README.md#saving-editing-and-reuse)
 for saving and replaying questions, and [earlier evaluation results](evaluation-history.md)
 for historical evidence.

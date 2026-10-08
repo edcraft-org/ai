@@ -129,7 +129,7 @@ def test_failure_runs_whole_plan_then_corrects_with_same_catalogue_and_fresh_evi
     assert second.complete and second.passed
     assert first.executions[0].evidence.findings[0].code == "PROPOSED_ANSWER_MISMATCH"
     assert first.executions[1].passed  # No fail-fast exit.
-    assert first.candidate_digest != second.candidate_digest
+    assert first.candidate != second.candidate
     assert len(executor.calls) == 2  # Finalization does not execute again.
     assert not any(m["role"] == "tool" for m in provider.generations[1])
     revision = json.loads(provider.generations[1][-1]["content"])
@@ -143,10 +143,7 @@ def test_failure_runs_whole_plan_then_corrects_with_same_catalogue_and_fresh_evi
     )
     assert "details" not in feedback[1]["evidence"]
     assert all(set(item) == {"tool", "error", "evidence"} for item in feedback)
-    assert (
-        result.artifact.authoring.attempts[0]["proposal"]["answer_expression"]
-        == "a - b"
-    )
+    assert result.attempts[0].candidate["answer_expression"] == "a - b"
     assert result.artifact.template.answer_expression is None
     assert [case.answer for case in result.artifact.validation.validated_cases] == [
         4,
@@ -169,7 +166,7 @@ def test_third_failure_returns_latest_proposal_full_history_and_never_attempt_fo
     assert len(result.attempts) == len(provider.generations) == 3
     assert len(client.dispatches) == 6
     assert all(attempt.complete and not attempt.passed for attempt in result.attempts)
-    assert result.proposal == result.attempts[-1].proposal
+    assert result.attempts[-1].candidate["answer_expression"] == "a - b"
     assert provider.turns[-1][1] == []
     assert len(provider.generations[1]) == len(provider.generations[2])
     assert provider.generations[2][-2]["role"] == "assistant"
@@ -327,7 +324,8 @@ def test_callable_schemas_do_not_expose_hidden_candidate_definitions():
         }
     # Full execution records and canonical answers remain available locally.
     execution = result.attempts[0].executions[0]
-    assert execution.effective_arguments["candidate"] == result.attempts[0].candidate
+    assert execution.application_arguments == {"required_distractors": 3}
+    assert execution.requested_arguments == {}
     assert execution.evidence.details["canonical_answers"]
 
 
@@ -436,3 +434,47 @@ def test_revision_transport_failure_keeps_complete_previous_attempt():
     assert len(result.attempts) == 1
     assert result.attempts[0].complete
     assert len(result.attempts[0].executions) == 2
+
+
+@pytest.mark.parametrize("revision", ["success", "timeout", "invalid_schema"])
+def test_generation_timing_includes_successful_and_failed_corrections(
+    monkeypatch, revision
+):
+    from types import SimpleNamespace
+
+    from edcraft_validator.application import template_workflow
+    from edcraft_validator.llm.llm_errors import GenerationTimeoutError
+
+    clock = [0.0]
+    monkeypatch.setattr(
+        template_workflow, "time", SimpleNamespace(perf_counter=lambda: clock[0])
+    )
+
+    class TimedProvider(Provider):
+        def generate(self, request):
+            if self.generations:
+                clock[0] += 7.0
+                if revision == "timeout":
+                    raise GenerationTimeoutError("Correction timed out")
+                if revision == "invalid_schema":
+                    return PlannedGenerationResponse(
+                        proposal=proposal(),
+                        checks=[{"name": SEMANTIC, "arguments": {}}],
+                    )
+            else:
+                clock[0] += 1.0
+            return super().generate(request)
+
+    result, _ = run(TimedProvider([wrong_answer(), proposal()]))
+    assert result.duration_ms == 8000
+    assert result.generation_duration_ms == 8000
+    if revision == "success":
+        assert result.status == "checked"
+        assert result.artifact.authoring.generation_duration_ms == 8000
+        assert result.failure is None
+    else:
+        assert result.status == "error"
+        assert result.failure.stage == "generation"
+        assert result.failure.code == (
+            "timeout" if revision == "timeout" else "schema_validation"
+        )

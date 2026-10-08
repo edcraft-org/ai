@@ -72,6 +72,18 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("template", type=Path)
     validate.add_argument("--output", type=Path)
 
+    for command in (author, validate):
+        command.add_argument(
+            "--template-output",
+            type=Path,
+            help="also save the reusable template when checking succeeds",
+        )
+        command.add_argument(
+            "--tool-schemas",
+            type=Path,
+            help="save full MCP tool definitions separately for diagnostics",
+        )
+
     generate = commands.add_parser(
         "generate", help="expand a validated template without AI or revalidation"
     )
@@ -117,6 +129,7 @@ def main() -> int:
 
 
 def _handle_author(args: argparse.Namespace) -> int:
+    _check_output_paths(args)
     domain = create_domain(args.domain)
     request_fields = {
         name: value
@@ -142,22 +155,23 @@ def _handle_author(args: argparse.Namespace) -> int:
         TemplateProviderSelection(provider=args.provider, model=args.model)
     )
     result = TemplateApplication().author_template(
-        request, domain=domain, provider=provider
+        request, domain=domain, provider=provider, **_catalogue_options(args)
     )
-    _write_json(result.model_dump(mode="json"), args.output)
+    _write_authoring_result(result, args)
     return 0 if result.status == "checked" else 2
 
 
 def _handle_validate(args: argparse.Namespace) -> int:
+    _check_output_paths(args)
     domain = create_domain(args.domain)
     candidate = domain.candidate_model.model_validate_json(args.template.read_text())
     provider = create_model_provider(
         TemplateProviderSelection(provider=args.provider, model=args.model)
     )
     result = TemplateApplication().validate_template(
-        candidate, domain=domain, provider=provider
+        candidate, domain=domain, provider=provider, **_catalogue_options(args)
     )
-    _write_json(result.model_dump(mode="json"), args.output)
+    _write_authoring_result(result, args)
     return 0 if result.status == "checked" else 2
 
 
@@ -207,6 +221,35 @@ def _write_json(value: dict[str, Any], output: Path | None) -> None:
         return
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(rendered + "\n")
+
+
+def _check_output_paths(args: argparse.Namespace) -> None:
+    paths = [
+        path.resolve()
+        for path in (args.output, args.template_output, args.tool_schemas)
+        if path is not None
+    ]
+    if len(paths) != len(set(paths)):
+        raise ValueError("Report, template and tool-schema output paths must differ")
+
+
+def _catalogue_options(args: argparse.Namespace) -> dict[str, Any]:
+    if args.tool_schemas is None:
+        return {}
+    return {
+        "on_catalogue_resolved": lambda snapshot: _write_json(
+            {"tools": snapshot.definitions()}, args.tool_schemas
+        )
+    }
+
+
+def _write_authoring_result(result, args: argparse.Namespace) -> None:
+    _write_json(result.model_dump(mode="json"), args.output)
+    if args.template_output is not None:
+        if result.artifact is not None:
+            _write_json(result.artifact.model_dump(mode="json"), args.template_output)
+        else:
+            print("No reusable template was written; see the report.", file=sys.stderr)
 
 
 if __name__ == "__main__":

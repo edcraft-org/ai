@@ -138,7 +138,7 @@ class CodeDomain:
                         check=item.tool,
                         status="passed",
                         duration_ms=item.duration_ms,
-                        details={"tool_version": item.version, **item.details},
+                        details={"tool_version": item.version},
                     )
                     for item in evidence
                 ],

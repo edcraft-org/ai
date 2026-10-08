@@ -10,7 +10,6 @@ def test_unsuccessful_tool_evidence_never_passes(status):
     execution = CheckExecution(
         call_id="1",
         tool="answer",
-        candidate_digest="abc",
         requested_arguments="{}",
         evidence=ToolEvidence(
             tool="answer",
@@ -23,16 +22,13 @@ def test_unsuccessful_tool_evidence_never_passes(status):
 
 
 def test_missing_evidence_never_passes():
-    assert not CheckExecution(
-        call_id="1", tool="answer", candidate_digest="abc", requested_arguments="{}"
-    ).passed
+    assert not CheckExecution(call_id="1", tool="answer", requested_arguments={}).passed
 
 
 def test_protocol_error_cannot_be_overridden_by_passing_evidence():
     execution = CheckExecution(
         call_id="1",
         tool="answer",
-        candidate_digest="abc",
         requested_arguments="{}",
         error="version mismatch",
         evidence=ToolEvidence(tool="answer", version="1", status="passed"),
