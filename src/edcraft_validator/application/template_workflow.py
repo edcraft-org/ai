@@ -110,6 +110,12 @@ class TemplateApplication:
         initial_candidate=None,
         on_catalogue_resolved=None,
     ) -> AuthoringResult:
+        """Author or validate a template using model-selected MCP checks.
+
+        Authoring allows three total attempts with a fixed check plan.
+        Validation checks an existing candidate once without rewriting it.
+        Failed attempts and their evidence remain available in the result.
+        """
         validating = initial_candidate is not None
         max_attempts = 1 if validating else 3
         request_payload = (
@@ -136,6 +142,8 @@ class TemplateApplication:
             generation_duration_ms = (time.perf_counter() - started) * 1000
             self._validate_response(response, snapshot.names, plan_only=validating)
             provider_settings = copy.deepcopy(provider.generation_settings())
+            # Keep the initial check plan across revisions so a correction cannot
+            # avoid a check that previously failed.
             plan = tuple(check.name for check in response.checks)
             result = AuthoringResult(
                 status="error",
@@ -164,23 +172,12 @@ class TemplateApplication:
                         if validating
                         else domain.build_candidate(request, response.proposal)
                     )
-                    payload = candidate.model_dump(mode="json")
-                    digest = hashlib.sha256(
-                        json.dumps(
-                            payload,
-                            sort_keys=True,
-                            separators=(",", ":"),
-                            allow_nan=False,
-                        ).encode()
-                    ).hexdigest()
-                    attempt = GenerationAttempt(
-                        number=number,
-                        proposal=copy.deepcopy(result.proposal),
-                        candidate=payload,
-                        candidate_digest=digest,
-                        pending=list(plan),
+                    attempt = self._build_attempt(
+                        number, candidate, result.proposal, plan
                     )
                     result.attempts.append(attempt)
+                    # Supply the exact candidate and request-owned arguments directly,
+                    # rather than asking the model to reproduce them.
                     bindings = {
                         name: domain.tool_bindings(request, candidate, name)
                         for name in plan
@@ -211,128 +208,29 @@ class TemplateApplication:
                         client,
                         seen_call_ids,
                     )
-                    if attempt.passed or number == max_attempts:
-                        # Deliver final evidence; model prose cannot change verdicts.
+                    if not attempt.passed and number < max_attempts:
+                        response, messages, revision_duration_ms = (
+                            self._revise_proposal(
+                                generation_request, response, attempt, plan, provider
+                            )
+                        )
+                        generation_duration_ms += revision_duration_ms
+                        result.proposal = response.proposal.model_dump(mode="json")
                         messages.append(
-                            {
-                                "role": "user",
-                                "content": (
-                                    "Checking is finished. Acknowledge the evidence "
-                                    "briefly. "
-                                    "Do not revise the proposal or request more tools."
-                                ),
-                            }
+                            {"role": "assistant", "content": response.model_dump_json()}
                         )
-                        try:
-                            receipt = provider.tool_turn(copy.deepcopy(messages), [])
-                            if receipt.calls:
-                                raise ValueError("Model requested tools after checking")
-                        except Exception as exc:
-                            # A failed acknowledgement cannot erase completed evidence.
-                            result.feedback_error = f"{type(exc).__name__}: {exc}"
-                        if not attempt.passed:
-                            result.status = "needs_review"
-                            result.reason = (
-                                "Selected checks did not pass"
-                                if validating
-                                else "Three complete attempts did not pass"
-                            )
-                            return result
-                        evidence = [
-                            execution.evidence
-                            for execution in attempt.executions
-                            if execution.evidence is not None
-                        ]
-                        try:
-                            artifact = domain.finalize_checked_template(
-                                candidate, evidence
-                            )
-                        except ValueError as exc:
-                            result.status = "needs_review"
-                            result.reason = (
-                                f"Selected checks passed; artifact unavailable: {exc}"
-                            )
-                            return result
-                        if not isinstance(artifact, ValidatedTemplateArtifact):
-                            raise TypeError(
-                                "Domain returned no shared validated artifact"
-                            )
-                        provenance = TemplateAuthoringProvenance(
-                            provider=provider.provider,
-                            model=provider.model,
-                            provider_settings=provider_settings,
-                            domain=domain.name,
-                            base_prompt_version=generation_request.prompt_version,
-                            request=copy.deepcopy(request_payload),
-                            proposal=copy.deepcopy(result.proposal),
-                            fixed_plan=list(plan),
-                            tool_catalogue=snapshot.definitions(),
-                            attempts=[
-                                item.model_dump(mode="json") for item in result.attempts
-                            ],
-                            generated_at=datetime.now(UTC),
-                            generation_duration_ms=generation_duration_ms,
-                        )
-                        result.artifact = artifact.model_copy(
-                            update={
-                                "artifact_id": uuid.uuid4().hex,
-                                "authoring": provenance,
-                            }
-                        )
-                        result.status = "checked"
-                        return result
-                    # Structured revisions need the latest proposal and explicit
-                    # feedback, rather than a growing native-tool conversation.
-                    messages = generation_messages(generation_request) + [
-                        {"role": "assistant", "content": response.model_dump_json()},
-                        {
-                            "role": "user",
-                            "content": json.dumps(
-                                {
-                                    "instruction": (
-                                        "The current proposal failed. Fix each failure "
-                                        "reported below. "
-                                        "Treat results as authoritative. "
-                                        "Revise any authored fields needed to fix "
-                                        "the failures; preserve the author request. "
-                                        "Do not repeat "
-                                        "the failed proposal. Return only the revised "
-                                        "proposal fields matching the supplied schema. "
-                                        "Do not return checks; the application keeps "
-                                        "the original check plan."
-                                    ),
-                                    "fixed_plan": list(plan),
-                                    "check_results": [
-                                        execution.model_feedback()
-                                        for execution in attempt.executions
-                                    ],
-                                }
-                            ),
-                        },
-                    ]
-                    generation_started = time.perf_counter()
-                    revised_proposal = provider.generate(
-                        replace(
-                            generation_request,
-                            response_model=type(response.proposal),
-                            schema_name="template_revision",
-                            messages=copy.deepcopy(messages),
-                            tool_catalogue=None,
-                        )
-                    )
-                    generation_duration_ms += (
-                        time.perf_counter() - generation_started
-                    ) * 1000
-                    if not isinstance(revised_proposal, type(response.proposal)):
-                        raise GenerationSchemaError(
-                            "Revision must return only the proposal"
-                        )
-                    response = response.model_copy(
-                        update={"proposal": revised_proposal}
-                    )
-                    result.proposal = response.proposal.model_dump(mode="json")
-                    messages.append(
-                        {"role": "assistant", "content": response.model_dump_json()}
+                        continue
+                    return self._finish_attempt(
+                        result,
+                        attempt,
+                        candidate,
+                        domain=domain,
+                        provider=provider,
+                        messages=messages,
+                        validating=validating,
+                        provider_settings=provider_settings,
+                        snapshot=snapshot,
+                        generation_duration_ms=generation_duration_ms,
                     )
             except Exception as exc:
                 result.reason = f"{type(exc).__name__}: {exc}"
@@ -340,6 +238,151 @@ class TemplateApplication:
             finally:
                 result.duration_ms = (time.perf_counter() - started) * 1000
         raise AssertionError("Authoring loop must return within three attempts")
+
+    @staticmethod
+    def _build_attempt(number, candidate, proposal, plan) -> GenerationAttempt:
+        """Record the exact candidate that this attempt will check."""
+        payload = candidate.model_dump(mode="json")
+        digest = hashlib.sha256(
+            json.dumps(
+                payload,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode()
+        ).hexdigest()
+        return GenerationAttempt(
+            number=number,
+            proposal=copy.deepcopy(proposal),
+            candidate=payload,
+            candidate_digest=digest,
+            pending=list(plan),
+        )
+
+    @staticmethod
+    def _revise_proposal(generation_request, response, attempt, plan, provider):
+        """Request a corrected proposal while retaining the original check plan."""
+        # Use the latest proposal and explicit feedback, rather than a growing
+        # native-tool conversation.
+        messages = generation_messages(generation_request) + [
+            {"role": "assistant", "content": response.model_dump_json()},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "instruction": (
+                            "The current proposal failed. Fix each failure "
+                            "reported below. "
+                            "Treat results as authoritative. "
+                            "Revise any authored fields needed to fix "
+                            "the failures; preserve the author request. "
+                            "Do not repeat "
+                            "the failed proposal. Return only the revised "
+                            "proposal fields matching the supplied schema. "
+                            "Do not return checks; the application keeps "
+                            "the original check plan."
+                        ),
+                        "fixed_plan": list(plan),
+                        "check_results": [
+                            execution.model_feedback()
+                            for execution in attempt.executions
+                        ],
+                    }
+                ),
+            },
+        ]
+        generation_started = time.perf_counter()
+        revised_proposal = provider.generate(
+            replace(
+                generation_request,
+                response_model=type(response.proposal),
+                schema_name="template_revision",
+                messages=copy.deepcopy(messages),
+                tool_catalogue=None,
+            )
+        )
+        duration_ms = (time.perf_counter() - generation_started) * 1000
+        if not isinstance(revised_proposal, type(response.proposal)):
+            raise GenerationSchemaError("Revision must return only the proposal")
+        response = response.model_copy(update={"proposal": revised_proposal})
+        return response, messages, duration_ms
+
+    @staticmethod
+    def _finish_attempt(
+        result,
+        attempt,
+        candidate,
+        *,
+        domain,
+        provider,
+        messages,
+        validating,
+        provider_settings,
+        snapshot,
+        generation_duration_ms,
+    ) -> AuthoringResult:
+        """Return the final verdict and package a reusable artifact when possible."""
+        # Deliver final evidence; model prose cannot change verdicts.
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "Checking is finished. Acknowledge the evidence "
+                    "briefly. "
+                    "Do not revise the proposal or request more tools."
+                ),
+            }
+        )
+        try:
+            receipt = provider.tool_turn(copy.deepcopy(messages), [])
+            if receipt.calls:
+                raise ValueError("Model requested tools after checking")
+        except Exception as exc:
+            # A failed acknowledgement cannot erase completed evidence.
+            result.feedback_error = f"{type(exc).__name__}: {exc}"
+
+        if not attempt.passed:
+            result.status = "needs_review"
+            result.reason = (
+                "Selected checks did not pass"
+                if validating
+                else "Three complete attempts did not pass"
+            )
+            return result
+
+        evidence = [
+            execution.evidence
+            for execution in attempt.executions
+            if execution.evidence is not None
+        ]
+        try:
+            artifact = domain.finalize_checked_template(candidate, evidence)
+        except ValueError as exc:
+            result.status = "needs_review"
+            result.reason = f"Selected checks passed; artifact unavailable: {exc}"
+            return result
+        if not isinstance(artifact, ValidatedTemplateArtifact):
+            raise TypeError("Domain returned no shared validated artifact")
+
+        provenance = TemplateAuthoringProvenance(
+            provider=provider.provider,
+            model=provider.model,
+            provider_settings=provider_settings,
+            domain=domain.name,
+            base_prompt_version=result.prompt_version,
+            request=copy.deepcopy(result.request),
+            proposal=copy.deepcopy(result.proposal),
+            fixed_plan=list(result.fixed_plan),
+            tool_catalogue=snapshot.definitions(),
+            attempts=[item.model_dump(mode="json") for item in result.attempts],
+            generated_at=datetime.now(UTC),
+            generation_duration_ms=generation_duration_ms,
+        )
+        result.artifact = artifact.model_copy(
+            update={"artifact_id": uuid.uuid4().hex, "authoring": provenance}
+        )
+        result.status = "checked"
+        return result
 
     @classmethod
     def _validate_response(cls, response, offered, *, plan_only=False):
