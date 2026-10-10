@@ -30,6 +30,7 @@ step-tracer = { git = "https://github.com/edcraft-org/step-tracer.git", rev = "a
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["."]
 markers = [
     "openai_live: real OpenAI template-authoring API test, run before a PR",
     "ollama_live: real Ollama template workflow, requires a running local model",
