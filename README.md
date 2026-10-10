@@ -15,7 +15,8 @@ You can also edit a template candidate, check it again, and generate questions f
 the saved result. This works through the library and command line. The new AI
 workflow is not yet connected to the product's editing and approval screens.
 
-The next step is workflow evaluation in [issue 40](https://github.com/edcraft-org/ai/issues/40).
+The focused workflow baseline for [issue 40](https://github.com/edcraft-org/ai/issues/40)
+is recorded in the [evaluation results](docs/evaluation-history.md#issue-40-baseline-10-october-2026).
 Difficulty calibration and question quality follow in Milestone 3; the user review
 and approval workflow follows in Milestone 4.
 
@@ -38,8 +39,20 @@ or a supported level such as `low` for models that require a named thinking leve
 Enabled thinking may require a larger `OLLAMA_NUM_PREDICT` budget.
 
 Always select a provider with `--provider`. Use `--model` to override its configured
-model. OpenAI and Ollama are the active providers; the SocLaas adapter is available
-but currently unused.
+model. OpenAI, Ollama, and SocLaas are available providers. SocLaas uses the
+OpenAI-compatible interface with `SOCLAAS_API_KEY`, `SOCLAAS_BASE_URL`, and
+`SOCLAAS_MODEL`. SocLaas defaults to JSON mode with the response schema included
+in the prompt; local schema validation and all template checks still apply.
+Set `SOCLAAS_RESPONSE_FORMAT=json_schema` to use strict structured output.
+`SOCLAAS_REASONING_EFFORT=default` leaves reasoning to the model; an explicit value
+such as `none` or `medium` is sent when configured. The default request timeout is
+300 seconds. Generation and tool/acknowledgement output budgets are 16384 and 4096
+tokens; adjust `SOCLAAS_GENERATION_MAX_TOKENS` and `SOCLAAS_TOOL_MAX_TOKENS` as needed.
+These budgets must cover reasoning and the final response.
+Every provider is asked to batch all pending checks in one native-tool response.
+The application executes each returned call, collects its evidence, and requests
+only checks still pending if the batch is incomplete. Corrections start after the
+whole selected plan finishes. Owned arguments and every returned call are validated.
 
 ## Create a template
 
@@ -54,7 +67,8 @@ uv run python -m edcraft_validator.cli author \
 
 One job produces one report, even when it takes three attempts. Each attempt stores
 its candidate once, followed by its tool arguments and results. The report also
-contains the request, model settings, selected checks, timings, and a reusable
+contains the request, model settings, selected checks, timings, per-call token usage,
+model-call count, and a reusable
 `artifact` if checking succeeded.
 
 `--template-output` saves that small artifact separately: the template, checked
@@ -70,7 +84,8 @@ existing file at that path is left unchanged.
 
 `checked` means the technical checks passed. Human approval is a later workflow step.
 The command exits with 0 for success, 2 for an unsuccessful recorded result, or 1
-for an initial input, configuration, or generation failure.
+for an input or provider-creation failure. Initial generation and MCP setup failures
+produce recorded `error` results with available usage and timing.
 
 If you did not use `--template-output`, extract the artifact from the report:
 

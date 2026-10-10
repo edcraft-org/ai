@@ -6,10 +6,10 @@ from dataclasses import FrozenInstanceError
 import pytest
 from pydantic import BaseModel
 
+from edcraft_validator.application.authoring_contracts import AuthoringFailure
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.llm.llm_contracts import ToolCatalogueSnapshot
 from edcraft_validator.mcp.catalogue import (
-    ToolCatalogueError,
     resolve_domain_tools,
 )
 from edcraft_validator.mcp.client import FastMcpToolClient
@@ -109,14 +109,20 @@ def test_bad_catalogue_stops_before_generation(listed, message):
             pytest.fail("invalid catalogues must stop before prompt construction")
 
     class Provider:
+        provider = "scripted"
+        model = "scripted"
+
         def generate(self, request):
             pytest.fail("invalid catalogues must stop before model generation")
 
-    with pytest.raises(ToolCatalogueError, match=message):
+    with pytest.raises(AuthoringFailure, match=message) as failure:
         TemplateApplication(tool_catalogue=catalogue).create_validated_template(
             EmptyRequest(), domain=Domain(), provider=Provider()
         )
     assert catalogue.calls == 1
+    assert failure.value.result.failure.stage == "configuration"
+    assert failure.value.result.failure.code == "MCP_CATALOGUE_ERROR"
+    assert failure.value.result.usage.model_call_count == 0
 
 
 def test_resolution_reads_once_and_copies_full_definitions():

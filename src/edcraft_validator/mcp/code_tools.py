@@ -162,6 +162,12 @@ def register_code_validation_tools(
         description=(
             "Select this tool when the authoring request requires concrete Python "
             "features such as a loop, conditional, helper function, or list operation. "
+            "Require only features explicitly requested by the author; arithmetic "
+            "alone does not require a loop or conditional. Correct mistaken feature "
+            "arguments instead of adding unrelated code to satisfy them. "
+            "helper_function means a separate helper called from the entry function. "
+            "list_aggregate means calls to sum, min, max, all, or any, not manual "
+            "accumulation in a loop. "
             "It checks the supported program structure and reports features reachable "
             "from the entry function. It establishes syntactic presence, not that the "
             "feature is pedagogically central or that the requested difficulty matches."
@@ -173,7 +179,11 @@ def register_code_validation_tools(
             list[CodeFeature],
             Field(
                 min_length=1,
-                description="Features that must occur in reachable learner code.",
+                description=(
+                    "Features explicitly requested by the author that must occur "
+                    "in reachable learner code. Follow the feature definitions "
+                    "in this tool's description; do not invent extra requirements."
+                ),
             ),
         ],
     ) -> ToolEvidence:

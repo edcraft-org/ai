@@ -10,8 +10,10 @@ For commands, see the [README](../../README.md).
 2. The application gets tools tagged for the selected domain from MCP. For example,
    code tools have the tag `domain:code`. MCP lists the tools and runs their checks.
 3. The model returns a template proposal and the checks it wants to run.
-4. The model requests those checks. The application supplies the current candidate,
-   calls MCP, and returns the results to the model.
+4. The model is asked to request all pending checks together using native tool
+   calls. The application supplies the current candidate, calls MCP, and collects
+   every result from the batch before the next model request. If the model requests
+   only part of the plan, the remaining checks are offered on the next turn.
 5. If a check fails, the model can revise the proposal and try again. The selected
    check names stay the same throughout the job.
 6. If all checks pass and the domain has the answers it needs, the application saves
@@ -56,6 +58,11 @@ feedback. Earlier attempts remain in the saved history without accumulating in t
 revision prompt.
 Revisions contain only template fields. The application retains the original check
 plan, so the model does not select the checks again while fixing a template.
+The model can correct its own tool arguments. If they imposed requirements the
+author did not request, corrections should fix those arguments rather than add
+irrelevant code; the requested scope and difficulty must be preserved.
+Correction feedback includes `model_arguments` separately from tool observations
+so the model can distinguish its own requirements from the author's request.
 
 ## Available code checks
 
@@ -84,8 +91,10 @@ well or has the right difficulty.
 | `needs_review` | Three authoring attempts failed, an existing candidate failed, or required answer data is missing. |
 | `error` | The workflow was interrupted or could not complete the tool conversation. |
 
-An initial configuration or generation failure can stop the command before a result
-exists. Later errors retain the candidates already built and their attempt history.
+MCP setup and initial generation failures return an `error` report with zero
+attempts, available usage, and timing. Invalid CLI inputs or provider-creation
+failures can stop before an application report exists. Later errors retain the
+candidates already built and their attempt history.
 
 Each tool result is `passed`, `failed`, or `error`. A successful tool call alone is
 not a passing check. Calls are bounded and checked against the allowed plan and tool

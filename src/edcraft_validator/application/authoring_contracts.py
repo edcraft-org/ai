@@ -6,6 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, SerializeAsAny
 
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
+from edcraft_validator.llm.usage import ModelCallRecord, ModelUsageSummary
 from edcraft_validator.mcp.evidence import ToolEvidence
 
 FailureStage = Literal[
@@ -75,6 +76,8 @@ class AuthoringResult(BaseModel):
     prompt_version: str
     duration_ms: float = 0
     generation_duration_ms: float = 0
+    model_calls: list[ModelCallRecord] = Field(default_factory=list)
+    usage: ModelUsageSummary = Field(default_factory=ModelUsageSummary)
     feedback_error: str | None = None
     failure: AuthoringError | None = None
     fixed_plan: list[str]
