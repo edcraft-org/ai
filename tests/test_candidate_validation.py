@@ -16,7 +16,6 @@ from edcraft_validator.llm.llm_contracts import (
     CheckPlanResponse,
     StructuredGenerationRequest,
 )
-from edcraft_validator.llm.llm_errors import GenerationSchemaError
 from edcraft_validator.llm.tool_context import generation_messages
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.evidence import ToolEvidence
@@ -149,10 +148,14 @@ def test_failed_candidate_is_not_rewritten_and_remaining_checks_run(candidate):
 
 def test_unknown_selected_tool_is_rejected_before_execution(candidate):
     executor = Executor()
-    with pytest.raises(GenerationSchemaError, match="not offered"):
-        application(executor).validate_template(
-            candidate, domain=CodeDomain(), provider=Selector(["unknown"])
-        )
+    result = application(executor).validate_template(
+        candidate, domain=CodeDomain(), provider=Selector(["unknown"])
+    )
+    assert result.status == "error"
+    assert result.failure.code == "schema_validation"
+    assert "not offered" in result.reason
+    assert result.attempts == []
+    assert result.usage.model_call_count == 1
     assert executor.calls == 0
 
 

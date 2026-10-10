@@ -31,8 +31,10 @@ from edcraft_validator.llm.llm_contracts import (
 )
 from edcraft_validator.llm.llm_errors import GenerationError, GenerationSchemaError
 from edcraft_validator.llm.tool_context import callable_tool, generation_messages
+from edcraft_validator.llm.usage import MeasuredProvider, summarize_usage
 from edcraft_validator.mcp.catalogue import (
     ToolCatalogue,
+    ToolCatalogueError,
     resolve_domain_tools,
 )
 from edcraft_validator.mcp.client import FastMcpToolClient
@@ -115,52 +117,65 @@ class TemplateApplication:
         Validation checks an existing candidate once without rewriting it.
         Failed attempts and their evidence remain available in the result.
         """
+        started = time.perf_counter()
         validating = initial_candidate is not None
         max_attempts = 1 if validating else 3
         request_payload = (
             {"operation": "validate"} if validating else request.model_dump(mode="json")
         )
-        with self.tool_client as client:
-            tools = resolve_domain_tools(domain.name, self.tool_catalogue or client)
-            snapshot = ToolCatalogueSnapshot.from_definitions(tools)
-            if on_catalogue_resolved is not None:
-                on_catalogue_resolved(snapshot)
-            generation_request = replace(
-                (
-                    domain.validation_request(initial_candidate)
-                    if validating
-                    else domain.generation_request(request)
-                ),
-                offered_tool_names=snapshot.names,
-                tool_catalogue=snapshot,
+        original_provider = provider
+        provider = MeasuredProvider(provider)
+        result = AuthoringResult(
+            status="error",
+            provider=provider.provider,
+            model=provider.model,
+            domain=domain.name,
+            request=copy.deepcopy(request_payload),
+            prompt_version="",
+            fixed_plan=[],
+            tool_catalogue=[],
+        )
+        generation_duration_ms = 0
+        stage = "configuration"
+        try:
+            provider_settings = copy.deepcopy(
+                getattr(original_provider, "generation_settings", lambda: {})()
             )
-            started = time.perf_counter()
-            response = provider.generate(generation_request)
-            generation_duration_ms = (time.perf_counter() - started) * 1000
-            self._validate_response(response, snapshot.names, plan_only=validating)
-            provider_settings = copy.deepcopy(provider.generation_settings())
-            # Keep the initial check plan across revisions so a correction cannot
-            # avoid a check that previously failed.
-            plan = tuple(check.name for check in response.checks)
-            result = AuthoringResult(
-                status="error",
-                provider=provider.provider,
-                model=provider.model,
-                domain=domain.name,
-                provider_settings=provider_settings,
-                request=copy.deepcopy(request_payload),
-                prompt_version=generation_request.prompt_version,
-                fixed_plan=list(plan),
-                tool_catalogue=snapshot.summaries(),
-            )
-            messages = generation_messages(generation_request)
-            messages.append(
-                {"role": "assistant", "content": response.model_dump_json()}
-            )
-            definitions = {tool["name"]: tool for tool in snapshot.definitions()}
-            seen_call_ids: set[str] = set()
-            stage = "template_building"
-            try:
+            result.provider_settings = provider_settings
+            with self.tool_client as client:
+                tools = resolve_domain_tools(domain.name, self.tool_catalogue or client)
+                snapshot = ToolCatalogueSnapshot.from_definitions(tools)
+                result.tool_catalogue = snapshot.summaries()
+                if on_catalogue_resolved is not None:
+                    on_catalogue_resolved(snapshot)
+                generation_request = replace(
+                    (
+                        domain.validation_request(initial_candidate)
+                        if validating
+                        else domain.generation_request(request)
+                    ),
+                    offered_tool_names=snapshot.names,
+                    tool_catalogue=snapshot,
+                )
+                result.prompt_version = generation_request.prompt_version
+                stage = "generation"
+                generation_started = time.perf_counter()
+                try:
+                    response = provider.generate(generation_request)
+                finally:
+                    generation_duration_ms += (
+                        time.perf_counter() - generation_started
+                    ) * 1000
+                self._validate_response(response, snapshot.names, plan_only=validating)
+                # Corrections cannot avoid checks that previously failed.
+                plan = tuple(check.name for check in response.checks)
+                result.fixed_plan = list(plan)
+                messages = generation_messages(generation_request)
+                messages.append(
+                    {"role": "assistant", "content": response.model_dump_json()}
+                )
+                definitions = {tool["name"]: tool for tool in snapshot.definitions()}
+                seen_call_ids: set[str] = set()
                 for number in range(1, max_attempts + 1):
                     stage = "template_building"
                     candidate = (
@@ -181,9 +196,11 @@ class TemplateApplication:
                             "role": "user",
                             "content": (
                                 f"Attempt {number}/{max_attempts}. "
-                                "Request each planned tool once: "
+                                "Request every planned tool exactly once in one "
+                                "response: "
                                 + json.dumps(plan)
-                                + ". Use native tool calls. Do not revise the "
+                                + ". Batch the native tool calls together. "
+                                "Do not revise the "
                                 "proposal until all checks finish. Candidate and "
                                 "request-owned "
                                 "arguments are supplied by the application. "
@@ -230,18 +247,26 @@ class TemplateApplication:
                         provider_settings=provider_settings,
                         generation_duration_ms=generation_duration_ms,
                     )
-            except Exception as exc:
-                result.reason = f"{type(exc).__name__}: {exc}"
-                result.failure = AuthoringError(
-                    stage="generation" if isinstance(exc, GenerationError) else stage,
-                    code=exc.category
+        except Exception as exc:
+            result.status = "error"
+            result.artifact = None
+            result.reason = f"{type(exc).__name__}: {exc}"
+            result.failure = AuthoringError(
+                stage=stage,
+                code=(
+                    exc.category
                     if isinstance(exc, GenerationError)
-                    else type(exc).__name__,
-                )
-                return result
-            finally:
-                result.duration_ms = (time.perf_counter() - started) * 1000
-                result.generation_duration_ms = generation_duration_ms
+                    else "MCP_CATALOGUE_ERROR"
+                    if isinstance(exc, ToolCatalogueError)
+                    else type(exc).__name__
+                ),
+            )
+            return result
+        finally:
+            result.duration_ms = (time.perf_counter() - started) * 1000
+            result.generation_duration_ms = generation_duration_ms
+            result.model_calls = provider.calls
+            result.usage = summarize_usage(provider.calls)
         raise AssertionError("Authoring loop must return within three attempts")
 
     @staticmethod
@@ -266,20 +291,32 @@ class TemplateApplication:
                 "content": json.dumps(
                     {
                         "instruction": (
-                            "The current proposal failed. Fix each failure "
+                            "The current checking attempt failed. Fix each failure "
                             "reported below. "
-                            "Treat results as authoritative. "
-                            "Revise any authored fields needed to fix "
-                            "the failures; preserve the author request. "
-                            "Do not repeat "
-                            "the failed proposal. Return only the revised "
+                            "Treat tool observations as authoritative, but "
+                            "distinguish them from requirements you supplied. "
+                            "Only check names are fixed; your tool arguments "
+                            "can change. "
+                            "The model_arguments below were supplied by you, "
+                            "not by the author. Reconsider any mistaken "
+                            "requirements in them. "
+                            "If your tool arguments imposed unrequested "
+                            "requirements, correct those arguments on the next "
+                            "tool turn instead of adding irrelevant code. "
+                            "Preserve the request's scope and difficulty. "
+                            "Revise authored fields when they are wrong. "
+                            "An unchanged proposal is allowed when only your "
+                            "tool calls were wrong. Return only the "
                             "proposal fields matching the supplied schema. "
                             "Do not return checks; the application keeps "
                             "the original check plan."
                         ),
                         "fixed_plan": list(plan),
                         "check_results": [
-                            execution.model_feedback()
+                            {
+                                **execution.model_feedback(),
+                                "model_arguments": execution.requested_arguments,
+                            }
                             for execution in attempt.executions
                         ],
                     }
@@ -476,8 +513,8 @@ class TemplateApplication:
                     {
                         "role": "user",
                         "content": (
-                            "Request the remaining tools using native tool calls: "
-                            + json.dumps(attempt.pending)
+                            "Request all remaining tools together using native "
+                            "tool calls: " + json.dumps(attempt.pending)
                         ),
                     }
                 )

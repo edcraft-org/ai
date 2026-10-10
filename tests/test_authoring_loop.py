@@ -117,6 +117,67 @@ def wrong_answer():
     return proposal().model_copy(update={"answer_expression": "a - b"})
 
 
+@pytest.mark.parametrize("provider_name", ["openai", "soclaas", "ollama"])
+def test_three_tool_batches_deliver_all_evidence_before_self_correction(provider_name):
+    def request_all(names):
+        return ModelTurn(
+            calls=[
+                calls(
+                    name,
+                    arguments='{"required":["arithmetic"]}'
+                    if name == FEATURES
+                    else "{}",
+                ).calls[0]
+                for name in names
+            ]
+        )
+
+    plan = (SEMANTIC, STRUCTURE, FEATURES)
+    provider = Provider([wrong_answer(), proposal()], plan, request_all)
+    provider.provider = provider_name
+    result, client = run(provider)
+
+    assert result.status == "checked"
+    assert [name for name, _ in client.dispatches] == list(plan) * 2
+    assert len(result.attempts) == 2
+    assert all(attempt.complete for attempt in result.attempts)
+    assert not result.attempts[0].passed and result.attempts[1].passed
+    checking_turns = [(messages, tools) for messages, tools in provider.turns if tools]
+    assert len(checking_turns) == 2  # One tool-request turn per full attempt.
+    assert all(len(tools) == 3 for _, tools in checking_turns)
+    assert "Batch the native tool calls together" in checking_turns[0][0][-1]["content"]
+    revision = json.loads(provider.generations[1][-1]["content"])
+    assert "tool arguments imposed unrequested requirements" in revision["instruction"]
+    assert "Only check names are fixed" in revision["instruction"]
+    assert "An unchanged proposal is allowed" in revision["instruction"]
+    assert revision["check_results"] == [
+        {
+            **execution.model_feedback(),
+            "model_arguments": execution.requested_arguments,
+        }
+        for execution in result.attempts[0].executions
+    ]
+    assert revision["fixed_plan"] == list(plan)
+    assert len([m for m in provider.turns[-1][0] if m["role"] == "tool"]) == 3
+
+
+def test_partial_batch_requests_only_remaining_checks_and_cannot_skip_them():
+    def request_subset(names):
+        return calls(names[0])
+
+    provider = Provider(call_factory=request_subset)
+    result, client = run(provider)
+
+    assert result.status == "checked"
+    assert [name for name, _ in client.dispatches] == [SEMANTIC, STRUCTURE]
+    first, second, receipt = provider.turns
+    assert [tool["function"]["name"] for tool in first[1]] == [SEMANTIC, STRUCTURE]
+    assert [tool["function"]["name"] for tool in second[1]] == [STRUCTURE]
+    assert len([m for m in second[0] if m["role"] == "tool"]) == 1
+    assert receipt[1] == []
+    assert len([m for m in receipt[0] if m["role"] == "tool"]) == 2
+
+
 def test_failure_runs_whole_plan_then_corrects_with_same_catalogue_and_fresh_evidence():
     provider = Provider([wrong_answer(), proposal()])
     executor = Executor()
@@ -142,7 +203,11 @@ def test_failure_runs_whole_plan_then_corrects_with_same_catalogue_and_fresh_evi
         "PROPOSED_ANSWER_MISMATCH"
     )
     assert "details" not in feedback[1]["evidence"]
-    assert all(set(item) == {"tool", "error", "evidence"} for item in feedback)
+    assert all(
+        set(item) == {"tool", "error", "evidence", "model_arguments"}
+        for item in feedback
+    )
+    assert feedback[0]["model_arguments"] == {}
     assert result.attempts[0].candidate["answer_expression"] == "a - b"
     assert result.artifact.template.answer_expression is None
     assert [case.answer for case in result.artifact.validation.validated_cases] == [
@@ -172,7 +237,11 @@ def test_third_failure_returns_latest_proposal_full_history_and_never_attempt_fo
     assert provider.generations[2][-2]["role"] == "assistant"
     feedback = json.loads(provider.generations[2][-1]["content"])["check_results"]
     assert feedback == [
-        execution.model_feedback() for execution in result.attempts[1].executions
+        {
+            **execution.model_feedback(),
+            "model_arguments": execution.requested_arguments,
+        }
+        for execution in result.attempts[1].executions
     ]
 
 

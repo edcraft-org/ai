@@ -5,6 +5,7 @@ from authoring_helpers import RequestPendingTools
 from fastmcp import FastMCP
 from pydantic import BaseModel
 
+from edcraft_validator.application.authoring_contracts import AuthoringFailure
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.domains.code.code_domain import CodeDomain
@@ -296,7 +297,7 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
             raise generation_error
 
     captured_catalogues = []
-    with pytest.raises(type(generation_error), match=str(generation_error)):
+    with pytest.raises(AuthoringFailure, match=str(generation_error)) as failure:
         TemplateApplication(
             tool_catalogue=ExampleCatalogue()
         ).create_validated_template(
@@ -306,6 +307,13 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
             on_catalogue_resolved=captured_catalogues.append,
         )
     assert len(captured_catalogues) == 1
+    result = failure.value.result
+    assert result.failure.stage == "generation"
+    assert result.failure.code == generation_error.category
+    assert not result.attempts
+    assert result.usage.model_call_count == 1
+    assert result.usage.input_tokens is None
+    assert result.generation_duration_ms > 0
     assert captured_catalogues[0].names == ("double_value", "positive_value")
 
 
@@ -340,7 +348,9 @@ def test_unknown_recommended_check_stops_before_candidate_validation() -> None:
                 checks=[RecommendedCheck(name="invented_check", arguments={})],
             )
 
-    with pytest.raises(GenerationSchemaError, match="not offered: invented_check"):
+    with pytest.raises(
+        AuthoringFailure, match="not offered: invented_check"
+    ) as failure:
         TemplateApplication(
             tool_catalogue=ExampleCatalogue()
         ).create_validated_template(
@@ -348,3 +358,5 @@ def test_unknown_recommended_check_stops_before_candidate_validation() -> None:
             domain=Domain(),
             provider=Provider(),
         )
+    assert failure.value.result.failure.code == "schema_validation"
+    assert failure.value.result.usage.model_call_count == 1

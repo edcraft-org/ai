@@ -1,4 +1,5 @@
 import copy
+import json
 import math
 import os
 from typing import Any
@@ -19,6 +20,7 @@ from edcraft_validator.llm.llm_errors import (
     GenerationTransportError,
 )
 from edcraft_validator.llm.tool_context import generation_messages
+from edcraft_validator.llm.usage import TokenUsage
 
 DEFAULT_OPENAI_MODEL = "gpt-5-mini"
 OpenAIGenerationError = GenerationError
@@ -46,35 +48,91 @@ class OpenAICompatibleProvider:
             )
         self.client = client
         self.model = model or _model(provider)
+        self.last_usage = TokenUsage()
+        self._response_format = (
+            _soclaas_response_format() if provider == "soclaas" else "json_schema"
+        )
+        self._generation_max_tokens = (
+            _positive_int_setting("SOCLAAS_GENERATION_MAX_TOKENS", 16384)
+            if provider == "soclaas"
+            else None
+        )
+        self._tool_max_tokens = (
+            _positive_int_setting("SOCLAAS_TOOL_MAX_TOKENS", 4096)
+            if provider == "soclaas"
+            else None
+        )
+        self._reasoning_effort = (
+            _soclaas_reasoning_effort() if provider == "soclaas" else None
+        )
 
     def generation_settings(self) -> dict[str, Any]:
         # Sampling parameters are deliberately omitted from API requests. Do not
         # claim a temperature/seed for defaults controlled by the remote provider.
-        return {
+        timeout = getattr(self.client, "timeout", None)
+        if timeout is not None and not isinstance(timeout, int | float):
+            timeout = str(timeout)
+        settings = {
             "sampling": "provider_defaults",
-            "response_format": "json_schema",
-            "strict": True,
+            "response_format": self._response_format,
+            "strict": self._response_format == "json_schema",
             "tool_choice": "required",
-            "parallel_tool_calls": False,
+            "parallel_tool_calls": True,
+            "timeout_seconds": timeout,
+            "max_retries": getattr(self.client, "max_retries", None),
         }
+        if self._tool_max_tokens is not None:
+            settings["tool_max_tokens"] = self._tool_max_tokens
+        if self._generation_max_tokens is not None:
+            settings["generation_max_tokens"] = self._generation_max_tokens
+        if self.provider == "soclaas":
+            settings["reasoning_effort"] = self._reasoning_effort or "provider_default"
+        return settings
 
     def generate[ProposalT: BaseModel](
         self, request: StructuredGenerationRequest[ProposalT]
     ) -> ProposalT:
         """Generate any domain proposal described by the supplied request."""
+        self.last_usage = TokenUsage()
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=_wire_messages(generation_messages(request)),
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": request.schema_name,
-                        "strict": True,
-                        "schema": request.response_model.model_json_schema(),
-                    },
-                },
-            )
+            schema = request.response_model.model_json_schema()
+            messages = generation_messages(request)
+            response_format = {"type": self._response_format}
+            if self._response_format == "json_schema":
+                response_format["json_schema"] = {
+                    "name": request.schema_name,
+                    "strict": True,
+                    "schema": schema,
+                }
+            else:
+                # JSON mode constrains syntax; local validation enforces the schema.
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "Satisfy the request and any check feedback above. "
+                            "Return only one JSON object matching this response "
+                            "schema. Preserve string contents, including line breaks "
+                            "and indentation, using valid JSON escaping.\n"
+                            + json.dumps(schema)
+                        ),
+                    }
+                )
+            kwargs = {
+                "model": self.model,
+                "messages": _wire_messages(messages),
+                "response_format": response_format,
+            }
+            if self._reasoning_effort is not None:
+                kwargs["reasoning_effort"] = self._reasoning_effort
+            if self._generation_max_tokens is not None:
+                kwargs["max_tokens"] = self._generation_max_tokens
+            response = self.client.chat.completions.create(**kwargs)
+            self._record_usage(response)
+            if getattr(response.choices[0], "finish_reason", None) == "length":
+                raise GenerationResponseError(
+                    f"{self.provider} generation exhausted its output budget"
+                )
             content = response.choices[0].message.content
             if not content:
                 raise GenerationResponseError(
@@ -108,15 +166,25 @@ class OpenAICompatibleProvider:
 
     def tool_turn(self, messages, tools) -> ModelTurn:
         """Translate native function calls; execution remains application-owned."""
+        self.last_usage = TokenUsage()
         try:
             kwargs = {"model": self.model, "messages": _wire_messages(messages)}
+            if self._reasoning_effort is not None:
+                kwargs["reasoning_effort"] = self._reasoning_effort
+            if self._tool_max_tokens is not None:
+                kwargs["max_tokens"] = self._tool_max_tokens
             if tools:
                 kwargs.update(
                     tools=_strict_tools(tools),
                     tool_choice="required",
-                    parallel_tool_calls=False,
+                    parallel_tool_calls=True,
                 )
             response = self.client.chat.completions.create(**kwargs)
+            self._record_usage(response)
+            if getattr(response.choices[0], "finish_reason", None) == "length":
+                raise GenerationResponseError(
+                    f"{self.provider} tool turn exhausted its output budget"
+                )
             message = response.choices[0].message
             return ModelTurn(
                 content=message.content or "",
@@ -129,16 +197,29 @@ class OpenAICompatibleProvider:
                     for call in (message.tool_calls or [])
                 ],
             )
+        except GenerationError:
+            raise
         except APITimeoutError as exc:
             raise GenerationTimeoutError(
                 f"{self.provider} tool turn timed out"
             ) from exc
-        except (APIConnectionError, APIStatusError) as exc:
+        except APIConnectionError as exc:
             raise GenerationTransportError(f"{self.provider} tool turn failed") from exc
+        except APIStatusError as exc:
+            raise GenerationTransportError(
+                f"{self.provider} tool turn failed with status {exc.status_code}"
+            ) from exc
         except Exception as exc:
             raise GenerationResponseError(
                 f"{self.provider} returned an invalid tool turn"
             ) from exc
+
+    def _record_usage(self, response):
+        usage = getattr(response, "usage", None)
+        self.last_usage = TokenUsage.from_counts(
+            getattr(usage, "prompt_tokens", None),
+            getattr(usage, "completion_tokens", None),
+        )
 
 
 def _api_key(provider: str) -> str | None:
@@ -190,7 +271,7 @@ def _timeout_seconds(provider: str) -> float:
         "soclaas": "SOCLAAS_TIMEOUT_SECONDS",
         "openai": "OPENAI_TIMEOUT_SECONDS",
     }[provider]
-    raw_value = os.getenv(variable, "120").strip()
+    raw_value = os.getenv(variable, "300" if provider == "soclaas" else "120").strip()
     try:
         value = float(raw_value)
     except ValueError as exc:
@@ -213,6 +294,31 @@ def _max_retries(provider: str) -> int:
     if not 0 <= value <= 5:
         raise OpenAIGenerationError(f"{variable} must be between 0 and 5")
     return value
+
+
+def _positive_int_setting(variable: str, default: int) -> int:
+    raw = os.getenv(variable, str(default)).strip()
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise OpenAIGenerationError(f"{variable} must be an integer") from exc
+    if value < 1:
+        raise OpenAIGenerationError(f"{variable} must be greater than zero")
+    return value
+
+
+def _soclaas_response_format() -> str:
+    value = os.getenv("SOCLAAS_RESPONSE_FORMAT", "json_object").strip()
+    if value not in {"json_object", "json_schema"}:
+        raise OpenAIGenerationError(
+            "SOCLAAS_RESPONSE_FORMAT must be json_object or json_schema"
+        )
+    return value
+
+
+def _soclaas_reasoning_effort() -> str | None:
+    value = os.getenv("SOCLAAS_REASONING_EFFORT", "default").strip() or "default"
+    return None if value == "default" else value
 
 
 class OpenAIProvider(OpenAICompatibleProvider):

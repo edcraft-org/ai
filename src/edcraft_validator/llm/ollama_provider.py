@@ -21,6 +21,7 @@ from edcraft_validator.llm.llm_errors import (
     GenerationTransportError,
 )
 from edcraft_validator.llm.tool_context import generation_messages
+from edcraft_validator.llm.usage import TokenUsage
 
 
 class OllamaProvider:
@@ -32,6 +33,7 @@ class OllamaProvider:
         self._options = {"temperature": _temperature(), "num_predict": _num_predict()}
         self._timeout = _timeout_seconds()
         self._think = _thinking()
+        self.last_usage = TokenUsage()
 
     def generation_settings(self) -> dict:
         return {
@@ -43,6 +45,7 @@ class OllamaProvider:
     def generate[ProposalT: BaseModel](
         self, request: StructuredGenerationRequest[ProposalT]
     ) -> ProposalT:
+        self.last_usage = TokenUsage()
         try:
             content = self._ollama_request(
                 generation_messages(request),
@@ -80,6 +83,7 @@ class OllamaProvider:
         return self._chat(messages, schema=schema)["content"]
 
     def tool_turn(self, messages, tools) -> ModelTurn:
+        self.last_usage = TokenUsage()
         message = self._chat(messages, tools=tools)
         try:
             return ModelTurn(
@@ -133,6 +137,9 @@ class OllamaProvider:
             timeout = self._timeout
             with urlopen(request, timeout=timeout) as response:
                 body = json.load(response)
+            self.last_usage = TokenUsage.from_counts(
+                body.get("prompt_eval_count"), body.get("eval_count")
+            )
             if body.get("done_reason") == "length":
                 raise GenerationResponseError(
                     "Ollama exhausted OLLAMA_NUM_PREDICT before completing its "

@@ -66,7 +66,11 @@ class RecordingCompletions:
     def create(self, **kwargs: object) -> SimpleNamespace:
         self.arguments = kwargs
         return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content=self.content))]
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content=self.content, tool_calls=None)
+                )
+            ]
         )
 
 
@@ -84,7 +88,10 @@ def client_with_content(content: str) -> SimpleNamespace:
 
 
 @pytest.mark.parametrize("provider_name", ["openai", "soclaas"])
-def test_generates_template_using_strict_structured_outputs(provider_name) -> None:
+def test_generates_template_using_strict_structured_outputs(
+    monkeypatch, provider_name
+) -> None:
+    monkeypatch.setenv("SOCLAAS_RESPONSE_FORMAT", "json_schema")
     client = client_with(code_response())
     provider = OpenAICompatibleProvider(provider_name, client, model="test-model")
 
@@ -361,9 +368,9 @@ def test_native_calls_and_correlated_results_are_preserved(provider_name):
     provider.tool_turn(messages, [])
     assert captured[0]["tools"] == tools
     assert captured[0]["tool_choice"] == "required"
-    assert captured[0]["parallel_tool_calls"] is False
+    assert captured[0]["parallel_tool_calls"] is True
     settings = provider.generation_settings()
-    assert settings["tool_choice"] == captured[0]["tool_choice"]
+    assert settings["tool_choice"] == "required"
     assert settings["parallel_tool_calls"] == captured[0]["parallel_tool_calls"]
     assert captured[1]["messages"][0]["tool_calls"][0]["id"] == "call-1"
     assert captured[1]["messages"][1]["tool_call_id"] == "call-1"
@@ -411,3 +418,231 @@ def test_strict_tool_arguments_preserve_mcp_required_fields():
     assert "strict" not in tool["function"]
     tool["function"]["parameters"]["required"] = []
     assert "strict" not in _strict_tools([tool])[0]["function"]
+
+
+@pytest.mark.parametrize("provider_name", ["openai", "soclaas"])
+@pytest.mark.parametrize("configured_limit", [None, "64"])
+@pytest.mark.parametrize("configured_reasoning", [None, " low ", "", "default"])
+def test_soclaas_request_options_apply_to_the_correct_calls(
+    monkeypatch, provider_name, configured_limit, configured_reasoning
+):
+    if configured_limit is None:
+        monkeypatch.delenv("SOCLAAS_TOOL_MAX_TOKENS", raising=False)
+    else:
+        monkeypatch.setenv("SOCLAAS_TOOL_MAX_TOKENS", configured_limit)
+    if configured_reasoning is None:
+        monkeypatch.delenv("SOCLAAS_REASONING_EFFORT", raising=False)
+    else:
+        monkeypatch.setenv("SOCLAAS_REASONING_EFFORT", configured_reasoning)
+    captured = []
+
+    def create(**kwargs):
+        captured.append(kwargs)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(
+                        content=json.dumps(code_response()), tool_calls=[]
+                    ),
+                )
+            ]
+        )
+
+    client = SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+    )
+    provider = OpenAICompatibleProvider(provider_name, client, model="test")
+    provider.generate(generation_request())
+    provider.tool_turn(
+        [],
+        [
+            {
+                "type": "function",
+                "function": {"name": "check", "parameters": {"type": "object"}},
+            }
+        ],
+    )
+    provider.tool_turn([], [])
+    if provider_name == "soclaas":
+        assert captured[0]["max_tokens"] == 16384
+        assert provider.generation_settings()["generation_max_tokens"] == 16384
+        expected = int(configured_limit) if configured_limit else 4096
+        assert captured[1]["max_tokens"] == captured[2]["max_tokens"] == expected
+        assert provider.generation_settings()["tool_max_tokens"] == expected
+        reasoning = (configured_reasoning or "").strip() or "default"
+        if reasoning == "default":
+            assert all("reasoning_effort" not in request for request in captured)
+            assert (
+                provider.generation_settings()["reasoning_effort"] == "provider_default"
+            )
+        else:
+            assert all(request["reasoning_effort"] == reasoning for request in captured)
+            assert provider.generation_settings()["reasoning_effort"] == reasoning
+    else:
+        assert all("max_tokens" not in request for request in captured)
+        assert "tool_max_tokens" not in provider.generation_settings()
+        assert all("reasoning_effort" not in request for request in captured)
+        assert "reasoning_effort" not in provider.generation_settings()
+
+
+@pytest.mark.parametrize("limit", ["0", "-1", "many"])
+def test_soclaas_rejects_invalid_tool_output_budget(monkeypatch, limit):
+    monkeypatch.setenv("SOCLAAS_TOOL_MAX_TOKENS", limit)
+    with pytest.raises(OpenAIGenerationError, match="SOCLAAS_TOOL_MAX_TOKENS"):
+        OpenAICompatibleProvider("soclaas", object(), model="test")
+
+
+@pytest.mark.parametrize("provider_name", ["openai", "soclaas"])
+def test_truncated_tool_response_retains_usage_and_cannot_be_dispatched(provider_name):
+    response = SimpleNamespace(
+        usage=SimpleNamespace(prompt_tokens=20, completion_tokens=8),
+        choices=[
+            SimpleNamespace(
+                finish_reason="length",
+                message=SimpleNamespace(
+                    content="",
+                    tool_calls=[
+                        SimpleNamespace(
+                            id="call-1",
+                            function=SimpleNamespace(name="check", arguments="{}"),
+                        )
+                    ],
+                ),
+            )
+        ],
+    )
+    client = SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(create=lambda **kwargs: response)
+        )
+    )
+    provider = OpenAICompatibleProvider(provider_name, client, model="test")
+    with pytest.raises(GenerationResponseError, match="exhausted its output budget"):
+        provider.tool_turn([], [])
+    assert provider.last_usage.input_tokens == 20
+    assert provider.last_usage.output_tokens == 8
+
+
+@pytest.mark.parametrize("revision", [False, True])
+def test_soclaas_json_mode_shows_current_schema_and_preserves_code(
+    monkeypatch, revision
+):
+    from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
+
+    monkeypatch.delenv("SOCLAAS_RESPONSE_FORMAT", raising=False)
+    request = generation_request()
+    payload = code_response()
+    if revision:
+        request = replace(
+            request,
+            response_model=CodeProposalResponse,
+            schema_name="template_revision",
+        )
+        payload = payload["proposal"]
+    original_messages = json.dumps(request.messages)
+    client = client_with(payload)
+    provider = OpenAICompatibleProvider("soclaas", client, model="test")
+
+    result = provider.generate(request)
+
+    proposal = result if revision else result.proposal
+    assert proposal.code == code_response()["proposal"]["code"]
+    arguments = client.chat.completions.arguments
+    assert arguments["response_format"] == {"type": "json_object"}
+    instruction = arguments["messages"][-1]["content"]
+    assert "line breaks and indentation" in instruction
+    supplied_schema = json.loads(instruction.split("\n", 1)[1])
+    assert supplied_schema == request.response_model.model_json_schema()
+    assert ("checks" in supplied_schema["properties"]) is not revision
+    assert provider.generation_settings()["strict"] is False
+    assert json.dumps(request.messages) == original_messages
+
+
+def test_soclaas_json_mode_still_enforces_local_schema(monkeypatch):
+    monkeypatch.setenv("SOCLAAS_RESPONSE_FORMAT", "json_object")
+    provider = OpenAICompatibleProvider("soclaas", client_with({}), model="test")
+    with pytest.raises(GenerationSchemaError):
+        provider.generate(generation_request())
+
+
+def test_soclaas_generation_budget_can_be_configured(monkeypatch):
+    monkeypatch.setenv("SOCLAAS_GENERATION_MAX_TOKENS", "32768")
+    client = client_with(code_response())
+    provider = OpenAICompatibleProvider("soclaas", client, model="test")
+    provider.generate(generation_request())
+    assert client.chat.completions.arguments["max_tokens"] == 32768
+    assert provider.generation_settings()["generation_max_tokens"] == 32768
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "many"])
+def test_soclaas_rejects_invalid_generation_budget(monkeypatch, value):
+    monkeypatch.setenv("SOCLAAS_GENERATION_MAX_TOKENS", value)
+    with pytest.raises(OpenAIGenerationError, match="SOCLAAS_GENERATION_MAX_TOKENS"):
+        OpenAICompatibleProvider("soclaas", object(), model="test")
+
+
+def test_soclaas_rejects_unknown_output_format(monkeypatch):
+    monkeypatch.setenv("SOCLAAS_RESPONSE_FORMAT", "text")
+    with pytest.raises(OpenAIGenerationError, match="SOCLAAS_RESPONSE_FORMAT"):
+        OpenAICompatibleProvider("soclaas", object(), model="test")
+
+
+def test_soclaas_default_timeout_allows_reasoning(monkeypatch):
+    monkeypatch.delenv("SOCLAAS_TIMEOUT_SECONDS", raising=False)
+    assert _timeout_seconds("soclaas") == 300
+
+
+@pytest.mark.parametrize("provider_name", ["openai", "soclaas"])
+def test_providers_offer_all_pending_tools_without_mutating_schemas(provider_name):
+    client = client_with_content("")
+    provider = OpenAICompatibleProvider(provider_name, client, model="test")
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": name,
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                    "additionalProperties": False,
+                },
+            },
+        }
+        for name in ("structure", "semantic")
+    ]
+    original = json.dumps(tools)
+    provider.tool_turn([], tools)
+    arguments = client.chat.completions.arguments
+    assert arguments["tool_choice"] == "required"
+    assert arguments["parallel_tool_calls"] is True
+    assert len(arguments["tools"]) == 2
+    assert arguments["tools"][0]["function"]["strict"] is True
+    provider.tool_turn([], tools[1:])
+    assert client.chat.completions.arguments["tool_choice"] == "required"
+    provider.tool_turn([], [])
+    assert "tool_choice" not in client.chat.completions.arguments
+    assert json.dumps(tools) == original
+
+
+@pytest.mark.parametrize("provider_name", ["openai", "soclaas"])
+def test_truncated_generation_retains_usage_before_json_parsing(provider_name):
+    response = SimpleNamespace(
+        usage=SimpleNamespace(prompt_tokens=20, completion_tokens=8),
+        choices=[
+            SimpleNamespace(
+                finish_reason="length", message=SimpleNamespace(content='{"proposal":')
+            )
+        ],
+    )
+    client = SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(create=lambda **kwargs: response)
+        )
+    )
+    provider = OpenAICompatibleProvider(provider_name, client, model="test")
+    with pytest.raises(GenerationResponseError, match="generation exhausted"):
+        provider.generate(generation_request())
+    assert provider.last_usage.input_tokens == 20
+    assert provider.last_usage.output_tokens == 8

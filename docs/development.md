@@ -56,8 +56,17 @@ The shared report envelope preserves domain-specific artifact fields on reload.
 Before using a reloaded artifact, parse its JSON through the selected domain's
 `validated_model`; that schema owns validation of its content. The code domain's
 schema still rejects unknown fields. Report `failure` records the terminal error's
-stage and code, independently of findings from earlier attempts. Generation timing
-includes correction requests that time out or return invalid responses.
+stage and code, independently of findings from earlier attempts. The job timer
+includes MCP setup and teardown. Generation timing includes initial and correction
+requests that time out or return invalid responses. Initial generation and MCP
+setup failures also return reports, with zero checking attempts. The compatibility
+`create_validated_template` wrapper raises `AuthoringFailure` with that report.
+
+`model_calls` records generation, revision, checking, and acknowledgement calls;
+`usage` summarizes their input/output tokens and application call count. Missing
+usage is `null`, with an explicit reason per call. Complete totals are `null` if a
+call is missing the corresponding count; reported subtotals retain known counts.
+The count describes application calls, not transport retries inside an SDK.
 
 `ValidatedCodeTemplate` stores the reusable content and canonical input/answer
 cases. Its check summaries retain names, versions and timings without copying
@@ -73,8 +82,8 @@ Regenerate older development artifacts that fail the new schema.
 Evaluation JSON stores the authoring report once under `authoring_result`.
 `TemplateEvaluationAttempt` derives its Python convenience fields from that report
 when loading, so `validated_template`, `tool_catalogue`, and `validation_evidence`
-remain available without repeating them in saved records. Initial failures before
-an authoring report exists retain their catalogue and evidence directly.
+remain available without repeating them in saved records. Provider-creation failures
+before an authoring report exists retain their error and timing directly.
 
 ## Execution limits
 
@@ -129,6 +138,9 @@ A provider implements `generate`, `tool_turn`, and `generation_settings`, then
 registers its factory. Parse responses against the supplied schema, normalize tool
 calls, and report non-secret settings. Test the adapter with a mocked client before
 live verification. To use another model from an existing provider, pass `--model`.
+To report tokens, expose `last_usage` as `TokenUsage`, reset it before each
+`generate` or `tool_turn`, and fill it from response metadata before parsing. Providers
+without this metadata remain usable and explicitly report unavailable token usage.
 
 A check keeps its operation and MCP tool definition together, with a description,
 input and output schemas, version, domain tags, deadline, and `ToolEvidence` result.
