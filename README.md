@@ -179,5 +179,6 @@ For live model calls and workflow evaluation, see the [evaluation guide](docs/ev
 - [How the workflow works](docs/question-generation/README.md)
 - [Goals and milestones](GOALS.md)
 - [Evaluation guide](docs/evaluation.md)
+- [Provisional Python difficulty rubric](docs/difficulty-rubric.md)
 - [Developer reference](docs/development.md)
 - [Earlier evaluation results](docs/evaluation-history.md)

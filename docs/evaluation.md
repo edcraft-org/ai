@@ -101,6 +101,17 @@ Use `--topic all --difficulty all` for all 15 profiles. Each run uses multiple m
 calls and may include revisions. Completed records are flushed to JSONL as they
 finish, so they survive an interruption.
 
+## Provisional difficulty review
+
+Use the versioned [Python tracing difficulty rubric](difficulty-rubric.md) for
+manual educational review. It defines the audience, worked anchors, evidence
+fields, uncertainty, template variation, and the agreement protocol to predeclare
+before held-out judging. Requested labels remain separate from estimates and
+learner performance. Difficulty evidence is advisory and cannot override failed
+technical checks. The reviewed reference set and LLM judge follow in issues
+[42](https://github.com/edcraft-org/ai/issues/42) and
+[43](https://github.com/edcraft-org/ai/issues/43).
+
 ## What to report
 
 Use the fixed supported requests for the initial live baseline. Scripted regression

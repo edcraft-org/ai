@@ -6,14 +6,15 @@ locally from that template and a seed.
 
 ## Current priority
 
-As of 6 October 2026, the code workflow supports free-form prompts, model-selected
+As of 14 October 2026, the code workflow supports free-form prompts, model-selected
 MCP checks, corrections, saved checking records, and repeatable question generation.
 Issues #34–#39 are complete.
 
-The next step is [issue 40: workflow evaluation](https://github.com/edcraft-org/ai/issues/40).
-Evaluate whether the active providers choose useful checks, respond to failures,
-and produce reusable templates. Difficulty calibration and question quality are
-later work. The difficulty values are `easy`, `medium`, and `hard`.
+The focused [issue 40 baseline](docs/evaluation-history.md#issue-40-baseline-10-october-2026)
+is recorded. The [provisional difficulty rubric](docs/difficulty-rubric.md) defines
+the audience and review protocol for issue 41. Next are the reviewed reference set
+(issue 42) and rubric-guided judge (issue 43); learner calibration remains later
+work. The difficulty values are `easy`, `medium`, and `hard`.
 
 ## Design principles
 
@@ -36,8 +37,8 @@ correctness check.
 | Milestone | Deliverable | Status |
 | --- | --- | --- |
 | 1. Code templates | Checked Python templates and repeatable question generation. | Complete |
-| 2. Model-selected workflow | Free-form requests, model-selected checks, corrections, saved records, and provider evaluation. | Implementation complete; evaluation remains |
-| 3. Difficulty and quality | A reviewed dataset and explainable assessment of difficulty, distractors, and learning-objective alignment. | Planned |
+| 2. Model-selected workflow | Free-form requests, model-selected checks, corrections, saved records, and provider evaluation. | Focused baseline recorded |
+| 3. Difficulty and quality | A reviewed dataset and explainable assessment of difficulty, distractors, and learning-objective alignment. | Provisional rubric defined; reference set and judge remain |
 | 4. Authoring and review | Request, inspect, edit, recheck, approve, and reuse templates through the product UI. | Planned |
 | 5. Mathematics pilot | One bounded question family using the shared workflow and suitable symbolic checks. | Planned |
 | 6. Source grounding | A small document corpus, retrieval, citations, and grounding evaluation. | Conditional on earlier milestones being stable |
@@ -80,4 +81,6 @@ a general-purpose agent framework are outside the current milestone.
 
 - [Workflow](docs/question-generation/README.md): current behavior and responsibilities.
 - [Evaluation](docs/evaluation.md): live checks, evaluation commands, and reporting.
+- [Difficulty rubric](docs/difficulty-rubric.md): provisional Python audience,
+  anchors, reviewer evidence, and agreement protocol.
 - [Earlier results](docs/evaluation-history.md): evidence from previous milestones.

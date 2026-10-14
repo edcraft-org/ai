@@ -7,6 +7,38 @@ not be treated as its current pass rates.
 Historical records may use `beginner`, `intermediate`, and `advanced`. The current
 labels are `easy`, `medium`, and `hard`.
 
+## Issue 41 rubric verification: 14 October 2026
+
+The [difficulty rubric](difficulty-rubric.md) defines `python-tracing-v0.1`,
+audience `intro-python-v0.1`, and agreement protocol
+`python-tracing-agreement-v0.1`. The rubric content SHA256 is:
+
+```text
+f3f81d582596e53ca5ca6a8e407d30ae6ec03e5448f5832f10c3b099a7246aee
+```
+
+Focused verification extracted the three Python anchors from the Markdown and
+ran the application's subset checker and isolated execution tracer. The answers
+were 10, 4, and 18; each matched the stated correct option and all options were
+distinct. Nine executable error-rule variants reproduced all stated distractors.
+The tracer confirmed four iterations for conditional accumulation and nine total
+iterations across four loop invocations for nested accumulation. At `n = 0`, the
+nested example and its three error-rule variants returned 0, confirming the
+documented collision boundary. Local details are saved under ignored
+`.artifacts/issue41-rubric-verification.json`.
+
+The existing offline suite passed with 414 tests and two opt-in live tests skipped;
+lint, formatting, lockfile, and diff whitespace checks passed. Automatic approval
+review blocked the separate live OpenAI smoke test because it sends repository
+prompts/code to OpenAI using local credentials. It was not executed. The PR commit
+suppresses CI to avoid triggering the same live test indirectly; CI and live
+verification remain pending approval.
+
+These results verify executable examples and existing technical behavior. The
+anchor levels are rubric design judgments, not independent human labels. Human
+agreement, held-out LLM agreement, and learner calibration have not been measured.
+The reference set and judge remain issues 42 and 43 work.
+
 ## Issue 40 baseline: 10 October 2026
 
 The five natural jobs used `authoring-baseline-v1` with OpenAI `gpt-5-mini`.
