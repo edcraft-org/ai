@@ -1,0 +1,755 @@
+{
+  "set_version": "python-tracing-reference-v1",
+  "protocol_version": "python-tracing-agreement-v0.2",
+  "rubric_version": "python-tracing-v0.2",
+  "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+  "assessment_conditions_version": "manual-tracing-v0.1",
+  "source_revision": "3d5d97f",
+  "created_date": "2026-10-14",
+  "review_status": "awaiting_human_review",
+  "observed_learner_performance": null,
+  "split_policy": "Preassigned by underlying code family, before human ratings or judge tuning; variants and changed targets stay together. Rubric anchors are development only.",
+  "items": [
+    {
+      "question_id": "arithmetic-linear-01",
+      "family_id": "arithmetic-linear",
+      "topic": "arithmetic",
+      "split": "development",
+      "requested_difficulty": "easy",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "arithmetic.linear_sum",
+        "source_revision": "3d5d97f",
+        "path": "examples/templates/arithmetic_linear.json",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/arithmetic_linear.json",
+        "source_sha256": "8822cf1f07cbe3161f2289bcf6d2ab5b7ffbd45450d781e82992aa0b22eff550",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "B": "Add c.",
+        "C": "Subtract b.",
+        "D": "Omit c."
+      }
+    },
+    {
+      "question_id": "arithmetic-linear-02",
+      "family_id": "arithmetic-linear",
+      "topic": "arithmetic",
+      "split": "development",
+      "requested_difficulty": "easy",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "arithmetic.linear_sum",
+        "source_revision": "3d5d97f",
+        "path": "examples/templates/arithmetic_linear.json",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/arithmetic_linear.json",
+        "source_sha256": "8822cf1f07cbe3161f2289bcf6d2ab5b7ffbd45450d781e82992aa0b22eff550",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Add c.",
+        "C": "Subtract b.",
+        "D": "Omit c."
+      }
+    },
+    {
+      "question_id": "arithmetic-reassignment-01",
+      "family_id": "arithmetic-reassignment",
+      "topic": "arithmetic",
+      "split": "development",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "arithmetic-reassignment",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Use original values.",
+        "B": "Assume simultaneous swap.",
+        "D": "Reverse final place weights."
+      }
+    },
+    {
+      "question_id": "arithmetic-reassignment-02",
+      "family_id": "arithmetic-reassignment",
+      "topic": "arithmetic",
+      "split": "development",
+      "requested_difficulty": "hard",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "arithmetic-reassignment",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Use original values.",
+        "B": "Assume simultaneous swap.",
+        "C": "Reverse final place weights."
+      }
+    },
+    {
+      "question_id": "arithmetic-quotient-remainder-01",
+      "family_id": "arithmetic-quotient-remainder",
+      "topic": "arithmetic",
+      "split": "held_out",
+      "requested_difficulty": "easy",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "arithmetic-quotient-remainder",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "B": "Use divisor as remainder.",
+        "C": "Swap quotient/remainder.",
+        "D": "Use the ceiling quotient instead of floor division."
+      }
+    },
+    {
+      "question_id": "arithmetic-quotient-remainder-02",
+      "family_id": "arithmetic-quotient-remainder",
+      "topic": "arithmetic",
+      "split": "held_out",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "arithmetic-quotient-remainder",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Use divisor as remainder.",
+        "C": "Swap quotient/remainder.",
+        "D": "Use the ceiling quotient instead of floor division."
+      }
+    },
+    {
+      "question_id": "conditionals-boolean-01",
+      "family_id": "conditionals-boolean",
+      "topic": "conditionals",
+      "split": "development",
+      "requested_difficulty": "easy",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "conditionals.boolean_branch_count",
+        "source_revision": "3d5d97f",
+        "path": "examples/templates/conditional_boolean.json",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/conditional_boolean.json",
+        "source_sha256": "291256e32e8d6aa7ed50793e9bb3a95fc9c74db9131346f62d9b8a4e05181a66",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Count taken branches only.",
+        "B": "Count unvisited inner condition.",
+        "D": "Count return as a condition."
+      }
+    },
+    {
+      "question_id": "conditionals-boolean-02",
+      "family_id": "conditionals-boolean",
+      "topic": "conditionals",
+      "split": "development",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "conditionals.boolean_branch_count",
+        "source_revision": "3d5d97f",
+        "path": "examples/templates/conditional_boolean.json",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/conditional_boolean.json",
+        "source_sha256": "291256e32e8d6aa7ed50793e9bb3a95fc9c74db9131346f62d9b8a4e05181a66",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Count only outer condition.",
+        "B": "Count return as a condition.",
+        "C": "Count condition and outcome separately."
+      }
+    },
+    {
+      "question_id": "conditionals-sequential-01",
+      "family_id": "conditionals-sequential",
+      "topic": "conditionals",
+      "split": "development",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "conditionals-sequential",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "B": "Skip second condition.",
+        "C": "Use initial x for doubling.",
+        "D": "Double before adding four."
+      }
+    },
+    {
+      "question_id": "conditionals-sequential-02",
+      "family_id": "conditionals-sequential",
+      "topic": "conditionals",
+      "split": "development",
+      "requested_difficulty": "hard",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "conditionals-sequential",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Apply first update unconditionally.",
+        "C": "Apply second update unconditionally.",
+        "D": "Apply both updates unconditionally."
+      }
+    },
+    {
+      "question_id": "conditionals-early-return-01",
+      "family_id": "conditionals-early-return",
+      "topic": "conditionals",
+      "split": "held_out",
+      "requested_difficulty": "easy",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "conditionals-early-return",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Omit negation.",
+        "B": "Continue to even branch.",
+        "D": "Continue to final return."
+      }
+    },
+    {
+      "question_id": "conditionals-early-return-02",
+      "family_id": "conditionals-early-return",
+      "topic": "conditionals",
+      "split": "held_out",
+      "requested_difficulty": "hard",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "conditionals-early-return",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Return unchanged input.",
+        "B": "Take even branch.",
+        "C": "Take negative branch."
+      }
+    },
+    {
+      "question_id": "loops-iteration-count-01",
+      "family_id": "loops-iteration-count",
+      "topic": "loops",
+      "split": "development",
+      "requested_difficulty": "easy",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "loops.iteration_count",
+        "source_revision": "3d5d97f",
+        "path": "examples/templates/loop_iterations.json",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/loop_iterations.json",
+        "source_sha256": "f2ca4271b47768e12f59a2dd0ff601a5de3e56ce5017ee231a33a5e95df7ad31",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "B": "Count final range value.",
+        "C": "Include final check.",
+        "D": "Include setup and final check."
+      }
+    },
+    {
+      "question_id": "loops-iteration-count-02",
+      "family_id": "loops-iteration-count",
+      "topic": "loops",
+      "split": "development",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "loops.iteration_count",
+        "source_revision": "3d5d97f",
+        "path": "examples/templates/loop_iterations.json",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/loop_iterations.json",
+        "source_sha256": "f2ca4271b47768e12f59a2dd0ff601a5de3e56ce5017ee231a33a5e95df7ad31",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Count final range value.",
+        "C": "Include final check.",
+        "D": "Include setup and final check."
+      }
+    },
+    {
+      "question_id": "loops-triangular-reset-01",
+      "family_id": "loops-triangular-reset",
+      "topic": "loops",
+      "split": "development",
+      "requested_difficulty": "hard",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "loops-triangular-reset",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Omit inner additions.",
+        "B": "Use range(i - 1).",
+        "D": "Add i again when adding each subtotal to total."
+      }
+    },
+    {
+      "question_id": "loops-triangular-reset-02",
+      "family_id": "loops-triangular-reset",
+      "topic": "loops",
+      "split": "development",
+      "requested_difficulty": "hard",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "loops-triangular-reset",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Count only inner invocations.",
+        "B": "Count inner iterations.",
+        "C": "Count all iterations."
+      }
+    },
+    {
+      "question_id": "loops-conditional-reset-01",
+      "family_id": "loops-conditional-reset",
+      "topic": "loops",
+      "split": "held_out",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "loops-conditional-reset",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "B": "Omit reset.",
+        "C": "Return current after its final reset.",
+        "D": "Reset current before adding it to total."
+      }
+    },
+    {
+      "question_id": "loops-conditional-reset-02",
+      "family_id": "loops-conditional-reset",
+      "topic": "loops",
+      "split": "held_out",
+      "requested_difficulty": "hard",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "loops-conditional-reset",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Omit reset.",
+        "C": "Reset current before adding it to total.",
+        "D": "Return current instead of total."
+      }
+    },
+    {
+      "question_id": "functions-single-helper-01",
+      "family_id": "functions-single-helper",
+      "topic": "functions",
+      "split": "development",
+      "requested_difficulty": "easy",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "functions.single_helper",
+        "source_revision": "3d5d97f",
+        "path": "examples/templates/function_helper.json",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/function_helper.json",
+        "source_sha256": "ab0415b6a1e24441a907b7ffc722e8c992440a8584eb3655d46580f6de478baf",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Exclude entry call.",
+        "B": "Count return as call.",
+        "D": "Count both returns as calls."
+      }
+    },
+    {
+      "question_id": "functions-single-helper-02",
+      "family_id": "functions-single-helper",
+      "topic": "functions",
+      "split": "development",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "functions.single_helper",
+        "source_revision": "3d5d97f",
+        "path": "examples/templates/function_helper.json",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/function_helper.json",
+        "source_sha256": "ab0415b6a1e24441a907b7ffc722e8c992440a8584eb3655d46580f6de478baf",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed.",
+          "Changed target from function calls to return value; adapted options."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Omit increment.",
+        "B": "Increment twice.",
+        "C": "Return call count."
+      }
+    },
+    {
+      "question_id": "functions-composition-01",
+      "family_id": "functions-composition",
+      "topic": "functions",
+      "split": "held_out",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "functions-composition",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "B": "Call both helpers on original input.",
+        "C": "Return only right.",
+        "D": "Use right twice."
+      }
+    },
+    {
+      "question_id": "functions-composition-02",
+      "family_id": "functions-composition",
+      "topic": "functions",
+      "split": "held_out",
+      "requested_difficulty": "hard",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "functions-composition",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Call both helpers on original input.",
+        "C": "Return only right.",
+        "D": "Use right twice."
+      }
+    },
+    {
+      "question_id": "functions-recursive-sum-01",
+      "family_id": "functions-recursive-sum",
+      "topic": "functions",
+      "split": "held_out",
+      "requested_difficulty": "easy",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "functions-recursive-sum",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Start accumulation at one.",
+        "B": "Apply recursive decrement to base case.",
+        "D": "Count condition and entry call."
+      }
+    },
+    {
+      "question_id": "functions-recursive-sum-02",
+      "family_id": "functions-recursive-sum",
+      "topic": "functions",
+      "split": "held_out",
+      "requested_difficulty": "hard",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "functions-recursive-sum",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Return only outer n.",
+        "B": "Omit outer contribution.",
+        "C": "Include n + 1."
+      }
+    },
+    {
+      "question_id": "lists-sum-01",
+      "family_id": "lists-sum",
+      "topic": "lists",
+      "split": "development",
+      "requested_difficulty": "easy",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "lists.integer_sum",
+        "source_revision": "3d5d97f",
+        "path": "examples/templates/list_sum.json",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/list_sum.json",
+        "source_sha256": "7b2768a23ddf1999d964e2ed912f16f875da1909872070bd8fa98b7b1e134d33",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "B": "Return length.",
+        "C": "Add one.",
+        "D": "Subtract one."
+      }
+    },
+    {
+      "question_id": "lists-sum-02",
+      "family_id": "lists-sum",
+      "topic": "lists",
+      "split": "development",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "lists.integer_sum",
+        "source_revision": "3d5d97f",
+        "path": "examples/templates/list_sum.json",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/list_sum.json",
+        "source_sha256": "7b2768a23ddf1999d964e2ed912f16f875da1909872070bd8fa98b7b1e134d33",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Return length.",
+        "C": "Add one.",
+        "D": "Subtract one."
+      }
+    },
+    {
+      "question_id": "lists-adjacent-differences-01",
+      "family_id": "lists-adjacent-differences",
+      "topic": "lists",
+      "split": "development",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "lists-adjacent-differences",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Never update previous.",
+        "B": "Use only final two values in reverse order.",
+        "D": "Reverse subtraction."
+      }
+    },
+    {
+      "question_id": "lists-adjacent-differences-02",
+      "family_id": "lists-adjacent-differences",
+      "topic": "lists",
+      "split": "development",
+      "requested_difficulty": "hard",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "lists-adjacent-differences",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Never update previous.",
+        "B": "Use only final two values in reverse order.",
+        "C": "Reverse subtraction."
+      }
+    },
+    {
+      "question_id": "lists-endpoint-swap-01",
+      "family_id": "lists-endpoint-swap",
+      "topic": "lists",
+      "split": "held_out",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "lists-endpoint-swap",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "B": "Use original first element.",
+        "C": "Omit multiplication.",
+        "D": "Use old first plus twice old last."
+      }
+    },
+    {
+      "question_id": "lists-endpoint-swap-02",
+      "family_id": "lists-endpoint-swap",
+      "topic": "lists",
+      "split": "held_out",
+      "requested_difficulty": "hard",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "lists-endpoint-swap",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Use original first element.",
+        "C": "Omit multiplication.",
+        "D": "Use old first plus twice old last."
+      }
+    }
+  ]
+}

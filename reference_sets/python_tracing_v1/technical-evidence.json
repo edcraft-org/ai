@@ -1,0 +1,490 @@
+{
+  "evidence_version": "python-tracing-technical-v1",
+  "questions_sha256": "b47aba0ee03ce8f3c1e4619d63a4e8355a08fe9b3498a00af54f5ebdbbc94b1c",
+  "manifest_sha256": "7b7ed29773e17b5b4aaf68f476a2f18e41d789fd5260604c420e132a3d780296",
+  "executor": "LocalPythonTool / StepTracer",
+  "step_tracer_revision": "ab7e22ef18b776a9cbd5260bef4b4eeacc17db11",
+  "timeout_seconds_per_case": 2,
+  "records": [
+    {
+      "question_id": "arithmetic-linear-01",
+      "question_sha256": "930de1957038082f7ddb5a7b297a61d87d48e4c0a7dc0c9d8fbc7ba7ca0dd363",
+      "verified_answer": 6,
+      "correct_option": "A",
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 3
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "arithmetic-linear-02",
+      "question_sha256": "176515700b333cadb3b4cc1bdae53d6160ec0fb023b1061d046c7203cbdd0f1e",
+      "verified_answer": 9,
+      "correct_option": "B",
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 3
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "arithmetic-reassignment-01",
+      "question_sha256": "a6fa70ad98f646facbb8395345be92585d62b8dabcffe554f0b15b9ea6164c02",
+      "verified_answer": 114,
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "arithmetic-reassignment-02",
+      "question_sha256": "76e70f0ea11b66a2d65030bfa8dc154b8547ef6197ddfbc8bf06dccba810d663",
+      "verified_answer": 96,
+      "correct_option": "D",
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "arithmetic-quotient-remainder-01",
+      "question_sha256": "9ed2ee3a688d3ce953569684eefb557b64855e5fe6bd3f99ac7249928bea95b9",
+      "verified_answer": 32,
+      "correct_option": "A",
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "arithmetic-quotient-remainder-02",
+      "question_sha256": "46f8fca4719b99f40ce9a9ded573a1fee15dbecb1a1f38c991ed5a7281c8cb89",
+      "verified_answer": 53,
+      "correct_option": "B",
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "conditionals-boolean-01",
+      "question_sha256": "6f086aff490b160207e62a7506fd922921e5fd9f274d4bff0dee13a5cbb19f71",
+      "verified_answer": 1,
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "decide",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 1,
+        "variable_snapshots": 1
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "conditionals-boolean-02",
+      "question_sha256": "7a65e06697dd2b994f3edfbb47be2d1e883d27fb40d6415bb1c65fb80716774d",
+      "verified_answer": 2,
+      "correct_option": "D",
+      "trace_summary": {
+        "entry_function": "decide",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 2,
+        "variable_snapshots": 1
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "conditionals-sequential-01",
+      "question_sha256": "9b73d2f4b0ec01e2c645e415940cdfca89aac2d4912db67d371e74ca80e2708d",
+      "verified_answer": 14,
+      "correct_option": "A",
+      "trace_summary": {
+        "entry_function": "decide",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 2,
+        "variable_snapshots": 3
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "conditionals-sequential-02",
+      "question_sha256": "bd64cf8817cad246d7a8c680db437ce6e690682576d4e2d280b178efcd80cc3b",
+      "verified_answer": 6,
+      "correct_option": "B",
+      "trace_summary": {
+        "entry_function": "decide",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 2,
+        "variable_snapshots": 1
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "conditionals-early-return-01",
+      "question_sha256": "23390e65e282735dd861bb6ca1312f2871663993ec35cee9a3024a9df5b5c1a2",
+      "verified_answer": 2,
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "decide",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 1,
+        "variable_snapshots": 1
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "conditionals-early-return-02",
+      "question_sha256": "0d78eeb6776183ce863ae7b24f0ca20664f7c0abffeb8c2ace1cd1d9654ce096",
+      "verified_answer": 6,
+      "correct_option": "D",
+      "trace_summary": {
+        "entry_function": "decide",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 2,
+        "variable_snapshots": 1
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "loops-iteration-count-01",
+      "question_sha256": "4a6e9c04747830c45a5592d7ce2d5892a010fd2bed13f4c6147dbe35579ab2ed",
+      "verified_answer": 2,
+      "correct_option": "A",
+      "trace_summary": {
+        "entry_function": "accumulate",
+        "function_calls": 2,
+        "loop_executions": 1,
+        "loop_iterations": 2,
+        "branch_executions": 0,
+        "variable_snapshots": 6
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "loops-iteration-count-02",
+      "question_sha256": "83d98f2f9b7b1ee233d4215693d3d0eb164619457a66b4859803a2fedba59fa0",
+      "verified_answer": 5,
+      "correct_option": "B",
+      "trace_summary": {
+        "entry_function": "accumulate",
+        "function_calls": 2,
+        "loop_executions": 1,
+        "loop_iterations": 5,
+        "branch_executions": 0,
+        "variable_snapshots": 12
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "loops-triangular-reset-01",
+      "question_sha256": "a98382de210a9a9ff774c75eba5e8e1011378a66432e36f4d7c82433a254f85b",
+      "verified_answer": 10,
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "accumulate",
+        "function_calls": 5,
+        "loop_executions": 4,
+        "loop_iterations": 9,
+        "branch_executions": 0,
+        "variable_snapshots": 23
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "loops-triangular-reset-02",
+      "question_sha256": "61e3e028fcdb5a7eca42ebcf407cf0905dab29e50793fa82b1fb2e91b556b0f5",
+      "verified_answer": 5,
+      "correct_option": "D",
+      "trace_summary": {
+        "entry_function": "accumulate",
+        "function_calls": 6,
+        "loop_executions": 5,
+        "loop_iterations": 14,
+        "branch_executions": 0,
+        "variable_snapshots": 34
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "loops-conditional-reset-01",
+      "question_sha256": "6b61bcf6ad3fbf0f1759b488fdb556494d93906ae0b7d32518deb2e7917c60ea",
+      "verified_answer": 8,
+      "correct_option": "A",
+      "trace_summary": {
+        "entry_function": "accumulate",
+        "function_calls": 2,
+        "loop_executions": 1,
+        "loop_iterations": 3,
+        "branch_executions": 3,
+        "variable_snapshots": 14
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "loops-conditional-reset-02",
+      "question_sha256": "5489e94b5dcdb620c8ae9e90fab8aac178c97dfabf60a245346e8945a5800c3c",
+      "verified_answer": 12,
+      "correct_option": "B",
+      "trace_summary": {
+        "entry_function": "accumulate",
+        "function_calls": 2,
+        "loop_executions": 1,
+        "loop_iterations": 4,
+        "branch_executions": 4,
+        "variable_snapshots": 17
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "functions-single-helper-01",
+      "question_sha256": "9a153188e3d3fc546367fbe5b9ba16a757ae60ec19fdc65aa10f971a036cbbc4",
+      "verified_answer": 2,
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 2,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 2
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "functions-single-helper-02",
+      "question_sha256": "38b6fb18dd893afcccd2a97490f2caa9206bf7879574220110647c20b88cc215",
+      "verified_answer": 6,
+      "correct_option": "D",
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 2,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 2
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "functions-composition-01",
+      "question_sha256": "bc3a61a75aee373ccf24a2d1db9b51adc4d824ef92c42f8ca1dd925ef944c77a",
+      "verified_answer": 12,
+      "correct_option": "A",
+      "trace_summary": {
+        "entry_function": "combine",
+        "function_calls": 3,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 5
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "functions-composition-02",
+      "question_sha256": "7f9c9808068061c3eccf4e239a94b406bcc4e1c0f62aec7b73b8763a701dd09e",
+      "verified_answer": 4,
+      "correct_option": "B",
+      "trace_summary": {
+        "entry_function": "combine",
+        "function_calls": 3,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 5
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "functions-recursive-sum-01",
+      "question_sha256": "33fe0bb8028d153a5b9c20431271b85c7a39a690ec952e41fec4fc00954f73b6",
+      "verified_answer": 0,
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "total",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 1,
+        "variable_snapshots": 1
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "functions-recursive-sum-02",
+      "question_sha256": "23fed1877a405ddf06764e989926fd6df077a38f80cbc6b0d7f4643fbf8c43ea",
+      "verified_answer": 10,
+      "correct_option": "D",
+      "trace_summary": {
+        "entry_function": "total",
+        "function_calls": 5,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 5,
+        "variable_snapshots": 5
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "lists-sum-01",
+      "question_sha256": "b39c8633b00693a22ea725bdc03ce9e9e22c8856c33d3fe8ff01a8605ca38fc5",
+      "verified_answer": 5,
+      "correct_option": "A",
+      "trace_summary": {
+        "entry_function": "total",
+        "function_calls": 2,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 1
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "lists-sum-02",
+      "question_sha256": "8342c9e9cce8b6754bfc319ff64be97d920f10f73116b2ecbb8e8babb0fc7ee6",
+      "verified_answer": 7,
+      "correct_option": "B",
+      "trace_summary": {
+        "entry_function": "total",
+        "function_calls": 2,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 1
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "lists-adjacent-differences-01",
+      "question_sha256": "7ee78a0d0e99d7d470e792cd345a2cd61389dd670e96bd05ed2d4a2b08c74e82",
+      "verified_answer": 1,
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "total",
+        "function_calls": 1,
+        "loop_executions": 1,
+        "loop_iterations": 3,
+        "branch_executions": 0,
+        "variable_snapshots": 12
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "lists-adjacent-differences-02",
+      "question_sha256": "555df92dd5ecb02c569a7a6f6978d8c9fa3a45a01184c145fd59ea56ff0904b8",
+      "verified_answer": 6,
+      "correct_option": "D",
+      "trace_summary": {
+        "entry_function": "total",
+        "function_calls": 1,
+        "loop_executions": 1,
+        "loop_iterations": 3,
+        "branch_executions": 0,
+        "variable_snapshots": 12
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "lists-endpoint-swap-01",
+      "question_sha256": "d9f3cbabf7ab30fe06eac59a7a9c462dabf65b4e2673335d6707aefefefd1977",
+      "verified_answer": 13,
+      "correct_option": "A",
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "lists-endpoint-swap-02",
+      "question_sha256": "2a4931477dbd06827610747c14fffd66a25373fa9e6b770a1facbaa0d7efcf65",
+      "verified_answer": 8,
+      "correct_option": "B",
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    }
+  ]
+}

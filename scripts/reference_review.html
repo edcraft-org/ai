@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EdCraft · Independent difficulty review</title>
+<style>
+:root{font-family:system-ui,sans-serif;color:#182c36;background:#edf3f5;line-height:1.55}
+body{max-width:1040px;margin:auto;padding:24px}
+h1{font-size:28px;margin-bottom:4px}
+h2{font-size:22px}
+h3{font-size:16px}
+p{margin:10px 0}
+.panel{background:white;border:1px solid #ccdce3;border-radius:12px;padding:24px;margin:18px 0}
+.muted{color:#4b6573;font-size:14px}
+.toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;position:sticky;top:0;background:#edf3f5;padding:12px 0;z-index:1}
+button,select,input,textarea{font:inherit;border:1px solid #a7bbc5;border-radius:6px;padding:8px}
+button{background:#125c73;color:white;cursor:pointer}
+button.secondary{background:white;color:#125c73}
+button:disabled{opacity:.45}
+label{display:block;font-weight:600;margin-top:16px}
+textarea{box-sizing:border-box;display:block;width:100%;min-height:82px;margin-top:6px;font-weight:400}
+select{background:white}
+pre{background:#142b36;color:#e4f4f8;padding:18px;border-radius:8px;overflow:auto;line-height:1.5}
+code{font-family:ui-monospace,monospace}
+.options{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.option{border:1px solid #ccdce3;border-radius:6px;padding:12px}
+.dimensions{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+.alert{color:#934100;font-size:14px}
+.checks label{font-weight:400}
+.checks input{margin-right:8px}
+details{margin-top:16px}
+summary{cursor:pointer;color:#125c73}
+@media(max-width:680px){body{padding:12px}
+.panel{padding:16px}
+.dimensions,.options{grid-template-columns:1fr}
+}
+
+</style>
+</head>
+<body>
+<h1>Independent difficulty review</h1>
+<p class="muted">EdCraft provisional reference set · 30 Python tracing questions · rubric v0.2</p>
+<div class="panel">
+<p>Assess each complete question on its own. Requested levels, source identity and other ratings are hidden. These are task-demand estimates, not measured learner performance.</p>
+<p id="conditions"></p>
+<p>Rate execution burden, changing state, conceptual interaction and answer discrimination. Use easy, medium, hard or unknown; do not add the dimension ratings into a score.</p>
+<details><summary>Read the full rubric and anchors</summary><pre id="rubric" style="white-space:pre-wrap;background:#f2f6f8;color:#182c36;font-family:inherit"></pre></details>
+<p class="muted">Only the exported packet should be used while rating. Do not inspect the source manifest or comparison results until all independent ratings are finished. Original ratings must be retained before any later revision.</p>
+<div class="checks"><label><input type="checkbox" id="attest">I am the named human reviewer and am reviewing independently, without seeing requested levels or using AI judgments.</label></div>
+</div>
+<div class="toolbar">
+<button id="previous" class="secondary">Previous</button><select id="jump" aria-label="Question"></select><button id="next" class="secondary">Next</button><span id="progress"></span><button id="download">Download ratings</button><button id="show-export" class="secondary">Show ratings JSON</button>
+</div>
+<div id="question" class="panel"></div>
+<div id="export-panel" class="panel" hidden><label>Exported ratings JSON<textarea id="export-json" readonly style="min-height:240px"></textarea></label><p class="muted">If downloads are unavailable, copy this text into a .json file and share it with Codex.</p></div>
+<p id="notice" class="alert" role="status"></p>
+<p class="muted">Drafts are saved in this browser when local storage is available. Download your ratings to preserve them and share the JSON file with Codex. No network requests or model calls occur from this page.</p>
+<script id="payload" type="application/json">__PAYLOAD__</script>
+<script>
+const payload = JSON.parse(document.getElementById('payload').textContent);
+const packet = payload.packet;
+let review = payload.review;
+let index = 0;
+const storageKey = 'edcraft-review:' + packet.packet_sha256 + ':' + review.reviewer_id;
+try {
+  const saved = localStorage.getItem(storageKey);
+  if (saved) {
+    const value = JSON.parse(saved);
+    if (value.packet_sha256 === review.packet_sha256 && value.reviewer_id === review.reviewer_id) {
+      review = value;
+    }
+  }
+} catch {}
+
+const names = {
+  execution_burden: 'Execution and reasoning burden',
+  changing_state: 'Changing state',
+  conceptual_interaction: 'Conceptual interaction',
+  answer_discrimination: 'Answer discrimination'
+};
+const esc = value => String(value).replace(/[&<>"']/g, character => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+}[character]));
+
+function choices(values, current) {
+  return values.map(value => `<option value="${esc(value)}" ${value === current ? 'selected' : ''}>${value || 'Unknown'}</option>`).join('');
+}
+
+function textField(key, label, value) {
+  return `<label>${esc(label)}<textarea data-field="${key}">${esc(value)}</textarea></label>`;
+}
+
+function remember() {
+  review.review_date = new Date().toISOString().slice(0, 10);
+  document.getElementById('export-json').value = JSON.stringify(review, null, 2) + '\n';
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(review));
+  } catch {
+    document.getElementById('notice').textContent = 'Browser storage is unavailable. Download ratings before leaving this page.';
+  }
+  updateProgress();
+}
+
+function updateProgress() {
+  const done = review.ratings.filter(rating => rating.status === 'reviewed').length;
+  document.getElementById('progress').textContent = `${done} / ${review.ratings.length} reviewed`;
+  for (let i = 0; i < review.ratings.length; i++) {
+    document.getElementById('jump').options[i].text = packet.questions[i].review_id + ' · ' + review.ratings[i].status;
+  }
+}
+
+function complete(rating) {
+  const required = [
+    rating.solution_reasoning, rating.concepts_and_dependencies,
+    rating.shortcuts, rating.nearest_anchor,
+    ...Object.values(rating.dimensions).map(dimension => dimension.reason),
+    ...Object.values(rating.option_evidence)
+  ];
+  if (required.some(value => !value.trim())) {
+    return 'Explain the solution, dependencies, shortcuts, anchor, all dimensions and all options.';
+  }
+  const uncertain = rating.estimated_difficulty === null || rating.confidence === 'low' ||
+    rating.alternative_levels.length ||
+    Object.values(rating.dimensions).some(dimension => dimension.rating === 'unknown');
+  if (uncertain && !rating.uncertainty_reason.trim()) {
+    return 'Explain the uncertainty, including unknown dimensions or alternative levels.';
+  }
+  return '';
+}
+
+function render() {
+  const q = packet.questions[index];
+  const r = review.ratings[index];
+  document.getElementById('jump').value = String(index);
+  document.getElementById('previous').disabled = index === 0;
+  document.getElementById('next').disabled = index === packet.questions.length - 1;
+  document.getElementById('question').innerHTML = `
+    <h2>${esc(q.review_id)} <span class="muted">· ${esc(r.status)}</span></h2>
+    <pre><code>${esc(q.code)}</code></pre>
+    <p><strong>${esc(q.question)}</strong></p>
+    <p class="muted">Concrete inputs: <code>${esc(JSON.stringify(q.inputs))}</code></p>
+    <div class="options">${q.options.map(option => `
+      <div class="option"><strong>${option.id}.</strong> <code>${esc(JSON.stringify(option.value))}</code></div>
+    `).join('')}</div>
+    <details>
+      <summary>Verified answer and execution evidence — for reviewers</summary>
+      <p>Correct option: <strong>${q.correct_option}</strong>; answer: <code>${esc(JSON.stringify(q.verified_answer))}</code></p>
+      <pre>${esc(JSON.stringify(q.trace_summary, null, 2))}</pre>
+      <p class="muted">Trace counts describe execution; they do not measure mental effort.</p>
+    </details>
+    ${textField('solution_reasoning', 'Explain a correct solution for this input', r.solution_reasoning)}
+    ${textField('concepts_and_dependencies', 'Which concepts matter, and how do they depend on one another?', r.concepts_and_dependencies)}
+    ${textField('shortcuts', 'Accessible shortcuts or irrelevant code (write “none” if absent)', r.shortcuts)}
+    <h3>Dimension ratings</h3>
+    <div class="dimensions">${Object.entries(names).map(([key, label]) => `
+      <div>
+        <label>${label}<br><select data-dimension="${key}">${choices(['unknown', 'low', 'moderate', 'high'], r.dimensions[key].rating)}</select></label>
+        <textarea aria-label="${label} reason" data-dimension-reason="${key}">${esc(r.dimensions[key].reason)}</textarea>
+      </div>
+    `).join('')}</div>
+    <h3>Option evidence</h3>
+    <p class="muted">Explain why the correct option follows. For each distractor, describe an error rule that yields that exact value, or say it is implausible and why. These are hypotheses, not observed learner misconceptions.</p>
+    ${q.options.map(option => textField('option:' + option.id, `Option ${option.id}: ${JSON.stringify(option.value)}`, r.option_evidence[option.id])).join('')}
+    <label>Overall estimate<br><select data-field="estimated_difficulty">${choices(['', 'easy', 'medium', 'hard'], r.estimated_difficulty || '')}</select></label>
+    <label>Confidence<br><select data-field="confidence">${choices(['low', 'medium', 'high'], r.confidence)}</select></label>
+    ${textField('nearest_anchor', 'Closest rubric anchor and why it fits (or why none fits)', r.nearest_anchor)}
+    <label>Alternative levels</label>
+    <div class="checks">${['easy', 'medium', 'hard'].map(level => `
+      <label><input type="checkbox" data-alternative="${level}" ${r.alternative_levels.includes(level) ? 'checked' : ''}>${level}</label>
+    `).join('')}</div>
+    ${textField('uncertainty_reason', 'Uncertainty reason (required for unknown, low confidence or alternatives)', r.uncertainty_reason)}
+    ${textField('quality_concerns', 'Wording or distractor quality concerns', r.quality_concerns)}
+    <p><button id="mark">Mark reviewed</button> <button class="secondary" id="pending">Keep pending</button></p>
+  `;
+  for (const element of document.querySelectorAll('[data-field]')) {
+    element.addEventListener('input', () => {
+      const key = element.dataset.field;
+      if (key.startsWith('option:')) r.option_evidence[key.slice(7)] = element.value;
+      else r[key] = key === 'estimated_difficulty' ? (element.value || null) : element.value;
+      r.status = 'pending';
+      remember();
+    });
+  }
+  for (const element of document.querySelectorAll('[data-dimension]')) {
+    element.addEventListener('change', () => {
+      r.dimensions[element.dataset.dimension].rating = element.value;
+      r.status = 'pending';
+      remember();
+    });
+  }
+  for (const element of document.querySelectorAll('[data-dimension-reason]')) {
+    element.addEventListener('input', () => {
+      r.dimensions[element.dataset.dimensionReason].reason = element.value;
+      r.status = 'pending';
+      remember();
+    });
+  }
+  for (const element of document.querySelectorAll('[data-alternative]')) {
+    element.addEventListener('change', () => {
+      r.alternative_levels = Array.from(document.querySelectorAll('[data-alternative]:checked')).map(e => e.dataset.alternative);
+      r.status = 'pending';
+      remember();
+    });
+  }
+  document.getElementById('mark').onclick = () => {
+    const problem = complete(r);
+    if (problem || !review.independent_blinded_review) {
+      document.getElementById('notice').textContent = problem || 'Confirm independent human review first.';
+      return;
+    }
+    r.status = 'reviewed';
+    document.getElementById('notice').textContent = 'Rating saved. You can continue to the next question.';
+    remember();
+    render();
+  };
+  document.getElementById('pending').onclick = () => {
+    r.status = 'pending';
+    remember();
+    render();
+  };
+  updateProgress();
+}
+
+document.getElementById('conditions').textContent = packet.conditions;
+document.getElementById('rubric').textContent = payload.rubric_text;
+document.getElementById('attest').checked = review.independent_blinded_review;
+document.getElementById('attest').onchange = event => {
+  review.independent_blinded_review = event.target.checked;
+  remember();
+};
+document.getElementById('jump').innerHTML = packet.questions.map((q, i) => `<option value="${i}">${q.review_id}</option>`).join('');
+document.getElementById('jump').onchange = event => { index = Number(event.target.value); render(); };
+document.getElementById('previous').onclick = () => { index--; render(); };
+document.getElementById('next').onclick = () => { index++; render(); };
+document.getElementById('show-export').onclick = () => {
+  remember();
+  document.getElementById('export-panel').hidden = false;
+  document.getElementById('export-json').focus();
+  document.getElementById('export-json').select();
+};
+document.getElementById('download').onclick = () => {
+  remember();
+  const blob = new Blob([JSON.stringify(review, null, 2) + '\n'], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'difficulty-review-' + review.reviewer_id + '.json';
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => { URL.revokeObjectURL(url); link.remove(); }, 10000);
+  document.getElementById('notice').textContent = 'Download requested. If this browser does not save it, use Show ratings JSON to copy the record.';
+};
+render();
+</script>
+</body>
+</html>

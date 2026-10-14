@@ -1,0 +1,936 @@
+{
+  "set_version": "python-tracing-reference-v1",
+  "questions": [
+    {
+      "question_id": "arithmetic-linear-01",
+      "code": "def calculate(a, b, c):\n    return a + b - c",
+      "entry_function": "calculate",
+      "inputs": {
+        "a": 2,
+        "b": 5,
+        "c": 1
+      },
+      "seed": null,
+      "question": "What does calculate(2, 5, 1) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 6
+        },
+        {
+          "id": "B",
+          "value": 8
+        },
+        {
+          "id": "C",
+          "value": -4
+        },
+        {
+          "id": "D",
+          "value": 7
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "arithmetic-linear-02",
+      "code": "def calculate(a, b, c):\n    return a + b - c",
+      "entry_function": "calculate",
+      "inputs": {
+        "a": 4,
+        "b": 8,
+        "c": 3
+      },
+      "seed": null,
+      "question": "What does calculate(4, 8, 3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 15
+        },
+        {
+          "id": "B",
+          "value": 9
+        },
+        {
+          "id": "C",
+          "value": -7
+        },
+        {
+          "id": "D",
+          "value": 12
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "arithmetic-reassignment-01",
+      "code": "def calculate(x, y):\n    x = x + y\n    y = x - y\n    return x * 10 + y",
+      "entry_function": "calculate",
+      "inputs": {
+        "x": 4,
+        "y": 7
+      },
+      "seed": null,
+      "question": "What does calculate(4, 7) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 47
+        },
+        {
+          "id": "B",
+          "value": 74
+        },
+        {
+          "id": "C",
+          "value": 114
+        },
+        {
+          "id": "D",
+          "value": 51
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "arithmetic-reassignment-02",
+      "code": "def calculate(x, y):\n    x = x + y\n    y = x - y\n    return x * 10 + y",
+      "entry_function": "calculate",
+      "inputs": {
+        "x": 6,
+        "y": 3
+      },
+      "seed": null,
+      "question": "What does calculate(6, 3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 63
+        },
+        {
+          "id": "B",
+          "value": 36
+        },
+        {
+          "id": "C",
+          "value": 69
+        },
+        {
+          "id": "D",
+          "value": 96
+        }
+      ],
+      "correct_option": "D"
+    },
+    {
+      "question_id": "arithmetic-quotient-remainder-01",
+      "code": "def calculate(x, y):\n    quotient = x // y\n    remainder = x % y\n    return quotient * 10 + remainder",
+      "entry_function": "calculate",
+      "inputs": {
+        "x": 17,
+        "y": 5
+      },
+      "seed": null,
+      "question": "What does calculate(17, 5) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 32
+        },
+        {
+          "id": "B",
+          "value": 35
+        },
+        {
+          "id": "C",
+          "value": 23
+        },
+        {
+          "id": "D",
+          "value": 42
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "arithmetic-quotient-remainder-02",
+      "code": "def calculate(x, y):\n    quotient = x // y\n    remainder = x % y\n    return quotient * 10 + remainder",
+      "entry_function": "calculate",
+      "inputs": {
+        "x": 23,
+        "y": 4
+      },
+      "seed": null,
+      "question": "What does calculate(23, 4) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 54
+        },
+        {
+          "id": "B",
+          "value": 53
+        },
+        {
+          "id": "C",
+          "value": 35
+        },
+        {
+          "id": "D",
+          "value": 63
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "conditionals-boolean-01",
+      "code": "def decide(enabled):\n    if enabled:\n        if 3 > 2:\n            return 1\n    return 0",
+      "entry_function": "decide",
+      "inputs": {
+        "enabled": false
+      },
+      "seed": null,
+      "question": "How many if conditions are evaluated when decide(False) runs? Count both true and false evaluations; do not count conditions that are never reached.",
+      "answer_target": "branch_executions",
+      "options": [
+        {
+          "id": "A",
+          "value": 0
+        },
+        {
+          "id": "B",
+          "value": 2
+        },
+        {
+          "id": "C",
+          "value": 1
+        },
+        {
+          "id": "D",
+          "value": 3
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "conditionals-boolean-02",
+      "code": "def decide(enabled):\n    if enabled:\n        if 3 > 2:\n            return 1\n    return 0",
+      "entry_function": "decide",
+      "inputs": {
+        "enabled": true
+      },
+      "seed": null,
+      "question": "How many if conditions are evaluated when decide(True) runs? Count both true and false evaluations; do not count conditions that are never reached.",
+      "answer_target": "branch_executions",
+      "options": [
+        {
+          "id": "A",
+          "value": 1
+        },
+        {
+          "id": "B",
+          "value": 3
+        },
+        {
+          "id": "C",
+          "value": 4
+        },
+        {
+          "id": "D",
+          "value": 2
+        }
+      ],
+      "correct_option": "D"
+    },
+    {
+      "question_id": "conditionals-sequential-01",
+      "code": "def decide(x):\n    if x < 5:\n        x = x + 4\n    if x % 2 == 1:\n        x = x * 2\n    return x",
+      "entry_function": "decide",
+      "inputs": {
+        "x": 3
+      },
+      "seed": null,
+      "question": "What does decide(3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 14
+        },
+        {
+          "id": "B",
+          "value": 7
+        },
+        {
+          "id": "C",
+          "value": 6
+        },
+        {
+          "id": "D",
+          "value": 10
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "conditionals-sequential-02",
+      "code": "def decide(x):\n    if x < 5:\n        x = x + 4\n    if x % 2 == 1:\n        x = x * 2\n    return x",
+      "entry_function": "decide",
+      "inputs": {
+        "x": 6
+      },
+      "seed": null,
+      "question": "What does decide(6) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 10
+        },
+        {
+          "id": "B",
+          "value": 6
+        },
+        {
+          "id": "C",
+          "value": 12
+        },
+        {
+          "id": "D",
+          "value": 20
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "conditionals-early-return-01",
+      "code": "def decide(x):\n    if x < 0:\n        return -x\n    if x % 2 == 0:\n        return x + 1\n    return x * 2",
+      "entry_function": "decide",
+      "inputs": {
+        "x": -2
+      },
+      "seed": null,
+      "question": "What does decide(-2) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": -2
+        },
+        {
+          "id": "B",
+          "value": -1
+        },
+        {
+          "id": "C",
+          "value": 2
+        },
+        {
+          "id": "D",
+          "value": -4
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "conditionals-early-return-02",
+      "code": "def decide(x):\n    if x < 0:\n        return -x\n    if x % 2 == 0:\n        return x + 1\n    return x * 2",
+      "entry_function": "decide",
+      "inputs": {
+        "x": 3
+      },
+      "seed": null,
+      "question": "What does decide(3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 3
+        },
+        {
+          "id": "B",
+          "value": 4
+        },
+        {
+          "id": "C",
+          "value": -3
+        },
+        {
+          "id": "D",
+          "value": 6
+        }
+      ],
+      "correct_option": "D"
+    },
+    {
+      "question_id": "loops-iteration-count-01",
+      "code": "def accumulate(n):\n    total = 0\n    for i in range(n):\n        total += i\n    return total",
+      "entry_function": "accumulate",
+      "inputs": {
+        "n": 2
+      },
+      "seed": null,
+      "question": "How many total loop-body iterations occur when accumulate(2) runs?",
+      "answer_target": "loop_iterations",
+      "options": [
+        {
+          "id": "A",
+          "value": 2
+        },
+        {
+          "id": "B",
+          "value": 1
+        },
+        {
+          "id": "C",
+          "value": 3
+        },
+        {
+          "id": "D",
+          "value": 4
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "loops-iteration-count-02",
+      "code": "def accumulate(n):\n    total = 0\n    for i in range(n):\n        total += i\n    return total",
+      "entry_function": "accumulate",
+      "inputs": {
+        "n": 5
+      },
+      "seed": null,
+      "question": "How many total loop-body iterations occur when accumulate(5) runs?",
+      "answer_target": "loop_iterations",
+      "options": [
+        {
+          "id": "A",
+          "value": 4
+        },
+        {
+          "id": "B",
+          "value": 5
+        },
+        {
+          "id": "C",
+          "value": 6
+        },
+        {
+          "id": "D",
+          "value": 7
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "loops-triangular-reset-01",
+      "code": "def accumulate(n):\n    total = 0\n    for i in range(1, n + 1):\n        subtotal = i\n        for j in range(i):\n            subtotal += j\n        total += subtotal\n    return total",
+      "entry_function": "accumulate",
+      "inputs": {
+        "n": 3
+      },
+      "seed": null,
+      "question": "What does accumulate(3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 6
+        },
+        {
+          "id": "B",
+          "value": 7
+        },
+        {
+          "id": "C",
+          "value": 10
+        },
+        {
+          "id": "D",
+          "value": 16
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "loops-triangular-reset-02",
+      "code": "def accumulate(n):\n    total = 0\n    for i in range(1, n + 1):\n        subtotal = i\n        for j in range(i):\n            subtotal += j\n        total += subtotal\n    return total",
+      "entry_function": "accumulate",
+      "inputs": {
+        "n": 4
+      },
+      "seed": null,
+      "question": "How many loop invocations occur across both loops when accumulate(4) runs? Count the outer loop once and the inner loop once each time it is reached, rather than counting body iterations.",
+      "answer_target": "loop_executions",
+      "options": [
+        {
+          "id": "A",
+          "value": 4
+        },
+        {
+          "id": "B",
+          "value": 10
+        },
+        {
+          "id": "C",
+          "value": 14
+        },
+        {
+          "id": "D",
+          "value": 5
+        }
+      ],
+      "correct_option": "D"
+    },
+    {
+      "question_id": "loops-conditional-reset-01",
+      "code": "def accumulate(n):\n    current = 2\n    total = 0\n    for i in range(n):\n        current += i\n        total += current\n        if i % 2 == 0:\n            current = 1\n    return total",
+      "entry_function": "accumulate",
+      "inputs": {
+        "n": 3
+      },
+      "seed": null,
+      "question": "What does accumulate(3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 8
+        },
+        {
+          "id": "B",
+          "value": 10
+        },
+        {
+          "id": "C",
+          "value": 1
+        },
+        {
+          "id": "D",
+          "value": 4
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "loops-conditional-reset-02",
+      "code": "def accumulate(n):\n    current = 2\n    total = 0\n    for i in range(n):\n        current += i\n        total += current\n        if i % 2 == 0:\n            current = 1\n    return total",
+      "entry_function": "accumulate",
+      "inputs": {
+        "n": 4
+      },
+      "seed": null,
+      "question": "What does accumulate(4) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 18
+        },
+        {
+          "id": "B",
+          "value": 12
+        },
+        {
+          "id": "C",
+          "value": 8
+        },
+        {
+          "id": "D",
+          "value": 4
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "functions-single-helper-01",
+      "code": "def increment(value):\n    return value + 1\n\ndef calculate(value):\n    return increment(value)",
+      "entry_function": "calculate",
+      "inputs": {
+        "value": 2
+      },
+      "seed": null,
+      "question": "How many function calls are traced when calculate(2) runs? Include the entry call, helper calls, and any safe built-in calls; do not count return statements.",
+      "answer_target": "function_calls",
+      "options": [
+        {
+          "id": "A",
+          "value": 1
+        },
+        {
+          "id": "B",
+          "value": 3
+        },
+        {
+          "id": "C",
+          "value": 2
+        },
+        {
+          "id": "D",
+          "value": 4
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "functions-single-helper-02",
+      "code": "def increment(value):\n    return value + 1\n\ndef calculate(value):\n    return increment(value)",
+      "entry_function": "calculate",
+      "inputs": {
+        "value": 5
+      },
+      "seed": null,
+      "question": "What does calculate(5) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 5
+        },
+        {
+          "id": "B",
+          "value": 7
+        },
+        {
+          "id": "C",
+          "value": 2
+        },
+        {
+          "id": "D",
+          "value": 6
+        }
+      ],
+      "correct_option": "D"
+    },
+    {
+      "question_id": "functions-composition-01",
+      "code": "def bump(x):\n    return x + 2\n\ndef combine(x):\n    left = bump(x)\n    right = bump(left)\n    return left + right",
+      "entry_function": "combine",
+      "inputs": {
+        "x": 3
+      },
+      "seed": null,
+      "question": "What does combine(3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 12
+        },
+        {
+          "id": "B",
+          "value": 10
+        },
+        {
+          "id": "C",
+          "value": 7
+        },
+        {
+          "id": "D",
+          "value": 14
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "functions-composition-02",
+      "code": "def bump(x):\n    return x + 2\n\ndef combine(x):\n    left = bump(x)\n    right = bump(left)\n    return left + right",
+      "entry_function": "combine",
+      "inputs": {
+        "x": -1
+      },
+      "seed": null,
+      "question": "What does combine(-1) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 2
+        },
+        {
+          "id": "B",
+          "value": 4
+        },
+        {
+          "id": "C",
+          "value": 3
+        },
+        {
+          "id": "D",
+          "value": 6
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "functions-recursive-sum-01",
+      "code": "def total(n):\n    if n == 0:\n        return 0\n    return n + total(n - 1)",
+      "entry_function": "total",
+      "inputs": {
+        "n": 0
+      },
+      "seed": null,
+      "question": "What does total(0) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 1
+        },
+        {
+          "id": "B",
+          "value": -1
+        },
+        {
+          "id": "C",
+          "value": 0
+        },
+        {
+          "id": "D",
+          "value": 2
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "functions-recursive-sum-02",
+      "code": "def total(n):\n    if n == 0:\n        return 0\n    return n + total(n - 1)",
+      "entry_function": "total",
+      "inputs": {
+        "n": 4
+      },
+      "seed": null,
+      "question": "What does total(4) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 4
+        },
+        {
+          "id": "B",
+          "value": 6
+        },
+        {
+          "id": "C",
+          "value": 15
+        },
+        {
+          "id": "D",
+          "value": 10
+        }
+      ],
+      "correct_option": "D"
+    },
+    {
+      "question_id": "lists-sum-01",
+      "code": "def total(values):\n    return sum(values)",
+      "entry_function": "total",
+      "inputs": {
+        "values": [
+          2,
+          3
+        ]
+      },
+      "seed": null,
+      "question": "What does total([2, 3]) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 5
+        },
+        {
+          "id": "B",
+          "value": 2
+        },
+        {
+          "id": "C",
+          "value": 6
+        },
+        {
+          "id": "D",
+          "value": 4
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "lists-sum-02",
+      "code": "def total(values):\n    return sum(values)",
+      "entry_function": "total",
+      "inputs": {
+        "values": [
+          2,
+          2,
+          3
+        ]
+      },
+      "seed": null,
+      "question": "What does total([2, 2, 3]) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 3
+        },
+        {
+          "id": "B",
+          "value": 7
+        },
+        {
+          "id": "C",
+          "value": 8
+        },
+        {
+          "id": "D",
+          "value": 6
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "lists-adjacent-differences-01",
+      "code": "def total(values):\n    result = 0\n    previous = 0\n    for value in values:\n        result += value - previous\n        previous = value\n    return result",
+      "entry_function": "total",
+      "inputs": {
+        "values": [
+          2,
+          5,
+          1
+        ]
+      },
+      "seed": null,
+      "question": "What does total([2, 5, 1]) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 8
+        },
+        {
+          "id": "B",
+          "value": 4
+        },
+        {
+          "id": "C",
+          "value": 1
+        },
+        {
+          "id": "D",
+          "value": -1
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "lists-adjacent-differences-02",
+      "code": "def total(values):\n    result = 0\n    previous = 0\n    for value in values:\n        result += value - previous\n        previous = value\n    return result",
+      "entry_function": "total",
+      "inputs": {
+        "values": [
+          4,
+          1,
+          6
+        ]
+      },
+      "seed": null,
+      "question": "What does total([4, 1, 6]) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 11
+        },
+        {
+          "id": "B",
+          "value": -5
+        },
+        {
+          "id": "C",
+          "value": -6
+        },
+        {
+          "id": "D",
+          "value": 6
+        }
+      ],
+      "correct_option": "D"
+    },
+    {
+      "question_id": "lists-endpoint-swap-01",
+      "code": "def calculate(values):\n    first = values[0]\n    values[0] = values[-1]\n    values[-1] = first\n    return values[0] + values[1] * 2",
+      "entry_function": "calculate",
+      "inputs": {
+        "values": [
+          2,
+          3,
+          7
+        ]
+      },
+      "seed": null,
+      "question": "What does calculate([2, 3, 7]) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 13
+        },
+        {
+          "id": "B",
+          "value": 8
+        },
+        {
+          "id": "C",
+          "value": 10
+        },
+        {
+          "id": "D",
+          "value": 16
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "lists-endpoint-swap-02",
+      "code": "def calculate(values):\n    first = values[0]\n    values[0] = values[-1]\n    values[-1] = first\n    return values[0] + values[1] * 2",
+      "entry_function": "calculate",
+      "inputs": {
+        "values": [
+          4,
+          1,
+          6
+        ]
+      },
+      "seed": null,
+      "question": "What does calculate([4, 1, 6]) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 6
+        },
+        {
+          "id": "B",
+          "value": 8
+        },
+        {
+          "id": "C",
+          "value": 7
+        },
+        {
+          "id": "D",
+          "value": 16
+        }
+      ],
+      "correct_option": "B"
+    }
+  ]
+}
