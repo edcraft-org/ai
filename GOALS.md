@@ -12,8 +12,8 @@ Issues #34–#39 are complete.
 
 The focused [issue 40 baseline](docs/evaluation-history.md#issue-40-baseline-10-october-2026)
 is recorded. The [provisional difficulty rubric](docs/difficulty-rubric.md) defines
-the audience and review protocol for issue 41. Next are the reviewed reference set
-(issue 42) and rubric-guided judge (issue 43); learner calibration remains later
+the assessment conditions and difficulty-matching protocol for issue 41. Next are
+the reviewed reference set (issue 42) and rubric-guided judge (issue 43); learner calibration remains later
 work. The difficulty values are `easy`, `medium`, and `hard`.
 
 ## Design principles
@@ -81,6 +81,6 @@ a general-purpose agent framework are outside the current milestone.
 
 - [Workflow](docs/question-generation/README.md): current behavior and responsibilities.
 - [Evaluation](docs/evaluation.md): live checks, evaluation commands, and reporting.
-- [Difficulty rubric](docs/difficulty-rubric.md): provisional Python audience,
-  anchors, reviewer evidence, and agreement protocol.
+- [Difficulty rubric](docs/difficulty-rubric.md): assessment conditions, anchors,
+  reviewer evidence, and requested-difficulty matching protocol.
 - [Earlier results](docs/evaluation-history.md): evidence from previous milestones.

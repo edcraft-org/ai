@@ -9,12 +9,15 @@ labels are `easy`, `medium`, and `hard`.
 
 ## Issue 41 rubric verification: 14 October 2026
 
-The [difficulty rubric](difficulty-rubric.md) defines `python-tracing-v0.1`,
-audience `intro-python-v0.1`, and agreement protocol
-`python-tracing-agreement-v0.1`. The rubric content SHA256 is:
+The [difficulty rubric](difficulty-rubric.md) defines `python-tracing-v0.2`,
+assessment conditions `manual-tracing-v0.1`, and agreement protocol
+`python-tracing-agreement-v0.2`. This revision centres on matching the generated
+question to the requested difficulty under manual-tracing conditions, replacing
+the fixed introductory-Python audience framing. The four dimensions and worked
+anchors remain. The rubric content SHA256 is:
 
 ```text
-f3f81d582596e53ca5ca6a8e407d30ae6ec03e5448f5832f10c3b099a7246aee
+f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f
 ```
 
 Focused verification extracted the three Python anchors from the Markdown and
@@ -26,6 +29,12 @@ iterations across four loop invocations for nested accumulation. At `n = 0`, the
 nested example and its three error-rule variants returned 0, confirming the
 documented collision boundary. Local details are saved under ignored
 `.artifacts/issue41-rubric-verification.json`.
+
+All nine entries in the documented level-comparison table were checked against
+`easy < medium < hard`: three matches, three too-easy results, and three too-hard
+results. The review also checked that null estimates, low confidence, and
+outcome-changing alternatives retain uncertainty, and technical failures remain
+ineligible. This verifies the documented policy, not an implemented comparator.
 
 The existing offline suite passed with 414 tests and two opt-in live tests skipped;
 lint, formatting, lockfile, and diff whitespace checks passed. After explicit
