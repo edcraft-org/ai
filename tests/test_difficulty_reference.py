@@ -34,14 +34,9 @@ def completed_review(packet):
             status="reviewed",
             estimated_difficulty="medium",
             confidence="medium",
-            solution_reasoning="Concrete trace supplied by the test reviewer.",
-            concepts_and_dependencies="An update depends on an earlier value.",
-            shortcuts="None identified in this synthetic test rating.",
-            nearest_anchor="Medium anchor: organised tracing.",
-            option_evidence={label: "Test option evidence." for label in "ABCD"},
+            rating_reason="Linked updates require a small organised trace.",
             dimensions={
-                dimension: {"rating": "moderate", "reason": "Test reason."}
-                for dimension in reference.DIMENSIONS
+                dimension: {"rating": "moderate"} for dimension in reference.DIMENSIONS
             },
         )
     return review
@@ -194,7 +189,7 @@ def test_invalid_review_rejected(packet, problem):
     elif problem == "edited":
         review["ratings"][0]["question_sha256"] = "edited"
     else:
-        review["ratings"][0]["option_evidence"]["A"] = ""
+        review["ratings"][0]["rating_reason"] = ""
     with pytest.raises(ValueError):
         reference.validate_review(reference.DEFAULT_SET, review)
 
@@ -305,3 +300,208 @@ def test_prepare_review_exports_safe_self_contained_form(monkeypatch, tmp_path):
         payload["rubric_text"]
         == (reference.ROOT / "docs/difficulty-rubric.md").read_text()
     )
+
+
+def recommendations():
+    questions, manifest = reference.load_set(reference.DEFAULT_SET)
+    return reference.load_recommendations(reference.DEFAULT_SET, questions, manifest)
+
+
+def confirmed_assisted_review(packet):
+    review = reference.assisted_review(packet, "test-human", recommendations())
+    review["assisted_review_confirmed"] = True
+    for rating in review["ratings"]:
+        rating.update(status="reviewed", human_decision="approved")
+    return review
+
+
+def test_short_human_review_needs_no_solution_or_option_explanations(packet):
+    review = completed_review(packet)
+    absent = {
+        "solution_reasoning",
+        "concepts_and_dependencies",
+        "shortcuts",
+        "nearest_anchor",
+        "option_evidence",
+    }
+    assert absent.isdisjoint(review["ratings"][0])
+    validated, _, _, _ = reference.validate_review(reference.DEFAULT_SET, review)
+    assert all(d.reason == "" for d in validated.ratings[0].dimensions.values())
+    review["ratings"][0]["dimensions"]["execution_burden"]["rating"] = None
+    with pytest.raises(ValueError, match="choose all four"):
+        reference.validate_review(reference.DEFAULT_SET, review)
+
+
+def test_detailed_legacy_reviews_are_preserved(packet):
+    review = completed_review(packet)
+    review.pop("review_schema_version")
+    for rating in review["ratings"]:
+        rating.pop("rating_reason")
+        rating.update(
+            solution_reasoning="Original human solution note.",
+            concepts_and_dependencies="Original dependency note.",
+            shortcuts="Original shortcut note.",
+            nearest_anchor="Original anchor note.",
+            option_evidence={label: "Original option note." for label in "ABCD"},
+        )
+        for dimension in rating["dimensions"].values():
+            dimension["reason"] = "Original dimension note."
+    original = copy.deepcopy(review)
+    report = reference.compare_review(reference.DEFAULT_SET, review)
+    assert review == original
+    assert report["review_sha256"] == reference.digest(original)
+    assert report["independent_reference"] is True
+
+
+def test_ai_recommendations_cover_all_items_without_human_labels(packet):
+    proposed = recommendations()
+    assert len(proposed["records"]) == 30
+    assert proposed["assessor_kind"] == "AI"
+    assert proposed["independent_blinded_assessment"] is False
+    review = reference.assisted_review(packet, "keith", proposed)
+    assert review["independent_blinded_review"] is False
+    assert not review["assisted_review_confirmed"]
+    assert all(
+        r["status"] == "pending" and r["human_decision"] == "pending"
+        for r in review["ratings"]
+    )
+    assert all(r["rating_reason"] == "" for r in review["ratings"])
+    reference.validate_review(reference.DEFAULT_SET, review)
+    with pytest.raises(ValueError, match="finish and freeze"):
+        reference.compare_review(reference.DEFAULT_SET, review)
+
+
+def test_assisted_approvals_need_no_retyped_ai_reason_and_disclose_assistance(packet):
+    review = confirmed_assisted_review(packet)
+    report = reference.compare_review(reference.DEFAULT_SET, review)
+    assert report["reference_type"] == "ai_assisted_single_human_reviewer"
+    assert report["independent_reference"] is False
+    assert report["human_decisions"] == {"approved": 30}
+    assert report["recommendations_sha256"] == reference.digest(recommendations())
+    assert all(r["rating_reason"] == "" for r in review["ratings"])
+    assert report["review_sha256"] == reference.digest(review)
+
+
+@pytest.mark.parametrize(
+    "problem",
+    [
+        "not_confirmed",
+        "blind_claim",
+        "no_decision",
+        "changed_proposals",
+        "changed_approval",
+    ],
+)
+def test_assisted_provenance_cannot_be_misrepresented(packet, problem):
+    review = confirmed_assisted_review(packet)
+    if problem == "not_confirmed":
+        review["assisted_review_confirmed"] = False
+    elif problem == "blind_claim":
+        review["independent_blinded_review"] = True
+    elif problem == "no_decision":
+        review["ratings"][0]["human_decision"] = "pending"
+    elif problem == "changed_proposals":
+        review["recommendations_sha256"] = "changed"
+    else:
+        first = review["ratings"][0]
+        first["estimated_difficulty"] = (
+            "hard" if first["estimated_difficulty"] != "hard" else "easy"
+        )
+    with pytest.raises(ValueError):
+        reference.validate_review(reference.DEFAULT_SET, review)
+
+
+def test_assisted_human_correction_and_abstention_are_separate_from_ai(packet):
+    review = confirmed_assisted_review(packet)
+    first = review["ratings"][0]
+    first.update(
+        estimated_difficulty="hard"
+        if first["estimated_difficulty"] != "hard"
+        else "easy",
+        human_decision="corrected",
+        rating_reason="Human reviewer sees more coordination than the proposal.",
+    )
+    second = review["ratings"][1]
+    second.update(
+        estimated_difficulty=None,
+        confidence="low",
+        human_decision="uncertain",
+        rating_reason="Human reviewer cannot place this question confidently.",
+    )
+    original_proposals = reference.read_json(
+        reference.DEFAULT_SET / "ai-recommendations.json"
+    )
+    report = reference.compare_review(reference.DEFAULT_SET, review)
+    assert report["human_decisions"] == {"corrected": 1, "uncertain": 1, "approved": 28}
+    assert report["comparisons"][1]["difficulty_match"] == "uncertain"
+    assert (
+        reference.read_json(reference.DEFAULT_SET / "ai-recommendations.json")
+        == original_proposals
+    )
+    first["rating_reason"] = ""
+    with pytest.raises(ValueError, match="short human note"):
+        reference.validate_review(reference.DEFAULT_SET, review)
+
+
+def test_ai_proposal_question_edits_invalidate_approval(dataset, packet):
+    review = confirmed_assisted_review(packet)
+    path = dataset / "ai-recommendations.json"
+    proposed = reference.read_json(path)
+    proposed["records"][0]["question_sha256"] = "changed"
+    reference.write_json(path, proposed)
+    with pytest.raises(ValueError, match="question changed"):
+        reference.validate_review(dataset, review)
+
+
+def test_assisted_export_cannot_be_renamed_as_independent(packet):
+    review = confirmed_assisted_review(packet)
+    review["review_schema_version"] = reference.REVIEW_SCHEMA
+    review["independent_blinded_review"] = True
+    for rating in review["ratings"]:
+        rating["rating_reason"] = "A purported independent note."
+    with pytest.raises(ValueError, match="relabelled independent"):
+        reference.validate_review(reference.DEFAULT_SET, review)
+
+
+def test_regeneration_preserves_saved_reviews_and_archives_format_switches(
+    monkeypatch, tmp_path, packet
+):
+    saved = completed_review(packet)
+    reference.write_json(tmp_path / "review.json", saved)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "difficulty_reference.py",
+            "prepare-review",
+            "--reviewer",
+            "test-human",
+            "--output",
+            str(tmp_path),
+        ],
+    )
+    reference.main()
+    assert reference.read_json(tmp_path / "review.json") == saved
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "difficulty_reference.py",
+            "prepare-review",
+            "--reviewer",
+            "test-human",
+            "--assisted",
+            "--output",
+            str(tmp_path),
+        ],
+    )
+    reference.main()
+    assert (
+        reference.read_json(
+            tmp_path / f"review.archive-{reference.digest(saved)[:12]}.json"
+        )
+        == saved
+    )
+    assisted = reference.read_json(tmp_path / "review.json")
+    assert assisted["review_schema_version"] == reference.ASSISTED_REVIEW_SCHEMA
+    assert all(r["status"] == "pending" for r in assisted["ratings"])

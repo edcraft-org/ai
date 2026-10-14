@@ -63,7 +63,7 @@ also reject stale evidence and a changed rubric.
 ## Single human review
 
 Keith has opted to be the sole reviewer for this collection. No AI-generated
-ratings are substituted for his review. Human–human agreement will be unavailable;
+ratings count as completed human verification without his explicit per-item confirmation. Human–human agreement will be unavailable;
 any resulting references must disclose the single-reviewer limitation. If another
 person becomes available, prepare a separate packet and retain their independent
 ratings before discussion. The current comparison command handles one reviewer;
@@ -77,22 +77,73 @@ uv run python scripts/difficulty_reference.py prepare-review \
 ```
 
 Open `.artifacts/difficulty-review-keith/review.html` in a browser. The packet uses
-opaque IDs and a fixed hash-based question order. It includes code, inputs, stem,
+opaque IDs and a fixed hash-based question order. The default form is independent;
+the assisted mode below deliberately shows AI suggestions. It includes code, inputs, stem,
 all options and separately expandable verified answers/traces. It excludes
 requested levels, source/generator identity, source explanations, family/topic
 metadata, split membership and other ratings. The reviewer may consult verified
 answers to check their solution; learners would not receive them.
 
-Use the full [rubric](../../docs/difficulty-rubric.md), including its anchors,
-without executing the questions or using AI judgments. Explain the concrete
-solution, relevant concepts and dependencies, shortcuts, each dimension and each
-option. For a wrong option, record a rule yielding that exact value or explain
-why it is implausible. Record the nearest anchor, estimate, confidence,
-alternatives, uncertainty and quality concerns. A supported recursive base case
-need not be hard; a count shortcut can avoid tracing irrelevant state. Unknowns
-remain unknown. If wording or correctness appears faulty, describe the concern
-and leave an uncertain review; repair/version and re-review the item before
-using it as a confirmed reference.
+The default short form records only human verification fields:
+
+| Human field | Purpose |
+| --- | --- |
+| Four dimension ratings | Check tracing effort, changing state, conceptual interaction and answer discrimination. Choose low/moderate/high/unknown for each. |
+| Overall difficulty | Supply easy/medium/hard/unknown. There is no validated formula for deriving this from dimension ratings. |
+| Confidence | Preserve uncertainty rather than force a resolved reference. |
+| One short reason | Record the human basis for the judgment, including uncertainty when relevant. No full solution is required. |
+| Alternative levels and quality concerns | Optional checks for a boundary, unclear wording or weak answer options. |
+
+Question content, inputs, verified answers, execution evidence, IDs, versions,
+reviewer identity/date and hashes are supplied automatically. Solution
+walkthroughs, concepts/dependencies, individual option explanations and anchor
+analysis can be supplied by an AI in a **separate** recommendation record; they
+must not be represented as human-authored explanations. AI analysis shown before
+rating changes the review to an assisted process. The short independent form is
+`human-difficulty-review-v2`; original detailed v1 exports remain accepted and
+are preserved without changing their evidence requirements.
+
+## AI recommendations for human verification
+
+At Keith's request, `ai-recommendations.json` provides Codex's proposed level,
+four dimension ratings with reasons, confidence, alternatives, solution and
+option explanations for all 30 questions. These are provisional AI judgments,
+not execution measurements, independent human labels or learner calibration.
+The assistant curated the collection and has seen its intended labels; this
+context is explicitly disclosed. No precise model identifier is asserted.
+
+Use the assisted form for the current review:
+
+```bash
+uv run python scripts/difficulty_reference.py prepare-review \
+  --reviewer keith --assisted --output .artifacts/difficulty-review-keith
+```
+
+The proposed values are prefilled, and the explanation remains attributed to AI.
+Every human item starts **pending**. Confirm the assisted-review statement, then
+approve each proposed rating, change it and confirm a correction, or mark it
+uncertain. A short human note is needed only for a correction or abstention.
+Approval does not require retyping an AI explanation. A correction may resolve
+an AI alternative or change its confidence as well as its level/dimensions.
+Optional question-quality concerns remain human notes.
+
+The assisted export is `human-difficulty-review-v3-assisted`. It binds approvals
+to a hash of the exact proposals, stores human decisions separately, and cannot
+claim independent blind review. Modified questions, rubric or recommendations
+invalidate previous confirmations. The comparison report discloses
+`ai_assisted_single_human_reviewer` and `independent_reference: false`. Agreement
+with this assisted reference describes consistency with a human-checked proposal;
+it cannot establish independent human accuracy or learner-difficulty validity.
+A reviewer who has not seen the proposals would be needed for an independent
+human benchmark. Do not tune the reserved families using these approvals.
+
+Old browser drafts use separate storage keys and are not overwritten by the
+assisted form. When switching file formats, the prior JSON is archived beside
+the regenerated form. Regeneration of the same format preserves its saved JSON.
+The question collection, split, rubric anchors and matching rule are unchanged.
+The provisional proposals are 17 easy, 12 medium and one hard; the reserved
+subset has no primary hard proposal. Do not force labels to balance the groups,
+and disclose this limited hard-category coverage if the human review confirms it.
 
 Drafts may be saved locally by the browser. **Download ratings to preserve them**;
 if your browser does not support downloads, use **Show ratings JSON** and save the
@@ -134,6 +185,6 @@ responses, response times or option-selection frequencies were collected.
 Issue 42 stays open until the actual human review and any repairs are recorded.
 The development/held-out manifest is ready; issue 43 must tune only on development
 families and freeze its judge/prompt/settings before scoring held-out families.
-No automated judge, held-out agreement statistics or calibration claim is part
-of this change. If held-out results later inform tuning, disclose that inspection
+The AI recommendations are review drafts; no runtime automated judge, held-out
+agreement statistics or calibration claim is part of this change. If held-out results later inform tuning, disclose that inspection
 and use fresh held-out families for the next evaluation.

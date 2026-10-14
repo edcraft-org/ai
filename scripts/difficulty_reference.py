@@ -4,9 +4,10 @@ import argparse
 import hashlib
 import json
 from collections import Counter
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Literal
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -17,6 +18,9 @@ from edcraft_validator.value_comparison import equivalent, same_value_shape
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SET = ROOT / "reference_sets/python_tracing_v1"
+REVIEW_SCHEMA = "human-difficulty-review-v2"
+ASSISTED_REVIEW_SCHEMA = "human-difficulty-review-v3-assisted"
+LEGACY_REVIEW_SCHEMA = "human-difficulty-review-v1"
 DIMENSIONS = (
     "execution_burden",
     "changing_state",
@@ -217,9 +221,10 @@ def make_packet(directory: Path, questions: list[Question], manifest: dict) -> d
 
 def blank_review(packet: dict, reviewer: str) -> dict:
     return {
+        "review_schema_version": REVIEW_SCHEMA,
         "reviewer_id": reviewer,
         "reviewer_kind": "human",
-        "review_date": datetime.now(UTC).date().isoformat(),
+        "review_date": datetime.now(ZoneInfo("Asia/Singapore")).date().isoformat(),
         "independent_blinded_review": False,
         "packet_sha256": packet["packet_sha256"],
         "rubric_version": packet["rubric_version"],
@@ -234,15 +239,8 @@ def blank_review(packet: dict, reviewer: str) -> dict:
                 "confidence": "low",
                 "alternative_levels": [],
                 "uncertainty_reason": "",
-                "solution_reasoning": "",
-                "concepts_and_dependencies": "",
-                "shortcuts": "",
-                "dimensions": {
-                    dimension: {"rating": "unknown", "reason": ""}
-                    for dimension in DIMENSIONS
-                },
-                "option_evidence": {option["id"]: "" for option in q["options"]},
-                "nearest_anchor": "",
+                "rating_reason": "",
+                "dimensions": {dimension: {"rating": None} for dimension in DIMENSIONS},
                 "quality_concerns": "",
             }
             for q in packet["questions"]
@@ -251,8 +249,8 @@ def blank_review(packet: dict, reviewer: str) -> dict:
 
 
 class Dimension(Record):
-    rating: Literal["low", "moderate", "high", "unknown"]
-    reason: str
+    rating: Literal["low", "moderate", "high", "unknown"] | None
+    reason: str = ""
 
 
 class Rating(Record):
@@ -263,48 +261,40 @@ class Rating(Record):
     confidence: Literal["low", "medium", "high"]
     alternative_levels: list[Difficulty]
     uncertainty_reason: str
-    solution_reasoning: str
-    concepts_and_dependencies: str
-    shortcuts: str
+    rating_reason: str = ""
+    # Retain detailed v1 human records without requiring these fields in v2.
+    solution_reasoning: str = ""
+    concepts_and_dependencies: str = ""
+    shortcuts: str = ""
     dimensions: dict[str, Dimension]
-    option_evidence: dict[str, str]
-    nearest_anchor: str
+    option_evidence: dict[str, str] = Field(default_factory=dict)
+    nearest_anchor: str = ""
     quality_concerns: str
+    human_decision: Literal["pending", "approved", "corrected", "uncertain"] = "pending"
 
     @model_validator(mode="after")
     def complete_review(self):
         if set(self.dimensions) != set(DIMENSIONS):
             raise ValueError("all four dimensions are required")
-        if set(self.option_evidence) != set("ABCD"):
+        if self.option_evidence and set(self.option_evidence) != set("ABCD"):
             raise ValueError("evidence for all four options is required")
         if len(set(self.alternative_levels)) != len(self.alternative_levels):
             raise ValueError("duplicate alternatives")
-        if self.status == "reviewed":
-            reasons = [
-                self.solution_reasoning,
-                self.concepts_and_dependencies,
-                self.shortcuts,
-                self.nearest_anchor,
-                *(dimension.reason for dimension in self.dimensions.values()),
-                *self.option_evidence.values(),
-            ]
-            if any(not reason.strip() for reason in reasons):
-                raise ValueError("reviewed ratings need reasons, including shortcuts")
-            if (
-                self.estimated_difficulty is None
-                or self.confidence == "low"
-                or self.alternative_levels
-                or any(d.rating == "unknown" for d in self.dimensions.values())
-            ) and not self.uncertainty_reason.strip():
-                raise ValueError("uncertain reviews need an uncertainty reason")
         return self
 
 
 class HumanReview(Record):
+    review_schema_version: Literal[
+        "human-difficulty-review-v1",
+        "human-difficulty-review-v2",
+        "human-difficulty-review-v3-assisted",
+    ] = LEGACY_REVIEW_SCHEMA
     reviewer_id: str = Field(min_length=1)
     reviewer_kind: Literal["human"]
     review_date: str
     independent_blinded_review: bool
+    assisted_review_confirmed: bool = False
+    recommendations_sha256: str | None = None
     packet_sha256: str
     rubric_version: str
     rubric_sha256: str
@@ -315,6 +305,55 @@ class HumanReview(Record):
     def valid_date(self):
         if date.fromisoformat(self.review_date).isoformat() != self.review_date:
             raise ValueError("review date must be YYYY-MM-DD")
+        for rating in self.ratings:
+            if rating.status != "reviewed":
+                continue
+            if any(d.rating is None for d in rating.dimensions.values()):
+                raise ValueError(
+                    "choose all four dimension ratings; unknown is allowed"
+                )
+            if self.review_schema_version == ASSISTED_REVIEW_SCHEMA:
+                if rating.human_decision == "pending":
+                    raise ValueError(
+                        "assisted ratings need explicit human confirmation"
+                    )
+                if rating.human_decision in {"corrected", "uncertain"} and not (
+                    rating.rating_reason.strip()
+                ):
+                    raise ValueError(
+                        "corrections or abstentions need a short human note"
+                    )
+                if rating.human_decision == "uncertain" and not (
+                    rating.estimated_difficulty is None or rating.confidence == "low"
+                ):
+                    raise ValueError(
+                        "uncertain human decisions must abstain or use low confidence"
+                    )
+                continue
+            if self.review_schema_version == REVIEW_SCHEMA:
+                if not rating.rating_reason.strip():
+                    raise ValueError("reviewed ratings need a short human reason")
+                # One brief note covers rationale and any uncertainty; no walkthrough.
+                continue
+            reasons = [
+                rating.solution_reasoning,
+                rating.concepts_and_dependencies,
+                rating.shortcuts,
+                rating.nearest_anchor,
+                *(dimension.reason for dimension in rating.dimensions.values()),
+                *rating.option_evidence.values(),
+            ]
+            if set(rating.option_evidence) != set("ABCD") or any(
+                not reason.strip() for reason in reasons
+            ):
+                raise ValueError("legacy reviewed ratings need full evidence")
+            if (
+                rating.estimated_difficulty is None
+                or rating.confidence == "low"
+                or rating.alternative_levels
+                or any(d.rating == "unknown" for d in rating.dimensions.values())
+            ) and not rating.uncertainty_reason.strip():
+                raise ValueError("uncertain legacy reviews need an uncertainty reason")
         return self
 
 
@@ -335,6 +374,88 @@ def match_decision(rating: Rating, requested: Difficulty) -> str | None:
     return decision
 
 
+def load_recommendations(
+    directory: Path, questions: list[Question], manifest: dict
+) -> dict:
+    """Load fixed AI proposals; these cannot count as human ratings by themselves."""
+    data = read_json(directory / "ai-recommendations.json")
+    if data["assessor_kind"] != "AI":
+        raise ValueError("recommendations must disclose their AI origin")
+    for field in (
+        "set_version",
+        "rubric_version",
+        "rubric_sha256",
+        "assessment_conditions_version",
+    ):
+        if data[field] != manifest[field]:
+            raise ValueError("stale recommendation context")
+    records = {record["question_id"]: record for record in data["records"]}
+    if len(records) != len(data["records"]) or set(records) != {
+        q.question_id for q in questions
+    }:
+        raise ValueError("recommendations must contain every question exactly once")
+    for question in questions:
+        record = records[question.question_id]
+        if record["question_sha256"] != digest(question.model_dump()):
+            raise ValueError("question changed since AI recommendation")
+        rating = Rating.model_validate(
+            {
+                **{k: v for k, v in record.items() if k != "question_id"},
+                "review_id": question.question_id,
+                "status": "pending",
+            }
+        )
+        if (
+            rating.estimated_difficulty is None
+            or any(
+                d.rating is None or not d.reason.strip()
+                for d in rating.dimensions.values()
+            )
+            or not rating.rating_reason.strip()
+            or set(rating.option_evidence) != set("ABCD")
+        ):
+            raise ValueError("AI recommendations need proposed levels and evidence")
+    return data
+
+
+def assisted_review(packet: dict, reviewer: str, recommendations: dict) -> dict:
+    review = blank_review(packet, reviewer)
+    review.update(
+        review_schema_version=ASSISTED_REVIEW_SCHEMA,
+        recommendations_sha256=digest(recommendations),
+        independent_blinded_review=False,
+        assisted_review_confirmed=False,
+    )
+    by_hash = {r["question_sha256"]: r for r in recommendations["records"]}
+    for rating in review["ratings"]:
+        proposed = by_hash[rating["question_sha256"]]
+        for field in ("estimated_difficulty", "confidence", "alternative_levels"):
+            rating[field] = (
+                proposed[field].copy()
+                if isinstance(proposed[field], list)
+                else proposed[field]
+            )
+        rating["dimensions"] = {
+            key: {"rating": dimension["rating"]}
+            for key, dimension in proposed["dimensions"].items()
+        }
+        rating["human_decision"] = "pending"
+        # AI prose remains in its own recommendation, never a human-authored note.
+    return review
+
+
+def same_judgment(rating: Rating, proposed: dict) -> bool:
+    return (
+        rating.estimated_difficulty == proposed["estimated_difficulty"]
+        and rating.confidence == proposed["confidence"]
+        and set(rating.alternative_levels) == set(proposed["alternative_levels"])
+        and all(
+            rating.dimensions[key].rating == proposed["dimensions"][key]["rating"]
+            for key in DIMENSIONS
+        )
+    )
+
+
 def validate_review(directory: Path, review_data: dict) -> tuple:
     """Check original ratings without revealing requested labels."""
     questions, manifest = load_set(directory)
@@ -353,10 +474,36 @@ def validate_review(directory: Path, review_data: dict) -> tuple:
         question["review_id"] for question in packet["questions"]
     }:
         raise ValueError("review must retain all items exactly once, including pending")
-    if any(r.status == "reviewed" for r in review.ratings) and not (
-        review.independent_blinded_review
-    ):
-        raise ValueError("reviewer must attest independent blinded human review")
+    reviewed = [r for r in review.ratings if r.status == "reviewed"]
+    if review.review_schema_version == ASSISTED_REVIEW_SCHEMA:
+        data = load_recommendations(directory, questions, manifest)
+        if review.recommendations_sha256 != digest(data):
+            raise ValueError("AI recommendations changed since human verification")
+        if review.independent_blinded_review:
+            raise ValueError(
+                "AI-assisted approvals cannot be independent blind ratings"
+            )
+        if reviewed and not review.assisted_review_confirmed:
+            raise ValueError("confirm AI-assisted human review")
+        proposed = {r["question_sha256"]: r for r in data["records"]}
+        for rating in reviewed:
+            original = proposed.get(rating.question_sha256)
+            if original is None:
+                raise ValueError("question changed since AI recommendation")
+            same = same_judgment(rating, original)
+            if rating.human_decision == "approved" and not same:
+                raise ValueError("changed ratings must be recorded as corrections")
+            if rating.human_decision == "corrected" and same:
+                raise ValueError("a correction must change a proposed judgment")
+    else:
+        if (
+            review.recommendations_sha256
+            or review.assisted_review_confirmed
+            or any(r.human_decision != "pending" for r in review.ratings)
+        ):
+            raise ValueError("assisted provenance cannot be relabelled independent")
+        if reviewed and not review.independent_blinded_review:
+            raise ValueError("reviewer must attest independent blinded human review")
     for blinded in packet["questions"]:
         if by_id[blinded["review_id"]].question_sha256 != blinded["question_sha256"]:
             raise ValueError("question changed since review")
@@ -385,16 +532,24 @@ def compare_review(directory: Path, review_data: dict) -> dict:
                 "requested_difficulty": entry["requested_difficulty"],
                 "estimated_difficulty": rating.estimated_difficulty,
                 "status": rating.status,
+                "human_decision": rating.human_decision,
                 "difficulty_match": match_decision(
                     rating, entry["requested_difficulty"]
                 ),
             }
         )
     return {
-        "review_sha256": digest(review.model_dump()),
+        "review_sha256": digest(review_data),
         "packet_sha256": packet["packet_sha256"],
         "reviewer_id": review.reviewer_id,
-        "reference_type": "single_human_reviewer",
+        "reference_type": (
+            "ai_assisted_single_human_reviewer"
+            if review.review_schema_version == ASSISTED_REVIEW_SCHEMA
+            else "single_human_reviewer"
+        ),
+        "independent_reference": review.review_schema_version != ASSISTED_REVIEW_SCHEMA,
+        "recommendations_sha256": review.recommendations_sha256,
+        "human_decisions": dict(Counter(r.human_decision for r in review.ratings)),
         "human_human_agreement": None,
         "observed_learner_performance": None,
         "reviewed_count": sum(r.status == "reviewed" for r in review.ratings),
@@ -411,6 +566,7 @@ def main() -> None:
     verify.add_argument("--write-evidence", action="store_true")
     export = commands.add_parser("prepare-review")
     export.add_argument("--reviewer", required=True)
+    export.add_argument("--assisted", action="store_true")
     export.add_argument("--output", type=Path, required=True)
     validate = commands.add_parser("validate-review")
     validate.add_argument("review", type=Path)
@@ -452,7 +608,27 @@ def main() -> None:
         )
     elif args.command == "prepare-review":
         packet = make_packet(args.set, questions, manifest)
-        review = blank_review(packet, args.reviewer)
+        recommendations = (
+            load_recommendations(args.set, questions, manifest)
+            if args.assisted
+            else None
+        )
+        review = (
+            assisted_review(packet, args.reviewer, recommendations)
+            if recommendations
+            else blank_review(packet, args.reviewer)
+        )
+        # Do not replace a saved review record when regenerating its presentation.
+        saved_path = args.output / "review.json"
+        if saved_path.exists():
+            saved = read_json(saved_path)
+            if saved.get("review_schema_version") == review["review_schema_version"]:
+                validate_review(args.set, saved)
+                review = saved
+            else:
+                archive = args.output / f"review.archive-{digest(saved)[:12]}.json"
+                if not archive.exists():
+                    write_json(archive, saved)
         write_json(args.output / "packet.json", packet)
         write_json(args.output / "review.json", review)
         template = (ROOT / "scripts/reference_review.html").read_text()
@@ -461,12 +637,28 @@ def main() -> None:
                 "packet": packet,
                 "review": review,
                 "rubric_text": (ROOT / "docs/difficulty-rubric.md").read_text(),
+                "recommendations": (
+                    {
+                        record["question_sha256"]: {
+                            key: value
+                            for key, value in record.items()
+                            if key != "question_id"
+                        }
+                        for record in recommendations["records"]
+                    }
+                    if recommendations
+                    else None
+                ),
+                "recommendation_context": recommendations["source_context"]
+                if recommendations
+                else None,
             }
         ).replace("<", "\\u003c")
         (args.output / "review.html").write_text(
             template.replace("__PAYLOAD__", payload)
         )
-        print(f"Prepared blinded review: {args.output / 'review.html'}")
+        kind = "AI-assisted" if args.assisted else "independent"
+        print(f"Prepared {kind} review: {args.output / 'review.html'}")
     elif args.command == "validate-review":
         review, _, _, _ = validate_review(args.set, read_json(args.review))
         print(
