@@ -7,6 +7,46 @@ not be treated as its current pass rates.
 Historical records may use `beginner`, `intermediate`, and `advanced`. The current
 labels are `easy`, `medium`, and `hard`.
 
+## Issue 41 rubric verification: 14 October 2026
+
+The [difficulty rubric](difficulty-rubric.md) defines `python-tracing-v0.2`,
+assessment conditions `manual-tracing-v0.1`, and agreement protocol
+`python-tracing-agreement-v0.2`. This revision centres on matching the generated
+question to the requested difficulty under manual-tracing conditions, replacing
+the fixed introductory-Python audience framing. The four dimensions and worked
+anchors remain. The rubric content SHA256 is:
+
+```text
+f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f
+```
+
+Focused verification extracted the three Python anchors from the Markdown and
+ran the application's subset checker and isolated execution tracer. The answers
+were 10, 4, and 18; each matched the stated correct option and all options were
+distinct. Nine executable error-rule variants reproduced all stated distractors.
+The tracer confirmed four iterations for conditional accumulation and nine total
+iterations across four loop invocations for nested accumulation. At `n = 0`, the
+nested example and its three error-rule variants returned 0, confirming the
+documented collision boundary. Local details are saved under ignored
+`.artifacts/issue41-rubric-verification.json`.
+
+All nine entries in the documented level-comparison table were checked against
+`easy < medium < hard`: three matches, three too-easy results, and three too-hard
+results. The review also checked that null estimates, low confidence, and
+outcome-changing alternatives retain uncertainty, and technical failures remain
+ineligible. This verifies the documented policy, not an implemented comparator.
+
+The existing offline suite passed with 414 tests and two opt-in live tests skipped;
+lint, formatting, lockfile, and diff whitespace checks passed. After explicit
+authorization, the separate live OpenAI author/edit/revalidate/replay smoke test
+also passed (one test). The live smoke test verifies the provider workflow, not
+educational difficulty.
+
+These results verify executable examples and existing technical behavior. The
+anchor levels are rubric design judgments, not independent human labels. Human
+agreement, held-out LLM agreement, and learner calibration have not been measured.
+The reference set and judge remain issues 42 and 43 work.
+
 ## Issue 40 baseline: 10 October 2026
 
 The five natural jobs used `authoring-baseline-v1` with OpenAI `gpt-5-mini`.
