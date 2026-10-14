@@ -28,11 +28,10 @@ documented collision boundary. Local details are saved under ignored
 `.artifacts/issue41-rubric-verification.json`.
 
 The existing offline suite passed with 414 tests and two opt-in live tests skipped;
-lint, formatting, lockfile, and diff whitespace checks passed. Automatic approval
-review blocked the separate live OpenAI smoke test because it sends repository
-prompts/code to OpenAI using local credentials. It was not executed. The PR commit
-suppresses CI to avoid triggering the same live test indirectly; CI and live
-verification remain pending approval.
+lint, formatting, lockfile, and diff whitespace checks passed. After explicit
+authorization, the separate live OpenAI author/edit/revalidate/replay smoke test
+also passed (one test). The live smoke test verifies the provider workflow, not
+educational difficulty.
 
 These results verify executable examples and existing technical behavior. The
 anchor levels are rubric design judgments, not independent human labels. Human
