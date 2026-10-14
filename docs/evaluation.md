@@ -110,10 +110,11 @@ and agreement protocol to predeclare before held-out judging. Assess the level
 independently, then compare it with the requested level to report `matches`,
 `too_easy`, `too_hard`, or `uncertain`. Requested labels remain separate from
 estimates and learner performance. Difficulty evidence is advisory and cannot
-override failed technical checks. The [provisional reference collection](../reference_sets/python_tracing_v1/README.md)
-for issue 42 contains 30 execution-verified concrete MCQs and a blinded human
-review form. Human ratings remain pending; technical verification is not a
-human difficulty label. The automated judge and held-out scoring are
+override failed technical checks. The [provisional reference collection](../reference_sets/python_tracing_v2/README.md)
+for issue 42 contains 30 distinct, execution-verified Python tracing MCQs and an
+AI-assisted human review form. Fifteen unchanged human decisions carry forward;
+the 15 new CRUXEval adaptations await confirmation. Technical verification is not
+a human difficulty label. The automated judge and held-out scoring are
 [issue 43](https://github.com/edcraft-org/ai/issues/43) work.
 
 ## What to report

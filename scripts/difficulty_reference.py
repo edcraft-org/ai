@@ -1,6 +1,8 @@
 """Verify the provisional set and prepare blinded human reviews; no model calls."""
 
 import argparse
+import ast
+import copy
 import hashlib
 import json
 from collections import Counter
@@ -17,7 +19,7 @@ from edcraft_validator.tools.python_execution import LocalPythonTool
 from edcraft_validator.value_comparison import equivalent, same_value_shape
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SET = ROOT / "reference_sets/python_tracing_v1"
+DEFAULT_SET = ROOT / "reference_sets/python_tracing_v2"
 REVIEW_SCHEMA = "human-difficulty-review-v2"
 ASSISTED_REVIEW_SCHEMA = "human-difficulty-review-v3-assisted"
 LEGACY_REVIEW_SCHEMA = "human-difficulty-review-v1"
@@ -44,6 +46,73 @@ def read_json(path: Path) -> Any:
 def write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+
+
+def code_family_fingerprint(code: str) -> str:
+    """Catch formatting, identifier and literal-only clones, not semantic equivalence.
+
+    Built-in names and operators remain significant. This deliberately conservative
+    screen needs a separate curator check for different implementations of one idea.
+    """
+    tree = ast.parse(code)
+    bound = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            bound.add(node.name)
+        elif isinstance(node, ast.arg):
+            bound.add(node.arg)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            bound.add(node.id)
+    names = {}
+
+    def normalise(name):
+        if name not in bound:
+            return name
+        return names.setdefault(name, f"identifier_{len(names)}")
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            node.name = normalise(node.name)
+        elif isinstance(node, ast.arg):
+            node.arg = normalise(node.arg)
+        elif isinstance(node, ast.Name):
+            node.id = normalise(node.id)
+        elif isinstance(node, ast.Constant):
+            node.value = f"literal_{type(node.value).__name__}"
+    return digest(ast.dump(tree, include_attributes=False))
+
+
+def check_external_sources(directory: Path, questions: list, entries: list) -> None:
+    external = [e for e in entries if e["provenance"]["kind"] == "cruxeval_adaptation"]
+    if not external:
+        return
+    source_path = directory / "sources/cruxeval-selected.jsonl"
+    source_bytes = source_path.read_bytes()
+    records = [json.loads(line) for line in source_bytes.decode().splitlines()]
+    by_id = {record["id"]: record for record in records}
+    ids = [e["provenance"]["source_id"] for e in external]
+    if (
+        len(by_id) != len(records)
+        or len(set(ids)) != len(ids)
+        or set(ids) != set(by_id)
+    ):
+        raise ValueError("external sources must retain distinct original records")
+    catalog = read_json(directory / "sources/provenance.json")
+    license_bytes = (directory / "sources/CRUXEval-LICENSE").read_bytes()
+    if hashlib.sha256(license_bytes).hexdigest() != catalog["license_sha256"]:
+        raise ValueError("external source license changed")
+    by_question = {q.question_id: q for q in questions}
+    for entry in external:
+        provenance = entry["provenance"]
+        original = by_id[provenance["source_id"]]
+        if (
+            provenance["source_sha256"] != hashlib.sha256(source_bytes).hexdigest()
+            or provenance["source_record_sha256"] != digest(original)
+            or provenance["source_revision"] != catalog["revision"]
+            or provenance["license"] != "MIT"
+            or by_question[entry["question_id"]].code != original["code"]
+        ):
+            raise ValueError("external code or source provenance changed")
 
 
 class Record(BaseModel):
@@ -95,18 +164,22 @@ def load_set(directory: Path) -> tuple[list[Question], dict]:
         raise ValueError("manifest and questions differ")
     family_splits = {}
     code_families = {}
+    family_counts = Counter()
     for question in questions:
         entry = next(e for e in entries if e["question_id"] == question.question_id)
         family, split = entry["family_id"], entry["split"]
+        family_counts[family] += 1
         if split not in {"development", "held_out"}:
             raise ValueError("unknown split")
         if entry["requested_difficulty"] not in {"easy", "medium", "hard"}:
             raise ValueError("unknown requested level")
         if family_splits.setdefault(family, split) != split:
             raise ValueError("family leaks across splits")
-        # Identical code cannot be assigned to different declared families.
-        if code_families.setdefault(question.code, family) != family:
-            raise ValueError("identical code assigned to multiple families")
+        fingerprint = code_family_fingerprint(question.code)
+        if code_families.setdefault(fingerprint, family) != family:
+            raise ValueError("normalised code clone assigned to multiple families")
+        if manifest.get("one_question_per_family") and family_counts[family] > 1:
+            raise ValueError("primary collection permits one question per family")
         if set(entry["distractor_hypotheses"]) != set("ABCD") - {
             question.correct_option
         }:
@@ -114,6 +187,7 @@ def load_set(directory: Path) -> tuple[list[Question], dict]:
     rubric_hash = hashlib.sha256((ROOT / "docs/difficulty-rubric.md").read_bytes())
     if rubric_hash.hexdigest() != manifest["rubric_sha256"]:
         raise ValueError("rubric changed; version and review the set again")
+    check_external_sources(directory, questions, entries)
     return questions, manifest
 
 
@@ -510,10 +584,77 @@ def validate_review(directory: Path, review_data: dict) -> tuple:
     return review, packet, questions, manifest
 
 
+def carry_forward_review(
+    source_directory: Path, source_data: dict, destination_directory: Path
+) -> tuple[dict, dict]:
+    """Reuse explicit assisted decisions only for unchanged questions AND proposals.
+
+    Keep the original review intact. Opaque IDs may change with packet ordering;
+    the audit maps them by the full question hash, never by their display number.
+    """
+    source, source_packet, old_questions, old_manifest = validate_review(
+        source_directory, source_data
+    )
+    if source.review_schema_version != ASSISTED_REVIEW_SCHEMA:
+        raise ValueError("carry-forward requires an explicitly assisted source review")
+    questions, manifest = load_set(destination_directory)
+    for field in ("rubric_version", "rubric_sha256", "assessment_conditions_version"):
+        if old_manifest[field] != manifest[field]:
+            raise ValueError("review context changed; fresh human review required")
+    proposals = load_recommendations(destination_directory, questions, manifest)
+    old_proposals = load_recommendations(source_directory, old_questions, old_manifest)
+    for field in ("assessor", "assessor_kind", "source_context"):
+        if old_proposals[field] != proposals[field]:
+            raise ValueError("recommendation context changed; fresh review required")
+    packet = make_packet(destination_directory, questions, manifest)
+    review = assisted_review(packet, source.reviewer_id, proposals)
+    # Transfer is not a new human review event; retain the actual review date.
+    review["review_date"] = source.review_date
+    originals = {r["question_sha256"]: r for r in source_data["ratings"]}
+    old_ai = {r["question_sha256"]: r for r in old_proposals["records"]}
+    new_ai = {r["question_sha256"]: r for r in proposals["records"]}
+    carried = []
+    for index, rating in enumerate(review["ratings"]):
+        item_hash = rating["question_sha256"]
+        original = originals.get(item_hash)
+        if (
+            original is None
+            or original["status"] != "reviewed"
+            or old_ai.get(item_hash) != new_ai[item_hash]
+        ):
+            continue
+        retained = copy.deepcopy(original)
+        retained["review_id"] = rating["review_id"]
+        review["ratings"][index] = retained
+        carried.append(
+            {
+                "question_sha256": item_hash,
+                "source_review_id": original["review_id"],
+                "destination_review_id": rating["review_id"],
+                "original_rating_sha256": digest(original),
+                "carried_rating_sha256": digest(retained),
+            }
+        )
+    review["assisted_review_confirmed"] = bool(carried)
+    validate_review(destination_directory, review)
+    return review, {
+        "source_set_version": source_packet["set_version"],
+        "source_review_sha256": digest(source_data),
+        "source_review_date": source.review_date,
+        "destination_set_version": packet["set_version"],
+        "initial_destination_review_sha256": digest(review),
+        "policy": "Unchanged full questions and exact AI proposals only; original "
+        "human notes and corrections retained. New items remain pending.",
+        "carried_count": len(carried),
+        "pending_count": len(review["ratings"]) - len(carried),
+        "mappings": carried,
+    }
+
+
 def compare_review(directory: Path, review_data: dict) -> dict:
     review, packet, questions, manifest = validate_review(directory, review_data)
     if any(r.status == "pending" for r in review.ratings):
-        raise ValueError("finish and freeze all independent ratings before comparison")
+        raise ValueError("finish and freeze all human ratings before comparison")
     by_id = {rating.review_id: rating for rating in review.ratings}
     entries = {entry["question_id"]: entry for entry in manifest["items"]}
     ordered = sorted(questions, key=lambda q: digest(q.question_id))
@@ -568,6 +709,10 @@ def main() -> None:
     export.add_argument("--reviewer", required=True)
     export.add_argument("--assisted", action="store_true")
     export.add_argument("--output", type=Path, required=True)
+    carry = commands.add_parser("carry-review")
+    carry.add_argument("--source-set", type=Path, required=True)
+    carry.add_argument("review", type=Path)
+    carry.add_argument("--output", type=Path, required=True)
     validate = commands.add_parser("validate-review")
     validate.add_argument("review", type=Path)
     compare = commands.add_parser("compare-review")
@@ -606,6 +751,16 @@ def main() -> None:
                 indent=2,
             )
         )
+    elif args.command == "carry-review":
+        saved = args.output / "review.json"
+        if saved.exists():
+            raise ValueError("destination review already exists; preserve it first")
+        review, audit = carry_forward_review(
+            args.source_set, read_json(args.review), args.set
+        )
+        write_json(saved, review)
+        write_json(args.output / "carry-forward.json", audit)
+        print(f"Carried {audit['carried_count']}; pending: {audit['pending_count']}")
     elif args.command == "prepare-review":
         packet = make_packet(args.set, questions, manifest)
         recommendations = (
@@ -652,6 +807,11 @@ def main() -> None:
                 "recommendation_context": recommendations["source_context"]
                 if recommendations
                 else None,
+                "carry_forward": (
+                    read_json(args.output / "carry-forward.json")
+                    if (args.output / "carry-forward.json").exists()
+                    else None
+                ),
             }
         ).replace("<", "\\u003c")
         (args.output / "review.html").write_text(

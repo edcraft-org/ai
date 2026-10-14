@@ -48,10 +48,11 @@ summary{cursor:pointer;color:#125c73}
 <p id="analysis-purpose" class="muted">Answers and question details are supplied automatically. Solution walkthroughs, concept analysis and option explanations belong in separate analysis after your independent ratings are saved.</p>
 <details><summary>Read the full rubric and anchors</summary><pre id="rubric" style="white-space:pre-wrap;background:#f2f6f8;color:#182c36;font-family:inherit"></pre></details>
 <p id="blinding-note" class="muted">Only the exported packet should be used while rating. Do not inspect the source manifest or comparison results until all independent ratings are finished. Original ratings must be retained before any later revision.</p>
+<p id="carry-note" class="muted" hidden></p>
 <div class="checks"><label><input type="checkbox" id="attest"><span id="attestation-text">I am the named human reviewer and am reviewing independently, without seeing requested levels or using AI judgments.</span></label></div>
 </div>
 <div class="toolbar">
-<button id="previous" class="secondary">Previous</button><select id="jump" aria-label="Question"></select><button id="next" class="secondary">Next</button><span id="progress"></span><button id="download">Download ratings</button><button id="show-export" class="secondary">Show ratings JSON</button>
+<button id="previous" class="secondary">Previous</button><select id="jump" aria-label="Question"></select><button id="next" class="secondary">Next</button><button id="next-pending" class="secondary">Next unreviewed</button><span id="progress"></span><button id="download">Download ratings</button><button id="show-export" class="secondary">Show ratings JSON</button>
 </div>
 <div id="question" class="panel"></div>
 <div id="export-panel" class="panel" hidden><label>Exported ratings JSON<textarea id="export-json" readonly style="min-height:240px"></textarea></label><p class="muted">If downloads are unavailable, copy this text into a .json file and share it with Codex.</p></div>
@@ -120,6 +121,7 @@ function updateProgress() {
   document.getElementById('current-status').textContent = '· ' + review.ratings[index].status;
   if (isAssisted) document.getElementById('mark').textContent = sameProposedRating(review.ratings[index]) ? 'Approve this rating' : 'Confirm my correction';
   document.getElementById('progress').textContent = `${done} / ${review.ratings.length} reviewed`;
+  document.getElementById('next-pending').disabled = done === review.ratings.length;
   for (let i = 0; i < review.ratings.length; i++) {
     document.getElementById('jump').options[i].text = packet.questions[i].review_id + ' · ' + review.ratings[i].status;
   }
@@ -277,6 +279,12 @@ if (isAssisted) {
   document.getElementById('blinding-note').textContent = 'Keep requested difficulty hidden until all confirmations are finished. Preserve the original confirmations before making later revisions.';
   document.getElementById('attestation-text').textContent = 'I understand these are AI suggestions and will check each one before confirming or correcting it.';
 }
+if (payload.carry_forward && isAssisted) {
+  const note = document.getElementById('carry-note');
+  note.hidden = false;
+  note.textContent = `${payload.carry_forward.carried_count} earlier ratings were carried forward because the complete questions and AI proposals are unchanged. Your original notes and corrections are preserved. New questions need your approval. Use Next unreviewed to move between them.`;
+  document.getElementById('review-introduction').textContent = 'Check the new questions, approve the suggestions, adjust them, or mark them uncertain. Your earlier confirmations for unchanged questions have been preserved.';
+}
 document.getElementById('rubric').textContent = payload.rubric_text;
 document.getElementById('attest').checked = acknowledged();
 document.getElementById('attest').onchange = event => {
@@ -288,6 +296,16 @@ document.getElementById('jump').innerHTML = packet.questions.map((q, i) => `<opt
 document.getElementById('jump').onchange = event => { index = Number(event.target.value); render(); };
 document.getElementById('previous').onclick = () => { index--; render(); };
 document.getElementById('next').onclick = () => { index++; render(); };
+document.getElementById('next-pending').onclick = () => {
+  for (let step = 1; step <= review.ratings.length; step++) {
+    const candidate = (index + step) % review.ratings.length;
+    if (review.ratings[candidate].status === 'pending') {
+      index = candidate;
+      render();
+      return;
+    }
+  }
+};
 document.getElementById('show-export').onclick = () => {
   remember();
   document.getElementById('export-panel').hidden = false;
@@ -306,6 +324,8 @@ document.getElementById('download').onclick = () => {
   setTimeout(() => { URL.revokeObjectURL(url); link.remove(); }, 10000);
   document.getElementById('notice').textContent = 'Download requested. If this browser does not save it, use Show ratings JSON to copy the record.';
 };
+const firstPending = review.ratings.findIndex(rating => rating.status === 'pending');
+if (firstPending >= 0) index = firstPending;
 render();
 </script>
 </body>

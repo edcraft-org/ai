@@ -1,0 +1,1031 @@
+{
+  "set_version": "python-tracing-reference-v2",
+  "questions": [
+    {
+      "question_id": "arithmetic-linear-01",
+      "code": "def calculate(a, b, c):\n    return a + b - c",
+      "entry_function": "calculate",
+      "inputs": {
+        "a": 2,
+        "b": 5,
+        "c": 1
+      },
+      "seed": null,
+      "question": "What does calculate(2, 5, 1) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 6
+        },
+        {
+          "id": "B",
+          "value": 8
+        },
+        {
+          "id": "C",
+          "value": -4
+        },
+        {
+          "id": "D",
+          "value": 7
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "arithmetic-reassignment-01",
+      "code": "def calculate(x, y):\n    x = x + y\n    y = x - y\n    return x * 10 + y",
+      "entry_function": "calculate",
+      "inputs": {
+        "x": 4,
+        "y": 7
+      },
+      "seed": null,
+      "question": "What does calculate(4, 7) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 47
+        },
+        {
+          "id": "B",
+          "value": 74
+        },
+        {
+          "id": "C",
+          "value": 114
+        },
+        {
+          "id": "D",
+          "value": 51
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "arithmetic-quotient-remainder-01",
+      "code": "def calculate(x, y):\n    quotient = x // y\n    remainder = x % y\n    return quotient * 10 + remainder",
+      "entry_function": "calculate",
+      "inputs": {
+        "x": 17,
+        "y": 5
+      },
+      "seed": null,
+      "question": "What does calculate(17, 5) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 32
+        },
+        {
+          "id": "B",
+          "value": 35
+        },
+        {
+          "id": "C",
+          "value": 23
+        },
+        {
+          "id": "D",
+          "value": 42
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "conditionals-boolean-01",
+      "code": "def decide(enabled):\n    if enabled:\n        if 3 > 2:\n            return 1\n    return 0",
+      "entry_function": "decide",
+      "inputs": {
+        "enabled": false
+      },
+      "seed": null,
+      "question": "How many if conditions are evaluated when decide(False) runs? Count both true and false evaluations; do not count conditions that are never reached.",
+      "answer_target": "branch_executions",
+      "options": [
+        {
+          "id": "A",
+          "value": 0
+        },
+        {
+          "id": "B",
+          "value": 2
+        },
+        {
+          "id": "C",
+          "value": 1
+        },
+        {
+          "id": "D",
+          "value": 3
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "conditionals-sequential-02",
+      "code": "def decide(x):\n    if x < 5:\n        x = x + 4\n    if x % 2 == 1:\n        x = x * 2\n    return x",
+      "entry_function": "decide",
+      "inputs": {
+        "x": 6
+      },
+      "seed": null,
+      "question": "What does decide(6) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 10
+        },
+        {
+          "id": "B",
+          "value": 6
+        },
+        {
+          "id": "C",
+          "value": 12
+        },
+        {
+          "id": "D",
+          "value": 20
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "conditionals-early-return-01",
+      "code": "def decide(x):\n    if x < 0:\n        return -x\n    if x % 2 == 0:\n        return x + 1\n    return x * 2",
+      "entry_function": "decide",
+      "inputs": {
+        "x": -2
+      },
+      "seed": null,
+      "question": "What does decide(-2) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": -2
+        },
+        {
+          "id": "B",
+          "value": -1
+        },
+        {
+          "id": "C",
+          "value": 2
+        },
+        {
+          "id": "D",
+          "value": -4
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "loops-iteration-count-01",
+      "code": "def accumulate(n):\n    total = 0\n    for i in range(n):\n        total += i\n    return total",
+      "entry_function": "accumulate",
+      "inputs": {
+        "n": 2
+      },
+      "seed": null,
+      "question": "How many total loop-body iterations occur when accumulate(2) runs?",
+      "answer_target": "loop_iterations",
+      "options": [
+        {
+          "id": "A",
+          "value": 2
+        },
+        {
+          "id": "B",
+          "value": 1
+        },
+        {
+          "id": "C",
+          "value": 3
+        },
+        {
+          "id": "D",
+          "value": 4
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "loops-triangular-reset-02",
+      "code": "def accumulate(n):\n    total = 0\n    for i in range(1, n + 1):\n        subtotal = i\n        for j in range(i):\n            subtotal += j\n        total += subtotal\n    return total",
+      "entry_function": "accumulate",
+      "inputs": {
+        "n": 4
+      },
+      "seed": null,
+      "question": "How many loop invocations occur across both loops when accumulate(4) runs? Count the outer loop once and the inner loop once each time it is reached, rather than counting body iterations.",
+      "answer_target": "loop_executions",
+      "options": [
+        {
+          "id": "A",
+          "value": 4
+        },
+        {
+          "id": "B",
+          "value": 10
+        },
+        {
+          "id": "C",
+          "value": 14
+        },
+        {
+          "id": "D",
+          "value": 5
+        }
+      ],
+      "correct_option": "D"
+    },
+    {
+      "question_id": "loops-conditional-reset-02",
+      "code": "def accumulate(n):\n    current = 2\n    total = 0\n    for i in range(n):\n        current += i\n        total += current\n        if i % 2 == 0:\n            current = 1\n    return total",
+      "entry_function": "accumulate",
+      "inputs": {
+        "n": 4
+      },
+      "seed": null,
+      "question": "What does accumulate(4) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 18
+        },
+        {
+          "id": "B",
+          "value": 12
+        },
+        {
+          "id": "C",
+          "value": 8
+        },
+        {
+          "id": "D",
+          "value": 4
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "functions-single-helper-01",
+      "code": "def increment(value):\n    return value + 1\n\ndef calculate(value):\n    return increment(value)",
+      "entry_function": "calculate",
+      "inputs": {
+        "value": 2
+      },
+      "seed": null,
+      "question": "How many function calls are traced when calculate(2) runs? Include the entry call, helper calls, and any safe built-in calls; do not count return statements.",
+      "answer_target": "function_calls",
+      "options": [
+        {
+          "id": "A",
+          "value": 1
+        },
+        {
+          "id": "B",
+          "value": 3
+        },
+        {
+          "id": "C",
+          "value": 2
+        },
+        {
+          "id": "D",
+          "value": 4
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "functions-composition-01",
+      "code": "def bump(x):\n    return x + 2\n\ndef combine(x):\n    left = bump(x)\n    right = bump(left)\n    return left + right",
+      "entry_function": "combine",
+      "inputs": {
+        "x": 3
+      },
+      "seed": null,
+      "question": "What does combine(3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 12
+        },
+        {
+          "id": "B",
+          "value": 10
+        },
+        {
+          "id": "C",
+          "value": 7
+        },
+        {
+          "id": "D",
+          "value": 14
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "functions-recursive-sum-01",
+      "code": "def total(n):\n    if n == 0:\n        return 0\n    return n + total(n - 1)",
+      "entry_function": "total",
+      "inputs": {
+        "n": 0
+      },
+      "seed": null,
+      "question": "What does total(0) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 1
+        },
+        {
+          "id": "B",
+          "value": -1
+        },
+        {
+          "id": "C",
+          "value": 0
+        },
+        {
+          "id": "D",
+          "value": 2
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "lists-sum-01",
+      "code": "def total(values):\n    return sum(values)",
+      "entry_function": "total",
+      "inputs": {
+        "values": [
+          2,
+          3
+        ]
+      },
+      "seed": null,
+      "question": "What does total([2, 3]) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 5
+        },
+        {
+          "id": "B",
+          "value": 2
+        },
+        {
+          "id": "C",
+          "value": 6
+        },
+        {
+          "id": "D",
+          "value": 4
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "lists-adjacent-differences-02",
+      "code": "def total(values):\n    result = 0\n    previous = 0\n    for value in values:\n        result += value - previous\n        previous = value\n    return result",
+      "entry_function": "total",
+      "inputs": {
+        "values": [
+          4,
+          1,
+          6
+        ]
+      },
+      "seed": null,
+      "question": "What does total([4, 1, 6]) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 11
+        },
+        {
+          "id": "B",
+          "value": -5
+        },
+        {
+          "id": "C",
+          "value": -6
+        },
+        {
+          "id": "D",
+          "value": 6
+        }
+      ],
+      "correct_option": "D"
+    },
+    {
+      "question_id": "lists-endpoint-swap-02",
+      "code": "def calculate(values):\n    first = values[0]\n    values[0] = values[-1]\n    values[-1] = first\n    return values[0] + values[1] * 2",
+      "entry_function": "calculate",
+      "inputs": {
+        "values": [
+          4,
+          1,
+          6
+        ]
+      },
+      "seed": null,
+      "question": "What does calculate([4, 1, 6]) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 6
+        },
+        {
+          "id": "B",
+          "value": 8
+        },
+        {
+          "id": "C",
+          "value": 7
+        },
+        {
+          "id": "D",
+          "value": 16
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "cruxeval-197",
+      "code": "def f(temp, timeLimit):\n    s = timeLimit // temp\n    e = timeLimit % temp\n    return [f'{e} oC', f'{s} {e}'][s > 1]",
+      "entry_function": "f",
+      "inputs": {
+        "temp": 4,
+        "timeLimit": 23
+      },
+      "seed": null,
+      "question": "What does f(4, 23) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": "3 oC"
+        },
+        {
+          "id": "B",
+          "value": "3 5"
+        },
+        {
+          "id": "C",
+          "value": "5 3"
+        },
+        {
+          "id": "D",
+          "value": "5 0"
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "cruxeval-598",
+      "code": "def f(text, n):\n    length = len(text)\n    return text[length*(n%4):length ]",
+      "entry_function": "f",
+      "inputs": {
+        "text": "abc",
+        "n": 5
+      },
+      "seed": null,
+      "question": "What does f('abc', 5) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": "abc"
+        },
+        {
+          "id": "B",
+          "value": "bc"
+        },
+        {
+          "id": "C",
+          "value": "a"
+        },
+        {
+          "id": "D",
+          "value": ""
+        }
+      ],
+      "correct_option": "D"
+    },
+    {
+      "question_id": "cruxeval-752",
+      "code": "def f(s, amount):\n    return (amount - len(s)) * 'z' + s",
+      "entry_function": "f",
+      "inputs": {
+        "s": "abc",
+        "amount": 8
+      },
+      "seed": null,
+      "question": "What does f('abc', 8) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": "zzzzzabc"
+        },
+        {
+          "id": "B",
+          "value": "zzzabc"
+        },
+        {
+          "id": "C",
+          "value": "zzzzzzzzabc"
+        },
+        {
+          "id": "D",
+          "value": "abc"
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "cruxeval-082",
+      "code": "def f(a, b, c, d):\n    return a and b or c and d",
+      "entry_function": "f",
+      "inputs": {
+        "a": "",
+        "b": "B",
+        "c": "C",
+        "d": "D"
+      },
+      "seed": null,
+      "question": "What does f('', 'B', 'C', 'D') return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": "B"
+        },
+        {
+          "id": "B",
+          "value": "C"
+        },
+        {
+          "id": "C",
+          "value": "D"
+        },
+        {
+          "id": "D",
+          "value": ""
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "cruxeval-253",
+      "code": "def f(text, pref):\n    length = len(pref)\n    if pref == text[:length]:\n        return text[length:]\n    return text",
+      "entry_function": "f",
+      "inputs": {
+        "text": "banana",
+        "pref": "ban"
+      },
+      "seed": null,
+      "question": "What does f('banana', 'ban') return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": "ban"
+        },
+        {
+          "id": "B",
+          "value": "ana"
+        },
+        {
+          "id": "C",
+          "value": "banana"
+        },
+        {
+          "id": "D",
+          "value": "nana"
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "cruxeval-356",
+      "code": "def f(array, num):\n    reverse = False\n    if num < 0:\n        reverse = True\n        num *= -1\n    array = array[::-1] * num\n    l = len(array)\n    \n    if reverse:\n        array = array[::-1]\n    return array",
+      "entry_function": "f",
+      "inputs": {
+        "array": [
+          1,
+          2,
+          3
+        ],
+        "num": -2
+      },
+      "seed": null,
+      "question": "What does f([1, 2, 3], -2) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": [
+            3,
+            2,
+            1,
+            3,
+            2,
+            1
+          ]
+        },
+        {
+          "id": "B",
+          "value": [
+            1,
+            2,
+            3,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": "C",
+          "value": []
+        },
+        {
+          "id": "D",
+          "value": [
+            1,
+            2,
+            3
+          ]
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "cruxeval-223",
+      "code": "def f(array, target):\n    count, i = 0, 1\n    for j in range(1, len(array)):\n        if ((array[j] > array[j-1]) and (array[j] <= target)): count += i\n        elif array[j] <= array[j-1]: i = 1\n        else: i += 1\n    return count",
+      "entry_function": "f",
+      "inputs": {
+        "array": [
+          1,
+          3,
+          2,
+          4,
+          5,
+          1,
+          3,
+          5
+        ],
+        "target": 3
+      },
+      "seed": null,
+      "question": "What does f([1, 3, 2, 4, 5, 1, 3, 5], 3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 3
+        },
+        {
+          "id": "B",
+          "value": 2
+        },
+        {
+          "id": "C",
+          "value": 4
+        },
+        {
+          "id": "D",
+          "value": 1
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "cruxeval-250",
+      "code": "def f(text):\n    count = len(text)\n    for i in range(-count+1, 0):\n        text = text + text[i]\n    return text",
+      "entry_function": "f",
+      "inputs": {
+        "text": "abcdefg"
+      },
+      "seed": null,
+      "question": "What does f('abcdefg') return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": "abcdefgbcdefg"
+        },
+        {
+          "id": "B",
+          "value": "abcdefgbdfbff"
+        },
+        {
+          "id": "C",
+          "value": "abcdefggfedcb"
+        },
+        {
+          "id": "D",
+          "value": "abcdefggggggg"
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "cruxeval-274",
+      "code": "def f(nums, target):\n    count = 0\n    for n1 in nums:\n        for n2 in nums:\n            count += (n1+n2==target)\n    return count",
+      "entry_function": "f",
+      "inputs": {
+        "nums": [
+          1,
+          2,
+          3
+        ],
+        "target": 4
+      },
+      "seed": null,
+      "question": "What does f([1, 2, 3], 4) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 1
+        },
+        {
+          "id": "B",
+          "value": 2
+        },
+        {
+          "id": "C",
+          "value": 3
+        },
+        {
+          "id": "D",
+          "value": 9
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "cruxeval-506",
+      "code": "def f(n):\n    p = ''\n    if n%2 == 1:\n        p+='sn'\n    else:\n        return n*n\n    for x in range(1, n+1):\n        if x%2 == 0:\n            p+='to'\n        else:\n            p+='ts'\n    return p",
+      "entry_function": "f",
+      "inputs": {
+        "n": 5
+      },
+      "seed": null,
+      "question": "What does f(5) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": "sntstotstots"
+        },
+        {
+          "id": "B",
+          "value": "sntotstotsto"
+        },
+        {
+          "id": "C",
+          "value": "tstotstots"
+        },
+        {
+          "id": "D",
+          "value": "sn"
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "cruxeval-629",
+      "code": "def f(text, dng):\n    if dng not in text:\n        return text\n    if text[-len(dng):] == dng:\n        return text[:-len(dng)]\n    return text[:-1] + f(text[:-2], dng)",
+      "entry_function": "f",
+      "inputs": {
+        "text": "abNGcdefghi",
+        "dng": "NG"
+      },
+      "seed": null,
+      "question": "What does f('abNGcdefghi', 'NG') return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": "abNabNGabNGcdabNGcdefabNGcdefgh"
+        },
+        {
+          "id": "B",
+          "value": "abNGcdefghabNGcdefabNGcdabNGabN"
+        },
+        {
+          "id": "C",
+          "value": "abNGcdefghabNGcdefabNGcdabNabNG"
+        },
+        {
+          "id": "D",
+          "value": "abNGcdefghabNGcdabNGcdefabNGabN"
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "cruxeval-783",
+      "code": "def f(text, comparison):\n    length = len(comparison)\n    if length <= len(text):\n        for i in range(length):\n            if comparison[length - i - 1] != text[len(text) - i - 1]:\n                return i\n    return length",
+      "entry_function": "f",
+      "inputs": {
+        "text": "abcd",
+        "comparison": "xbcd"
+      },
+      "seed": null,
+      "question": "What does f('abcd', 'xbcd') return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 0
+        },
+        {
+          "id": "B",
+          "value": 1
+        },
+        {
+          "id": "C",
+          "value": 3
+        },
+        {
+          "id": "D",
+          "value": 4
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "cruxeval-147",
+      "code": "def f(nums):\n    middle = len(nums)//2\n    return nums[middle:] + nums[0:middle]",
+      "entry_function": "f",
+      "inputs": {
+        "nums": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "seed": null,
+      "question": "What does f([1, 2, 3, 4, 5]) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": [
+            3,
+            4,
+            5,
+            1,
+            2
+          ]
+        },
+        {
+          "id": "B",
+          "value": [
+            4,
+            5,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": "C",
+          "value": [
+            5,
+            4,
+            3,
+            2,
+            1
+          ]
+        },
+        {
+          "id": "D",
+          "value": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "cruxeval-498",
+      "code": "def f(nums, idx, added):\n    nums[idx:idx] = (added,)\n    return nums",
+      "entry_function": "f",
+      "inputs": {
+        "nums": [
+          1,
+          4,
+          7
+        ],
+        "idx": 1,
+        "added": 9
+      },
+      "seed": null,
+      "question": "What does f([1, 4, 7], 1, 9) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": [
+            1,
+            9,
+            7
+          ]
+        },
+        {
+          "id": "B",
+          "value": [
+            1,
+            4,
+            9,
+            7
+          ]
+        },
+        {
+          "id": "C",
+          "value": [
+            1,
+            9,
+            4,
+            7
+          ]
+        },
+        {
+          "id": "D",
+          "value": [
+            9,
+            1,
+            4,
+            7
+          ]
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "cruxeval-793",
+      "code": "def f(list, start, end):\n    count = 0\n    for i in range(start, end):\n        for j in range(i, end):\n            if list[i] != list[j]:\n                count += 1\n    return count",
+      "entry_function": "f",
+      "inputs": {
+        "list": [
+          1,
+          2,
+          4,
+          3,
+          2,
+          1
+        ],
+        "start": 0,
+        "end": 6
+      },
+      "seed": null,
+      "question": "What does f([1, 2, 4, 3, 2, 1], 0, 6) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 15
+        },
+        {
+          "id": "B",
+          "value": 14
+        },
+        {
+          "id": "C",
+          "value": 13
+        },
+        {
+          "id": "D",
+          "value": 9
+        }
+      ],
+      "correct_option": "C"
+    }
+  ]
+}

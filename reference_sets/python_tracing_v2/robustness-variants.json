@@ -1,0 +1,845 @@
+{
+  "source_set_version": "python-tracing-reference-v1",
+  "purpose": "Archived sibling variants for optional within-family robustness checks; excluded from the 30-item primary reference and its independent-item counts. Original questions, splits and human ratings remain in python_tracing_v1.",
+  "questions": [
+    {
+      "question_id": "arithmetic-linear-02",
+      "code": "def calculate(a, b, c):\n    return a + b - c",
+      "entry_function": "calculate",
+      "inputs": {
+        "a": 4,
+        "b": 8,
+        "c": 3
+      },
+      "seed": null,
+      "question": "What does calculate(4, 8, 3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 15
+        },
+        {
+          "id": "B",
+          "value": 9
+        },
+        {
+          "id": "C",
+          "value": -7
+        },
+        {
+          "id": "D",
+          "value": 12
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "arithmetic-reassignment-02",
+      "code": "def calculate(x, y):\n    x = x + y\n    y = x - y\n    return x * 10 + y",
+      "entry_function": "calculate",
+      "inputs": {
+        "x": 6,
+        "y": 3
+      },
+      "seed": null,
+      "question": "What does calculate(6, 3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 63
+        },
+        {
+          "id": "B",
+          "value": 36
+        },
+        {
+          "id": "C",
+          "value": 69
+        },
+        {
+          "id": "D",
+          "value": 96
+        }
+      ],
+      "correct_option": "D"
+    },
+    {
+      "question_id": "arithmetic-quotient-remainder-02",
+      "code": "def calculate(x, y):\n    quotient = x // y\n    remainder = x % y\n    return quotient * 10 + remainder",
+      "entry_function": "calculate",
+      "inputs": {
+        "x": 23,
+        "y": 4
+      },
+      "seed": null,
+      "question": "What does calculate(23, 4) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 54
+        },
+        {
+          "id": "B",
+          "value": 53
+        },
+        {
+          "id": "C",
+          "value": 35
+        },
+        {
+          "id": "D",
+          "value": 63
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "conditionals-boolean-02",
+      "code": "def decide(enabled):\n    if enabled:\n        if 3 > 2:\n            return 1\n    return 0",
+      "entry_function": "decide",
+      "inputs": {
+        "enabled": true
+      },
+      "seed": null,
+      "question": "How many if conditions are evaluated when decide(True) runs? Count both true and false evaluations; do not count conditions that are never reached.",
+      "answer_target": "branch_executions",
+      "options": [
+        {
+          "id": "A",
+          "value": 1
+        },
+        {
+          "id": "B",
+          "value": 3
+        },
+        {
+          "id": "C",
+          "value": 4
+        },
+        {
+          "id": "D",
+          "value": 2
+        }
+      ],
+      "correct_option": "D"
+    },
+    {
+      "question_id": "conditionals-sequential-01",
+      "code": "def decide(x):\n    if x < 5:\n        x = x + 4\n    if x % 2 == 1:\n        x = x * 2\n    return x",
+      "entry_function": "decide",
+      "inputs": {
+        "x": 3
+      },
+      "seed": null,
+      "question": "What does decide(3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 14
+        },
+        {
+          "id": "B",
+          "value": 7
+        },
+        {
+          "id": "C",
+          "value": 6
+        },
+        {
+          "id": "D",
+          "value": 10
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "conditionals-early-return-02",
+      "code": "def decide(x):\n    if x < 0:\n        return -x\n    if x % 2 == 0:\n        return x + 1\n    return x * 2",
+      "entry_function": "decide",
+      "inputs": {
+        "x": 3
+      },
+      "seed": null,
+      "question": "What does decide(3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 3
+        },
+        {
+          "id": "B",
+          "value": 4
+        },
+        {
+          "id": "C",
+          "value": -3
+        },
+        {
+          "id": "D",
+          "value": 6
+        }
+      ],
+      "correct_option": "D"
+    },
+    {
+      "question_id": "loops-iteration-count-02",
+      "code": "def accumulate(n):\n    total = 0\n    for i in range(n):\n        total += i\n    return total",
+      "entry_function": "accumulate",
+      "inputs": {
+        "n": 5
+      },
+      "seed": null,
+      "question": "How many total loop-body iterations occur when accumulate(5) runs?",
+      "answer_target": "loop_iterations",
+      "options": [
+        {
+          "id": "A",
+          "value": 4
+        },
+        {
+          "id": "B",
+          "value": 5
+        },
+        {
+          "id": "C",
+          "value": 6
+        },
+        {
+          "id": "D",
+          "value": 7
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "loops-triangular-reset-01",
+      "code": "def accumulate(n):\n    total = 0\n    for i in range(1, n + 1):\n        subtotal = i\n        for j in range(i):\n            subtotal += j\n        total += subtotal\n    return total",
+      "entry_function": "accumulate",
+      "inputs": {
+        "n": 3
+      },
+      "seed": null,
+      "question": "What does accumulate(3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 6
+        },
+        {
+          "id": "B",
+          "value": 7
+        },
+        {
+          "id": "C",
+          "value": 10
+        },
+        {
+          "id": "D",
+          "value": 16
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "loops-conditional-reset-01",
+      "code": "def accumulate(n):\n    current = 2\n    total = 0\n    for i in range(n):\n        current += i\n        total += current\n        if i % 2 == 0:\n            current = 1\n    return total",
+      "entry_function": "accumulate",
+      "inputs": {
+        "n": 3
+      },
+      "seed": null,
+      "question": "What does accumulate(3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 8
+        },
+        {
+          "id": "B",
+          "value": 10
+        },
+        {
+          "id": "C",
+          "value": 1
+        },
+        {
+          "id": "D",
+          "value": 4
+        }
+      ],
+      "correct_option": "A"
+    },
+    {
+      "question_id": "functions-single-helper-02",
+      "code": "def increment(value):\n    return value + 1\n\ndef calculate(value):\n    return increment(value)",
+      "entry_function": "calculate",
+      "inputs": {
+        "value": 5
+      },
+      "seed": null,
+      "question": "What does calculate(5) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 5
+        },
+        {
+          "id": "B",
+          "value": 7
+        },
+        {
+          "id": "C",
+          "value": 2
+        },
+        {
+          "id": "D",
+          "value": 6
+        }
+      ],
+      "correct_option": "D"
+    },
+    {
+      "question_id": "functions-composition-02",
+      "code": "def bump(x):\n    return x + 2\n\ndef combine(x):\n    left = bump(x)\n    right = bump(left)\n    return left + right",
+      "entry_function": "combine",
+      "inputs": {
+        "x": -1
+      },
+      "seed": null,
+      "question": "What does combine(-1) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 2
+        },
+        {
+          "id": "B",
+          "value": 4
+        },
+        {
+          "id": "C",
+          "value": 3
+        },
+        {
+          "id": "D",
+          "value": 6
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "functions-recursive-sum-02",
+      "code": "def total(n):\n    if n == 0:\n        return 0\n    return n + total(n - 1)",
+      "entry_function": "total",
+      "inputs": {
+        "n": 4
+      },
+      "seed": null,
+      "question": "What does total(4) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 4
+        },
+        {
+          "id": "B",
+          "value": 6
+        },
+        {
+          "id": "C",
+          "value": 15
+        },
+        {
+          "id": "D",
+          "value": 10
+        }
+      ],
+      "correct_option": "D"
+    },
+    {
+      "question_id": "lists-sum-02",
+      "code": "def total(values):\n    return sum(values)",
+      "entry_function": "total",
+      "inputs": {
+        "values": [
+          2,
+          2,
+          3
+        ]
+      },
+      "seed": null,
+      "question": "What does total([2, 2, 3]) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 3
+        },
+        {
+          "id": "B",
+          "value": 7
+        },
+        {
+          "id": "C",
+          "value": 8
+        },
+        {
+          "id": "D",
+          "value": 6
+        }
+      ],
+      "correct_option": "B"
+    },
+    {
+      "question_id": "lists-adjacent-differences-01",
+      "code": "def total(values):\n    result = 0\n    previous = 0\n    for value in values:\n        result += value - previous\n        previous = value\n    return result",
+      "entry_function": "total",
+      "inputs": {
+        "values": [
+          2,
+          5,
+          1
+        ]
+      },
+      "seed": null,
+      "question": "What does total([2, 5, 1]) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 8
+        },
+        {
+          "id": "B",
+          "value": 4
+        },
+        {
+          "id": "C",
+          "value": 1
+        },
+        {
+          "id": "D",
+          "value": -1
+        }
+      ],
+      "correct_option": "C"
+    },
+    {
+      "question_id": "lists-endpoint-swap-01",
+      "code": "def calculate(values):\n    first = values[0]\n    values[0] = values[-1]\n    values[-1] = first\n    return values[0] + values[1] * 2",
+      "entry_function": "calculate",
+      "inputs": {
+        "values": [
+          2,
+          3,
+          7
+        ]
+      },
+      "seed": null,
+      "question": "What does calculate([2, 3, 7]) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 13
+        },
+        {
+          "id": "B",
+          "value": 8
+        },
+        {
+          "id": "C",
+          "value": 10
+        },
+        {
+          "id": "D",
+          "value": 16
+        }
+      ],
+      "correct_option": "A"
+    }
+  ],
+  "items": [
+    {
+      "question_id": "arithmetic-linear-02",
+      "family_id": "arithmetic-linear",
+      "topic": "arithmetic",
+      "split": "development",
+      "requested_difficulty": "easy",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "arithmetic.linear_sum",
+        "source_revision": "3d5d97f",
+        "path": "examples/templates/arithmetic_linear.json",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/arithmetic_linear.json",
+        "source_sha256": "8822cf1f07cbe3161f2289bcf6d2ab5b7ffbd45450d781e82992aa0b22eff550",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Add c.",
+        "C": "Subtract b.",
+        "D": "Omit c."
+      }
+    },
+    {
+      "question_id": "arithmetic-reassignment-02",
+      "family_id": "arithmetic-reassignment",
+      "topic": "arithmetic",
+      "split": "development",
+      "requested_difficulty": "hard",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "arithmetic-reassignment",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Use original values.",
+        "B": "Assume simultaneous swap.",
+        "C": "Reverse final place weights."
+      }
+    },
+    {
+      "question_id": "arithmetic-quotient-remainder-02",
+      "family_id": "arithmetic-quotient-remainder",
+      "topic": "arithmetic",
+      "split": "held_out",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "arithmetic-quotient-remainder",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Use divisor as remainder.",
+        "C": "Swap quotient/remainder.",
+        "D": "Use the ceiling quotient instead of floor division."
+      }
+    },
+    {
+      "question_id": "conditionals-boolean-02",
+      "family_id": "conditionals-boolean",
+      "topic": "conditionals",
+      "split": "development",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "conditionals.boolean_branch_count",
+        "source_revision": "3d5d97f",
+        "path": "examples/templates/conditional_boolean.json",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/conditional_boolean.json",
+        "source_sha256": "291256e32e8d6aa7ed50793e9bb3a95fc9c74db9131346f62d9b8a4e05181a66",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Count only outer condition.",
+        "B": "Count return as a condition.",
+        "C": "Count condition and outcome separately."
+      }
+    },
+    {
+      "question_id": "conditionals-sequential-01",
+      "family_id": "conditionals-sequential",
+      "topic": "conditionals",
+      "split": "development",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "conditionals-sequential",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "B": "Skip second condition.",
+        "C": "Use initial x for doubling.",
+        "D": "Double before adding four."
+      }
+    },
+    {
+      "question_id": "conditionals-early-return-02",
+      "family_id": "conditionals-early-return",
+      "topic": "conditionals",
+      "split": "held_out",
+      "requested_difficulty": "hard",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "conditionals-early-return",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Return unchanged input.",
+        "B": "Take even branch.",
+        "C": "Take negative branch."
+      }
+    },
+    {
+      "question_id": "loops-iteration-count-02",
+      "family_id": "loops-iteration-count",
+      "topic": "loops",
+      "split": "development",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "loops.iteration_count",
+        "source_revision": "3d5d97f",
+        "path": "examples/templates/loop_iterations.json",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/loop_iterations.json",
+        "source_sha256": "f2ca4271b47768e12f59a2dd0ff601a5de3e56ce5017ee231a33a5e95df7ad31",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Count final range value.",
+        "C": "Include final check.",
+        "D": "Include setup and final check."
+      }
+    },
+    {
+      "question_id": "loops-triangular-reset-01",
+      "family_id": "loops-triangular-reset",
+      "topic": "loops",
+      "split": "development",
+      "requested_difficulty": "hard",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "loops-triangular-reset",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Omit inner additions.",
+        "B": "Use range(i - 1).",
+        "D": "Add i again when adding each subtotal to total."
+      }
+    },
+    {
+      "question_id": "loops-conditional-reset-01",
+      "family_id": "loops-conditional-reset",
+      "topic": "loops",
+      "split": "held_out",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "loops-conditional-reset",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "B": "Omit reset.",
+        "C": "Return current after its final reset.",
+        "D": "Reset current before adding it to total."
+      }
+    },
+    {
+      "question_id": "functions-single-helper-02",
+      "family_id": "functions-single-helper",
+      "topic": "functions",
+      "split": "development",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "functions.single_helper",
+        "source_revision": "3d5d97f",
+        "path": "examples/templates/function_helper.json",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/function_helper.json",
+        "source_sha256": "ab0415b6a1e24441a907b7ffc722e8c992440a8584eb3655d46580f6de478baf",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed.",
+          "Changed target from function calls to return value; adapted options."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Omit increment.",
+        "B": "Increment twice.",
+        "C": "Return call count."
+      }
+    },
+    {
+      "question_id": "functions-composition-02",
+      "family_id": "functions-composition",
+      "topic": "functions",
+      "split": "held_out",
+      "requested_difficulty": "hard",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "functions-composition",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Call both helpers on original input.",
+        "C": "Return only right.",
+        "D": "Use right twice."
+      }
+    },
+    {
+      "question_id": "functions-recursive-sum-02",
+      "family_id": "functions-recursive-sum",
+      "topic": "functions",
+      "split": "held_out",
+      "requested_difficulty": "hard",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "functions-recursive-sum",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Return only outer n.",
+        "B": "Omit outer contribution.",
+        "C": "Include n + 1."
+      }
+    },
+    {
+      "question_id": "lists-sum-02",
+      "family_id": "lists-sum",
+      "topic": "lists",
+      "split": "development",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "lists.integer_sum",
+        "source_revision": "3d5d97f",
+        "path": "examples/templates/list_sum.json",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/list_sum.json",
+        "source_sha256": "7b2768a23ddf1999d964e2ed912f16f875da1909872070bd8fa98b7b1e134d33",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Return length.",
+        "C": "Add one.",
+        "D": "Subtract one."
+      }
+    },
+    {
+      "question_id": "lists-adjacent-differences-01",
+      "family_id": "lists-adjacent-differences",
+      "topic": "lists",
+      "split": "development",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "lists-adjacent-differences",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "A": "Never update previous.",
+        "B": "Use only final two values in reverse order.",
+        "D": "Reverse subtraction."
+      }
+    },
+    {
+      "question_id": "lists-endpoint-swap-01",
+      "family_id": "lists-endpoint-swap",
+      "topic": "lists",
+      "split": "held_out",
+      "requested_difficulty": "medium",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "lists-endpoint-swap",
+        "source_revision": null,
+        "path": null,
+        "url": null,
+        "source_sha256": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)"
+      },
+      "distractor_hypotheses": {
+        "B": "Use original first element.",
+        "C": "Omit multiplication.",
+        "D": "Use old first plus twice old last."
+      }
+    }
+  ]
+}

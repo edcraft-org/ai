@@ -47,7 +47,8 @@ def test_full_set_execution_and_family_split():
     evidence = reference.checked_evidence(reference.DEFAULT_SET, questions, manifest)
     assert reference.verify_questions(questions) == evidence["records"]
     assert len(questions) == 30
-    assert len({entry["family_id"] for entry in manifest["items"]}) == 15
+    assert len({entry["family_id"] for entry in manifest["items"]}) == 30
+    assert len({reference.code_family_fingerprint(q.code) for q in questions}) == 30
     assert Counter(e["split"] for e in manifest["items"]) == {
         "development": 18,
         "held_out": 12,
@@ -208,9 +209,60 @@ def test_unknown_human_label_is_retained_as_uncertain(packet):
 def test_family_leak_rejected(dataset):
     path = dataset / "manifest.json"
     manifest = reference.read_json(path)
+    manifest["items"][1]["family_id"] = manifest["items"][0]["family_id"]
     manifest["items"][1]["split"] = "held_out"
     reference.write_json(path, manifest)
     with pytest.raises(ValueError, match="family leaks"):
+        reference.load_set(dataset)
+
+
+def test_primary_collection_rejects_same_family_variants(dataset):
+    path = dataset / "manifest.json"
+    manifest = reference.read_json(path)
+    manifest["items"][1]["family_id"] = manifest["items"][0]["family_id"]
+    reference.write_json(path, manifest)
+    with pytest.raises(ValueError, match="one question per family"):
+        reference.load_set(dataset)
+
+
+def test_renamed_literal_and_formatting_clones_cannot_cross_families(dataset):
+    path = dataset / "questions.json"
+    data = reference.read_json(path)
+    data["questions"][1]["code"] = (
+        "# A cosmetic rewrite of the first question\n"
+        "def renamed(first, second, third):\n    return (first + second) - third\n"
+    )
+    reference.write_json(path, data)
+    with pytest.raises(ValueError, match="normalised code clone"):
+        reference.load_set(dataset)
+    first = "def f(x):\n    return x + 1"
+    renamed = "def g(y):\n    return y + 42"
+    assert reference.code_family_fingerprint(
+        first
+    ) == reference.code_family_fingerprint(renamed)
+    assert reference.code_family_fingerprint(
+        first
+    ) != reference.code_family_fingerprint("def g(y):\n    return y - 42")
+
+
+@pytest.mark.parametrize("problem", ["source", "code", "license", "revision"])
+def test_external_source_and_license_integrity(dataset, problem):
+    if problem == "source":
+        path = dataset / "sources/cruxeval-selected.jsonl"
+        path.write_text(path.read_text().replace('"sample_197"', '"sample_changed"'))
+    elif problem == "license":
+        (dataset / "sources/CRUXEval-LICENSE").write_text("removed")
+    elif problem == "code":
+        path = dataset / "questions.json"
+        data = reference.read_json(path)
+        data["questions"][15]["code"] += "\n# edited source\n"
+        reference.write_json(path, data)
+    else:
+        path = dataset / "manifest.json"
+        data = reference.read_json(path)
+        data["items"][15]["provenance"]["source_revision"] = "different"
+        reference.write_json(path, data)
+    with pytest.raises(ValueError, match="external"):
         reference.load_set(dataset)
 
 
@@ -505,3 +557,125 @@ def test_regeneration_preserves_saved_reviews_and_archives_format_switches(
     assisted = reference.read_json(tmp_path / "review.json")
     assert assisted["review_schema_version"] == reference.ASSISTED_REVIEW_SCHEMA
     assert all(r["status"] == "pending" for r in assisted["ratings"])
+
+
+def test_original_review_is_preserved_and_only_unchanged_decisions_are_carried():
+    source = reference.ROOT / "reference_sets/python_tracing_v1"
+    original_path = source / "reviews/keith-2026-10-15.json"
+    original_bytes = original_path.read_bytes()
+    original = reference.read_json(original_path)
+    review, audit = reference.carry_forward_review(
+        source, original, reference.DEFAULT_SET
+    )
+    validated, _, _, _ = reference.validate_review(reference.DEFAULT_SET, review)
+    assert audit["carried_count"] == 15
+    assert audit["pending_count"] == 15
+    assert audit["source_review_sha256"] == reference.digest(original)
+    assert Counter(r.human_decision for r in validated.ratings) == {
+        "approved": 13,
+        "corrected": 2,
+        "pending": 15,
+    }
+    previous = {r["question_sha256"]: r for r in original["ratings"]}
+    for rating in review["ratings"]:
+        if rating["status"] == "pending":
+            assert rating["human_decision"] == "pending"
+            assert rating["question_sha256"] not in previous
+        else:
+            old = previous[rating["question_sha256"]]
+            assert {k: v for k, v in rating.items() if k != "review_id"} == {
+                k: v for k, v in old.items() if k != "review_id"
+            }
+    assert original_path.read_bytes() == original_bytes
+    with pytest.raises(ValueError, match="finish and freeze"):
+        reference.compare_review(reference.DEFAULT_SET, review)
+
+
+@pytest.mark.parametrize("change", ["proposal", "question"])
+def test_changed_question_or_proposal_needs_fresh_approval(dataset, change):
+    source = reference.ROOT / "reference_sets/python_tracing_v1"
+    original = reference.read_json(source / "reviews/keith-2026-10-15.json")
+    proposal_path = dataset / "ai-recommendations.json"
+    proposals = reference.read_json(proposal_path)
+    if change == "proposal":
+        proposals["records"][0]["rating_reason"] += " Revised recommendation."
+    else:
+        question_path = dataset / "questions.json"
+        data = reference.read_json(question_path)
+        data["questions"][0]["question"] += " Check carefully."
+        reference.write_json(question_path, data)
+        new_hash = reference.digest(data["questions"][0])
+        proposals["records"][0]["question_sha256"] = new_hash
+        evidence_path = dataset / "technical-evidence.json"
+        evidence = reference.read_json(evidence_path)
+        evidence["questions_sha256"] = reference.digest(data)
+        evidence["records"][0]["question_sha256"] = new_hash
+        reference.write_json(evidence_path, evidence)
+    reference.write_json(proposal_path, proposals)
+    review, audit = reference.carry_forward_review(source, original, dataset)
+    assert audit["carried_count"] == 14
+    assert audit["pending_count"] == 16
+    changed_hash = proposals["records"][0]["question_sha256"]
+    assert (
+        next(r for r in review["ratings"] if r["question_sha256"] == changed_hash)[
+            "status"
+        ]
+        == "pending"
+    )
+
+
+def test_carry_forward_rejects_stale_or_changed_assistance_context(dataset):
+    source = reference.ROOT / "reference_sets/python_tracing_v1"
+    original = reference.read_json(source / "reviews/keith-2026-10-15.json")
+    original["packet_sha256"] = "stale"
+    with pytest.raises(ValueError, match="stale review"):
+        reference.carry_forward_review(source, original, dataset)
+    original = reference.read_json(source / "reviews/keith-2026-10-15.json")
+    path = dataset / "ai-recommendations.json"
+    proposals = reference.read_json(path)
+    proposals["source_context"] = "Different assistance disclosure."
+    reference.write_json(path, proposals)
+    with pytest.raises(ValueError, match="context changed"):
+        reference.carry_forward_review(source, original, dataset)
+
+
+def test_carry_cli_never_overwrites_a_saved_review(monkeypatch, tmp_path):
+    path = tmp_path / "review.json"
+    path.write_text('"existing review"\n')
+    source = reference.ROOT / "reference_sets/python_tracing_v1"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "difficulty_reference.py",
+            "carry-review",
+            "--source-set",
+            str(source),
+            str(source / "reviews/keith-2026-10-15.json"),
+            "--output",
+            str(tmp_path),
+        ],
+    )
+    with pytest.raises(ValueError, match="already exists"):
+        reference.main()
+    assert path.read_text() == '"existing review"\n'
+
+
+def test_committed_partial_review_and_transfer_audit_replay_exactly():
+    source = reference.ROOT / "reference_sets/python_tracing_v1"
+    original_path = source / "reviews/keith-2026-10-15.json"
+    review, audit = reference.carry_forward_review(
+        source, reference.read_json(original_path), reference.DEFAULT_SET
+    )
+    archived = reference.read_json(
+        reference.DEFAULT_SET / "reviews/keith-2026-10-15-carried.json"
+    )
+    saved_audit = reference.read_json(
+        reference.DEFAULT_SET / "reviews/carry-forward.json"
+    )
+    assert archived == review
+    assert all(saved_audit[key] == value for key, value in audit.items())
+    assert (
+        saved_audit["source_review_file_sha256"]
+        == reference.hashlib.sha256(original_path.read_bytes()).hexdigest()
+    )

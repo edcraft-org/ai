@@ -1,5 +1,11 @@
 # Python tracing reference set v1
 
+> Historical collection: superseded by [v2](../python_tracing_v2/README.md).
+> Keith completed this review on 2026-10-15: 28 approvals and two corrections.
+> The original export is in `reviews/keith-2026-10-15.json`. The description below
+> records the original delivery state; v2 retains one question per family and
+> carries forward 15 unchanged decisions.
+
 Prepared for [issue 42](https://github.com/edcraft-org/ai/issues/42), using
 `python-tracing-v0.2`, `manual-tracing-v0.1` and
 `python-tracing-agreement-v0.2`. This is a **provisional collection awaiting human
