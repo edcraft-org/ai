@@ -104,6 +104,7 @@ function remember() {
 
 function updateProgress() {
   const done = review.ratings.filter(rating => rating.status === 'reviewed').length;
+  document.getElementById('current-status').textContent = '· ' + review.ratings[index].status;
   document.getElementById('progress').textContent = `${done} / ${review.ratings.length} reviewed`;
   for (let i = 0; i < review.ratings.length; i++) {
     document.getElementById('jump').options[i].text = packet.questions[i].review_id + ' · ' + review.ratings[i].status;
@@ -136,7 +137,7 @@ function render() {
   document.getElementById('previous').disabled = index === 0;
   document.getElementById('next').disabled = index === packet.questions.length - 1;
   document.getElementById('question').innerHTML = `
-    <h2>${esc(q.review_id)} <span class="muted">· ${esc(r.status)}</span></h2>
+    <h2>${esc(q.review_id)} <span id="current-status" class="muted">· ${esc(r.status)}</span></h2>
     <pre><code>${esc(q.code)}</code></pre>
     <p><strong>${esc(q.question)}</strong></p>
     <p class="muted">Concrete inputs: <code>${esc(JSON.stringify(q.inputs))}</code></p>
