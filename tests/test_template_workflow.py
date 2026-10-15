@@ -144,9 +144,13 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring is not None
     assert validated.authoring.provider == "stub"
     assert validated.authoring.model == "stub-model"
-    assert validated.authoring.base_prompt_version == "code-template-v16+response-v3"
+    assert (
+        validated.authoring.base_prompt_version
+        == "code-template-v17-typical-difficulty+response-v3"
+    )
     assert validated.authoring.domain == "code"
     assert provider_calls[0].tool_catalogue.names == (
+        "code_assess_template_difficulty",
         "code_require_features",
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",

@@ -10,11 +10,14 @@ from edcraft_validator.application.code_difficulty import (
     CodeDifficultyReport,
     assess_code_question_difficulty,
 )
+from edcraft_validator.application.template_difficulty import assess_template_difficulty
+from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.code_types import Difficulty
 from edcraft_validator.domains.code.difficulty import CodeDifficultyQuestion
 from edcraft_validator.llm.judging import JudgeProviderFactory
 from edcraft_validator.llm.llm_contracts import ModelProvider, TemplateProviderSelection
 from edcraft_validator.llm.provider_registry import create_model_provider
+from edcraft_validator.mcp.evidence import ToolEvidence
 
 
 def configured_difficulty_provider() -> ModelProvider:
@@ -70,6 +73,38 @@ def register_difficulty_tools(
         return await assess_code_question_difficulty(
             question,
             requested_difficulty=requested_difficulty,
+            provider_factory=provider_factory,
+            judge_timeout_seconds=judge_timeout_seconds,
+        )
+
+    @server.tool(
+        name="code_assess_template_difficulty",
+        version="1.0.0",
+        tags={"domain:code", "quality:code", "stage:after-validation"},
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
+        description=(
+            "Assess the difficulty of a reusable Python tracing MCQ template. "
+            "Select this check when authoring or validating a template with a target "
+            "difficulty. SocLaas estimates the typical instance across the entire "
+            "finite parameter domain, with independent uniform parameter values, "
+            "using code, question pattern, answer target and distractor recipes. "
+            "The declared level is hidden from the judge and compared afterwards. "
+            "Passed means the advisory estimate matches the target; failed means "
+            "a mismatch or missing information. Reports parameter-dependent variation. "
+            "One judge call, no check corrections or retries. Does not execute code "
+            "or verify correctness; use separate correctness tools. May incur cost."
+        ),
+    )
+    async def code_assess_template_difficulty(
+        candidate: CodeTemplateCandidate,
+    ) -> ToolEvidence:
+        return await assess_template_difficulty(
+            candidate,
             provider_factory=provider_factory,
             judge_timeout_seconds=judge_timeout_seconds,
         )

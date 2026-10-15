@@ -6,6 +6,7 @@ import time
 import uuid
 from collections.abc import Callable
 from dataclasses import replace
+from functools import partial
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as JsonSchemaError
@@ -49,9 +50,16 @@ class TemplateApplication:
         *,
         tool_catalogue: ToolCatalogue | None = None,
         tool_client: FastMcpToolClient | None = None,
+        max_correction_attempts: int = 3,
     ) -> None:
         self.tool_catalogue = tool_catalogue
         self.tool_client = tool_client or FastMcpToolClient()
+        if (
+            type(max_correction_attempts) is not int
+            or not 0 <= max_correction_attempts <= 3
+        ):
+            raise ValueError("max_correction_attempts must be an integer from 0 to 3")
+        self.max_correction_attempts = max_correction_attempts
 
     def create_validated_template(
         self, request, *, domain, provider, on_catalogue_resolved=None
@@ -113,13 +121,13 @@ class TemplateApplication:
     ) -> AuthoringResult:
         """Author or validate a template using model-selected MCP checks.
 
-        Authoring allows three total attempts with a fixed check plan.
+        Authoring allows an initial attempt and up to three template revisions.
         Validation checks an existing candidate once without rewriting it.
         Failed attempts and their evidence remain available in the result.
         """
         started = time.perf_counter()
         validating = initial_candidate is not None
-        max_attempts = 1 if validating else 3
+        max_attempts = 1 if validating else self.max_correction_attempts + 1
         request_payload = (
             {"operation": "validate"} if validating else request.model_dump(mode="json")
         )
@@ -219,8 +227,21 @@ class TemplateApplication:
                         provider,
                         client,
                         seen_call_ids,
+                        checked_bindings=partial(
+                            self._checked_bindings, domain, request, candidate, attempt
+                        ),
                     )
-                    if not attempt.passed and number < max_attempts:
+                    terminal_check_error = any(
+                        execution.evidence is not None
+                        and execution.evidence.status == "error"
+                        and execution.evidence.details.get("retryable") is False
+                        for execution in attempt.executions
+                    )
+                    if (
+                        not attempt.passed
+                        and not terminal_check_error
+                        and number < max_attempts
+                    ):
                         stage = "generation"
                         revision_started = time.perf_counter()
                         try:
@@ -267,7 +288,7 @@ class TemplateApplication:
             result.generation_duration_ms = generation_duration_ms
             result.model_calls = provider.calls
             result.usage = summarize_usage(provider.calls)
-        raise AssertionError("Authoring loop must return within three attempts")
+        raise AssertionError("Authoring loop must return within its attempt limit")
 
     @staticmethod
     def _build_attempt(number, candidate, plan) -> GenerationAttempt:
@@ -293,8 +314,10 @@ class TemplateApplication:
                         "instruction": (
                             "The current checking attempt failed. Fix each failure "
                             "reported below. "
-                            "Treat tool observations as authoritative, but "
-                            "distinguish them from requirements you supplied. "
+                            "Use tool observations to address the failures. "
+                            "Difficulty estimates are advisory rubric judgments, "
+                            "not correctness evidence or measured learner outcomes. "
+                            "Distinguish observations from requirements you supplied. "
                             "Only check names are fixed; your tool arguments "
                             "can change. "
                             "The model_arguments below were supplied by you, "
@@ -375,7 +398,7 @@ class TemplateApplication:
             result.reason = (
                 "Selected checks did not pass"
                 if validating
-                else "Three complete attempts did not pass"
+                else "Template checking stopped without all selected checks passing"
             )
             return result
 
@@ -425,18 +448,66 @@ class TemplateApplication:
         cls._validate_recommended_checks(response, offered_tool_names=offered)
 
     @staticmethod
+    def _checked_bindings(domain, request, candidate, attempt, name):
+        return domain.checked_tool_bindings(
+            request,
+            candidate,
+            name,
+            [
+                execution.evidence
+                for execution in attempt.executions
+                if execution.evidence is not None
+            ],
+        )
+
+    @staticmethod
     def _run_checks(
-        attempt, plan, definitions, bindings, messages, provider, client, seen_call_ids
+        attempt,
+        plan,
+        definitions,
+        bindings,
+        messages,
+        provider,
+        client,
+        seen_call_ids,
+        *,
+        checked_bindings,
     ):
+        deferred = {
+            name
+            for name in plan
+            if "stage:after-validation"
+            in definitions[name].get("_meta", {}).get("fastmcp", {}).get("tags", [])
+        }
         for _ in range(2 * len(plan) + 2):
             if not attempt.pending:
                 attempt.complete = True
                 attempt.passed = all(item.passed for item in attempt.executions)
                 return
+            ordinary = [name for name in attempt.pending if name not in deferred]
+            available = ordinary or list(attempt.pending)
+            if not ordinary and deferred:
+                if any(not item.passed for item in attempt.executions):
+                    # Leave deferred checks pending; their prerequisite failed.
+                    # Never invent an MCP output or spend a judge call on it.
+                    return
+                for name in available:
+                    bindings[name] = checked_bindings(name)
             callable_tools = [
-                callable_tool(definitions[name], bindings[name])
-                for name in attempt.pending
+                callable_tool(definitions[name], bindings[name]) for name in available
             ]
+            if deferred:
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "Request only the checks available in this stage: "
+                            + json.dumps(available)
+                            + ". Template difficulty runs after correctness checks "
+                            "pass, on the reusable template with checked distractors."
+                        ),
+                    }
+                )
             turn = provider.tool_turn(copy.deepcopy(messages), callable_tools)
             if len(turn.calls) > len(plan):
                 raise ValueError("Too many tool calls in one turn")
@@ -456,6 +527,8 @@ class TemplateApplication:
                 try:
                     if call.name not in attempt.pending:
                         raise ValueError("Tool is outside the pending frozen plan")
+                    if call.name not in available:
+                        raise ValueError("Tool is not available in this checking stage")
                     attempt.pending.remove(call.name)
                     definition = definitions[call.name]
                     arguments = json.loads(call.arguments_json)
@@ -474,7 +547,7 @@ class TemplateApplication:
                     execution.application_arguments = {
                         key: copy.deepcopy(value)
                         for key, value in bindings[call.name].items()
-                        if key != "candidate"
+                        if key != "candidate" or call.name in deferred
                     }
                     Draft202012Validator(definition["inputSchema"]).validate(effective)
                     output_schema = definition.get("outputSchema")

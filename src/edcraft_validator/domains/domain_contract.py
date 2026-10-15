@@ -33,6 +33,16 @@ class DomainModule(Protocol):
         self, candidate: BaseModel, evidence: list[ToolEvidence]
     ) -> ValidatedTemplateArtifact: ...
 
+    def checked_tool_bindings(
+        self,
+        request: BaseModel | None,
+        candidate: BaseModel,
+        tool_name: str,
+        evidence: list[ToolEvidence],
+    ) -> dict[str, Any]:
+        """Bind tools tagged stage:after-validation to the checked reusable content."""
+        ...
+
     def generate_question(
         self, validated: ValidatedTemplateArtifact, *, seed: int
     ) -> BaseModel: ...

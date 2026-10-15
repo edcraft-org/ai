@@ -1,5 +1,46 @@
 # Difficulty checking
 
+## Reusable template workflow
+
+`code_assess_template_difficulty` runs inside the normal `author` and `validate`
+workflows. It is offered through the `domain:code` catalogue. The author prompt
+asks the model to select it alongside the independent correctness checks; inspect
+`fixed_plan` to confirm selection. No difficulty claim is made for an omitted check.
+
+After the selected correctness checks pass, the application binds the exact
+reusable template: code, full finite parameter domains, question pattern, answer
+target and checked distractor recipes. The proposed answer expression is cleared,
+just as in the saved artifact. The model requests the native tool call; it cannot
+replace the application-owned candidate. If correctness fails, difficulty stays
+pending and no judge call is spent on that attempt.
+
+SocLaas assesses the **typical instance**, treating listed parameter values as
+independent and uniformly distributed. It considers common tracing demands and
+reports substantial variation in `domain_variation` and `quality_concerns`. This
+is one holistic estimate, not an exhaustive difficulty measurement of every case.
+The original dimensions, level descriptions and three worked anchors are reused;
+no evaluation examples are added. Required closed keys D1, D2, ... cover every
+checked distractor recipe. Template ID, topic and declared level are hidden from
+the judge. The declared level is compared with its estimate afterwards.
+
+The tool returns ordinary `ToolEvidence`: `passed` means the advisory estimate
+matches the declared level, `failed` means a mismatch or missing essential
+information, and `error` means the assessment failed. Full judge reasoning, usage,
+request/rubric hashes and the exact template hash are retained in `details`.
+The finalizer checks that difficulty evidence belongs to the saved template.
+This tool does not execute code or check correctness, even when called independently.
+
+Authoring permits the initial proposal plus up to three **template** revisions.
+The original request, target and selected check names stay fixed. Mismatch feedback
+can change code, parameter domains, wording and distractor recipes coherently; the
+new template must pass correctness again before another difficulty assessment.
+A judge error ends the job without a check retry or template revision. `validate`
+checks once without revision. `generate` remains deterministic local expansion
+and makes no model calls. The selected author provider performs generation and
+revision; every difficulty assessment uses SocLaas.
+
+## Standalone concrete-question API
+
 `assess_code_difficulty` v2 assesses one concrete Python tracing MCQ using SocLaas.
 It returns one closest `easy`, `medium` or `hard` label under the original rubric's
 manual, untimed tracing conditions. It is advisory: it does not execute code,
@@ -68,10 +109,10 @@ level; missing learner calibration alone does not justify abstention. The rubric
 hash identifies the original source document, while the request hash identifies
 the actual runtime instructions and response schema. Failures expose sanitized
 field locations/codes/messages rather than raw response values or exception text.
-The tool has tag `quality:code`, separate from ordinary correctness checks, and
-listing tools makes no model calls.
+This standalone tool has tag `quality:code` and is not offered to the reusable
+template author. Listing tools makes no model calls.
 
-## Generation and revision
+## Standalone question generation and revision
 
 `author_question_with_difficulty` in `application/difficulty_authoring.py` preserves
 the brief and requested level while generating and assessing a concrete question.

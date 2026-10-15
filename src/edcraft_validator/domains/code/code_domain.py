@@ -22,6 +22,10 @@ from edcraft_validator.domains.code.prompt_builder import (
 )
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
 from edcraft_validator.domains.code.question_generator import generate_code_question
+from edcraft_validator.domains.code.template_difficulty import (
+    TEMPLATE_DIFFICULTY_TOOL,
+    template_sha256,
+)
 from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     StructuredGenerationRequest,
@@ -121,14 +125,18 @@ class CodeDomain:
             recipe not in template.distractors for recipe in selected
         ):
             raise ValueError("Selected distractors are not checked proposal recipes")
+        reusable = template.model_copy(
+            update={"answer_expression": None, "distractors": selected}, deep=True
+        )
+        difficulty = next(
+            (item for item in evidence if item.tool == TEMPLATE_DIFFICULTY_TOOL), None
+        )
+        if difficulty is not None and difficulty.details.get(
+            "template_sha256"
+        ) != template_sha256(reusable):
+            raise ValueError("Difficulty evidence belongs to a different template")
         return ValidatedCodeTemplate(
-            template=template.model_copy(
-                update={
-                    "answer_expression": None,
-                    "distractors": selected,
-                },
-                deep=True,
-            ),
+            template=reusable,
             validation=TemplateValidationSummary(
                 validator_version="mcp-code-template-v1",
                 cases_validated=len(cases),
@@ -144,6 +152,11 @@ class CodeDomain:
                 ],
             ),
         )
+
+    def checked_tool_bindings(self, request, candidate, tool_name, evidence):
+        """Assess exactly the reusable template produced by correctness checks."""
+        checked = self.finalize_checked_template(candidate, evidence)
+        return {"candidate": checked.template.model_dump(mode="json")}
 
     def generate_question(
         self, validated: BaseModel, *, seed: int

@@ -13,7 +13,7 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v16"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v17-typical-difficulty"
 
 
 def build_template_prompt(
@@ -51,6 +51,10 @@ Return an empty `arguments` object for every check in this first response. Tool
 arguments and execution are handled in later model turns. The application supplies
 the current candidate and required distractor count. Select tools that obtain
 execution-derived answers and checked distractors necessary for a reusable template.
+Also select the available template difficulty check to assess the requested level
+for the typical instance across independent, uniformly sampled parameter values.
+Difficulty feedback concerns the reusable template: revise its code, finite domains,
+question pattern and distractor rules coherently while preserving the request.
 Only selected checks will run. Later calls must supply any remaining required
 arguments from each tool schema; the empty arguments rule applies only to planning.
 """
@@ -161,6 +165,10 @@ def build_code_validation_request(
                     "and empty planning arguments. Select tools that establish "
                     "execution-derived answers and checked distractors needed "
                     "for a reusable template. "
+                    "Also select the template difficulty check to assess its "
+                    "declared level for the typical instance across the finite "
+                    "parameter domain. Difficulty is advisory and independent "
+                    "of correctness. "
                     "Only selected checks run. Later, use native tool calls with "
                     "required arguments from their schemas. The application binds "
                     "the exact candidate and distractor count. Use feature checks "
@@ -177,6 +185,6 @@ def build_code_validation_request(
             },
         ],
         response_model=CheckPlanResponse,
-        prompt_version="code-validation-v2",
+        prompt_version="code-validation-v3-typical-difficulty",
         schema_name="template_check_plan",
     )

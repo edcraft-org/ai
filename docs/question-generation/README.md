@@ -19,7 +19,10 @@ For commands, see the [README](../../README.md).
 6. If all checks pass and the domain has the answers it needs, the application saves
    a reusable artifact. Otherwise, it returns the checked candidates and history.
 
-There are at most three complete attempts: the initial proposal plus two revisions.
+There are at most four attempts: the initial proposal plus three template revisions.
+Selected template difficulty checks run after correctness passes and use SocLaas
+to estimate the typical instance across the finite parameter domain. A mismatch
+feeds back into revision; a judge failure ends the job without retrying the check.
 Each attempt runs the whole selected plan, even if one check fails. Checks must all
 pass on the same candidate in the same attempt.
 

@@ -8,7 +8,7 @@ The same saved template and seed produce the same question without another AI ca
 
 You can request a template using a free-form prompt and an `easy`, `medium`, or
 `hard` difficulty. The model chooses checks, receives their results, and revises
-failed templates. It gets three total attempts: the first proposal and up to two
+failed templates. It gets four total attempts: the first proposal and up to three
 revisions.
 
 You can also edit a template candidate, check it again, and generate questions from
@@ -50,10 +50,15 @@ such as `none` or `medium` is sent when configured. The default request timeout 
 300 seconds. Generation and tool/acknowledgement output budgets are 16384 and 4096
 tokens; adjust `SOCLAAS_GENERATION_MAX_TOKENS` and `SOCLAAS_TOOL_MAX_TOKENS` as needed.
 These budgets must cover reasoning and the final response.
-Every provider is asked to batch all pending checks in one native-tool response.
+Every provider is asked to batch the current stage's checks in one native-tool response.
 The application executes each returned call, collects its evidence, and requests
 only checks still pending if the batch is incomplete. Corrections start after the
-whole selected plan finishes. Owned arguments and every returned call are validated.
+stage finishes. Owned arguments and every returned call are validated.
+The template difficulty check runs after correctness passes, using the selected
+distractors and the complete finite parameter domains. SocLaas estimates the
+typical instance with independent, uniformly sampled parameter values. A mismatch
+feeds back into template revision. A failed judge response ends the job without
+retrying the check. Configure SocLaas even when OpenAI authors the template.
 
 ## Create a template
 
@@ -66,7 +71,7 @@ uv run python -m edcraft_validator.cli author \
   --template-output /tmp/reusable-template.json
 ```
 
-One job produces one report, even when it takes three attempts. Each attempt stores
+One job produces one report, even when it takes four attempts. Each attempt stores
 its candidate once, followed by its tool arguments and results. The report also
 contains the request, model settings, selected checks, timings, per-call token usage,
 model-call count, and a reusable
@@ -83,7 +88,9 @@ existing file at that path is left unchanged.
 | `needs_review` | Checking failed or required answer data is missing. |
 | `error` | The workflow could not finish. |
 
-`checked` means the technical checks passed. Human approval is a later workflow step.
+`checked` means all selected checks passed. A difficulty match is an advisory rubric
+estimate, independent of correctness and learner calibration. Inspect `fixed_plan`
+to see which checks the model selected. Human approval is a later workflow step.
 The command exits with 0 for success, 2 for an unsuccessful recorded result, or 1
 for an input or provider-creation failure. Initial generation and MCP setup failures
 produce recorded `error` results with available usage and timing.
@@ -158,8 +165,9 @@ Generate questions from the new artifact after checking succeeds.
   across every allowed input combination.
 
 Imports, file access, networking, and other unsupported Python features
-are rejected. Difficulty is currently the requested label; technical checking does
-not measure educational difficulty or question quality.
+are rejected. The template retains its requested difficulty label. When selected,
+the SocLaas difficulty check compares that label with an advisory estimate for a
+typical instance; it does not establish measured learner difficulty.
 
 The explicitly invoked [`assess_code_difficulty` MCP tool](docs/difficulty-judging.md)
 adds a separate provisional LLM assessment of a complete concrete MCQ. It records

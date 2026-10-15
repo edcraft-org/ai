@@ -223,13 +223,13 @@ def test_failure_runs_whole_plan_then_corrects_with_same_catalogue_and_fresh_evi
     assert len(executor.calls) == 2
 
 
-def test_third_failure_returns_latest_proposal_full_history_and_never_attempt_four():
+def test_fourth_failure_retains_full_history_without_attempt_five():
     provider = Provider([wrong_answer()])
     result, client = run(provider)
     assert result.status == "needs_review"
     assert result.artifact is None
-    assert len(result.attempts) == len(provider.generations) == 3
-    assert len(client.dispatches) == 6
+    assert len(result.attempts) == len(provider.generations) == 4
+    assert len(client.dispatches) == 8
     assert all(attempt.complete and not attempt.passed for attempt in result.attempts)
     assert result.attempts[-1].candidate["answer_expression"] == "a - b"
     assert provider.turns[-1][1] == []
@@ -264,7 +264,7 @@ def test_invalid_or_overridden_arguments_never_dispatch_or_pass(arguments):
     )
     assert result.status == "needs_review"
     assert client.dispatches == []
-    assert len(result.attempts) == 3
+    assert len(result.attempts) == 4
     assert all(attempt.executions[0].error for attempt in result.attempts)
 
 
@@ -286,7 +286,7 @@ def test_duplicate_name_runs_once_and_cannot_pass():
 
     result, client = run(Provider(call_factory=repeat))
     assert result.status == "needs_review"
-    assert [name for name, _ in client.dispatches] == [SEMANTIC, STRUCTURE] * 3
+    assert [name for name, _ in client.dispatches] == [SEMANTIC, STRUCTURE] * 4
     assert all(attempt.executions[1].error for attempt in result.attempts)
 
 
@@ -439,7 +439,7 @@ def test_model_argument_revision_keeps_membership_and_reruns_semantic_check():
     assert [name for name, _ in client.dispatches] == [SEMANTIC, FEATURES] * 2
 
 
-def test_failed_final_feedback_preserves_third_failure_history():
+def test_failed_final_feedback_preserves_fourth_failure_history():
     class NoReceipt(Provider):
         def tool_turn(self, messages, tools):
             if not tools:
@@ -448,7 +448,7 @@ def test_failed_final_feedback_preserves_third_failure_history():
 
     result, _ = run(NoReceipt([wrong_answer()]))
     assert result.status == "needs_review"
-    assert len(result.attempts) == 3
+    assert len(result.attempts) == 4
     assert (
         result.feedback_error == "TimeoutError: Model unavailable for acknowledgement"
     )

@@ -21,7 +21,7 @@ All paths below are under `src/edcraft_validator/`.
 | Checking algorithms | `mcp/code_tools.py`, `mcp/code_checks/` | Structure, execution, answers, distractors, and feature detection. |
 | Question generation | `domains/code/question_generator.py`, expressions and rendering | Local expansion from saved answers and recipes. |
 | Python tools | `tools/python_analysis.py`, `tools/python_execution.py`, `tools/python_worker.py` | Supported syntax and batched tracing. |
-| Advisory difficulty | `mcp/difficulty_tools.py`, `application/code_difficulty.py`, `domains/code/difficulty.py`, `llm/judging.py` | Explicit concrete-MCQ judging, separate from technical validation. |
+| Advisory difficulty | `mcp/difficulty_tools.py`, `application/code_difficulty.py`, `domains/code/difficulty.py`, `llm/judging.py` | Template difficulty and standalone concrete-MCQ judging, independent of correctness. |
 
 ## Model and tool calls
 
@@ -35,7 +35,11 @@ features to require. The application supplies the candidate and distractor count
 Only selected checks run. The model can change proposal fields and tool arguments
 between attempts, but check membership stays fixed. Invalid arguments fail that
 check's slot; they can be corrected on the next attempt. Each selected check runs at
-most once per attempt. All selected names must finish before correction starts.
+most once per attempt. Checks tagged `stage:after-validation` wait for the other selected checks to pass.
+The domain supplies `checked_tool_bindings` for the exact reusable content. If a
+prerequisite fails, deferred checks stay pending without a fabricated tool result.
+Authoring permits up to three template revisions. An assessment error with
+`retryable: false` ends the job without another check call or revision.
 
 The tool conversation is limited to `2 * plan_size + 2` turns per attempt. Unfinished
 plans return `error` with the available history. Tool replies are checked against
@@ -171,3 +175,11 @@ revisions; a failed assessment ends the job immediately. See the
 | `loop_iterations` | Total loop-body iterations. |
 | `loop_executions` | Number of loop statements encountered. |
 | `function_calls` | Traced calls, including the entry call and safe built-ins. |
+
+`code_assess_template_difficulty` has `domain:code`, `quality:code` and
+`stage:after-validation` tags. The normal author selects and calls it after
+correctness checks pass. `application/template_difficulty.py` owns its single
+SocLaas call; `domains/code/template_difficulty.py` owns the template prompt and
+required per-recipe evidence schema. It judges the typical instance across the
+uniform finite parameter domain. The existing concrete-question API remains
+available separately and is not used for template authoring.
