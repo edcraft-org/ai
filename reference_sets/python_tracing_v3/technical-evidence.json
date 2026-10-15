@@ -1,0 +1,508 @@
+{
+  "evidence_version": "python-tracing-technical-v1",
+  "questions_sha256": "8ae2781db890b6a9e3aa4ab3efc9d8ebe1560507862cf7a7095dbe3e7fadf0df",
+  "manifest_sha256": "180e8bbcd4ffdd6eb0306739376b9de0eec73d39a15344f9ba43fc61470e4026",
+  "executor": "LocalPythonTool / StepTracer",
+  "step_tracer_revision": "ab7e22ef18b776a9cbd5260bef4b4eeacc17db11",
+  "timeout_seconds_per_case": 2,
+  "records": [
+    {
+      "question_id": "arithmetic-coupled-arithmetic-01",
+      "question_sha256": "991521f6e830b8f89ea9531e4b19b36ff4b18532e5ba57e1ebf107c8dfbda500",
+      "verified_answer": 175,
+      "correct_option": "B",
+      "trace_summary": {
+        "entry_function": "encode",
+        "function_calls": 1,
+        "loop_executions": 1,
+        "loop_iterations": 6,
+        "branch_executions": 0,
+        "variable_snapshots": 28
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "arithmetic-reassignment-01",
+      "question_sha256": "a6fa70ad98f646facbb8395345be92585d62b8dabcffe554f0b15b9ea6164c02",
+      "verified_answer": 114,
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "arithmetic-quotient-remainder-01",
+      "question_sha256": "9ed2ee3a688d3ce953569684eefb557b64855e5fe6bd3f99ac7249928bea95b9",
+      "verified_answer": 32,
+      "correct_option": "A",
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "conditionals-boolean-01",
+      "question_sha256": "6f086aff490b160207e62a7506fd922921e5fd9f274d4bff0dee13a5cbb19f71",
+      "verified_answer": 1,
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "decide",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 1,
+        "variable_snapshots": 1
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "conditionals-sequential-02",
+      "question_sha256": "bd64cf8817cad246d7a8c680db437ce6e690682576d4e2d280b178efcd80cc3b",
+      "verified_answer": 6,
+      "correct_option": "B",
+      "trace_summary": {
+        "entry_function": "decide",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 2,
+        "variable_snapshots": 1
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "conditionals-conditional-feedback-01",
+      "question_sha256": "c1b659696a559fd06777f1727d2b3f6d489522de105b18689f7501b1da21ea5a",
+      "verified_answer": 14,
+      "correct_option": "D",
+      "trace_summary": {
+        "entry_function": "adjust",
+        "function_calls": 1,
+        "loop_executions": 1,
+        "loop_iterations": 6,
+        "branch_executions": 20,
+        "variable_snapshots": 24
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "loops-iteration-count-01",
+      "question_sha256": "4a6e9c04747830c45a5592d7ce2d5892a010fd2bed13f4c6147dbe35579ab2ed",
+      "verified_answer": 2,
+      "correct_option": "A",
+      "trace_summary": {
+        "entry_function": "accumulate",
+        "function_calls": 2,
+        "loop_executions": 1,
+        "loop_iterations": 2,
+        "branch_executions": 0,
+        "variable_snapshots": 6
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "loops-guarded-sweep-01",
+      "question_sha256": "eba7596ea583c1a3d4c755b99dd0b23165855255d7d764916e2e3390b5f40435",
+      "verified_answer": 11,
+      "correct_option": "B",
+      "trace_summary": {
+        "entry_function": "sweep",
+        "function_calls": 11,
+        "loop_executions": 11,
+        "loop_iterations": 28,
+        "branch_executions": 6,
+        "variable_snapshots": 58
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "loops-conditional-reset-02",
+      "question_sha256": "5489e94b5dcdb620c8ae9e90fab8aac178c97dfabf60a245346e8945a5800c3c",
+      "verified_answer": 12,
+      "correct_option": "B",
+      "trace_summary": {
+        "entry_function": "accumulate",
+        "function_calls": 2,
+        "loop_executions": 1,
+        "loop_iterations": 4,
+        "branch_executions": 4,
+        "variable_snapshots": 17
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "functions-single-helper-01",
+      "question_sha256": "9a153188e3d3fc546367fbe5b9ba16a757ae60ec19fdc65aa10f971a036cbbc4",
+      "verified_answer": 2,
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 2,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 2
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "functions-composition-01",
+      "question_sha256": "bc3a61a75aee373ccf24a2d1db9b51adc4d824ef92c42f8ca1dd925ef944c77a",
+      "verified_answer": 12,
+      "correct_option": "A",
+      "trace_summary": {
+        "entry_function": "combine",
+        "function_calls": 3,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 5
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "functions-recursive-sum-01",
+      "question_sha256": "33fe0bb8028d153a5b9c20431271b85c7a39a690ec952e41fec4fc00954f73b6",
+      "verified_answer": 0,
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "total",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 1,
+        "variable_snapshots": 1
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "lists-mutating-selection-score-01",
+      "question_sha256": "88f2477a8df83eb8c1e2858c3314c967c8a54be27e0a794983fa021bdf080b0c",
+      "verified_answer": 16,
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "transform",
+        "function_calls": 11,
+        "loop_executions": 5,
+        "loop_iterations": 14,
+        "branch_executions": 10,
+        "variable_snapshots": 43
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "lists-adjacent-differences-02",
+      "question_sha256": "555df92dd5ecb02c569a7a6f6978d8c9fa3a45a01184c145fd59ea56ff0904b8",
+      "verified_answer": 6,
+      "correct_option": "D",
+      "trace_summary": {
+        "entry_function": "total",
+        "function_calls": 1,
+        "loop_executions": 1,
+        "loop_iterations": 3,
+        "branch_executions": 0,
+        "variable_snapshots": 12
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "lists-endpoint-swap-02",
+      "question_sha256": "2a4931477dbd06827610747c14fffd66a25373fa9e6b770a1facbaa0d7efcf65",
+      "verified_answer": 8,
+      "correct_option": "B",
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "cruxeval-197",
+      "question_sha256": "5ecffcf90afb220d6079f52c0258904e5dca9670eb00e8be2ad9c738d2579328",
+      "verified_answer": "5 3",
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "cruxeval-598",
+      "question_sha256": "fb8eaa102b856bc31f8ef2149f690671fc1678e834b8542309aa6f30bc5e79e4",
+      "verified_answer": "",
+      "correct_option": "D",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 2,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 3
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "cruxeval-752",
+      "question_sha256": "840dfa5c28c2142081a0ae3e4e6e933fe5a696a4ba9bcbd8e4722eab6941f73a",
+      "verified_answer": "zzzzzabc",
+      "correct_option": "A",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 2,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 2
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "cruxeval-082",
+      "question_sha256": "1f89d939a463a2b290f403bcb31321b28a3e78d9d063f1e9c3b934d275958be5",
+      "verified_answer": "D",
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "cruxeval-253",
+      "question_sha256": "828255a925a525b39412c00b52dda08bbef25b3ec6303a4faaf7a921c71a99e6",
+      "verified_answer": "ana",
+      "correct_option": "B",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 2,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 1,
+        "variable_snapshots": 3
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "cruxeval-356",
+      "question_sha256": "75877598dee79e434d9d708548b34f9055504801a82c6128421fa9b19341850b",
+      "verified_answer": [
+        1,
+        2,
+        3,
+        1,
+        2,
+        3
+      ],
+      "correct_option": "B",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 2,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 2,
+        "variable_snapshots": 8
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "cruxeval-223",
+      "question_sha256": "956b3f850fdf0e1cf168b0adb55585aa5dc2ac18aa4cfc81a91ab7ef43f54845",
+      "verified_answer": 2,
+      "correct_option": "B",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 3,
+        "loop_executions": 1,
+        "loop_iterations": 7,
+        "branch_executions": 12,
+        "variable_snapshots": 18
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "loops-coupled-prefix-fold-01",
+      "question_sha256": "3f9734d28d154f9920cf1083c2f1e48c306961f0c481b6dd57e6951ca09fadaf",
+      "verified_answer": 22,
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "tally",
+        "function_calls": 8,
+        "loop_executions": 6,
+        "loop_iterations": 20,
+        "branch_executions": 15,
+        "variable_snapshots": 53
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "cruxeval-274",
+      "question_sha256": "9128f762b1a214b0b6d06259725b15e9738c8ab990ba30e4ac363ce9f23f6dd5",
+      "verified_answer": 3,
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 1,
+        "loop_executions": 4,
+        "loop_iterations": 12,
+        "branch_executions": 0,
+        "variable_snapshots": 24
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "cruxeval-506",
+      "question_sha256": "4fd19bdd56971218f1af9211b78adf345b2805e142a9b420b6c49696d4dd357f",
+      "verified_answer": "sntstotstots",
+      "correct_option": "A",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 2,
+        "loop_executions": 1,
+        "loop_iterations": 5,
+        "branch_executions": 6,
+        "variable_snapshots": 13
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "functions-branching-recursion-01",
+      "question_sha256": "311828f67482f6a158f938df5bfd51f397f90df067446477d7a5e103a13377cb",
+      "verified_answer": 2,
+      "correct_option": "D",
+      "trace_summary": {
+        "entry_function": "weave",
+        "function_calls": 15,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 22,
+        "variable_snapshots": 44
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "cruxeval-783",
+      "question_sha256": "028f1404109694ba6db046ef8147c8c9d6171709b48559be7e733546915aad92",
+      "verified_answer": 3,
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 3,
+        "loop_executions": 1,
+        "loop_iterations": 4,
+        "branch_executions": 5,
+        "variable_snapshots": 7
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "cruxeval-147",
+      "question_sha256": "8f3142dfaaeceb6aa2a733d8af00e9516c20af48835a86fedf36448696f38c43",
+      "verified_answer": [
+        3,
+        4,
+        5,
+        1,
+        2
+      ],
+      "correct_option": "A",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 2,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 2
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "cruxeval-498",
+      "question_sha256": "a4f175270270b06f538910eded32b0faf1d1fdf823e20aaf4e7e2dabc23b370e",
+      "verified_answer": [
+        1,
+        9,
+        4,
+        7
+      ],
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    },
+    {
+      "question_id": "cruxeval-793",
+      "question_sha256": "551df614bddf46b93d00e34c6c84e9ed98d242667e1c4b19207c58ddc96a213d",
+      "verified_answer": 13,
+      "correct_option": "C",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 8,
+        "loop_executions": 7,
+        "loop_iterations": 27,
+        "branch_executions": 21,
+        "variable_snapshots": 44
+      },
+      "subset_valid": true,
+      "options_distinct": true
+    }
+  ]
+}

@@ -19,7 +19,7 @@ from edcraft_validator.tools.python_execution import LocalPythonTool
 from edcraft_validator.value_comparison import equivalent, same_value_shape
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SET = ROOT / "reference_sets/python_tracing_v2"
+DEFAULT_SET = ROOT / "reference_sets/python_tracing_v3"
 REVIEW_SCHEMA = "human-difficulty-review-v2"
 ASSISTED_REVIEW_SCHEMA = "human-difficulty-review-v3-assisted"
 LEGACY_REVIEW_SCHEMA = "human-difficulty-review-v1"

@@ -21,6 +21,13 @@ def dataset(tmp_path):
 
 
 @pytest.fixture
+def historical_dataset(tmp_path):
+    destination = tmp_path / "historical-set"
+    shutil.copytree(reference.ROOT / "reference_sets/python_tracing_v2", destination)
+    return destination
+
+
+@pytest.fixture
 def packet():
     questions, manifest = reference.load_set(reference.DEFAULT_SET)
     return reference.make_packet(reference.DEFAULT_SET, questions, manifest)
@@ -229,8 +236,7 @@ def test_renamed_literal_and_formatting_clones_cannot_cross_families(dataset):
     path = dataset / "questions.json"
     data = reference.read_json(path)
     data["questions"][1]["code"] = (
-        "# A cosmetic rewrite of the first question\n"
-        "def renamed(first, second, third):\n    return (first + second) - third\n"
+        "# A cosmetic copy of the first question\n" + data["questions"][0]["code"]
     )
     reference.write_json(path, data)
     with pytest.raises(ValueError, match="normalised code clone"):
@@ -565,9 +571,11 @@ def test_original_review_is_preserved_and_only_unchanged_decisions_are_carried()
     original_bytes = original_path.read_bytes()
     original = reference.read_json(original_path)
     review, audit = reference.carry_forward_review(
-        source, original, reference.DEFAULT_SET
+        source, original, (reference.ROOT / "reference_sets/python_tracing_v2")
     )
-    validated, _, _, _ = reference.validate_review(reference.DEFAULT_SET, review)
+    validated, _, _, _ = reference.validate_review(
+        (reference.ROOT / "reference_sets/python_tracing_v2"), review
+    )
     assert audit["carried_count"] == 15
     assert audit["pending_count"] == 15
     assert audit["source_review_sha256"] == reference.digest(original)
@@ -588,11 +596,14 @@ def test_original_review_is_preserved_and_only_unchanged_decisions_are_carried()
             }
     assert original_path.read_bytes() == original_bytes
     with pytest.raises(ValueError, match="finish and freeze"):
-        reference.compare_review(reference.DEFAULT_SET, review)
+        reference.compare_review(
+            (reference.ROOT / "reference_sets/python_tracing_v2"), review
+        )
 
 
 @pytest.mark.parametrize("change", ["proposal", "question"])
-def test_changed_question_or_proposal_needs_fresh_approval(dataset, change):
+def test_changed_question_or_proposal_needs_fresh_approval(historical_dataset, change):
+    dataset = historical_dataset
     source = reference.ROOT / "reference_sets/python_tracing_v1"
     original = reference.read_json(source / "reviews/keith-2026-10-15.json")
     proposal_path = dataset / "ai-recommendations.json"
@@ -624,7 +635,8 @@ def test_changed_question_or_proposal_needs_fresh_approval(dataset, change):
     )
 
 
-def test_carry_forward_rejects_stale_or_changed_assistance_context(dataset):
+def test_carry_forward_rejects_stale_or_changed_assistance_context(historical_dataset):
+    dataset = historical_dataset
     source = reference.ROOT / "reference_sets/python_tracing_v1"
     original = reference.read_json(source / "reviews/keith-2026-10-15.json")
     original["packet_sha256"] = "stale"
@@ -665,13 +677,17 @@ def test_committed_partial_review_and_transfer_audit_replay_exactly():
     source = reference.ROOT / "reference_sets/python_tracing_v1"
     original_path = source / "reviews/keith-2026-10-15.json"
     review, audit = reference.carry_forward_review(
-        source, reference.read_json(original_path), reference.DEFAULT_SET
+        source,
+        reference.read_json(original_path),
+        (reference.ROOT / "reference_sets/python_tracing_v2"),
     )
     archived = reference.read_json(
-        reference.DEFAULT_SET / "reviews/keith-2026-10-15-carried.json"
+        (reference.ROOT / "reference_sets/python_tracing_v2")
+        / "reviews/keith-2026-10-15-carried.json"
     )
     saved_audit = reference.read_json(
-        reference.DEFAULT_SET / "reviews/carry-forward.json"
+        (reference.ROOT / "reference_sets/python_tracing_v2")
+        / "reviews/carry-forward.json"
     )
     assert archived == review
     assert all(saved_audit[key] == value for key, value in audit.items())
@@ -682,7 +698,7 @@ def test_committed_partial_review_and_transfer_audit_replay_exactly():
 
 
 def test_completed_human_reference_and_comparison_are_bound_to_original_export():
-    directory = reference.DEFAULT_SET
+    directory = reference.ROOT / "reference_sets/python_tracing_v2"
     questions, manifest = reference.load_set(directory)
     metadata = manifest["completed_review"]
     path = directory / metadata["path"]
@@ -715,7 +731,7 @@ def test_completed_human_reference_and_comparison_are_bound_to_original_export()
 def test_follow_up_audit_covers_frozen_items_and_replays_shortcut_evidence():
     from edcraft_validator.tools.python_execution import LocalPythonTool
 
-    directory = reference.DEFAULT_SET
+    directory = reference.ROOT / "reference_sets/python_tracing_v2"
     audit = reference.read_json(directory / "quality-audit-2026-10-15.json")
     questions, manifest = reference.load_set(directory)
     original = reference.read_json(directory / manifest["completed_review"]["path"])
@@ -765,3 +781,168 @@ def test_follow_up_audit_covers_frozen_items_and_replays_shortcut_evidence():
     assert choices["Q30-first-two-pending-prefixes"] & choices["Q30-base-return"] == {
         "B"
     }
+
+
+def test_v3_keeps_24_exact_decisions_and_requires_six_fresh_reviews():
+    source = reference.ROOT / "reference_sets/python_tracing_v2"
+    original = reference.read_json(source / "reviews/keith-2026-10-15-final.json")
+    review, audit = reference.carry_forward_review(
+        source, original, reference.DEFAULT_SET
+    )
+    assert audit["carried_count"] == 24
+    assert audit["pending_count"] == 6
+    assert review == reference.read_json(
+        reference.DEFAULT_SET / "reviews/keith-2026-10-15-carried.json"
+    )
+    assert audit == reference.read_json(
+        reference.DEFAULT_SET / "reviews/carry-forward.json"
+    )
+    validated, _, _, manifest = reference.validate_review(reference.DEFAULT_SET, review)
+    assert manifest["review_status"] == "partial_assisted_single_human_review"
+    assert "completed_review" not in manifest
+    assert Counter(r.human_decision for r in validated.ratings) == {
+        "approved": 23,
+        "corrected": 1,
+        "pending": 6,
+    }
+    originals = {r["question_sha256"]: r for r in original["ratings"]}
+    for rating in review["ratings"]:
+        if rating["status"] == "reviewed":
+            old = originals[rating["question_sha256"]]
+            assert {k: v for k, v in rating.items() if k != "review_id"} == {
+                k: v for k, v in old.items() if k != "review_id"
+            }
+    assert Counter(
+        r["estimated_difficulty"]
+        for r in review["ratings"]
+        if r["status"] == "reviewed"
+    ) == {"easy": 13, "medium": 11}
+    assert Counter(r["estimated_difficulty"] for r in review["ratings"]) == {
+        "easy": 13,
+        "medium": 11,
+        "hard": 6,
+    }
+    with pytest.raises(ValueError, match="finish and freeze"):
+        reference.compare_review(reference.DEFAULT_SET, review)
+
+
+def test_v3_replacements_preserve_topics_splits_and_original_review():
+    source = reference.ROOT / "reference_sets/python_tracing_v2"
+    old_questions, old_manifest = reference.load_set(source)
+    questions, manifest = reference.load_set(reference.DEFAULT_SET)
+    audit = reference.read_json(
+        reference.DEFAULT_SET / "replacement-audit-2026-10-15.json"
+    )
+    old_by_id = {q.question_id: q for q in old_questions}
+    new_by_id = {q.question_id: q for q in questions}
+    old_entries = {e["question_id"]: e for e in old_manifest["items"]}
+    new_entries = {e["question_id"]: e for e in manifest["items"]}
+    original = reference.read_json(source / old_manifest["completed_review"]["path"])
+    assert audit["source_review_sha256"] == reference.digest(original)
+    assert audit["human_approval_of_replacements"] is False
+    assert audit["assessor_kind"] == "AI"
+    assert {r["source_review_id"] for r in audit["records"]} == {
+        "Q11",
+        "Q14",
+        "Q19",
+        "Q22",
+        "Q24",
+        "Q30",
+    }
+    assert Counter(r["split"] for r in audit["records"]) == {
+        "development": 3,
+        "held_out": 3,
+    }
+    assert len(set(old_by_id) & set(new_by_id)) == 24
+    for ident in set(old_by_id) & set(new_by_id):
+        assert old_by_id[ident] == new_by_id[ident]
+        assert old_entries[ident]["split"] == new_entries[ident]["split"]
+    recs = reference.load_recommendations(reference.DEFAULT_SET, questions, manifest)
+    old_recs = reference.read_json(source / "ai-recommendations.json")
+    old_proposals = {r["question_id"]: r for r in old_recs["records"]}
+    for proposal in recs["records"]:
+        if proposal["question_id"] in old_proposals:
+            assert proposal == old_proposals[proposal["question_id"]]
+    new_proposals = [
+        r for r in recs["records"] if r["question_id"] not in old_proposals
+    ]
+    assert len(new_proposals) == 6
+    assert all(r["estimated_difficulty"] == "hard" for r in new_proposals)
+    assert all(r["alternative_levels"] == ["medium"] for r in new_proposals)
+    for record in audit["records"]:
+        old = old_entries[record["replaced_question_id"]]
+        new = new_entries[record["question_id"]]
+        assert old["topic"] == new["topic"] == record["topic"]
+        assert old["split"] == new["split"] == record["split"]
+        assert record["human_status"] == "pending"
+        assert new["provenance"]["kind"] == "newly_authored"
+        assert record["source_question_sha256"] == reference.digest(
+            old_by_id[record["replaced_question_id"]].model_dump()
+        )
+    assert (
+        sum(e["provenance"]["kind"] == "cruxeval_adaptation" for e in manifest["items"])
+        == 13
+    )
+
+
+def test_v3_distractors_and_worked_traces_replay_in_the_bounded_worker():
+    from edcraft_validator.tools.python_analysis import PythonSubsetAnalyzer
+    from edcraft_validator.tools.python_execution import LocalPythonTool
+
+    questions, _ = reference.load_set(reference.DEFAULT_SET)
+    by_id = {q.question_id: q for q in questions}
+    audit = reference.read_json(
+        reference.DEFAULT_SET / "replacement-audit-2026-10-15.json"
+    )
+    expected_answers = {
+        "arithmetic-coupled-arithmetic-01": 175,
+        "conditionals-conditional-feedback-01": 14,
+        "loops-guarded-sweep-01": 11,
+        "loops-coupled-prefix-fold-01": 22,
+        "functions-branching-recursion-01": 2,
+        "lists-mutating-selection-score-01": 16,
+    }
+    assert len(audit["records"]) == 6
+    for record in audit["records"]:
+        question = by_id[record["question_id"]]
+        options = {o.id: o.value for o in question.options}
+        assert record["question_sha256"] == reference.digest(question.model_dump())
+        assert record["verified_answer"] == expected_answers[question.question_id]
+        assert options[record["verified_correct_option"]] == record["verified_answer"]
+        observer = record["observer"]
+        assert (
+            PythonSubsetAnalyzer(observer["entry_function"])
+            .check(observer["code"])
+            .is_valid
+        )
+        result = LocalPythonTool().execute_batch(
+            observer["code"],
+            observer["entry_function"],
+            [observer["inputs"]],
+            timeout_seconds=2,
+        )[0]
+        assert result.ok
+        assert result.answer == observer["observed_answer"]
+        assert {m["option"] for m in record["distractor_checks"]} == (
+            set(options) - {question.correct_option}
+        )
+        for mutation in record["distractor_checks"]:
+            assert (
+                PythonSubsetAnalyzer(question.entry_function)
+                .check(mutation["mutated_code"])
+                .is_valid
+            )
+            result = LocalPythonTool().execute_batch(
+                mutation["mutated_code"],
+                question.entry_function,
+                [question.inputs],
+                timeout_seconds=2,
+            )[0]
+            assert result.ok
+            answer = (
+                result.answer
+                if question.answer_target == "return_value"
+                else (result.trace_summary[question.answer_target])
+            )
+            assert answer == mutation["verified_answer"] == options[mutation["option"]]
+            assert result.answer == mutation["native_return_value"]

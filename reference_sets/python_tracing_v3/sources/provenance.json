@@ -1,0 +1,14 @@
+{
+  "dataset": "CRUXEval",
+  "repository": "https://github.com/facebookresearch/cruxeval",
+  "revision": "190faf16d175b5847b0af05d937872b1fb395942",
+  "upstream_jsonl_sha256": "8368b81047dc5014e4caf5a2f97604eff7644e0ecd7415e3ceeb184bbc2e0c96",
+  "license": "MIT",
+  "license_sha256": "055ca9e3fa33562173156e02e2350ceff4089deab480b368a849b6bc04f09719",
+  "source_record_count": 800,
+  "supported_compatible_candidates": 48,
+  "selected_count": 13,
+  "source_authorship": "Functions and inputs generated with Code Llama 34B; source outputs obtained through execution. This is not a human-labelled difficulty corpus.",
+  "source_difficulty_labels": null,
+  "retrieved_date": "2026-10-15"
+}
