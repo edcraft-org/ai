@@ -783,7 +783,7 @@ def test_follow_up_audit_covers_frozen_items_and_replays_shortcut_evidence():
     }
 
 
-def test_v3_keeps_24_exact_decisions_and_requires_six_fresh_reviews():
+def test_v3_initial_review_keeps_24_decisions_and_six_pending_items():
     source = reference.ROOT / "reference_sets/python_tracing_v2"
     original = reference.read_json(source / "reviews/keith-2026-10-15-final.json")
     review, audit = reference.carry_forward_review(
@@ -798,8 +798,9 @@ def test_v3_keeps_24_exact_decisions_and_requires_six_fresh_reviews():
         reference.DEFAULT_SET / "reviews/carry-forward.json"
     )
     validated, _, _, manifest = reference.validate_review(reference.DEFAULT_SET, review)
-    assert manifest["review_status"] == "partial_assisted_single_human_review"
-    assert "completed_review" not in manifest
+    assert manifest["review_status"] == "completed_assisted_single_human_review"
+    assert manifest["completed_review"]["reviewed_count"] == 30
+    assert manifest["completed_review"]["pending_count"] == 0
     assert Counter(r.human_decision for r in validated.ratings) == {
         "approved": 23,
         "corrected": 1,
@@ -954,3 +955,60 @@ def test_v3_distractors_and_worked_traces_replay_in_the_bounded_worker():
             )
             assert answer == mutation["verified_answer"] == options[mutation["option"]]
             assert result.answer == mutation["native_return_value"]
+
+
+def test_v3_completed_export_preserves_prior_ratings_and_boundary_uncertainty():
+    directory = reference.DEFAULT_SET
+    questions, manifest = reference.load_set(directory)
+    metadata = manifest["completed_review"]
+    path = directory / metadata["path"]
+    original = reference.read_json(path)
+    review, _, _, _ = reference.validate_review(directory, original)
+    assert len(questions) == metadata["reviewed_count"] == 30
+    assert metadata["pending_count"] == 0
+    assert all(r.status == "reviewed" for r in review.ratings)
+    assert Counter(r.human_decision for r in review.ratings) == {
+        "approved": 29,
+        "corrected": 1,
+    }
+    assert Counter(r.estimated_difficulty for r in review.ratings) == {
+        "easy": 13,
+        "medium": 11,
+        "hard": 6,
+    }
+    assert reference.digest(original) == metadata["review_sha256"]
+    assert (
+        reference.hashlib.sha256(path.read_bytes()).hexdigest()
+        == (metadata["source_file_sha256"])
+    )
+    initial = reference.read_json(directory / manifest["carried_review"]["path"])
+    initial_by_id = {r["review_id"]: r for r in initial["ratings"]}
+    newly_approved = set()
+    for rating in original["ratings"]:
+        previous = initial_by_id[rating["review_id"]]
+        if previous["status"] == "reviewed":
+            assert rating == previous
+        else:
+            newly_approved.add(rating["review_id"])
+            assert rating["human_decision"] == "approved"
+            assert rating["estimated_difficulty"] == "hard"
+            assert rating["confidence"] == "medium"
+            assert rating["alternative_levels"] == ["medium"]
+    assert newly_approved == {"Q01", "Q11", "Q12", "Q20", "Q23", "Q29"}
+    report = reference.compare_review(directory, original)
+    assert report == reference.read_json(directory / metadata["comparison_path"])
+    assert report["review_sha256"] == metadata["review_sha256"]
+    assert report["reviewed_count"] == 30 and report["pending_count"] == 0
+    assert report["independent_reference"] is False
+    assert report["observed_learner_performance"] is None
+    assert report["human_human_agreement"] is None
+    assert Counter(item["difficulty_match"] for item in report["comparisons"]) == {
+        "matches": 8,
+        "too_easy": 3,
+        "uncertain": 19,
+    }
+    assert all(
+        item["difficulty_match"] == "uncertain"
+        for item in report["comparisons"]
+        if item["review_id"] in newly_approved
+    )

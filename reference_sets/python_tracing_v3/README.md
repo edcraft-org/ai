@@ -2,10 +2,11 @@
 
 Prepared for [issue 42](https://github.com/edcraft-org/ai/issues/42), using the
 unchanged `python-tracing-v0.2` rubric and `manual-tracing-v0.1` conditions.
-There are **30 distinct programs, with six new provisional hard candidates**.
-Keith's decisions on 24 unchanged complete questions and their exact AI proposals
-carry forward. **Only the six replacements need review.** AI recommendations do
-not count as completed human ratings.
+There are **30 distinct programs, all reviewed by Keith on 2026-10-15**.
+Twenty-four unchanged questions retained their original decisions; Keith approved
+all six replacements. The [original final export](reviews/keith-2026-10-15-final.json)
+is preserved byte-for-byte. The collection has **13 easy, 11 medium and six hard
+primary estimates**, with uncertainty retained.
 
 ## Why these six changed
 
@@ -31,16 +32,25 @@ All six are newly authored by Codex, with explicit AI provenance. They are not
 attributed to CRUXEval and are not human-labelled source questions. The separate
 AI proposals include four dimension ratings, a worked solution, concepts,
 option-by-option reasons and a shorter-solution caveat. Each proposes **hard with
-medium as an alternative**, at medium confidence. Please correct a candidate if
-its shortest sound solution makes medium more appropriate; the target mix must
-not determine your rating. Difficulty is not a sum of dimension scores.
+medium as an alternative**, at medium confidence. Keith approved those exact
+judgments for all six new questions. Their primary estimates are human-confirmed
+hard; the adjacent alternatives remain part of the record. Difficulty is not a
+sum of dimension scores, and a target mix must not force a label.
 
-The projected primary mix is **13 easy, 11 medium and six hard**: the first 24
-are retained human estimates; the last six are unapproved AI estimates. This is
-not a completed human reference or learner-calibrated distribution. The retained
-human decisions comprise 23 approvals and one correction, with original notes,
-confidence, alternatives and ratings preserved. The other two historical
-corrections concern replaced questions and remain in v2's original review.
+The completed review comprises **29 approvals and one correction**, including 24
+unchanged carried decisions and six new approvals. Original notes, confidence,
+alternatives and ratings are preserved. The other two historical corrections
+concern replaced questions and remain in v2's original review. This is a completed
+AI-assisted single-human reference, not an independent or learner-calibrated
+benchmark. Keith knew the curator was Codex and saw its proposals: requested
+labels were hidden, but this is not a fully blind review.
+
+The [frozen requested-level comparison](reviews/comparison-2026-10-15.json) records
+**eight matches, three too-easy and 19 uncertain comparisons**. These are not
+runtime judge accuracy. All six new hard-primary questions retain medium as an
+alternative; because that would change a requested-hard comparison, their match
+decisions remain uncertain. Other retained alternatives account for the remaining
+13 uncertain comparisons. None of these items is unfinished.
 
 ## Verification and provenance
 
@@ -80,7 +90,26 @@ judge has been tuned using this collection. Tune only on development families,
 freeze the judge before reserved scoring, and disclose any reserved results used
 for tuning; fresh reserved families are then needed for an independent estimate.
 
-## Review the six pending items
+## Reproduce the completed review
+
+The CLI defaults to v3. The original final export is the current completed record;
+its exact question, proposal, rubric and packet hashes are validated before use.
+
+```bash
+uv run python scripts/difficulty_reference.py verify
+uv run python scripts/difficulty_reference.py validate-review \
+  reference_sets/python_tracing_v3/reviews/keith-2026-10-15-final.json
+uv run python scripts/difficulty_reference.py compare-review \
+  reference_sets/python_tracing_v3/reviews/keith-2026-10-15-final.json \
+  --output .artifacts/reference-comparison-v3.json
+```
+
+To view the completed review in the form, copy the final export into a **new**
+output directory as `review.json`, then run `prepare-review --reviewer keith
+--assisted --output <that-directory>`. It will preserve the saved completed record.
+Do not overwrite an existing review or browser draft.
+
+## Historical initial review and carry-forward
 
 Use a fresh output folder so earlier saved exports remain intact:
 
@@ -93,23 +122,18 @@ uv run python scripts/difficulty_reference.py prepare-review \
   --reviewer keith --assisted --output .artifacts/difficulty-review-keith-v3
 ```
 
+This reproduces the historical initial form, with 24 reviewed and six pending.
 Open `review.html`. The form starts at the first pending question. **Next
-unreviewed** visits the six replacements; 24 carried decisions already count as
-reviewed. Approve, correct or mark uncertain. Only corrections and abstentions
+unreviewed** visits the six replacements. Approve, correct or mark uncertain.
+Only corrections and abstentions
 need a brief human note. The requested levels stay hidden. Save with **Download
 ratings** or **Show ratings JSON**. Browser storage is a convenience; the exported
 review becomes the versioned record after validation.
 
-```bash
-uv run python scripts/difficulty_reference.py verify
-uv run python scripts/difficulty_reference.py validate-review \
-  reference_sets/python_tracing_v3/reviews/keith-2026-10-15-carried.json
-```
-
-The CLI defaults to v3. `compare-review` rejects this partial review until the six
-new items have explicit human decisions. Once completed, compare the frozen
-export against authoring requests; alternatives that change the comparison keep
-`uncertain`. Never convert a pending AI proposal into a human rating.
+`compare-review` rejects the historical partial review. Only the final completed
+export supports a frozen comparison. Alternatives that change the comparison
+keep `uncertain`; no pending AI proposal becomes a human rating. The initial
+partial review and carry-forward audit are preserved unchanged.
 
 The original [v1](../python_tracing_v1/README.md) and
 [v2](../python_tracing_v2/README.md) questions, proposals, original human uploads,
@@ -124,13 +148,19 @@ opaque question numbers alone cannot authorize reuse.
   source provenance, requested levels and distractor hypotheses.
 - `technical-evidence.json`: verified answers, counters and collection hashes.
 - `ai-recommendations.json`: separate provisional AI judgments and explanations.
-- `reviews/keith-2026-10-15-carried.json`: 24 human decisions and six pending items.
+- `reviews/keith-2026-10-15-carried.json`: historical initial partial record,
+  24 reviewed and six pending.
+- `reviews/keith-2026-10-15-final.json`: original completed human export, 30 reviewed.
+- `reviews/comparison-2026-10-15.json`: reproducible requested-level comparison,
+  bound to the final review hash.
 - `reviews/carry-forward.json`: exact source review hash and old/new review mapping.
 - `replacement-audit-2026-10-15.json`: executable evidence for the six replacements.
 - `curation-audit.json` and `sources/`: clone-screen evidence and source attribution.
 
 This remains an AI-assisted, single-reviewer reference. Independent human
 agreement and learner correctness, timing and option-selection data are
-unavailable. Technical checks cannot establish difficulty. PR #83 remains draft
-until the six replacements are reviewed. Runtime judging and empirical agreement
-are separate [issue 43](https://github.com/edcraft-org/ai/issues/43) work.
+unavailable. Technical checks cannot establish difficulty. The six replacements'
+original AI audit remains historical evidence; the separate final human record
+contains their approvals. Human review is complete for issue 42. Runtime judging
+and empirical agreement are separate
+[issue 43](https://github.com/edcraft-org/ai/issues/43) work.

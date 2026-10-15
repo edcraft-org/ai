@@ -6,7 +6,7 @@
   "assessment_conditions_version": "manual-tracing-v0.1",
   "source_revision": "4726b5a3f5c5292e55c74a845df337c8d0828320",
   "created_date": "2026-10-15",
-  "review_status": "partial_assisted_single_human_review",
+  "review_status": "completed_assisted_single_human_review",
   "observed_learner_performance": null,
   "split_policy": "All 24 unchanged families retain their previous split. Six replacement families inherit the split and topic of the removed item: three development and three reserved. Replacements were selected after inspecting v2 difficulty ratings, not as a fresh independent sample. No judge tuning has occurred.",
   "items": [
@@ -829,5 +829,18 @@
     "reference_type": "ai_assisted_single_human_reviewer",
     "independent_reference": false,
     "notes": "Carry-forward is not a new review event. Only unchanged full questions with identical AI proposals retain human decisions; all six replacements need explicit review."
+  },
+  "completed_review": {
+    "path": "reviews/keith-2026-10-15-final.json",
+    "reviewer_id": "keith",
+    "review_date": "2026-10-15",
+    "review_sha256": "de61d45a4cac39c3b41fac5dc43642a87ff001d3b1d67d447a2f3daf8a92b18c",
+    "source_file_sha256": "43d7444d2df3efa862cef9911996671487e046b469d4093a7e7996713cbd3e57",
+    "comparison_path": "reviews/comparison-2026-10-15.json",
+    "reviewed_count": 30,
+    "pending_count": 0,
+    "reference_type": "ai_assisted_single_human_reviewer",
+    "independent_reference": false,
+    "notes": "Original uploaded export retained verbatim. Keith approved the six new hard primary estimates, retaining medium confidence and medium alternatives; the other 24 human decisions are unchanged. The initial partial review and carry-forward audit remain historical records."
   }
 }

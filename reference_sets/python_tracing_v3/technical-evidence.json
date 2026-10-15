@@ -1,7 +1,7 @@
 {
   "evidence_version": "python-tracing-technical-v1",
   "questions_sha256": "b56592e6a82162dea8c01930562f457819686a8eb069f1c96214e81ad21b0a25",
-  "manifest_sha256": "a1d1466135bfc7e25d0dcc69e0228ab73d0149d640dcf01645e2a4613f19f663",
+  "manifest_sha256": "9e8aba10c5ab200446b3c576c005a560bd71697ddf03877f8f0ba542a86dc929",
   "executor": "LocalPythonTool / StepTracer",
   "step_tracer_revision": "ab7e22ef18b776a9cbd5260bef4b4eeacc17db11",
   "timeout_seconds_per_case": 2,

@@ -112,13 +112,14 @@ independently, then compare it with the requested level to report `matches`,
 estimates and learner performance. Difficulty evidence is advisory and cannot
 override failed technical checks. The [provisional reference collection](../reference_sets/python_tracing_v3/README.md)
 for issue 42 contains 30 distinct, execution-verified Python tracing MCQs and an
-AI-assisted human review form. V3 replaces three disputed hard items and three
-easy items with six newly authored hard candidates; all six need human review.
-Twenty-four unchanged questions retain their exact proposals and original human
-decisions. The earlier v2 collection, completed review and follow-up audit remain
-versioned unchanged. The projected 13 easy / 11 medium / 6 hard mix combines the
-24 retained human primary estimates with six provisional AI estimates; it is not
-a completed human reference or learner-calibrated difficulty distribution.
+AI-assisted human review form. Keith completed all 30 v3 ratings on 2026-10-15:
+29 approvals and one correction, with 13 easy, 11 medium and six hard primary
+estimates. The six new hard estimates retain medium confidence and medium
+alternatives. Twenty-four prior decisions are unchanged. The original final export
+and frozen comparison are versioned: eight matches, three too-easy and 19 uncertain
+requested-level comparisons; none is pending. These are human-checked reference
+judgments, not runtime judge accuracy or learner-calibrated difficulty. The earlier
+v1/v2 collections, reviews and audits remain unchanged.
 Technical verification is not a human
 difficulty label. The automated judge and held-out scoring are
 [issue 43](https://github.com/edcraft-org/ai/issues/43) work.
