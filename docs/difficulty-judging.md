@@ -102,7 +102,7 @@ option, alternatives, uncertainty and quality concerns. Distractor
 error explanations are hypotheses, not observed learner misconceptions.
 
 The application then derives `matches`, `too_easy`, `too_hard` or `uncertain` using
-the same comparison function as the human-reference workflow. Requested levels
+the ordered easy/medium/hard comparison rule. Requested levels
 and estimates remain separate. Unresolved estimates and
 alternatives that change the comparison retain `uncertain`. Without a requested
 level, `difficulty_match` is null. Use `easy`/`medium`/`hard` in the API; the rubric
@@ -110,8 +110,9 @@ maps these to beginner/intermediate/advanced terminology.
 
 The runtime assessment has no confidence field. Uncertainty is expressed through
 a null estimate, plausible alternative levels and an explanatory reason. Historical
-human review records retain their original confidence fields and comparison policy;
-they are not rewritten when the runtime schema changes.
+human review records in Git history retain their original confidence fields and
+comparison policy. The final approved dataset contains fixed categories and
+dimension ratings without review confidence or alternatives.
 
 | Report field | Meaning |
 | --- | --- |

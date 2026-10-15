@@ -110,13 +110,28 @@ and agreement protocol to predeclare before held-out judging. Assess the level
 independently, then compare it with the requested level to report `matches`,
 `too_easy`, `too_hard`, or `uncertain`. Requested labels remain separate from
 estimates and learner performance. Difficulty evidence is advisory and cannot
-override failed technical checks. The [provisional reference collection](../reference_sets/python_tracing_v2/README.md)
-for issue 42 contains 30 distinct, execution-verified Python tracing MCQs and an
-AI-assisted human review form. Fifteen unchanged human decisions carry forward;
-the 15 new CRUXEval adaptations await confirmation. Technical verification is not
-a human difficulty label. The callable advisory judge is documented in
-[difficulty judging](difficulty-judging.md); held-out scoring and empirical
-agreement remain pending [issue 43](https://github.com/edcraft-org/ai/issues/43) work.
+override failed technical checks.
+
+For issue 42, use the single [frozen evaluation dataset](../reference_sets/python_tracing/README.md)
+in `reference_sets/python_tracing/dataset.json`. It contains 30 complete,
+execution-verified MCQs with human-reviewed categories: 13 easy, 11 medium and
+six hard. Each question has one fixed `difficulty` label, four dimension ratings,
+a topic and a development/reserved split (18/12). These assignments are frozen;
+judge outputs and later model disagreements must never rewrite them.
+
+Use the [dataset evaluation runner](difficulty-judging.md#evaluate-the-approved-dataset)
+to assess fixed questions through MCP with the reference labels and explanations
+hidden. It reports primary-label agreement, uncertainty, failures and dimension
+agreement separately for development and held-out questions. The human-approved
+`difficulty` categories and dimension ratings are the authoritative reference.
+The dataset retains questions, answers, difficulty reasons and solution explanations; review notes,
+alternative ratings and execution logs are omitted. Earlier datasets and review
+history remain in Git. This remains
+an AI-assisted, single-human reference, not independent human agreement or
+learner calibration.
+Technical verification is not a human difficulty label. The advisory judge and
+evaluation protocol are documented in [difficulty judging](difficulty-judging.md);
+results belong in [evaluation history](evaluation-history.md).
 
 ## What to report
 
