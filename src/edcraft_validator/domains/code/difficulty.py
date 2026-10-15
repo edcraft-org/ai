@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 from edcraft_validator.domains.code.code_types import AnswerTarget, Difficulty
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
 
-DIFFICULTY_PROMPT_VERSION = "code-difficulty-v3"
+DIFFICULTY_PROMPT_VERSION = "code-difficulty-v4"
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 OptionID = Literal["A", "B", "C", "D"]
 AnswerValue = int | float | bool | str | list[int]
@@ -28,12 +28,11 @@ class DifficultyOption(Record):
     value: AnswerValue
 
 
-class CodeDifficultyQuestion(Record):
-    """Exactly the learner-facing MCQ plus its designated answer, without labels."""
+class CodeQuestionContent(Record):
+    """Fields shared by MCP questions and closed-schema authoring responses."""
 
     code: str = Field(min_length=1, max_length=20_000)
     entry_function: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
-    inputs: dict[str, int | bool | str | list[int]]
     question: Text = Field(max_length=8_000)
     answer_target: AnswerTarget
     options: list[DifficultyOption] = Field(min_length=3, max_length=4)
@@ -47,6 +46,12 @@ class CodeDifficultyQuestion(Record):
             raise ValueError("correct_option must identify a supplied option")
         return self
 
+
+class CodeDifficultyQuestion(CodeQuestionContent):
+    """Exactly the learner-facing MCQ plus its designated answer, without labels."""
+
+    inputs: dict[str, int | bool | str | list[int]]
+
     @property
     def sha256(self) -> str:
         return hashlib.sha256(
@@ -57,6 +62,29 @@ class CodeDifficultyQuestion(Record):
                 allow_nan=False,
             ).encode()
         ).hexdigest()
+
+
+class NamedQuestionInput(Record):
+    name: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
+    value: int | bool | str | list[int]
+
+
+class CodeQuestionDraft(CodeQuestionContent):
+    """Named input entries keep the author response schema closed for OpenAI."""
+
+    inputs: list[NamedQuestionInput]
+
+    @model_validator(mode="after")
+    def unique_input_names(self):
+        names = [item.name for item in self.inputs]
+        if len(names) != len(set(names)):
+            raise ValueError("input names must be unique")
+        return self
+
+    def to_question(self) -> CodeDifficultyQuestion:
+        value = self.model_dump()
+        value["inputs"] = {item.name: item.value for item in self.inputs}
+        return CodeDifficultyQuestion.model_validate(value)
 
 
 class DimensionAssessment(Record):
@@ -87,7 +115,6 @@ class DifficultyAssessment(Record):
     shortcuts: Text
     nearest_anchor: Text
     option_evidence: list[OptionAssessment] = Field(min_length=3, max_length=4)
-    confidence: Literal["high", "moderate", "low"]
     alternative_levels: list[Difficulty] = Field(
         description=(
             "Other plausible levels, unique and excluding estimated_difficulty. "
@@ -96,8 +123,8 @@ class DifficultyAssessment(Record):
     )
     uncertainty_reason: str | None = Field(
         description=(
-            "A nonblank reason is required when the estimate is null, confidence "
-            "is low, alternative_levels is nonempty, or any dimension is unknown. "
+            "A nonblank reason is required when the estimate is null, "
+            "alternative_levels is nonempty, or any dimension is unknown. "
             "Otherwise null is allowed."
         )
     )
@@ -114,7 +141,6 @@ class DifficultyAssessment(Record):
             raise ValueError("option evidence must not repeat an option")
         uncertain = (
             self.estimated_difficulty is None
-            or self.confidence == "low"
             or self.alternative_levels
             or any(d.rating == "unknown" for d in self.dimensions.__dict__.values())
         )
@@ -187,8 +213,10 @@ def build_difficulty_request(
                     "uncertainty/quality concerns, never a forced medium label. "
                     "alternative_levels must be unique and exclude the primary "
                     "estimate. Supply a nonblank uncertainty_reason if the estimate "
-                    "is null, confidence is low, any dimension is unknown, or any "
+                    "is null, any dimension is unknown, or any "
                     "alternative level is supplied. Explain every option exactly once. "
+                    "Do not return a confidence field or score. Express uncertainty "
+                    "through a null estimate, alternative levels and their reasons. "
                     "Return only the assessment matching the supplied schema.\n\n"
                     + rubric.text
                 ),

@@ -71,7 +71,9 @@ class MeasuredProvider:
 
     def generate(self, request):
         operation = (
-            "revision" if request.schema_name == "template_revision" else "generation"
+            "revision"
+            if request.schema_name in {"template_revision", "code_question_revision"}
+            else "generation"
         )
         return self._call(operation, self.delegate.generate, request)
 

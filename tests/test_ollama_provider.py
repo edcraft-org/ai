@@ -35,9 +35,22 @@ def isolated_ollama_settings(monkeypatch):
         "OLLAMA_TIMEOUT_SECONDS",
         "OLLAMA_TEMPERATURE",
         "OLLAMA_NUM_PREDICT",
+        "OLLAMA_NUM_CTX",
         "OLLAMA_THINK",
     ):
         monkeypatch.delenv(variable, raising=False)
+
+
+def test_explicit_ollama_context_is_in_effective_settings(monkeypatch):
+    monkeypatch.setenv("OLLAMA_NUM_CTX", "16384")
+    assert OllamaProvider().generation_settings()["options"]["num_ctx"] == 16384
+
+
+@pytest.mark.parametrize("value", ["many", "1024", "131073"])
+def test_invalid_ollama_context_is_rejected(monkeypatch, value):
+    monkeypatch.setenv("OLLAMA_NUM_CTX", value)
+    with pytest.raises(GenerationError, match="OLLAMA_NUM_CTX"):
+        OllamaProvider()
 
 
 def generation_request(

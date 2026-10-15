@@ -435,10 +435,13 @@ class HumanReview(Record):
 def match_decision(rating: Rating, requested: Difficulty) -> str | None:
     if rating.status == "pending":
         return None
+    # Preserve the historical human-review protocol and its frozen records.
+    # Runtime model assessments no longer have a confidence field.
+    if rating.confidence == "low":
+        return "uncertain"
     return compare_difficulty(
         rating.estimated_difficulty,
         requested,
-        rating.confidence,
         rating.alternative_levels,
     )
 

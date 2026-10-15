@@ -90,7 +90,6 @@ async def assess_code_question_difficulty(
                     report.difficulty_match = compare_difficulty(
                         assessment.estimated_difficulty,
                         requested_difficulty,
-                        assessment.confidence,
                         assessment.alternative_levels,
                     )
         else:

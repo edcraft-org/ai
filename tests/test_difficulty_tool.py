@@ -80,7 +80,6 @@ def assessment():
                 strict=True,
             )
         ],
-        "confidence": "high",
         "alternative_levels": [],
         "uncertainty_reason": None,
         "quality_concerns": ["The 12 distractor has weak plausibility evidence."],
@@ -273,19 +272,17 @@ async def test_missing_rubric_prevents_model_call(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "estimate, confidence, alternatives, expected",
+    "estimate, alternatives, expected",
     [
-        (None, "low", [], "uncertain"),
-        ("easy", "low", [], "uncertain"),
-        ("easy", "moderate", ["medium"], "uncertain"),
-        ("hard", "moderate", ["medium"], "too_hard"),
+        (None, [], "uncertain"),
+        ("easy", ["medium"], "uncertain"),
+        ("hard", ["medium"], "too_hard"),
     ],
 )
-async def test_uncertainty_is_retained(estimate, confidence, alternatives, expected):
+async def test_uncertainty_is_retained(estimate, alternatives, expected):
     proposed = assessment()
     proposed.update(
         estimated_difficulty=estimate,
-        confidence=confidence,
         alternative_levels=alternatives,
         uncertainty_reason="The closest anchor has material differences.",
     )
@@ -391,13 +388,17 @@ async def test_adapter_schema_failure_retains_findings_without_response_values()
     assert "PRIVATE_RESPONSE_CONTENT" not in report.model_dump_json()
 
 
-@pytest.mark.parametrize("problem", ["empty_reason", "no_uncertainty", "wrong_options"])
+@pytest.mark.parametrize(
+    "problem", ["empty_reason", "no_uncertainty", "wrong_options", "legacy_confidence"]
+)
 async def test_invalid_judgments_cannot_become_matches(problem):
     proposed = assessment()
     if problem == "empty_reason":
         proposed["dimensions"]["changing_state"]["reason"] = "  "
     elif problem == "no_uncertainty":
         proposed["estimated_difficulty"] = None
+    elif problem == "legacy_confidence":
+        proposed["confidence"] = "high"
     else:
         proposed["option_evidence"].pop()
     report = await assess(Provider(proposed), requested_difficulty="easy")
@@ -483,6 +484,7 @@ async def test_invalid_mcp_input_shapes_fail_before_model_calls(change):
 
 def test_output_contract_is_compatible_with_strict_structured_generation():
     schema = DifficultyAssessment.model_json_schema()
+    assert "confidence" not in schema["properties"]
     for node in [schema, *schema["$defs"].values()]:
         if node.get("type") == "object":
             assert node["additionalProperties"] is False

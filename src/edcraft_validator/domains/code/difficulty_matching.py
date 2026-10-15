@@ -10,10 +10,9 @@ DifficultyMatch = Literal["matches", "too_easy", "too_hard", "uncertain"]
 def compare_difficulty(
     estimated: Difficulty | None,
     requested: Difficulty,
-    confidence: str,
     alternatives: list[Difficulty],
 ) -> DifficultyMatch:
-    if estimated is None or confidence == "low":
+    if estimated is None:
         return "uncertain"
     order = {"easy": 0, "medium": 1, "hard": 2}
 

@@ -98,15 +98,20 @@ reduces anchoring/instruction-following risk but does not establish model accura
 
 The judge supplies four dimension ratings with reasons, overall estimated level,
 solution/dependency reasoning, shortcuts, nearest anchor, evidence for every
-option, confidence, alternatives, uncertainty and quality concerns. Distractor
+option, alternatives, uncertainty and quality concerns. Distractor
 error explanations are hypotheses, not observed learner misconceptions.
 
 The application then derives `matches`, `too_easy`, `too_hard` or `uncertain` using
 the same comparison function as the human-reference workflow. Requested levels
-and estimates remain separate. Low confidence, unresolved estimates and
+and estimates remain separate. Unresolved estimates and
 alternatives that change the comparison retain `uncertain`. Without a requested
 level, `difficulty_match` is null. Use `easy`/`medium`/`hard` in the API; the rubric
 maps these to beginner/intermediate/advanced terminology.
+
+The runtime assessment has no confidence field. Uncertainty is expressed through
+a null estimate, plausible alternative levels and an explanatory reason. Historical
+human review records retain their original confidence fields and comparison policy;
+they are not rewritten when the runtime schema changes.
 
 | Report field | Meaning |
 | --- | --- |
@@ -184,3 +189,37 @@ Full local transcripts, results and usage are saved under ignored
 small smoke tests on worked anchors, not held-out judge-accuracy measurements.
 They send the test questions, template, tool schemas and rubric to the configured
 provider and incur inference costs.
+
+## Generate, assess and correct across providers
+
+`application.difficulty_authoring.author_question_with_difficulty` is a separate
+application operation. It asks the authoring model for a concrete question, calls
+the MCP difficulty tool, and supplies its output back to the author when the
+decision is `too_easy`, `too_hard` or `uncertain`. The author makes one correction
+under the unchanged brief/target, and the tool independently assesses the complete
+revised MCQ. A remaining mismatch/uncertainty is recorded without further attempts.
+Provider failures and malformed judge outputs remain errors, not correction cues.
+The difficulty tool itself neither generates nor corrects questions.
+
+Run the two development briefs for all three configured providers with:
+
+```bash
+OPENAI_MAX_RETRIES=0 SOCLAAS_MAX_RETRIES=0 \
+OLLAMA_NUM_PREDICT=4096 OLLAMA_NUM_CTX=16384 OLLAMA_THINK=false \
+uv run python scripts/evaluate_difficulty_authoring.py \
+  --provider all --env-file .env \
+  --output .artifacts/difficulty-correction/run-01 --timeout-seconds 300
+```
+
+Use a new output directory for each experiment. Each record retains the full
+initial MCQ, raw structured tool output, corrected MCQ, reassessment, model/settings,
+usage, latency, errors and source fingerprint. Author and judge use the same
+configured provider/model in separate conversations; these are integration checks,
+not an independent accuracy comparison. Nothing executes the generated code or
+establishes technical validity. No reference or held-out questions are used.
+
+Author responses represent concrete inputs as a closed-schema list of unique
+name/value entries for compatibility with OpenAI structured generation. The
+application converts these to the existing question input dictionary without
+changing values. Ollama can set `OLLAMA_NUM_CTX` explicitly so the entire rubric
+and response schema fit without relying on the service's smaller default context.
