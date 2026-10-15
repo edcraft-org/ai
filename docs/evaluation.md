@@ -119,15 +119,12 @@ six hard. Each question has one fixed `difficulty` label, four dimension ratings
 a topic and a development/reserved split (18/12). These assignments are frozen;
 judge outputs and later model disagreements must never rewrite them.
 
-Evaluate predicted categories against `difficulty`. Keep that label, dimensions,
-solutions, provenance and review notes out of judge prompts; use
-`question_for_judge` from `scripts/difficulty_reference.py` for the MCQ payload.
-Historical confidence and alternative levels are review context only and do not
-reclassify gold labels. The old comparison against authoring requests is not the
-evaluation target. Earlier datasets and review history remain in Git. The
-read-only `verify` command checks the frozen fingerprint and execution answers;
-it cannot regenerate evidence or relabel questions. This remains an AI-assisted,
-single-human reference, not independent human agreement or learner calibration.
+The dataset is prepared for future model evaluation. Evaluation helpers, scoring
+and dataset-specific tests are deferred. The fixed `difficulty` categories and
+dimension ratings remain the reference; historical confidence and alternatives
+are context only. Earlier datasets and review history remain in Git. This remains
+an AI-assisted, single-human reference, not independent human agreement or
+learner calibration.
 Technical verification is not a human
 difficulty label. The automated judge and held-out scoring are
 [issue 43](https://github.com/edcraft-org/ai/issues/43) work.

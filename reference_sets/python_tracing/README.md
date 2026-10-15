@@ -1,6 +1,6 @@
 # Frozen Python tracing evaluation dataset
 
-Use **[dataset.json](dataset.json)** as the single final reference for evaluation.
+Use **[dataset.json](dataset.json)** as the single final reference dataset.
 All 30 questions completed human review on 2026-10-15. The categories are fixed:
 
 | Difficulty | Questions |
@@ -10,77 +10,47 @@ All 30 questions completed human review on 2026-10-15. The categories are fixed:
 | Hard | 6 |
 
 There are six questions per topic: arithmetic, conditionals, loops, functions and
-lists. The family-based split remains 18 development and 12 reserved questions.
-All questions, correct answers, difficulty labels, dimension ratings, topics and
-splits match the approved snapshot at Git commit `240704a`.
+lists. The family-based split is 18 development and 12 reserved questions.
+Questions, answers, difficulty labels, dimension ratings, topics and splits match
+the approved snapshot at Git commit `240704a`.
 
-## Using the data
+## Contents
 
-Each entry in `questions` contains the complete code, input, stem, answer options,
-correct option and verified answer. For evaluation:
+Each entry in `questions` includes:
 
-- `difficulty` is the fixed overall reference category.
-- `dimensions` contains the four fixed dimension ratings.
-- `topic`, `family_id` and `split` organise the evaluation without moving families.
-- `difficulty_reason`, `reason_source` and `solution` explain the judgment and answer.
-- `provenance` records attribution and source identifiers.
-- `review_notes` preserves the original human decision, confidence and alternatives.
-  These notes do **not** change the fixed category or turn it into an uncertain label.
-- `trace_summary` records execution evidence, including the counting conventions.
+- The code, concrete input, question text, answer options and correct answer.
+- `difficulty`: the fixed overall reference category.
+- `dimensions`: the four fixed dimension ratings.
+- `topic`, `family_id` and `split`: the organisation of the dataset.
+- `difficulty_reason`, `reason_source` and `solution`: explanations and their origin.
+- `provenance`: source attribution and identifiers.
+- `review_notes`: human decisions, confidence and alternatives retained as context.
+  These notes do not change the fixed category.
+- `trace_summary`: the recorded execution evidence.
 
-Compare a judge's predicted category with `difficulty`. Never replace reference
-labels with judge outputs or recompute them from dimension ratings. Keep labels,
-dimension ratings, solutions and review notes out of the judge input. The helper
-below returns only the complete MCQ, including its verified correct option:
+Evaluation implementation is deferred. This directory provides the dataset,
+documentation and source attribution for that work.
 
-```python
-from scripts.difficulty_reference import load_dataset, question_for_judge
+## Frozen reference
 
-reference = load_dataset()
-for item in reference.questions:
-    judge_input = question_for_judge(item)
-    expected_category = item.difficulty
-```
+The dataset is pinned by Git tag `python-tracing-evaluation-2026-10-15-r1`.
+Its canonical JSON SHA-256 is
+`046d3a20928e22b17b523ed22269cad677560dc03ef02677a283ff3cb517f23e`.
 
-Tune on development families and freeze the judge before reserved scoring. If
-reserved results inform tuning, disclose that and use a separate new evaluation
-set; do not change this dataset to improve a score.
-
-## Verification and freeze
-
-```bash
-uv run python scripts/difficulty_reference.py verify
-```
-
-The command checks the pinned dataset fingerprint, source attribution, distinct
-families, correct options and execution traces. It is read-only. There is no
-relabel, review-transfer or evidence-overwrite command. Primary categories also
-reject reassignment on loaded question objects. Regression tests separately pin
-the exact approved difficulty, dimension, topic and split assignments, so keeping
-the totals while swapping individual labels is rejected.
-
-Pin evaluation runs to Git tag `python-tracing-evaluation-2026-10-15-r1` and the
-reported dataset fingerprint. The tag also preserves the earlier review history.
-
-Questions, categories, dimension ratings, topics and splits are frozen. Changes
-to them require an explicitly agreed new benchmark identity. Metadata-only
-corrections use a new Git tag and fingerprint without changing evaluation labels;
-existing tags remain fixed for reproducing earlier runs.
-The original reviews and superseded collections are recoverable from Git history;
-they are no longer active dataset files.
+Keep question content, categories, dimension ratings, topics and splits unchanged.
+Changes require an explicitly agreed new benchmark identity so previous results
+remain reproducible. Metadata-only corrections use a new tag and fingerprint;
+existing tags remain fixed. Earlier reviews remain available in Git history.
 
 ## Attribution and limits
 
 Thirteen source programs come from CRUXEval revision
-`190faf16d175b5847b0af05d937872b1fb395942`. Their code remains unchanged, with source
-IDs, links, record hashes and modification notes inside the dataset. Preserve
-[CRUXEval-LICENSE](CRUXEval-LICENSE). The other items record fixture adaptation or
-AI authorship. CRUXEval did not supply the difficulty labels.
+`190faf16d175b5847b0af05d937872b1fb395942`. Their code is unchanged, with source IDs,
+links, record hashes and modification notes inside the dataset. Preserve
+[CRUXEval-LICENSE](CRUXEval-LICENSE). Other items record fixture adaptation or AI
+authorship. CRUXEval did not supply the difficulty labels.
 
-These are fixed, human-confirmed evaluation categories under the recorded manual
-tracing conditions. The review was AI-assisted and involved one human. Public
-metadata records the review method and date and omits reviewer names and
-identifiers. This does not establish independent human agreement or
-learner-calibrated difficulty.
-Freezing the labels makes evaluations comparable; it does not erase their
-original uncertainty or guarantee every learner will find them equally difficult.
+The review was AI-assisted and involved one human. Public metadata omits reviewer
+names and identifiers. The reference does not establish independent human
+agreement or learner-calibrated difficulty. Original confidence and alternatives
+remain documented without changing the fixed evaluation categories.
