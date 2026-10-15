@@ -109,11 +109,10 @@ class ForbiddenExecutor:
         raise AssertionError("Difficulty assessment must never execute code")
 
 
-async def assess(provider=None, item=None, max_correction_attempts=0, **kwargs):
+async def assess(provider=None, item=None, **kwargs):
     return await assess_code_question_difficulty(
         item or question(),
         provider_factory=lambda: provider or Provider(),
-        max_correction_attempts=max_correction_attempts,
         **kwargs,
     )
 

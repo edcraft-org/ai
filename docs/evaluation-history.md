@@ -7,6 +7,59 @@ not be treated as its current pass rates.
 Historical records may use `beginner`, `intermediate`, and `advanced`. The current
 labels are `easy`, `medium`, and `hard`.
 
+## Single-pass checks restored, 16 October 2026
+
+The difficulty check now makes one assessment call. It has no correction loop,
+replacement judgment, diagnostic-feedback request or correction-budget setting.
+Its report retains `judge`, diagnostics and usage and removes the experimental
+`judge_attempts` and `max_correction_attempts` fields. An invalid response or
+operational failure returns an error immediately. Question revisions remain in
+the separate authoring operation, with at most three revisions after a valid
+mismatch or missing-information result. A failed check ends that authoring job.
+The upper bound is now four author calls and four checks, rather than twenty calls.
+
+No new live difficulty evaluation was run for this removal. The prior experiment's
+saved first passes provide the baseline with the same single-label prompt/schema:
+OpenAI matched 20/30 references (66.7%) with no invalid reports; SocLaas matched
+15/30 (50.0%) with six invalid option-evidence reports. SocLaas matched 15/24 valid
+labelled responses (62.5%). Its post-repair 19/30 result below belongs to the
+earlier correction experiment and is not a current single-pass result. All prior
+evidence is retained unchanged. Validation: 486 tests passed and five opt-in live
+tests skipped; lint, formatting and diff checks passed.
+
+Accuracy improvements are proposed, not included in this change:
+
+1. Create a dedicated runtime rubric aligned with the difficulty-only contract.
+   Preserve the reviewed anchors, while removing historical instructions requiring
+   correctness eligibility, confidence and uncertainty that the current prompt
+   must override. Test this simplification independently from anchor changes.
+2. Expand reviewed development examples at adjacent label boundaries. Include
+   short but coupled hard traces, repetitive medium traces and concrete-input
+   shortcuts. Require the deciding comparison with neighboring anchors within the
+   same assessment call. Focus on the observed hard-to-medium and medium-to-easy
+   errors, without copying inspected test items into the prompt.
+3. Test a question-specific response schema requiring every supplied option ID.
+   This targets the six invalid SocLaas reports, separately from classification
+   accuracy. Keep an error when the response is invalid; do not relax validation
+   or add repair calls to improve apparent coverage.
+4. Compare alternative judge models on the same independently reviewed questions,
+   including judges separate from the generator. Model choice and bias deserve
+   direct measurement: [MT-Bench's judge study](https://arxiv.org/abs/2306.05685)
+   reports both promise and limitations of LLM judges. Its chat-preference results
+   do not establish difficulty accuracy for this task. Structured criteria and
+   evaluation steps are also a candidate experiment, motivated by
+   [G-Eval](https://aclanthology.org/2023.emnlp-main.153/), whose findings concern
+   text generation evaluation rather than Python tracing difficulty.
+
+Tune on development material and evaluate each change separately on new balanced
+families labeled independently by two reviewers with disagreements adjudicated.
+The repeatedly inspected 30-item set remains regression evidence. Report invalid
+response rate, all-item and valid-only agreement, and per-level recall, including
+macro-average recall so easy questions do not dominate the result. Repeat fixed
+configurations to expose run variation. Longer term, actual learner performance
+under the stated tracing conditions is needed to validate educational difficulty;
+agreement with an approved reviewer label alone cannot supply that calibration.
+
 ## Single-label judgments and three corrections, 15–16 October 2026
 
 Runtime revision `701ddea` selects the closest single easy/medium/hard level for

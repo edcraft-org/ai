@@ -166,9 +166,8 @@ async def test_failed_correction_preserves_original_and_feedback():
 
 async def test_judge_failure_does_not_turn_into_a_question_revision():
     author = Author([question().model_dump()])
-    server = create_validation_server(
-        difficulty_provider_factory=lambda: Provider(GenerationResponseError("private"))
-    )
+    judge = Provider(GenerationResponseError("private"))
+    server = create_validation_server(difficulty_provider_factory=lambda: judge)
     async with Client(server) as client:
         report = await author_question_with_difficulty(
             "Create a tracing MCQ.",
@@ -180,4 +179,5 @@ async def test_judge_failure_does_not_turn_into_a_question_revision():
     assert len(author.requests) == len(report.attempts) == 1
     assert report.attempts[0].question is not None
     assert report.attempts[0].tool_output.status == "error"
-    assert len(report.attempts[0].tool_output.judge_attempts) == 4
+    assert len(judge.requests) == 1
+    assert report.attempts[0].tool_output.usage.model_call_count == 1

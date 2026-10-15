@@ -42,7 +42,7 @@ async with Client(create_validation_server()) as client:
 ```
 
 Question content is untrusted data, never instructions. The requested level and
-generator identity are hidden from the judge, including every repair call.
+generator identity are hidden from the judge.
 Supplied answer designations are context, not execution-verified evidence.
 The service validates input shapes and identifiers without checking the Python
 subset, evaluating answers or verifying distractors. Those checks belong to the
@@ -69,41 +69,35 @@ its anchors, conditions, text, version and hash. Approved reference data is unch
 | --- | --- |
 | `status: assessed` | A valid single-label assessment, not a correctness pass. |
 | `status: unable_to_assess` | Essential information is missing; no label is invented. |
-| `status: error` | No valid assessment after the permitted attempts. |
+| `status: error` | The single assessment failed. |
 | `difficulty_match` | `matches`, `too_easy` or `too_hard`, derived only from the selected label. Null without a requested level or usable estimate. |
-| `judge_attempts` | Every initial/repair model run, including failures and diagnostics. |
-| `judge` | Final run, also present as the last entry of `judge_attempts`; do not count it twice. |
-| `usage` | Aggregate usage across all judge attempts, including failed calls. |
+| `judge` | The single assessment run, with output or sanitized error diagnostics. |
+| `usage` | Usage from that run, including a failed call; aliases `judge.usage`. |
 
 Reports retain the normalized question hash, rubric/conditions versions, exact
 rubric hash, prompt/request hashes, model/settings, timestamps, latency and usage.
 Failed schema responses retain field locations, codes and messages while omitting
 response values and exception context. Missing token counts are null, with known
 partial totals retained; unknown usage is never represented as a zero-cost call.
-Historical v1 records remain unchanged and require their historical interpretation.
-The v2 tool/report version identifies the changed response contract.
+Historical records remain unchanged and require their original interpretation.
+The v2 tool/report version identifies the single-label response contract. Current
+reports omit the experimental `judge_attempts` and `max_correction_attempts` fields.
 
-## Three corrective follow-ups
+## Single-pass checks
 
-The default budget is **one initial call plus up to three corrective calls**.
-Invalid output, option-evidence mismatches, timeouts and transport failures can
-trigger a follow-up. Feedback contains sanitized error codes and validation findings
-alongside the unchanged original question. It contains no requested or reference
-level. Configuration/internal errors stop immediately because model feedback cannot
-repair host setup or application code. Every failure remains in `judge_attempts`.
-
-The first valid assessment stops the loop, even if its label disagrees with an
-authoring target or approved reference. Valid disagreements and valid missing-data
-abstentions are not retried to obtain a preferred answer. The generic `run_judge`
-still makes one call; the difficulty application owns the bounded repair policy.
+Each invocation makes **one assessment call**. Invalid output, option-evidence
+mismatches, timeouts, transport failures and configuration/internal errors return
+an error with available diagnostics. The tool sends no correction feedback and
+does not make replacement judgments or rewrite the question. A valid disagreement
+remains a disagreement. Missing essential information returns `unable_to_assess`.
 
 `create_validation_server` accepts `difficulty_judge_timeout_seconds` (60 seconds
-per model call by default), `difficulty_max_correction_attempts` (0–3, default 3)
-and an injected provider factory. MCP callers must allow the whole budget:
-`(max_corrections + 1) * per_call_timeout + overhead`. An outer model-call deadline
+by default) and an injected provider factory. There is no check correction setting.
+MCP callers should allow the per-call timeout plus overhead. An outer model deadline
 stops waiting and discards late results; it cannot terminate a synchronous provider
 thread. Align transport deadlines and SDK retry settings with the application budget.
-The evaluation scripts set SDK retries to zero and retain application attempts.
+The evaluation examples set SDK retries to zero; any host-configured transport
+retries remain a provider setting, separate from application-level corrections.
 
 ## Generate, assess, correct and reassess
 
@@ -114,10 +108,10 @@ initial generation plus up to three generation/question corrections. Valid
 can be supplied by a revision. Failed generation receives sanitized diagnostics
 and can regenerate from the same brief. The original failures are retained.
 
-Each assessment has its own bounded output-repair history. An exhausted assessment
-error remains an error rather than prompting an unrelated question rewrite.
+Each assessment makes one call. An assessment error immediately ends the job
+without prompting a question rewrite or another assessment of that version.
 Neither operation executes code or establishes question correctness. The theoretical
-bound is four author calls plus four assessments of at most four judge calls each.
+bound is four author calls plus four single-call assessments: eight model calls.
 The author and judge use the same configured provider/model in separate conversations.
 
 ```bash
@@ -149,21 +143,20 @@ uv run python scripts/evaluate_difficulty_dataset.py \
   --output .artifacts/single-label-dataset/run-01 --timeout-seconds 250
 ```
 
-Protocol `single-label-difficulty-dataset-evaluation-v2` keeps all approved questions,
+Protocol `single-pass-difficulty-dataset-evaluation-v3` keeps all approved questions,
 labels, dimensions and development/held-out splits fixed. Only MCQ content and the
 designated answer enter model calls. The reference label, dimension ratings,
-explanation, solution, ID, provenance, topic and split remain hidden, including
-repairs. Output repairs use diagnostics, never reference disagreement. Valid
-label disagreements remain results and evaluation questions are never rewritten.
+explanation, solution, ID, provenance, topic and split remain hidden. Every question
+gets one assessment, without correction or reassessment. Valid disagreements and
+failed checks remain results; evaluation questions are never rewritten.
 
 The pre-call manifest freezes source, schema, prompt, rubric, dataset and settings.
-Individual records are saved as jobs complete. Summaries report first-pass and
-post-repair accuracy separately, correction calls, recovered labels, failures,
-missing estimates, confusion, dimensions, ordinal alpha, family bootstrap intervals
-and complete usage accounting. Improvements due to recovered responses are
-separate from changes to the accuracy of valid first-pass judgments.
-The reader retains the historical comparison policy for archived v1 records;
-new runtime records never return `uncertain` comparisons.
+Individual records are saved as jobs complete. Summaries report exact agreement,
+failures, missing estimates, confusion, dimensions, ordinal alpha, family bootstrap
+intervals and usage. Legacy first-pass/repair summary fields remain readable for
+archived experiments; correction/recovery counts are zero in new runs. Historical
+comparison rules remain available when reading old records; current reports never
+return `uncertain` comparisons.
 
 This adapts the original rubric agreement protocol: the final dataset omits
 original authoring targets, so original-target false acceptance/rejection are

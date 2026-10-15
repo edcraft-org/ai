@@ -160,10 +160,12 @@ becomes a correctness pass. See the [configuration and reporting guide](difficul
 The difficulty service does not call the executor, analyser or correctness tools;
 applications combine those tools' independent outputs when needed.
 `application/difficulty_authoring.py` owns the separate generate/assess/correct
-operation. It freezes the brief and requested level, retains both question
+operation. It freezes the brief and requested level, retains all question
 versions and tool reports, and permits three corrections followed by reassessment.
-The v2 judge selects one closest label and retains up to three diagnostic repairs
-for invalid responses; valid disagreements are not rejudged to obtain a preferred level.
+The v2 judge selects one closest label in one call. Checks have no corrections or
+reassessment; invalid responses and operational failures remain errors. Only the
+authoring caller revises questions following valid mismatch/missing-information
+feedback. A failed check ends that authoring job.
 The wheel bundles the rubric document using Hatch's force-include mapping; the
 editable source tree reads the original document in `docs/`.
 

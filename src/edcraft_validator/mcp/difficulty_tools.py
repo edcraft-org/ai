@@ -34,7 +34,6 @@ def register_difficulty_tools(
     *,
     provider_factory: JudgeProviderFactory,
     judge_timeout_seconds: float,
-    max_correction_attempts: int = 3,
 ) -> None:
     # Model responses are not deterministic; read-only still sends question data
     # to the host-configured provider and may incur inference cost.
@@ -54,8 +53,7 @@ def register_difficulty_tools(
             "host-configured LLM judge using the versioned difficulty rubric. "
             "Requested difficulty is hidden during estimation and compared afterwards. "
             "Selects one closest level, or unable_to_assess for missing information. "
-            "Retains up to three corrective follow-ups with diagnostics, all usage "
-            "and latency; "
+            "Makes one assessment call and reports diagnostics, usage and latency; "
             "assessed means an assessment was produced, not a correctness pass or "
             "a difficulty match. Does not execute code or verify correctness; "
             "correctness checks belong to other tools. No template-wide "
@@ -74,5 +72,4 @@ def register_difficulty_tools(
             requested_difficulty=requested_difficulty,
             provider_factory=provider_factory,
             judge_timeout_seconds=judge_timeout_seconds,
-            max_correction_attempts=max_correction_attempts,
         )

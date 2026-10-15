@@ -163,8 +163,9 @@ not measure educational difficulty or question quality.
 
 The explicitly invoked [`assess_code_difficulty` MCP tool](docs/difficulty-judging.md)
 adds a separate provisional LLM assessment of a complete concrete MCQ. It records
-one closest difficulty label, reasons, repair history, model usage and comparison without changing
-correctness results. Human-reference evaluation remains pending.
+one closest difficulty label, reasons, model usage and comparison in a single
+assessment call. Failed checks return errors without correction or reassessment.
+See [evaluation history](docs/evaluation-history.md) for human-reference results.
 
 ## Tests
 

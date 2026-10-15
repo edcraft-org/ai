@@ -137,7 +137,7 @@ async def evaluate_provider(provider, args):
         difficulty_judge_timeout_seconds=args.timeout_seconds,
     )
     records = []
-    async with Client(server, timeout=4 * args.timeout_seconds + 20) as client:
+    async with Client(server, timeout=args.timeout_seconds + 20) as client:
         for case_id, requested, brief in CASES:
             print(f"{provider}/{case_id}: generating and assessing", flush=True)
             result = await author_question_with_difficulty(
@@ -146,7 +146,7 @@ async def evaluate_provider(provider, args):
                 provider_factory=factory,
                 tool_client=client,
                 author_timeout_seconds=args.timeout_seconds,
-                tool_timeout_seconds=4 * args.timeout_seconds + 10,
+                tool_timeout_seconds=args.timeout_seconds + 10,
             )
             record = result.model_dump(mode="json") | {
                 "case_id": case_id,
@@ -185,7 +185,7 @@ async def evaluate(args):
             }
         )
     preregistration = {
-        "experiment_version": "single-label-difficulty-correction-v3",
+        "experiment_version": "single-pass-difficulty-authoring-v4",
         "generated_at": datetime.now(UTC).isoformat(),
         "source_fingerprint_sha256": args.source_fingerprint,
         "timeout_seconds": args.timeout_seconds,
@@ -196,8 +196,8 @@ async def evaluate(args):
         ],
         "policy": (
             "One initial generation plus up to three generation/question "
-            "corrections. Each assessment permits up to three diagnostic error "
-            "repairs; valid labels are not retried. No reference questions."
+            "corrections. Each assessment makes one call without corrections "
+            "or retries; assessment failures end the job. No reference questions."
         ),
     }
     (args.output / "manifest.json").write_text(
@@ -205,7 +205,7 @@ async def evaluate(args):
     )
     results = await asyncio.gather(*[evaluate_provider(p, args) for p in providers])
     manifest = {
-        "experiment_version": "single-label-difficulty-correction-v3",
+        "experiment_version": "single-pass-difficulty-authoring-v4",
         "generated_at": datetime.now(UTC).isoformat(),
         "source_fingerprint_sha256": args.source_fingerprint,
         "timeout_seconds": args.timeout_seconds,
@@ -220,7 +220,7 @@ async def evaluate(args):
             "Author and judge use the same provider/model in separate calls.",
             "No reference-set or held-out questions are used.",
             "Up to three corrections for generation errors, too_easy, too_hard "
-            "or missing information; assessment errors get bounded repairs.",
+            "or missing information; assessment errors end the job immediately.",
             "No correctness checks or generated-code execution are performed.",
         ],
     }

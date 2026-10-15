@@ -34,7 +34,7 @@ DIMENSIONS = (
     "answer_discrimination",
 )
 ROOT = Path(__file__).resolve().parents[1]
-PROTOCOL = "single-label-difficulty-dataset-evaluation-v2"
+PROTOCOL = "single-pass-difficulty-dataset-evaluation-v3"
 
 
 def write_json(path, value):
@@ -98,6 +98,7 @@ def comparison_to_reference(value, requested):
 
 
 def judge_attempts(record):
+    """Read archived repair histories as well as current single-pass reports."""
     output = record.get("tool_output") or {}
     return output.get("judge_attempts") or (
         [output["judge"]] if output.get("judge") else []
@@ -309,7 +310,7 @@ async def evaluate_item(client, provider, item, output, timeout):
         response = await client.call_tool(
             "assess_code_difficulty",
             {"question": record["question"], "requested_difficulty": None},
-            timeout=4 * timeout + 10,
+            timeout=timeout + 10,
         )
         report = CodeDifficultyReport.model_validate(response.structured_content)
         if report.question_sha256 != blinded_question(item).sha256:
@@ -337,7 +338,7 @@ async def evaluate_provider(provider, data, args):
         difficulty_judge_timeout_seconds=args.timeout_seconds,
     )
     semaphore = asyncio.Semaphore(1 if provider == "ollama" else 3)
-    async with Client(server, timeout=4 * args.timeout_seconds + 20) as client:
+    async with Client(server, timeout=args.timeout_seconds + 20) as client:
 
         async def run(item):
             async with semaphore:
@@ -405,12 +406,8 @@ async def evaluate(args):
         "judge_timeout_seconds": args.timeout_seconds,
         "policy": {
             "initial_assessments_per_item_per_provider": 1,
-            "max_correction_attempts": 3,
-            "repair_policy": (
-                "Diagnostic repairs/retries only after invalid outputs or "
-                "operational failures. Stop at the first valid assessment; "
-                "no reference label is supplied or used for retries."
-            ),
+            "max_correction_attempts": 0,
+            "repair_policy": "None. One assessment call; failures remain failures.",
             "question_corrections": 0,
             "remote_concurrency": 3,
             "local_concurrency": 1,
@@ -427,8 +424,8 @@ async def evaluate(args):
             "scoring": (
                 "Primary estimate exact agreement; errors and unknowns "
                 "count as nonmatches over all items. Also retain "
-                "single-label comparison against the reference. First-pass and "
-                "post-repair results are reported separately."
+                "single-label comparison against the reference. One pass only; "
+                "historical repair metrics are zero for new runs."
             ),
             "family_grouping": (
                 "Explicit family_id if present, otherwise question_id; "

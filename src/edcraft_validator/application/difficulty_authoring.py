@@ -204,7 +204,8 @@ async def author_question_with_difficulty(
 ) -> DifficultyAuthoringResult:
     """Generate and assess; allow up to three question/generation corrections.
 
-    The caller owns the connected MCP client and judge configuration. No
+    Each check assesses once; its failure ends this operation. The caller owns
+    the connected MCP client and judge configuration. No
     correctness tool is called and no technical validity is claimed here.
     """
     if not brief.strip():
