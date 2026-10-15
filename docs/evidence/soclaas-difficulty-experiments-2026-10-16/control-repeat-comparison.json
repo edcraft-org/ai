@@ -1,0 +1,248 @@
+{
+  "same_request_and_settings_count": 30,
+  "previous_first_pass_matches": 15,
+  "current_control_matches": 19,
+  "interpretation": "Identical request hashes/settings do not guarantee identical outputs from the provider-default model alias. Current concurrent control is the primary comparison, not the older lower score.",
+  "records": [
+    {
+      "question_id": "arithmetic-coupled-arithmetic-01",
+      "request_sha256": "5920ff86b51d50d6773e45f376c046e460f09b7a4591d31c918d70c0896d4a6c",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "medium",
+      "after_estimate": "hard"
+    },
+    {
+      "question_id": "cruxeval-082",
+      "request_sha256": "73bcdc573f9abc6acdf4538389210d9bbfd1ce7811843f6440429926a762a480",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "easy",
+      "after_estimate": "easy"
+    },
+    {
+      "question_id": "lists-adjacent-differences-02",
+      "request_sha256": "34309deed3261b97b62c4f3da30f73557a457a0511a3368aea8628f78feabcdb",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "easy",
+      "after_estimate": "easy"
+    },
+    {
+      "question_id": "cruxeval-274",
+      "request_sha256": "131abe03437238e8aff19127fae75cda24b2d325ae2a7497773d7a456f660453",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "easy",
+      "after_estimate": "medium"
+    },
+    {
+      "question_id": "conditionals-boolean-01",
+      "request_sha256": "820a731699aa68964520a81b4bac2bdb1fa0220c367db1ec0b1e88321d03a44f",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "easy",
+      "after_estimate": "easy"
+    },
+    {
+      "question_id": "functions-single-helper-01",
+      "request_sha256": "d82db8247ea99893949d585297ca6ad0185167ae649e18f12150a9374849f1c0",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "easy",
+      "after_estimate": "easy"
+    },
+    {
+      "question_id": "cruxeval-506",
+      "request_sha256": "de3b0931aed30e90e765cfcfbdf473dcea2399c0f67e65c1872e04d31b4436a5",
+      "before_error": null,
+      "after_error": "JUDGE_OPTION_EVIDENCE_MISMATCH",
+      "before_estimate": "easy",
+      "after_estimate": null
+    },
+    {
+      "question_id": "cruxeval-253",
+      "request_sha256": "2734c35651859918955f98ebf9f04685895fb0d55292e98edce7db7d5d683180",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "easy",
+      "after_estimate": "easy"
+    },
+    {
+      "question_id": "cruxeval-783",
+      "request_sha256": "9ff4bacd23091b39177c17974c73ffff650372fe1ae09da2c12f99cb40491524",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "easy",
+      "after_estimate": "medium"
+    },
+    {
+      "question_id": "cruxeval-147",
+      "request_sha256": "f4ce60444353b328773ac6b1a423213886c4ccdd1646b65993464a61e160bc0e",
+      "before_error": "JUDGE_OPTION_EVIDENCE_MISMATCH",
+      "after_error": "JUDGE_OPTION_EVIDENCE_MISMATCH",
+      "before_estimate": null,
+      "after_estimate": null
+    },
+    {
+      "question_id": "conditionals-sequential-02",
+      "request_sha256": "8ffd49b296d38c90e1504c5223c476e2d75787168e65c66a31a37a0d4cdead3f",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "easy",
+      "after_estimate": "easy"
+    },
+    {
+      "question_id": "lists-mutating-selection-score-01",
+      "request_sha256": "7fa8c958c929708ee290090b9ab6a78422a9be1babd8dddf8c21892550387b91",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "medium",
+      "after_estimate": "hard"
+    },
+    {
+      "question_id": "loops-iteration-count-01",
+      "request_sha256": "36f573b46aacc3beef4ff69d87bdd6087e5541ecf846b9ef4dad22d555e8cde2",
+      "before_error": "JUDGE_OPTION_EVIDENCE_MISMATCH",
+      "after_error": "JUDGE_OPTION_EVIDENCE_MISMATCH",
+      "before_estimate": null,
+      "after_estimate": null
+    },
+    {
+      "question_id": "arithmetic-reassignment-01",
+      "request_sha256": "f48ae2b30fa9889fbe1f1aa6dd5b2c0c9c2fecb0a2099a1689209e14dad66029",
+      "before_error": "JUDGE_OPTION_EVIDENCE_MISMATCH",
+      "after_error": null,
+      "before_estimate": null,
+      "after_estimate": "easy"
+    },
+    {
+      "question_id": "cruxeval-197",
+      "request_sha256": "7a4eb48d3bca7f26b2c992a415068f17450fffd6390c30cec2e53d8949d9e4b0",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "easy",
+      "after_estimate": "easy"
+    },
+    {
+      "question_id": "cruxeval-223",
+      "request_sha256": "a8a85af92546d554aeb3b366af2a9db702fe70e0b3e24fc44ebc908eb52d7b69",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "hard",
+      "after_estimate": "medium"
+    },
+    {
+      "question_id": "loops-guarded-sweep-01",
+      "request_sha256": "aff7e73cca829b571e109a1225f0ca0cc970a6200e604ca688f0adb182f85db9",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "hard",
+      "after_estimate": "medium"
+    },
+    {
+      "question_id": "cruxeval-598",
+      "request_sha256": "641a3534ce589123e8367e30d686dd2212733fa7c2714435c9f152495f90d7e0",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "easy",
+      "after_estimate": "easy"
+    },
+    {
+      "question_id": "arithmetic-quotient-remainder-01",
+      "request_sha256": "f13e7297f563bdff9f37f3300a84aa48b881d055b164ef0a47a44271ec1c66cc",
+      "before_error": "JUDGE_OPTION_EVIDENCE_MISMATCH",
+      "after_error": null,
+      "before_estimate": null,
+      "after_estimate": "easy"
+    },
+    {
+      "question_id": "cruxeval-752",
+      "request_sha256": "4bb94b7e440b8e23c6336673d061deb381939272165776e98dbd27a48c64c953",
+      "before_error": "JUDGE_OPTION_EVIDENCE_MISMATCH",
+      "after_error": null,
+      "before_estimate": null,
+      "after_estimate": "easy"
+    },
+    {
+      "question_id": "functions-recursive-sum-01",
+      "request_sha256": "2c775b74130fd463af5aefa6ff6efff4c0993dcd7368bc7d39c1d3806cf9a4d0",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "easy",
+      "after_estimate": "easy"
+    },
+    {
+      "question_id": "conditionals-conditional-feedback-01",
+      "request_sha256": "04cdad81dd22f69dd7d4117ec379ca38bb5b1c055a7cdc7c9bbde8dc4e16969c",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "hard",
+      "after_estimate": "medium"
+    },
+    {
+      "question_id": "functions-branching-recursion-01",
+      "request_sha256": "5cdea30d6d8934bc05d382c05bb17a55e29b12b07bb9519d2f5ce7277ebb46ea",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "hard",
+      "after_estimate": "medium"
+    },
+    {
+      "question_id": "functions-composition-01",
+      "request_sha256": "e978ebd0f74bc3051dfbd5cb39c6149cee92178a88e1ba5f4cd1b994a7d4032e",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "easy",
+      "after_estimate": "easy"
+    },
+    {
+      "question_id": "lists-endpoint-swap-02",
+      "request_sha256": "2cf749baee226ffdd5076439276368da08b7dd8571cd2191adb979bcfdd5c80b",
+      "before_error": "JUDGE_OPTION_EVIDENCE_MISMATCH",
+      "after_error": null,
+      "before_estimate": null,
+      "after_estimate": "easy"
+    },
+    {
+      "question_id": "cruxeval-356",
+      "request_sha256": "6d43b07b102a47d8f06a8656b6d59041647c9eae0ec7f146fcea7557b24a2644",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "easy",
+      "after_estimate": "easy"
+    },
+    {
+      "question_id": "cruxeval-498",
+      "request_sha256": "64841572c4a1300676cc98d4137aa71a30416c3f8fc9d7f4647c54374d1cd2c7",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "easy",
+      "after_estimate": "easy"
+    },
+    {
+      "question_id": "loops-conditional-reset-02",
+      "request_sha256": "21833e3314a64d38e3ae1f320f3ae5e168caf2b1ac0ed247b6dddb6bd946f3ed",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "medium",
+      "after_estimate": "medium"
+    },
+    {
+      "question_id": "loops-coupled-prefix-fold-01",
+      "request_sha256": "d2a89e04d7aa654cdcece7df17ef461fe669f6e23796abb21b5797c36e38ee9e",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "hard",
+      "after_estimate": "hard"
+    },
+    {
+      "question_id": "cruxeval-793",
+      "request_sha256": "843858649694c3d37ae3365713c55920e5fcc9775ab87163f631e6a3912feeab",
+      "before_error": null,
+      "after_error": null,
+      "before_estimate": "medium",
+      "after_estimate": "medium"
+    }
+  ]
+}

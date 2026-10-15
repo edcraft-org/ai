@@ -7,6 +7,127 @@ not be treated as its current pass rates.
 Historical records may use `beginner`, `intermediate`, and `advanced`. The current
 labels are `easy`, `medium`, and `hard`.
 
+## SocLaas-only rubric/schema experiments, 16 October 2026
+
+Difficulty checks now default to SocLaas and reject a different configured
+provider rather than falling back. The experiment used only SocLaas alias
+`default`, strict JSON-schema output, provider-default sampling/reasoning,
+240-second provider and 250-second application timeouts, the existing
+16,384-token output cap and zero SDK retries. Runtime `eda0b39` and all profiles,
+settings, instruction/schema/anchor hashes, schedule, selection rule and promotion
+gate were frozen before calls. Each question/profile received one MCP assessment;
+there were no output corrections, replacement judgments, question generation or
+correctness checks. Production uses only the selected profile per check, not an
+ensemble or all four profiles.
+
+The original dataset, 18/12 split, reference labels/dimensions and rubric document
+are unchanged. **Zero new worked examples were added.** The compact prompt uses
+the same three original core anchors verbatim, with no evaluation questions,
+solutions or labels inserted. Those anchor programs have no exact code duplicates
+in this dataset after whitespace normalization; this does not establish that all
+families or concepts are independent. Compact instructions omit historical review
+protocols and extended variant commentary, reducing the system prompt from
+27,479 to 5,504 characters. This is a change to runtime presentation and procedure,
+not a change to the approved reference labels or anchor definitions.
+
+### Development ablations and candidate selection
+
+Four fixed profiles assessed every development question, interleaved with seed 43
+and concurrency three in total. The runtime-rubric profile removes conflicting
+historical instructions about correctness eligibility, confidence and uncertainty
+and states a difficulty-only decision procedure. The exact-options profile requires
+each supplied A/B/C[/D] evidence key in a closed wire object, then normalizes it to
+the existing ordered public evidence list. Missing/extra keys remain errors.
+
+| Development profile | Reference matches | Valid-label agreement | Macro recall including failures | Invalid reports |
+| --- | --- | --- | --- | --- |
+| Original prompt + array schema (control) | 12/18 (66.7%) | 12/15 | 64.8% | 3 option-evidence mismatches |
+| Compact runtime rubric only | 10/18 (55.6%) | 10/12 | 51.9% | 5 option-evidence mismatches, 1 transport failure |
+| Exact-option schema only | 14/18 (77.8%) | 14/18 | 66.7% | 0 |
+| Compact rubric + exact-option schema | 14/18 (77.8%) | 14/18 | 74.1% | 0 |
+
+Macro recall averages the easy/medium/hard match rates, with failures counted as
+nonmatches within their reference category. It prevents the more common easy
+items from dominating selection. The predeclared ranking used development macro
+recall, then exact matches, fewer invalid reports, shorter instructions and fixed
+profile order. The combined profile won and was saved in `selection.json` before
+any reserved calls began. The runtime-only result demonstrates that shortening
+instructions alone did not solve structural output failures. The two keyed
+profiles matched the same number of references but differed in per-level recall.
+
+### Reserved regression gate and deployment
+
+Only control and the development-selected combined profile assessed the unchanged
+12 reserved questions. The gate required no regression in macro recall, all-item
+agreement, severe easy/hard disagreements or invalid reports. It passed, so
+`code-difficulty-v6-runtime-exact-options` remains the production default. No
+alternative candidate was selected using reserved results.
+
+| Metric | Control | Combined |
+| --- | --- | --- |
+| Reserved reference agreement | 7/12 (58.3%) | 9/12 (75.0%) |
+| Reserved macro recall | 57.8% | 80.0% |
+| All 30 reference agreement | 19/30 (63.3%) | 23/30 (76.7%) |
+| All-item macro recall | 60.0% | 76.7% |
+| Valid labelled responses | 27/30 | 30/30 |
+| Invalid reports | 3 | 0 |
+| Abstentions / severe disagreements | 0 / 0 | 0 / 0 |
+| Ordinal alpha | 0.724 (27 pairs) | 0.810 (30 pairs) |
+
+Across both splits, the combined profile made eight previously incorrect results
+correct and four previously correct results incorrect. All three previously invalid
+control reports became correct labels. On the same 27 questions labelled by both
+profiles, matches rose from 19 to 20; thus three of the net four gained matches
+came from response coverage and one from net label changes on jointly labelled
+questions. The reserved split had no invalid reports in either condition, so its
+7-to-9 gain came from changed labels, not recovery. On development's same 15 valid
+questions, combined matched 11 versus control's 12. These distinctions matter:
+response validity and difficulty classification are different outcomes.
+
+Combined matched 12/13 easy, 6/11 medium and 5/6 hard references. Seven disagreements
+remain, including five medium questions. Overall family-bootstrap 95% intervals
+for exact agreement are 43.3–80.0% for control and 60.0–90.0% for combined. This
+single repeat is a descriptive regression result. The dataset has been inspected
+repeatedly and has AI-assisted single-human reference labels. Development selection
+and a reused reserved split do not supply fresh confirmation or learner calibration.
+Keeping examples fixed limits one source of overfitting; it does not eliminate
+selection bias or service/sampling variation. Fresh independently reviewed families
+remain necessary for a broader accuracy claim.
+
+All 30 control request hashes and provider settings exactly match the previous
+single-label experiment's first passes, yet SocLaas's overall agreement changed
+from 15/30 there to 19/30 here. That repeat variation is archived separately and
+reinforces why the concurrent 19/30 control, rather than the older 15/30 result,
+is the primary baseline. The `default` alias does not independently identify a
+fixed backend or guarantee deterministic outputs.
+
+### Usage, failures and verification
+
+The four development profiles required 72 calls and the reserved pair 24, reaching
+the preregistered maximum of **96 SocLaas calls**. One runtime-only transport
+failure has unknown usage. Known partial totals across the entire experiment are
+355,515 input and 148,324 output tokens; complete totals remain unavailable.
+
+For the directly comparable 30-question runs, control reported 178,640 input and
+47,037 output tokens; combined reported 44,570 input and 47,387 output tokens.
+Input tokens fell **75.1%**, while output tokens were slightly higher. Combined
+used about 59.3% fewer reported total tokens. All 60 calls in this comparison had
+usage metadata. These are token counts, not monetary savings: no service price or
+input/output billing equivalence was assumed. Runtime-only known input usage also
+fell, but its missing-call total cannot be treated as zero.
+
+The independent audit reconstructed all 96 request hashes and exact wire schemas,
+verified SocLaas-only identical settings and one call per result, round-tripped keyed
+responses to canonical reports, checked dataset/rubric/anchor hashes and the lack of
+added examples, verified that selection preceded reserved calls, independently
+recomputed the selection/promotion decision, regenerated summaries/usage and checked
+for configured credentials in JSON evidence. Full questions, tool outputs, failures,
+pre-call manifest, saved selection, paired comparisons and checksums are in
+[the experiment archive](evidence/soclaas-difficulty-experiments-2026-10-16/).
+Validation: **499 tests passed**, five opt-in live tests skipped; lint, formatting
+and diff checks passed. The separate tool-selection smoke tests now opt into
+SocLaas rather than OpenAI. No OpenAI or Ollama difficulty evaluation was run.
+
 ## Single-pass checks restored, 16 October 2026
 
 The difficulty check now makes one assessment call. It has no correction loop,

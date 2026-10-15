@@ -9,17 +9,18 @@ The result remains advisory and does not establish learner-calibrated difficulty
 ## Configure and invoke
 
 ```bash
-export EDCRAFT_DIFFICULTY_PROVIDER=openai
+export EDCRAFT_DIFFICULTY_PROVIDER=soclaas
 # Optional: EDCRAFT_DIFFICULTY_MODEL=<model>
 uv run python -m edcraft_validator.mcp
 ```
 
-The registry supports OpenAI, SocLaas and Ollama. Supply their existing credentials
-and configuration through the environment. OpenAI and SocLaas default to strict
-JSON-schema output through the shared adapter. Each model call creates a fresh
-provider so settings, usage and failures remain separate. Listing tools does not
-create a provider or call a model. Missing provider configuration is an explicit
-error and cannot be repaired by asking the model again.
+Difficulty checks use **SocLaas only**, by default. Supply `SOCLAAS_API_KEY`,
+`SOCLAAS_BASE_URL` and `SOCLAAS_MODEL` through the environment. A non-SocLaas
+`EDCRAFT_DIFFICULTY_PROVIDER` value is rejected; there is no provider fallback.
+Strict JSON-schema output is the default. Each call creates a fresh provider so
+settings, usage and failures remain separate. Listing tools makes no model calls.
+Missing configuration is an explicit error. The general provider registry still
+supports other authoring providers independently of this check policy.
 
 The input has `question` and optional `requested_difficulty`. A question contains
 `code`, `entry_function`, concrete `inputs`, the `question` stem, `answer_target`,
@@ -52,7 +53,8 @@ Deterministic question expansion makes no implicit model calls.
 
 ## Single-label policy and reports
 
-Prompt `code-difficulty-v5-single-label` requires one closest anchor for a complete
+The default prompt, `code-difficulty-v6-runtime-exact-options`, requires one closest
+anchor for a complete
 question, including adjacent boundary cases. The response contains four dimension
 ratings/reasons, the estimated level, deciding reason, solution/dependency
 reasoning, shortcuts, nearest anchor, evidence for every supplied option and quality
@@ -61,9 +63,20 @@ concerns. Distractor explanations remain hypotheses rather than learner data.
 Confidence, alternative levels and `uncertainty_reason` are absent from the v2
 schema. A null estimate is allowed only when essential question information is
 missing, with `unable_to_assess_reason`; borderline difficulty and missing learner
-calibration are not grounds for abstention. The runtime prompt explicitly overrides
-the rubric's historical confidence/alternative reporting conventions while retaining
-its anchors, conditions, text, version and hash. Approved reference data is unchanged.
+calibration are not grounds for abstention. The runtime-rubric experiment removes
+historical review instructions about confidence, uncertainty and correctness
+eligibility instead of including contradictory instructions. Its dimension/level
+tables and three core worked anchors come directly from the frozen rubric. No new
+examples or evaluation labels are added. Approved reference data is unchanged.
+
+The selected exact-options schema uses a closed wire object with required A/B/C or
+A/B/C/D evidence keys, matching the supplied question. It then converts these
+entries to the existing ordered `option_evidence` list in the public MCP report.
+Missing or extra keys still fail validation; no repair call is made. The normalized
+assessment retains the original request hash, prompt version and usage. The rubric
+hash identifies the original source document; the request hash identifies the
+actual runtime instructions and wire schema. See the experiment section below and
+[evaluation history](evaluation-history.md) for the selected profile and results.
 
 | Field | Meaning |
 | --- | --- |
@@ -92,7 +105,9 @@ does not make replacement judgments or rewrite the question. A valid disagreemen
 remains a disagreement. Missing essential information returns `unable_to_assess`.
 
 `create_validation_server` accepts `difficulty_judge_timeout_seconds` (60 seconds
-by default) and an injected provider factory. There is no check correction setting.
+by default), an injected provider factory and an optional host-side request builder
+for controlled experiments. None of these is an MCP question argument. There is
+no check correction setting.
 MCP callers should allow the per-call timeout plus overhead. An outer model deadline
 stops waiting and discards late results; it cannot terminate a synchronous provider
 thread. Align transport deadlines and SDK retry settings with the application budget.
@@ -115,11 +130,10 @@ bound is four author calls plus four single-call assessments: eight model calls.
 The author and judge use the same configured provider/model in separate conversations.
 
 ```bash
-OPENAI_MAX_RETRIES=0 SOCLAAS_MAX_RETRIES=0 \
-OPENAI_TIMEOUT_SECONDS=240 SOCLAAS_TIMEOUT_SECONDS=240 \
+SOCLAAS_MAX_RETRIES=0 SOCLAAS_TIMEOUT_SECONDS=240 \
 SOCLAAS_RESPONSE_FORMAT=json_schema \
 uv run python scripts/evaluate_difficulty_authoring.py \
-  --providers openai soclaas --env-file .env \
+  --providers soclaas --env-file .env \
   --output .artifacts/single-label-workflow/run-01 --timeout-seconds 250
 ```
 
@@ -127,19 +141,18 @@ The fixed easy/medium/hard briefs and settings are recorded before calls. Every
 accepted MCQ version and tool report is saved. Summaries separate initial/final
 matches, question correction attempts, changed MCQs, failures, missing-information
 outcomes and total model usage. An unsuccessful fourth version is not accepted.
-Use a new output directory. Ollama is available explicitly but requires its local
-service and installed model; the scripts do not download models.
+Use a new output directory. This experiment and the dataset runner accept SocLaas
+only. Historical cross-provider evidence remains readable.
 
 ## Evaluate the approved dataset
 
 ```bash
-OPENAI_MAX_RETRIES=0 SOCLAAS_MAX_RETRIES=0 \
-OPENAI_TIMEOUT_SECONDS=240 SOCLAAS_TIMEOUT_SECONDS=240 \
+SOCLAAS_MAX_RETRIES=0 SOCLAAS_TIMEOUT_SECONDS=240 \
 SOCLAAS_RESPONSE_FORMAT=json_schema \
 uv run python scripts/evaluate_difficulty_dataset.py \
   --dataset reference_sets/python_tracing/dataset.json \
   --dataset-revision <approved-dataset-commit> --env-file .env \
-  --providers openai soclaas --followup-of <previous-run> \
+  --providers soclaas --followup-of <previous-run> \
   --output .artifacts/single-label-dataset/run-01 --timeout-seconds 250
 ```
 
@@ -157,6 +170,42 @@ intervals and usage. Legacy first-pass/repair summary fields remain readable for
 archived experiments; correction/recovery counts are zero in new runs. Historical
 comparison rules remain available when reading old records; current reports never
 return `uncertain` comparisons.
+
+## Bounded accuracy experiments
+
+```bash
+SOCLAAS_MAX_RETRIES=0 SOCLAAS_TIMEOUT_SECONDS=240 \
+SOCLAAS_RESPONSE_FORMAT=json_schema \
+PYTHONPATH=src:. uv run python scripts/experiment_soclaas_difficulty.py \
+  --env-file .env --output .artifacts/soclaas-ablations/run-01
+```
+
+Protocol `soclaas-difficulty-ablations-v1` freezes four profiles: the original
+single-label prompt/array schema (`control`), a difficulty-only compact rubric
+(`runtime_rubric`), exact option keys with the original prompt (`exact_options`),
+and both changes (`combined`). The same three original core worked anchors are
+used; no evaluation question becomes a prompt example and no new example is added.
+All settings, instruction/schema/anchor hashes and the interleaved schedule are
+saved before calls. There is one check per question/profile, with zero SDK retries
+and concurrency three across all profiles. Generation and question correction are
+not part of this experiment.
+
+All four profiles assess the 18 development questions (72 calls). The candidate
+is selected using development macro recall, with failures as nonmatches; ties use
+exact matches, fewer invalid reports, shorter instructions, then fixed profile
+order. Selection is saved before evaluating control and that candidate on the
+12 reserved questions, using at most 24 further calls. A fixed promotion gate
+requires no regression in reserved macro recall, all-item agreement, severe
+disagreements or invalid reports. A failed gate retains control, without testing
+another candidate. The entire run is bounded at 96 calls. Every failure stays in
+the results.
+
+The reserved collection has already been inspected in previous work; this is a
+regression screen, not a fresh unbiased estimate. Example count and source are
+fixed to avoid expanding the prompt around evaluation cases. Even a positive
+result requires new independently reviewed families before a general accuracy
+claim. Judge agreement and response validity are reported separately from token
+usage; no monetary cost is inferred without a known service price.
 
 This adapts the original rubric agreement protocol: the final dataset omits
 original authoring targets, so original-target false acceptance/rejection are

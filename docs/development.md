@@ -166,6 +166,11 @@ The v2 judge selects one closest label in one call. Checks have no corrections o
 reassessment; invalid responses and operational failures remain errors. Only the
 authoring caller revises questions following valid mismatch/missing-information
 feedback. A failed check ends that authoring job.
+Production difficulty checks default to SocLaas and reject other configured
+providers. Host-side request-builder injection supports fixed rubric/schema
+experiments without exposing experiment controls in the MCP input. The compact
+rubric reuses the three existing anchors; the exact-option wire schema normalizes
+to the same public report. No reference question or label is added to a prompt.
 The wheel bundles the rubric document using Hatch's force-include mapping; the
 editable source tree reads the original document in `docs/`.
 
