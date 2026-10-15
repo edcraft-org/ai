@@ -126,7 +126,8 @@ async def test_mismatch_generates_one_correction_then_reassesses():
 
 
 @pytest.mark.parametrize(
-    "estimate,expected", [("easy", "mismatch"), (None, "uncertain")]
+    "estimate,expected",
+    [("easy", "mismatch"), ("hard", "mismatch"), (None, "uncertain")],
 )
 async def test_remaining_nonmatch_stops_after_one_correction(estimate, expected):
     report, author, _ = await run(

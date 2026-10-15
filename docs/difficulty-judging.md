@@ -217,6 +217,8 @@ usage, latency, errors and source fingerprint. Author and judge use the same
 configured provider/model in separate conversations; these are integration checks,
 not an independent accuracy comparison. Nothing executes the generated code or
 establishes technical validity. No reference or held-out questions are used.
+Ollama must be running with the configured model already installed; the experiment
+does not download models.
 
 Author responses represent concrete inputs as a closed-schema list of unique
 name/value entries for compatibility with OpenAI structured generation. The

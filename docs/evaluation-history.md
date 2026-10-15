@@ -7,6 +7,65 @@ not be treated as its current pass rates.
 Historical records may use `beginner`, `intermediate`, and `advanced`. The current
 labels are `easy`, `medium`, and `hard`.
 
+## Confidence-free generation and correction: 15 October 2026
+
+The runtime difficulty assessment no longer contains a confidence field.
+Unresolved estimates and alternatives retain explicit uncertainty. Historical
+human-review confidence and comparisons are unchanged. The separate authoring
+operation generates a complete MCQ, calls the difficulty MCP tool, and makes one
+correction on `too_easy`, `too_hard` or `uncertain`, then reassesses the revised
+question under the unchanged request. Errors remain errors and do not trigger a
+fabricated correction. The tool itself neither generates nor repairs questions.
+
+The experiment used two fresh briefs per provider: medium conditional accumulation
+and hard list/helper processing with interacting state. Author and judge used the
+same configured provider/model in separate conversations. No reference questions
+were used and generated code was not executed. This is an integration experiment,
+not an independent judge evaluation or provider ranking.
+
+Final runtime revision: `671d1de656a36b6fb0a017687275ed7f9a25505a`.
+The final source fingerprint is
+`a15ab39e99256af4de1b47aa07de9541dd9bc4da9a227c8b43f235f421991480`.
+The judge prompt is `code-difficulty-v4` and the author prompt is
+`concrete-question-difficulty-authoring-v2`.
+
+| Provider/model | Target | Initial assessment | Correction and reassessment |
+| --- | --- | --- | --- |
+| OpenAI / `gpt-5-mini` | medium | medium with easy alternative: uncertain | Question changed; still medium with easy alternative: uncertain |
+| OpenAI / `gpt-5-mini` | hard | medium with easy/hard alternatives: uncertain | Question changed; hard with medium alternative: uncertain |
+| SocLaas / `default` | medium | Question generated; judge transport error | No assessed level, so no correction |
+| SocLaas / `default` | hard | Author response failed schema validation | No accepted question or assessment |
+| Ollama / `tobestyledintro/qwen3.8-9b-distill:latest` | medium | medium: matches | No correction needed |
+| Ollama / `tobestyledintro/qwen3.8-9b-distill:latest` | hard | medium: too easy | Correction returned the identical MCQ; still medium: too easy |
+
+The preliminary configuration is also retained. OpenAI's preliminary author
+requests failed before a question was accepted, and Ollama was initially not
+running. The follow-up used a closed named-input authoring schema for OpenAI and
+an explicit 16,384-token context for the installed local Ollama model. No model
+was downloaded. The temporary local server was stopped after the experiment.
+SocLaas's preliminary medium case produced an easy estimate, a correction, then a
+medium estimate with an easy alternative (`uncertain`); its preliminary hard judge
+response failed schema validation. These outcomes are retained separately rather
+than replacing later failures with successful earlier calls. The SocLaas `default`
+alias does not establish the backend model's identity.
+
+The [summary](evidence/difficulty-correction-2026-10-15/summary.json) links exact
+byte-preserved [preliminary records](evidence/difficulty-correction-2026-10-15/initial-v1.json)
+and [final records](evidence/difficulty-correction-2026-10-15/final-v2.json).
+Every accepted initial/corrected MCQ and complete tool result is retained with
+hashes, requested levels, model/settings, timings, usage and failures. OpenAI's
+corrections and the preliminary SocLaas correction changed the question hashes.
+Ollama returned an unchanged question on its correction attempt; that failure to
+revise is recorded explicitly rather than counted as an improvement.
+The final six cases contain one confirmed match, two uncertain outcomes, one
+remaining mismatch and two errors; none establishes technical correctness.
+
+Offline verification: 519 tests passed, five opt-in live tests skipped. Focused
+tests cover both mismatch directions, uncertainty, the one-correction bound,
+failed generation/correction/judging, frozen requested levels, closed authoring
+schemas, and effective Ollama context settings. Lint, formatting, lockfile and
+diff checks passed; a wheel contained the correction workflow and exact rubric.
+
 ## Issue 43 difficulty-tool live smoke: 15 October 2026
 
 The [advisory difficulty tool](difficulty-judging.md) was exercised through the
