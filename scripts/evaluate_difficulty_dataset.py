@@ -34,7 +34,7 @@ DIMENSIONS = (
     "answer_discrimination",
 )
 ROOT = Path(__file__).resolve().parents[1]
-PROTOCOL = "frozen-difficulty-dataset-evaluation-v1"
+PROTOCOL = "single-label-difficulty-dataset-evaluation-v2"
 
 
 def write_json(path, value):
@@ -77,9 +77,54 @@ def load_dataset(path):
 
 def assessment(record):
     report = record.get("tool_output")
-    if report and report["status"] == "assessed":
+    if report and report["status"] in {"assessed", "unable_to_assess"}:
         return report["judge"]["assessment"]
     return None
+
+
+def comparison_to_reference(value, requested):
+    """Read old evidence without applying the new policy retroactively."""
+    estimate = value["estimated_difficulty"]
+    legacy = "alternative_levels" in value
+    if estimate is None:
+        return "uncertain" if legacy else "unable_to_assess"
+    decision = compare_difficulty(estimate, requested)
+    if legacy and any(
+        compare_difficulty(a, requested) != decision
+        for a in value["alternative_levels"]
+    ):
+        return "uncertain"
+    return decision
+
+
+def judge_attempts(record):
+    output = record.get("tool_output") or {}
+    return output.get("judge_attempts") or (
+        [output["judge"]] if output.get("judge") else []
+    )
+
+
+def first_pass_record(record):
+    attempts = judge_attempts(record)
+    if not attempts:
+        return record
+    first = attempts[0]
+    value = first.get("assessment")
+    status = (
+        "error"
+        if first["status"] != "completed"
+        else (
+            "unable_to_assess" if value["estimated_difficulty"] is None else "assessed"
+        )
+    )
+    return record | {
+        "tool_output": (record.get("tool_output") or {})
+        | {
+            "judge": first,
+            "status": status,
+            "error_code": first["error_code"],
+        }
+    }
 
 
 def ratio(numerator, denominator):
@@ -119,7 +164,7 @@ def ordinal_alpha(pairs):
 def summarize(records):
     confusion = {a: dict.fromkeys(LEVELS, 0) for a in LEVELS}
     dimensions = {name: [0, 0] for name in DIMENSIONS}
-    pairs, errors, unknowns, uncertain, confirmed = [], Counter(), 0, 0, 0
+    pairs, errors, unknowns, uncertain, confirmed, decisive = [], Counter(), 0, 0, 0, 0
     for record in records:
         value = assessment(record)
         if value is None:
@@ -133,11 +178,10 @@ def summarize(records):
         else:
             pairs.append((reference["difficulty"], estimate))
             confusion[reference["difficulty"]][estimate] += 1
-        decision = compare_difficulty(
-            estimate, reference["difficulty"], value["alternative_levels"]
-        )
+        decision = comparison_to_reference(value, reference["difficulty"])
         uncertain += decision == "uncertain"
         confirmed += decision == "matches"
+        decisive += decision in {"matches", "too_easy", "too_hard"}
         for name in DIMENSIONS:
             rating = value["dimensions"][name]["rating"]
             if rating != "unknown":
@@ -157,9 +201,7 @@ def summarize(records):
         "primary_agreement_jointly_labelled": ratio(matches, len(pairs)),
         "confirmed_reference_matches": ratio(confirmed, len(records)),
         "uncertain_comparisons": uncertain,
-        "decision_coverage": ratio(
-            len(records) - sum(errors.values()) - uncertain, len(records)
-        ),
+        "decision_coverage": ratio(decisive, len(records)),
         "confusion_rows_reference_columns_judge": confusion,
         "severe_disagreements": confusion["easy"]["hard"] + confusion["hard"]["easy"],
         "dimensions": {name: ratio(*counts) for name, counts in dimensions.items()},
@@ -226,6 +268,16 @@ def all_summaries(records):
                 if r["provider"] == provider and (split == "all" or r["split"] == split)
             ]
             result[provider][split] = summarize(subset) | {
+                "first_pass": summarize([first_pass_record(r) for r in subset]),
+                "corrective_calls": sum(
+                    max(len(judge_attempts(r)) - 1, 0) for r in subset
+                ),
+                "recovered_to_label": sum(
+                    first_pass_record(r)["tool_output"]["status"] == "error"
+                    and bool(assessment(r) and assessment(r)["estimated_difficulty"])
+                    for r in subset
+                    if r.get("tool_output")
+                ),
                 "bootstrap": bootstrap_intervals(subset),
                 "topics": {
                     topic: summarize([r for r in subset if r["topic"] == topic])
@@ -235,9 +287,8 @@ def all_summaries(records):
     calls = [
         ModelCallRecord.model_validate(call)
         for r in records
-        for call in ((r.get("tool_output") or {}).get("judge") or {}).get(
-            "model_calls", []
-        )
+        for attempt in judge_attempts(r)
+        for call in attempt.get("model_calls", [])
     ]
     return {"providers": result, "usage": summarize_usage(calls).model_dump()}
 
@@ -258,7 +309,7 @@ async def evaluate_item(client, provider, item, output, timeout):
         response = await client.call_tool(
             "assess_code_difficulty",
             {"question": record["question"], "requested_difficulty": None},
-            timeout=timeout + 10,
+            timeout=4 * timeout + 10,
         )
         report = CodeDifficultyReport.model_validate(response.structured_content)
         if report.question_sha256 != blinded_question(item).sha256:
@@ -286,7 +337,7 @@ async def evaluate_provider(provider, data, args):
         difficulty_judge_timeout_seconds=args.timeout_seconds,
     )
     semaphore = asyncio.Semaphore(1 if provider == "ollama" else 3)
-    async with Client(server, timeout=args.timeout_seconds + 20) as client:
+    async with Client(server, timeout=4 * args.timeout_seconds + 20) as client:
 
         async def run(item):
             async with semaphore:
@@ -353,8 +404,13 @@ async def evaluate(args):
         "providers": configurations,
         "judge_timeout_seconds": args.timeout_seconds,
         "policy": {
-            "calls_per_item_per_provider": 1,
-            "replacement_calls": 0,
+            "initial_assessments_per_item_per_provider": 1,
+            "max_correction_attempts": 3,
+            "repair_policy": (
+                "Diagnostic repairs/retries only after invalid outputs or "
+                "operational failures. Stop at the first valid assessment; "
+                "no reference label is supplied or used for retries."
+            ),
             "question_corrections": 0,
             "remote_concurrency": 3,
             "local_concurrency": 1,
@@ -371,8 +427,8 @@ async def evaluate(args):
             "scoring": (
                 "Primary estimate exact agreement; errors and unknowns "
                 "count as nonmatches over all items. Also retain "
-                "conservative comparison against reference using "
-                "alternatives."
+                "single-label comparison against the reference. First-pass and "
+                "post-repair results are reported separately."
             ),
             "family_grouping": (
                 "Explicit family_id if present, otherwise question_id; "

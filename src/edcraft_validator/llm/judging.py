@@ -113,10 +113,10 @@ async def run_judge[AssessmentT: BaseModel](
         except GenerationError as exc:
             report.error_code = f"JUDGE_{exc.category.upper()}"
             if isinstance(exc.__cause__, ValidationError):
-                report.validation_errors = _validation_findings(exc.__cause__)
+                report.validation_errors = validation_findings(exc.__cause__)
         except ValidationError as exc:
             report.error_code = "JUDGE_INVALID_RESPONSE"
-            report.validation_errors = _validation_findings(exc)
+            report.validation_errors = validation_findings(exc)
         except (AttributeError, TypeError, ValueError):
             report.error_code = "JUDGE_INVALID_RESPONSE"
         except Exception:
@@ -130,7 +130,7 @@ async def run_judge[AssessmentT: BaseModel](
     return report
 
 
-def _validation_findings(error: ValidationError) -> list[JudgeValidationFinding]:
+def validation_findings(error: ValidationError) -> list[JudgeValidationFinding]:
     # Keep field locations and validation reasons, excluding response values,
     # exception context and URLs. Provider credentials never enter this schema.
     return [

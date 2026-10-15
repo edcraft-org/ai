@@ -161,7 +161,9 @@ The difficulty service does not call the executor, analyser or correctness tools
 applications combine those tools' independent outputs when needed.
 `application/difficulty_authoring.py` owns the separate generate/assess/correct
 operation. It freezes the brief and requested level, retains both question
-versions and tool reports, and permits one correction followed by reassessment.
+versions and tool reports, and permits three corrections followed by reassessment.
+The v2 judge selects one closest label and retains up to three diagnostic repairs
+for invalid responses; valid disagreements are not rejudged to obtain a preferred level.
 The wheel bundles the rubric document using Hatch's force-include mapping; the
 editable source tree reads the original document in `docs/`.
 

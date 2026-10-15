@@ -48,7 +48,8 @@ def summarize_records(records):
     results = {}
     for provider in sorted({record["provider"] for record in records}):
         subset = [r for r in records if r["provider"] == provider]
-        corrections = [r for r in subset if len(r["attempts"]) == 2]
+        corrections = [r for r in subset if len(r["attempts"]) > 1]
+        correction_stages = [a for r in corrections for a in r["attempts"][1:]]
 
         def tool(attempt):
             return attempt.get("tool_output") or {}
@@ -62,10 +63,24 @@ def summarize_records(records):
             )
 
         calls = []
+        changed_questions = 0
         for record in subset:
+            previous_question = None
             for attempt in record["attempts"]:
+                current_question = attempt.get("question")
+                if current_question:
+                    changed_questions += (
+                        previous_question is not None
+                        and current_question != previous_question
+                    )
+                    previous_question = current_question
                 calls.extend(attempt["generation"]["model_calls"])
-                calls.extend((tool(attempt).get("judge") or {}).get("model_calls", []))
+                output = tool(attempt)
+                runs = output.get("judge_attempts") or (
+                    [output["judge"]] if output.get("judge") else []
+                )
+                for run in runs:
+                    calls.extend(run.get("model_calls", []))
         results[provider] = {
             "jobs": len(subset),
             "initial_primary_matches": sum(
@@ -75,12 +90,9 @@ def summarize_records(records):
                 tool(r["attempts"][0]).get("difficulty_match") == "matches"
                 for r in subset
             ),
-            "correction_attempts": len(corrections),
-            "changed_questions": sum(
-                bool(r["attempts"][1].get("question"))
-                and r["attempts"][0]["question"] != r["attempts"][1]["question"]
-                for r in corrections
-            ),
+            "jobs_with_corrections": len(corrections),
+            "correction_attempts": len(correction_stages),
+            "changed_questions": changed_questions,
             "corrections_resolved_to_confirmed_match": sum(
                 r["status"] == "matches" for r in corrections
             ),
@@ -88,7 +100,9 @@ def summarize_records(records):
                 primary_match(r, r["attempts"][-1]) for r in subset
             ),
             "final_confirmed_matches": sum(r["status"] == "matches" for r in subset),
-            "final_uncertain": sum(r["status"] == "uncertain" for r in subset),
+            "final_unable_to_assess": sum(
+                r["status"] == "unable_to_assess" for r in subset
+            ),
             "final_mismatch": sum(r["status"] == "mismatch" for r in subset),
             "final_errors": sum(r["status"] == "error" for r in subset),
             "usage": summarize_usage(
@@ -123,7 +137,7 @@ async def evaluate_provider(provider, args):
         difficulty_judge_timeout_seconds=args.timeout_seconds,
     )
     records = []
-    async with Client(server, timeout=args.timeout_seconds + 10) as client:
+    async with Client(server, timeout=4 * args.timeout_seconds + 20) as client:
         for case_id, requested, brief in CASES:
             print(f"{provider}/{case_id}: generating and assessing", flush=True)
             result = await author_question_with_difficulty(
@@ -132,7 +146,7 @@ async def evaluate_provider(provider, args):
                 provider_factory=factory,
                 tool_client=client,
                 author_timeout_seconds=args.timeout_seconds,
-                tool_timeout_seconds=args.timeout_seconds + 10,
+                tool_timeout_seconds=4 * args.timeout_seconds + 10,
             )
             record = result.model_dump(mode="json") | {
                 "case_id": case_id,
@@ -171,7 +185,7 @@ async def evaluate(args):
             }
         )
     preregistration = {
-        "experiment_version": "difficulty-correction-smoke-v2",
+        "experiment_version": "single-label-difficulty-correction-v3",
         "generated_at": datetime.now(UTC).isoformat(),
         "source_fingerprint_sha256": args.source_fingerprint,
         "timeout_seconds": args.timeout_seconds,
@@ -181,9 +195,9 @@ async def evaluate(args):
             for key, level, brief in CASES
         ],
         "policy": (
-            "One initial generation/assessment; one correction and reassessment "
-            "on a valid nonmatch, including uncertain. No replacement calls "
-            "or reference questions."
+            "One initial generation plus up to three generation/question "
+            "corrections. Each assessment permits up to three diagnostic error "
+            "repairs; valid labels are not retried. No reference questions."
         ),
     }
     (args.output / "manifest.json").write_text(
@@ -191,7 +205,7 @@ async def evaluate(args):
     )
     results = await asyncio.gather(*[evaluate_provider(p, args) for p in providers])
     manifest = {
-        "experiment_version": "difficulty-correction-smoke-v2",
+        "experiment_version": "single-label-difficulty-correction-v3",
         "generated_at": datetime.now(UTC).isoformat(),
         "source_fingerprint_sha256": args.source_fingerprint,
         "timeout_seconds": args.timeout_seconds,
@@ -205,7 +219,8 @@ async def evaluate(args):
             "Small integration experiment; no provider ranking or calibration.",
             "Author and judge use the same provider/model in separate calls.",
             "No reference-set or held-out questions are used.",
-            "One correction on too_easy, too_hard or uncertain; errors stay errors.",
+            "Up to three corrections for generation errors, too_easy, too_hard "
+            "or missing information; assessment errors get bounded repairs.",
             "No correctness checks or generated-code execution are performed.",
         ],
     }

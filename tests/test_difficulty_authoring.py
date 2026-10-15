@@ -66,7 +66,7 @@ async def run(author_responses, estimates, requested="medium"):
         value = assessment()
         value["estimated_difficulty"] = estimate
         if estimate is None:
-            value["uncertainty_reason"] = "The concrete trace is ambiguous."
+            value["unable_to_assess_reason"] = "The required question body is missing."
         judge = Provider(value)
         judges.append(judge)
         return judge
@@ -127,30 +127,37 @@ async def test_mismatch_generates_one_correction_then_reassesses():
 
 @pytest.mark.parametrize(
     "estimate,expected",
-    [("easy", "mismatch"), ("hard", "mismatch"), (None, "uncertain")],
+    [("easy", "mismatch"), ("hard", "mismatch"), (None, "unable_to_assess")],
 )
-async def test_remaining_nonmatch_stops_after_one_correction(estimate, expected):
+async def test_remaining_nonmatch_stops_after_three_corrections(estimate, expected):
     report, author, _ = await run(
-        [question().model_dump(), revised_question()], [estimate, estimate]
+        [question().model_dump(), *[revised_question() for _ in range(3)]],
+        [estimate] * 4,
     )
     assert report.status == expected
-    assert len(author.requests) == len(report.attempts) == 2
+    assert len(author.requests) == len(report.attempts) == 4
 
 
 async def test_generation_failure_is_retained_without_judging():
-    report, author, judges = await run([GenerationResponseError("private")], [])
+    report, author, judges = await run(
+        [GenerationResponseError("private") for _ in range(4)], []
+    )
     assert report.status == "error"
     assert report.error_code == "AUTHOR_INVALID_RESPONSE"
-    assert len(author.requests) == 1 and judges == []
+    assert len(author.requests) == 4 and judges == []
     assert report.attempts[0].generation.usage.output_tokens == 20
     assert "private" not in report.model_dump_json()
 
 
 async def test_failed_correction_preserves_original_and_feedback():
     report, author, judges = await run(
-        [question().model_dump(), GenerationResponseError("private")], ["easy"]
+        [
+            question().model_dump(),
+            *[GenerationResponseError("private") for _ in range(3)],
+        ],
+        ["easy"],
     )
-    assert report.status == "error" and len(author.requests) == 2
+    assert report.status == "error" and len(author.requests) == 4
     assert len(judges) == 1
     assert report.attempts[0].tool_output.difficulty_match == "too_easy"
     assert report.attempts[1].question is None
@@ -173,3 +180,4 @@ async def test_judge_failure_does_not_turn_into_a_question_revision():
     assert len(author.requests) == len(report.attempts) == 1
     assert report.attempts[0].question is not None
     assert report.attempts[0].tool_output.status == "error"
+    assert len(report.attempts[0].tool_output.judge_attempts) == 4

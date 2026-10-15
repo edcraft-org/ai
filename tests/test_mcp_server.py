@@ -71,6 +71,7 @@ async def test_catalogue_exposes_authoritative_names_descriptions_and_schemas():
     assert advisory.annotations.idempotent_hint is False
     assert advisory.output_schema["properties"]["status"]["enum"] == [
         "assessed",
+        "unable_to_assess",
         "error",
     ]
     executable = next(

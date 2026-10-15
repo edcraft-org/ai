@@ -1,209 +1,124 @@
 # Advisory difficulty MCP tool
 
-`assess_code_difficulty` estimates the provisional difficulty of one complete,
-concrete Python tracing MCQ. It uses the [versioned rubric](difficulty-rubric.md),
-including its manual-tracing conditions, semantic prerequisites and worked anchors.
-It does not infer a fixed learner cohort or establish learner-calibrated difficulty.
-
-This implements the callable judge portion of issue 43. Evaluation against frozen
-human references, held-out agreement/confusion reports and disagreement analysis
-remain pending. Existing AI recommendations and scripted test responses are not
-evidence of judge accuracy.
+`assess_code_difficulty` v2 assesses one complete concrete Python tracing MCQ.
+It returns one closest `easy`, `medium` or `hard` label with rubric-based evidence.
+It performs no code execution, correctness verification or question repair.
+Assessment conditions and anchors come from the [frozen rubric](difficulty-rubric.md).
+The result remains advisory and does not establish learner-calibrated difficulty.
 
 ## Configure and invoke
 
-Start the existing stdio MCP server with a host-selected provider:
-
 ```bash
 export EDCRAFT_DIFFICULTY_PROVIDER=openai
-# Optional: export EDCRAFT_DIFFICULTY_MODEL=<your model name>
-# Supply the provider's existing credentials/settings through the environment.
+# Optional: EDCRAFT_DIFFICULTY_MODEL=<model>
 uv run python -m edcraft_validator.mcp
 ```
 
-The provider registry supports `openai`, `ollama` and `soclaas`. The model defaults
-to that provider's existing configuration when the difficulty-specific model is
-omitted. Each invocation constructs a fresh provider. Listing tools and running
-ordinary authoring jobs do not create a judge provider or make judge calls.
-An unset/invalid provider or missing credentials produces a recorded
-`JUDGE_CONFIGURATION_ERROR`.
+The registry supports OpenAI, SocLaas and Ollama. Supply their existing credentials
+and configuration through the environment. OpenAI and SocLaas default to strict
+JSON-schema output through the shared adapter. Each model call creates a fresh
+provider so settings, usage and failures remain separate. Listing tools does not
+create a provider or call a model. Missing provider configuration is an explicit
+error and cannot be repaired by asking the model again.
 
-The MCP input has a `question` object and an optional `requested_difficulty` field.
-For example, an in-process caller can use:
+The input has `question` and optional `requested_difficulty`. A question contains
+`code`, `entry_function`, concrete `inputs`, the `question` stem, `answer_target`,
+three or four ordered `options` (`A` through `C` or `D`) and `correct_option`.
+Supported targets are return value, branch evaluations, loop iterations, loop
+invocations and function calls. Stems must define relevant counting conventions.
+Code is limited to 20,000 characters and the stem to 8,000. Templates, approved
+reference levels, reference explanations and provenance are not question fields.
+
+For an in-process caller with a complete question dictionary:
 
 ```python
-import asyncio
-import json
-
-from fastmcp import Client
-from edcraft_validator.mcp.server import create_validation_server
-
-
-async def main():
-    async with Client(create_validation_server()) as client:
-        result = await client.call_tool(
-            "assess_code_difficulty",
-            {
-                "question": {
-                    "code": "def f(x):\n    y = x + 2\n    return y * 2\n",
-                    "entry_function": "f",
-                    "inputs": {"x": 3},
-                    "question": "What does f(3) return?",
-                    "answer_target": "return_value",
-                    "options": [
-                        {"id": "A", "value": 6},
-                        {"id": "B", "value": 7},
-                        {"id": "C", "value": 10},
-                        {"id": "D", "value": 12},
-                    ],
-                    "correct_option": "C",
-                },
-                "requested_difficulty": "easy",
-            },
-        )
-        print(json.dumps(result.structured_content, indent=2))
-
-
-asyncio.run(main())
+async with Client(create_validation_server()) as client:
+    result = await client.call_tool(
+        "assess_code_difficulty",
+        {"question": question, "requested_difficulty": "medium"},
+        timeout=250,
+    )
+    report = result.structured_content
 ```
 
-Supply the actual learner-facing option order: three or four options
-labelled A/B/C[/D], with exactly one designated correct option. Answer types are
-numbers, booleans, strings or integer lists; nonfinite values are rejected.
-The input contract checks field types, option identifiers and required content.
-It does not check option distinctness, answer correctness, the Python subset or
-execution-specific parameter limits. Code is limited to 20,000 characters and the
-stem to 8,000. Do not submit a template or curator difficulty/provenance fields.
+Question content is untrusted data, never instructions. The requested level and
+generator identity are hidden from the judge, including every repair call.
+Supplied answer designations are context, not execution-verified evidence.
+The service validates input shapes and identifiers without checking the Python
+subset, evaluating answers or verifying distractors. Those checks belong to the
+separate correctness tools. Ordinary authoring continues to expose correctness
+tools; this advisory operation is explicitly invoked with tag `quality:code`.
+Deterministic question expansion makes no implicit model calls.
 
-All five answer targets are supported. Count conventions follow the execution
-worker: evaluated `if` conditions, total loop-body iterations, loop statements
-encountered, or traced function calls including entry and supported built-ins.
-Stems must state the relevant convention. The judge can record uncertainty about
-wording that affects its difficulty estimate.
+## Single-label policy and reports
 
-## Evidence and outcomes
+Prompt `code-difficulty-v5-single-label` requires one closest anchor for a complete
+question, including adjacent boundary cases. The response contains four dimension
+ratings/reasons, the estimated level, deciding reason, solution/dependency
+reasoning, shortcuts, nearest anchor, evidence for every supplied option and quality
+concerns. Distractor explanations remain hypotheses rather than learner data.
 
-The service evaluates difficulty directly from the supplied MCQ. It has no code
-executor, static analyser or correctness prerequisite. The designated correct option
-is supplied context, not execution-verified evidence. Correctness tools retain
-responsibility for code support, answers and distractor validity. An application
-can combine their independent results; a difficulty assessment establishes no
-correctness outcome and never replaces one.
+Confidence, alternative levels and `uncertainty_reason` are absent from the v2
+schema. A null estimate is allowed only when essential question information is
+missing, with `unable_to_assess_reason`; borderline difficulty and missing learner
+calibration are not grounds for abstention. The runtime prompt explicitly overrides
+the rubric's historical confidence/alternative reporting conventions while retaining
+its anchors, conditions, text, version and hash. Approved reference data is unchanged.
 
-The prompt contains the complete supplied MCQ and its answer designation.
-It excludes the requested level, template/source IDs, generator identity and
-curator recommendations. Code/comments, stem and options are identified as
-untrusted data; they are not instructions to the judge. This prompt separation
-reduces anchoring/instruction-following risk but does not establish model accuracy.
-
-The judge supplies four dimension ratings with reasons, overall estimated level,
-solution/dependency reasoning, shortcuts, nearest anchor, evidence for every
-option, alternatives, uncertainty and quality concerns. Distractor
-error explanations are hypotheses, not observed learner misconceptions.
-
-The application then derives `matches`, `too_easy`, `too_hard` or `uncertain` using
-the ordered easy/medium/hard comparison rule. Requested levels
-and estimates remain separate. Unresolved estimates and
-alternatives that change the comparison retain `uncertain`. Without a requested
-level, `difficulty_match` is null. Use `easy`/`medium`/`hard` in the API; the rubric
-maps these to beginner/intermediate/advanced terminology.
-
-The runtime assessment has no confidence field. Uncertainty is expressed through
-a null estimate, plausible alternative levels and an explanatory reason. Historical
-human review records in Git history retain their original confidence fields and
-comparison policy. The final approved dataset contains fixed categories and
-dimension ratings without review confidence or alternatives.
-
-| Report field | Meaning |
+| Field | Meaning |
 | --- | --- |
-| `advisory: true` | Quality evidence cannot override correctness or required evidence. |
-| `status: assessed` | A valid assessment was produced, including possible uncertainty or mismatch. |
-| `status: error` | Rubric/provider configuration, judge timeout, malformed response or another judging error prevented assessment. |
-| `judge.status` | `completed` or `error`; a model failure is not a valid uncertain estimate. |
+| `status: assessed` | A valid single-label assessment, not a correctness pass. |
+| `status: unable_to_assess` | Essential information is missing; no label is invented. |
+| `status: error` | No valid assessment after the permitted attempts. |
+| `difficulty_match` | `matches`, `too_easy` or `too_hard`, derived only from the selected label. Null without a requested level or usable estimate. |
+| `judge_attempts` | Every initial/repair model run, including failures and diagnostics. |
+| `judge` | Final run, also present as the last entry of `judge_attempts`; do not count it twice. |
+| `usage` | Aggregate usage across all judge attempts, including failed calls. |
 
-Invalid MCP input is a protocol error. Operational failures return structured
-reports with explicit codes and no fallback difficulty or fabricated match.
-Reports include UTC time, tool version, normalized question hash, exact rubric
-hash/version, assessment conditions version, prompt version and a request/schema
-hash. Judge records retain provider/model/settings, latency, token usage and call
-errors. Save returned reports alongside their exact source questions when keeping
-versioned evaluation records. There is no database or automatic file write.
-Schema failures also retain validation field locations, codes and messages while
-omitting response values and exception context.
+Reports retain the normalized question hash, rubric/conditions versions, exact
+rubric hash, prompt/request hashes, model/settings, timestamps, latency and usage.
+Failed schema responses retain field locations, codes and messages while omitting
+response values and exception context. Missing token counts are null, with known
+partial totals retained; unknown usage is never represented as a zero-cost call.
+Historical v1 records remain unchanged and require their historical interpretation.
+The v2 tool/report version identifies the changed response contract.
 
-## Integration and deadlines
+## Three corrective follow-ups
 
-The tool is tagged `quality:code`, separate from `domain:code` correctness checks.
-It is explicitly callable and never enters the existing authoring check plan.
-Question expansion remains deterministic and makes no implicit judge calls.
+The default budget is **one initial call plus up to three corrective calls**.
+Invalid output, option-evidence mismatches, timeouts and transport failures can
+trigger a follow-up. Feedback contains sanitized error codes and validation findings
+alongside the unchanged original question. It contains no requested or reference
+level. Configuration/internal errors stop immediately because model feedback cannot
+repair host setup or application code. Every failure remains in `judge_attempts`.
 
-The reusable entry point is
-`application.code_difficulty.assess_code_question_difficulty`; the MCP wrapper
-adds registration and host-owned provider configuration. The code domain owns
-the question/assessment contracts, rubric and prompt. `llm.judging.run_judge`
-shares structured-call execution and usage accounting without interpreting a rubric.
+The first valid assessment stops the loop, even if its label disagrees with an
+authoring target or approved reference. Valid disagreements and valid missing-data
+abstentions are not retried to obtain a preferred answer. The generic `run_judge`
+still makes one call; the difficulty application owns the bounded repair policy.
 
-An embedding host can inject `difficulty_provider_factory` and set
-`difficulty_judge_timeout_seconds` through `create_validation_server`. The factory
-must return a fresh provider per call so concurrent usage records stay separate.
-The default judge deadline is 60 seconds. Configure provider transport
-timeouts/retries consistently with the host deadline. The service makes one judge
-application call and does not retry malformed assessments; SDK transport retries
-are separately recorded as provider settings.
+`create_validation_server` accepts `difficulty_judge_timeout_seconds` (60 seconds
+per model call by default), `difficulty_max_correction_attempts` (0–3, default 3)
+and an injected provider factory. MCP callers must allow the whole budget:
+`(max_corrections + 1) * per_call_timeout + overhead`. An outer model-call deadline
+stops waiting and discards late results; it cannot terminate a synchronous provider
+thread. Align transport deadlines and SDK retry settings with the application budget.
+The evaluation scripts set SDK retries to zero and retain application attempts.
 
-An outer deadline stops waiting and ignores late synchronous results; it cannot
-terminate the provider thread. Its report explicitly records unknown token usage.
-Completed calls that fail response parsing still retain provider-reported tokens.
-Unavailable token counts are null, never zero-cost claims. Assessing through a
-remote provider sends the question to that configured service and may incur cost;
-the tool's MCP annotations declare this external interaction and non-determinism.
+## Generate, assess, correct and reassess
 
-Assessments apply only to the exact code, input, stem, target and options. Recheck
-and reassess edited questions. Sampling questions from a template does not establish
-the level of every expansion. For issue 43 evaluation, finish/freeze human
-references, tune only on development families, freeze the judge configuration,
-then score held-out families under the predeclared agreement protocol.
+`application.difficulty_authoring.author_question_with_difficulty` owns question
+creation and revision. It preserves the original brief/target and permits one
+initial generation plus up to three generation/question corrections. Valid
+`too_easy`/`too_hard` feedback revises the full MCQ; missing essential information
+can be supplied by a revision. Failed generation receives sanitized diagnostics
+and can regenerate from the same brief. The original failures are retained.
 
-## Live selection smoke tests
-
-With OpenAI credentials exported, run:
-
-```bash
-RUN_OPENAI_LIVE_TESTS=1 OPENAI_MAX_RETRIES=0 \
-  uv run pytest tests/test_difficulty_live.py -q
-```
-
-These tests offer the model every tool discovered from the MCP server. Two
-rubric-example requests ask for difficulty assessment without naming the tool;
-a correctness-only control asks for answer/distractor checking. The chosen calls
-are dispatched through MCP and their results are returned to the model for a final
-summary. Each difficulty call invokes a separate structured judge. Source questions
-and supplied answers must remain unchanged in tool arguments.
-
-The existing provider requires a tool call on its tool-selection turn, so these
-tests evaluate which tool the model selects and whether the call works. They do
-not establish whether the model would spontaneously choose to use tools. The
-ordinary authoring workflow continues to expose only correctness tools.
-
-Full local transcripts, results and usage are saved under ignored
-`.artifacts/difficulty-live/` (override with `DIFFICULTY_LIVE_OUTPUT`). These are
-small smoke tests on worked anchors, not held-out judge-accuracy measurements.
-They send the test questions, template, tool schemas and rubric to the configured
-provider and incur inference costs.
-
-## Generate, assess and correct across providers
-
-`application.difficulty_authoring.author_question_with_difficulty` is a separate
-application operation. It asks the authoring model for a concrete question, calls
-the MCP difficulty tool, and supplies its output back to the author when the
-decision is `too_easy`, `too_hard` or `uncertain`. The author makes one correction
-under the unchanged brief/target, and the tool independently assesses the complete
-revised MCQ. A remaining mismatch/uncertainty is recorded without further attempts.
-Provider failures and malformed judge outputs remain errors, not correction cues.
-The difficulty tool itself neither generates nor corrects questions.
-
-Run the easy arithmetic, medium conditional-state and hard interacting-state
-briefs for the two remote providers with:
+Each assessment has its own bounded output-repair history. An exhausted assessment
+error remains an error rather than prompting an unrelated question rewrite.
+Neither operation executes code or establishes question correctness. The theoretical
+bound is four author calls plus four assessments of at most four judge calls each.
+The author and judge use the same configured provider/model in separate conversations.
 
 ```bash
 OPENAI_MAX_RETRIES=0 SOCLAAS_MAX_RETRIES=0 \
@@ -211,77 +126,50 @@ OPENAI_TIMEOUT_SECONDS=240 SOCLAAS_TIMEOUT_SECONDS=240 \
 SOCLAAS_RESPONSE_FORMAT=json_schema \
 uv run python scripts/evaluate_difficulty_authoring.py \
   --providers openai soclaas --env-file .env \
-  --output .artifacts/difficulty-correction/run-01 --timeout-seconds 250
+  --output .artifacts/single-label-workflow/run-01 --timeout-seconds 250
 ```
 
-Use a new output directory for each experiment. Each record retains the full
-initial MCQ, raw structured tool output, corrected MCQ, reassessment, model/settings,
-usage, latency, errors and source fingerprint. Author and judge use the same
-configured provider/model in separate conversations; these are integration checks,
-not an independent accuracy comparison. Nothing executes the generated code or
-establishes technical validity. No reference or held-out questions are used.
-Ollama must be running with the configured model already installed; the experiment
-does not download models.
-
-Author responses represent concrete inputs as a closed-schema list of unique
-name/value entries for compatibility with OpenAI structured generation. The
-application converts these to the existing question input dictionary without
-changing values. Ollama can set `OLLAMA_NUM_CTX` explicitly so the entire rubric
-and response schema fit without relying on the service's smaller default context.
-
-The runner writes provider settings and fixed briefs to `manifest.json` before
-any call. Its summary separates initial/final primary estimates, confirmed
-matches, corrections attempted, changed questions, unresolved outcomes and errors.
-`--provider all` retains the option to include local Ollama. OpenAI and SocLaas
-now both default to the same strict `json_schema` response path; an explicit
-SocLaas `json_object` setting is an opt-in compatibility fallback.
+The fixed easy/medium/hard briefs and settings are recorded before calls. Every
+accepted MCQ version and tool report is saved. Summaries separate initial/final
+matches, question correction attempts, changed MCQs, failures, missing-information
+outcomes and total model usage. An unsuccessful fourth version is not accepted.
+Use a new output directory. Ollama is available explicitly but requires its local
+service and installed model; the scripts do not download models.
 
 ## Evaluate the approved dataset
-
-`scripts/evaluate_difficulty_dataset.py` evaluates the final issue 42
-`dataset.json` through the MCP tool. Supply the approved dataset path and its Git
-revision explicitly; it does not use the historical partially reviewed v2 set.
 
 ```bash
 OPENAI_MAX_RETRIES=0 SOCLAAS_MAX_RETRIES=0 \
 OPENAI_TIMEOUT_SECONDS=240 SOCLAAS_TIMEOUT_SECONDS=240 \
-OLLAMA_TIMEOUT_SECONDS=240 OLLAMA_NUM_PREDICT=4096 \
-OLLAMA_NUM_CTX=16384 OLLAMA_THINK=false \
+SOCLAAS_RESPONSE_FORMAT=json_schema \
 uv run python scripts/evaluate_difficulty_dataset.py \
   --dataset reference_sets/python_tracing/dataset.json \
   --dataset-revision <approved-dataset-commit> --env-file .env \
-  --providers openai soclaas \
-  --output .artifacts/difficulty-dataset/run-01 --timeout-seconds 250
+  --providers openai soclaas --followup-of <previous-run> \
+  --output .artifacts/single-label-dataset/run-01 --timeout-seconds 250
 ```
 
-The default is all three providers; `--providers openai` selects one. Every item
-receives one scheduled assessment per provider, without repair, replacement or
-question correction. The input allowlist excludes the approved difficulty,
-dimension ratings, reference reasons, solution, source identity, topic and split.
-The designated answer is supplied as question context. No code is executed.
+Protocol `single-label-difficulty-dataset-evaluation-v2` keeps all approved questions,
+labels, dimensions and development/held-out splits fixed. Only MCQ content and the
+designated answer enter model calls. The reference label, dimension ratings,
+explanation, solution, ID, provenance, topic and split remain hidden, including
+repairs. Output repairs use diagnostics, never reference disagreement. Valid
+label disagreements remain results and evaluation questions are never rewritten.
 
-For a separately scheduled configuration follow-up on an already inspected set,
-record `--followup-of <prior-evaluation-id>`. Preserve both runs and report it as
-regression evidence rather than fresh held-out validation.
+The pre-call manifest freezes source, schema, prompt, rubric, dataset and settings.
+Individual records are saved as jobs complete. Summaries report first-pass and
+post-repair accuracy separately, correction calls, recovered labels, failures,
+missing estimates, confusion, dimensions, ordinal alpha, family bootstrap intervals
+and complete usage accounting. Improvements due to recovered responses are
+separate from changes to the accuracy of valid first-pass judgments.
+The reader retains the historical comparison policy for archived v1 records;
+new runtime records never return `uncertain` comparisons.
 
-The runner snapshots the dataset and writes a configuration manifest before the
-first call. Development and held-out questions retain their splits, with no tuning
-between them. Individual records are saved as calls finish. `results.json` retains
-all questions, references, tool outputs and sanitized failures; `summary.json`
-reports primary-label agreement, confusion, severe disagreements, dimension
-agreement, ordinal alpha and 95% family bootstrap intervals. Errors and unknown
-estimates remain nonmatches in the all-items agreement denominator. A separate
-comparison against the approved level retains uncertainty from alternatives.
-
-This is an explicit adaptation of `python-tracing-agreement-v0.2`, recorded as
-`frozen-difficulty-dataset-evaluation-v1`: the simplified final dataset supplies
-approved levels, but omits original authoring targets and reference match decisions.
-Consequently, original-target decision accuracy, false acceptance/rejection and
-the four-way decision confusion table are unavailable. An approved level must not
-be relabelled as an original authoring request to manufacture those metrics.
-
-The reference is AI-assisted and approved by one human; independent human-human
-agreement and learner calibration remain unavailable. Existing v2 seed questions
-and AI recommendations are present in branch history, so disclose this prior
-exposure when reporting results. Do not tune on these held-out results and then
-reuse the same questions as an untouched benchmark.
+This adapts the original rubric agreement protocol: the final dataset omits
+original authoring targets, so original-target false acceptance/rejection are
+unavailable. Approved categories cannot substitute for those authoring requests.
+The reference is AI-assisted and approved by one human, not independent human
+agreement or learner calibration. Existing held-out items have been inspected;
+follow-ups are regression evidence. Tuning based on them needs fresh held-out
+families for confirmatory evaluation. Full results and earlier policies are
+preserved in [evaluation history](evaluation-history.md).
