@@ -18,6 +18,7 @@ from edcraft_validator.domains.code.difficulty_matching import (
     DifficultyMatch,
     compare_difficulty,
 )
+from edcraft_validator.domains.code.difficulty_profiles import KeyedDifficultyAssessment
 from edcraft_validator.llm.judging import (
     JudgeProviderFactory,
     JudgeRun,
@@ -53,6 +54,7 @@ async def assess_code_question_difficulty(
     requested_difficulty: Difficulty | None = None,
     provider_factory: JudgeProviderFactory,
     judge_timeout_seconds: float = 60,
+    request_builder=None,
 ) -> CodeDifficultyReport:
     if not math.isfinite(judge_timeout_seconds) or judge_timeout_seconds <= 0:
         raise ValueError("judge timeout must be finite and positive")
@@ -66,7 +68,7 @@ async def assess_code_question_difficulty(
     )
     try:
         rubric = load_code_difficulty_rubric()
-        request = build_difficulty_request(question, rubric)
+        request = (request_builder or build_difficulty_request)(question, rubric)
     except (OSError, ValueError):
         report.error_code = "RUBRIC_UNAVAILABLE"
     else:
@@ -78,6 +80,10 @@ async def assess_code_question_difficulty(
             provider_factory=provider_factory,
             timeout_seconds=judge_timeout_seconds,
         )
+        payload = judge.model_dump()
+        if isinstance(judge.assessment, KeyedDifficultyAssessment):
+            payload["assessment"] = judge.assessment.to_assessment().model_dump()
+        judge = JudgeRun[DifficultyAssessment].model_validate(payload)
         if judge.status == "completed":
             assessment = judge.assessment
             assert assessment is not None

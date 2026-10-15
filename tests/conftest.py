@@ -6,6 +6,7 @@ import pytest
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     """Keep real model calls opt-in during local work."""
     for marker, variable in (
+        ("soclaas_live", "RUN_SOCLAAS_LIVE_TESTS"),
         ("openai_live", "RUN_OPENAI_LIVE_TESTS"),
         ("ollama_live", "RUN_OLLAMA_LIVE_TESTS"),
     ):

@@ -171,9 +171,7 @@ async def evaluate_provider(provider, args):
 async def evaluate(args):
     args.output.mkdir(parents=True, exist_ok=False)
     args.source_fingerprint = source_fingerprint()
-    providers = args.providers or (
-        ("openai", "soclaas", "ollama") if args.provider == "all" else (args.provider,)
-    )
+    providers = args.providers or (args.provider,)
     configurations = []
     for name in providers:
         provider = create_model_provider(TemplateProviderSelection(provider=name))
@@ -233,12 +231,8 @@ async def evaluate(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     selection = parser.add_mutually_exclusive_group()
-    selection.add_argument(
-        "--provider", choices=("all", "openai", "soclaas", "ollama"), default="all"
-    )
-    selection.add_argument(
-        "--providers", nargs="+", choices=("openai", "soclaas", "ollama")
-    )
+    selection.add_argument("--provider", choices=("soclaas",), default="soclaas")
+    selection.add_argument("--providers", nargs="+", choices=("soclaas",))
     parser.add_argument("--env-file", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--timeout-seconds", type=float, default=300)

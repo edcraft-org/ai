@@ -41,7 +41,7 @@ def missing_option():
 @pytest.mark.parametrize(
     "response,error",
     [
-        (missing_option(), "JUDGE_OPTION_EVIDENCE_MISMATCH"),
+        (missing_option(), "JUDGE_INVALID_RESPONSE"),
         (GenerationTransportError("private"), "JUDGE_TRANSPORT"),
         (GenerationResponseError("private"), "JUDGE_INVALID_RESPONSE"),
         (GenerationTimeoutError("private"), "JUDGE_TIMEOUT"),

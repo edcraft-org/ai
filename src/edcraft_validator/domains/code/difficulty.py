@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 from edcraft_validator.domains.code.code_types import AnswerTarget, Difficulty
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
 
-DIFFICULTY_PROMPT_VERSION = "code-difficulty-v5-single-label"
+DIFFICULTY_PROMPT_VERSION = "code-difficulty-v6-runtime-exact-options"
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 OptionID = Literal["A", "B", "C", "D"]
 AnswerValue = int | float | bool | str | list[int]
@@ -165,7 +165,7 @@ def load_code_difficulty_rubric() -> CodeDifficultyRubric:
     return CodeDifficultyRubric(text, version[1], conditions[1])
 
 
-def build_difficulty_request(
+def _build_control_difficulty_request(
     question: CodeDifficultyQuestion,
     rubric: CodeDifficultyRubric,
 ) -> StructuredGenerationRequest[DifficultyAssessment]:
@@ -224,6 +224,12 @@ def build_difficulty_request(
             },
         ],
         response_model=DifficultyAssessment,
-        prompt_version=DIFFICULTY_PROMPT_VERSION,
+        prompt_version="code-difficulty-v5-single-label",
         schema_name="code_difficulty_assessment",
     )
+
+
+def build_difficulty_request(question, rubric):
+    from edcraft_validator.domains.code.difficulty_profiles import build_profile_request
+
+    return build_profile_request(question, rubric, profile="combined")

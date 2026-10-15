@@ -35,6 +35,7 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
+    "soclaas_live: real SocLaas difficulty tool selection, opt-in",
     "openai_live: real OpenAI template-authoring API test, run before a PR",
     "ollama_live: real Ollama template workflow, requires a running local model",
 ]

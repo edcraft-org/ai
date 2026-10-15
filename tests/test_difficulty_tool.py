@@ -20,6 +20,10 @@ from edcraft_validator.domains.code.difficulty import (
     DifficultyAssessment,
     load_code_difficulty_rubric,
 )
+from edcraft_validator.domains.code.difficulty_profiles import (
+    KeyedDifficultyAssessment,
+    build_profile_request,
+)
 from edcraft_validator.llm.llm_errors import (
     GenerationResponseError,
     GenerationTimeoutError,
@@ -101,7 +105,17 @@ class Provider:
         self.last_usage = TokenUsage(input_tokens=123, output_tokens=45)
         if isinstance(self.response, Exception):
             raise self.response
-        return request.response_model.model_validate(self.response)
+        response = self.response
+        if issubclass(request.response_model, KeyedDifficultyAssessment):
+            response = response | {
+                "option_evidence": {
+                    item["option_id"]: {
+                        k: v for k, v in item.items() if k != "option_id"
+                    }
+                    for item in response["option_evidence"]
+                }
+            }
+        return request.response_model.model_validate(response)
 
 
 class ForbiddenExecutor:
@@ -110,6 +124,11 @@ class ForbiddenExecutor:
 
 
 async def assess(provider=None, item=None, **kwargs):
+    # Legacy-array failure cases remain covered alongside explicit profile tests.
+    kwargs.setdefault(
+        "request_builder",
+        lambda q, r: build_profile_request(q, r, profile="control"),
+    )
     return await assess_code_question_difficulty(
         item or question(),
         provider_factory=lambda: provider or Provider(),
@@ -445,6 +464,7 @@ async def test_deadline_returns_snapshot_and_discards_late_result():
 
 async def test_unconfigured_provider_is_explicit_without_breaking_server(monkeypatch):
     monkeypatch.delenv("EDCRAFT_DIFFICULTY_PROVIDER", raising=False)
+    monkeypatch.delenv("SOCLAAS_API_KEY", raising=False)
     async with Client(
         create_validation_server(code_execution_tool=ForbiddenExecutor())
     ) as client:

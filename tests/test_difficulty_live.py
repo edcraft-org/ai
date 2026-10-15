@@ -15,7 +15,7 @@ from edcraft_validator.llm.tool_context import callable_tool
 from edcraft_validator.llm.usage import MeasuredProvider, summarize_usage
 from edcraft_validator.mcp.server import create_validation_server
 
-pytestmark = pytest.mark.openai_live
+pytestmark = pytest.mark.soclaas_live
 
 
 def difficulty_cases():
@@ -62,7 +62,7 @@ def difficulty_cases():
 
 async def exercise_selection(case_id, user_request, payload):
     selection = TemplateProviderSelection(
-        provider="openai", model=os.getenv("OPENAI_MODEL")
+        provider="soclaas", model=os.getenv("SOCLAAS_MODEL")
     )
     selector = MeasuredProvider(create_model_provider(selection))
     server = create_validation_server(
@@ -139,12 +139,12 @@ async def exercise_selection(case_id, user_request, payload):
 async def test_live_model_selects_and_uses_difficulty_tool(
     case_id, question, requested
 ):
-    if not os.getenv("OPENAI_API_KEY"):
-        pytest.skip("OPENAI_API_KEY is not configured")
+    if not os.getenv("SOCLAAS_API_KEY"):
+        pytest.skip("SOCLAAS_API_KEY is not configured")
     record = await exercise_selection(
         case_id,
         "Assess this concrete MCQ's difficulty under our rubric, compare with the "
-        "authoring target, and explain the reasoning and uncertainty. "
+        "authoring target, and explain the reasoning. "
         "Only difficulty assessment is requested.",
         {"question": question, "requested_difficulty": requested},
     )
@@ -163,8 +163,8 @@ async def test_live_model_selects_and_uses_difficulty_tool(
 
 
 async def test_live_correctness_request_does_not_select_difficulty_tool():
-    if not os.getenv("OPENAI_API_KEY"):
-        pytest.skip("OPENAI_API_KEY is not configured")
+    if not os.getenv("SOCLAAS_API_KEY"):
+        pytest.skip("SOCLAAS_API_KEY is not configured")
     candidate = json.loads(
         Path("examples/templates/arithmetic_linear.json").read_text()
     )

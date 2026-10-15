@@ -483,8 +483,8 @@ def main():
     parser.add_argument(
         "--providers",
         nargs="+",
-        choices=("openai", "soclaas", "ollama"),
-        default=["openai", "soclaas", "ollama"],
+        choices=("soclaas",),
+        default=["soclaas"],
     )
     parser.add_argument("--env-file", type=Path)
     parser.add_argument("--output", type=Path, required=True)

@@ -19,9 +19,9 @@ from edcraft_validator.llm.provider_registry import create_model_provider
 
 def configured_difficulty_provider() -> ModelProvider:
     """Create a fresh provider per call; configuration is controlled by the host."""
-    name = os.getenv("EDCRAFT_DIFFICULTY_PROVIDER")
-    if not name:
-        raise ValueError("EDCRAFT_DIFFICULTY_PROVIDER is not configured")
+    name = os.getenv("EDCRAFT_DIFFICULTY_PROVIDER", "").strip() or "soclaas"
+    if name != "soclaas":
+        raise ValueError("Difficulty checks use SocLaas only")
     return create_model_provider(
         TemplateProviderSelection(
             provider=name, model=os.getenv("EDCRAFT_DIFFICULTY_MODEL") or None
@@ -34,6 +34,7 @@ def register_difficulty_tools(
     *,
     provider_factory: JudgeProviderFactory,
     judge_timeout_seconds: float,
+    request_builder=None,
 ) -> None:
     # Model responses are not deterministic; read-only still sends question data
     # to the host-configured provider and may incur inference cost.
@@ -72,4 +73,5 @@ def register_difficulty_tools(
             requested_difficulty=requested_difficulty,
             provider_factory=provider_factory,
             judge_timeout_seconds=judge_timeout_seconds,
+            request_builder=request_builder,
         )
