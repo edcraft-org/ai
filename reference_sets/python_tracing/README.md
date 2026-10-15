@@ -1,7 +1,7 @@
-# Frozen Python tracing evaluation dataset
+# Python tracing evaluation dataset
 
 Use **[dataset.json](dataset.json)** as the single final reference dataset.
-All 30 questions completed human review on 2026-10-15. The categories are fixed:
+It contains 30 human-reviewed questions with fixed difficulty categories:
 
 | Difficulty | Questions |
 | --- | ---: |
@@ -9,48 +9,49 @@ All 30 questions completed human review on 2026-10-15. The categories are fixed:
 | Medium | 11 |
 | Hard | 6 |
 
+The human-approved `difficulty` labels and `dimensions` ratings are authoritative.
+Do not replace them with model predictions or recalculate them from the reasons.
+The questions, answers, ratings, reasons, topics and splits are unchanged by the
+simplification of the dataset format. Earlier reviews remain in Git history.
+
+## Fields
+
+The dataset records its identifier, rubric version and assessment conditions
+once, followed by `questions`. Each question contains:
+
+| Field | Purpose |
+| --- | --- |
+| `question_id` | Stable identifier. |
+| `code`, `entry_function`, `inputs` | Program and exact input to trace. |
+| `question`, `answer_target` | What the learner is asked to determine. |
+| `options`, `correct_option` | Answer choices and the correct choice. |
+| `difficulty`, `difficulty_reason` | Approved category and its explanation. |
+| `dimensions` | Approved ratings for execution burden, changing state, conceptual interaction and answer discrimination. |
+| `solution` | Explanation of the correct answer. |
+| `topic`, `split` | Topic and `development`/`held_out` assignment. |
+| `provenance` | Source identifier and pinned source link, for adapted questions. |
+
 There are six questions per topic: arithmetic, conditionals, loops, functions and
-lists. The family-based split is 18 development and 12 reserved questions.
-Questions, answers, difficulty labels, dimension ratings, topics and splits match
-the approved snapshot at Git commit `240704a`.
+lists. The existing split is 18 development and 12 reserved questions.
+Review notes, confidence, alternative ratings, review bookkeeping, hashes,
+execution logs and duplicate answer values are omitted. The correct answer value
+is available from the option identified by `correct_option`.
 
-## Contents
+Keep question content, approved categories and dimension ratings, topics and
+splits fixed so evaluation results remain comparable. Git history records changes
+to this dataset. Evaluation tooling and scoring are deferred.
 
-Each entry in `questions` includes:
+## Attribution
 
-- The code, concrete input, question text, answer options and correct answer.
-- `difficulty`: the fixed overall reference category.
-- `dimensions`: the four fixed dimension ratings.
-- `topic`, `family_id` and `split`: the organisation of the dataset.
-- `difficulty_reason`, `reason_source` and `solution`: explanations and their origin.
-- `provenance`: source attribution and identifiers.
-- `review_notes`: human decisions, confidence and alternatives retained as context.
-  These notes do not change the fixed category.
-- `trace_summary`: the recorded execution evidence.
+Thirteen programs retain the original code from
+[CRUXEval](https://github.com/facebookresearch/cruxeval/tree/190faf16d175b5847b0af05d937872b1fb395942).
+Their concrete input may differ from the source example, and their question text
+and answer choices were added during curation. Preserve
+[CRUXEval-LICENSE](CRUXEval-LICENSE).
+Three questions adapt existing EdCraft examples; fourteen were newly authored.
+Adapted questions include their source identifier and link in `provenance`.
+CRUXEval did not supply the difficulty labels.
 
-Evaluation implementation is deferred. This directory provides the dataset,
-documentation and source attribution for that work.
-
-## Frozen reference
-
-The dataset is pinned by Git tag `python-tracing-evaluation-2026-10-15-r1`.
-Its canonical JSON SHA-256 is
-`046d3a20928e22b17b523ed22269cad677560dc03ef02677a283ff3cb517f23e`.
-
-Keep question content, categories, dimension ratings, topics and splits unchanged.
-Changes require an explicitly agreed new benchmark identity so previous results
-remain reproducible. Metadata-only corrections use a new tag and fingerprint;
-existing tags remain fixed. Earlier reviews remain available in Git history.
-
-## Attribution and limits
-
-Thirteen source programs come from CRUXEval revision
-`190faf16d175b5847b0af05d937872b1fb395942`. Their code is unchanged, with source IDs,
-links, record hashes and modification notes inside the dataset. Preserve
-[CRUXEval-LICENSE](CRUXEval-LICENSE). Other items record fixture adaptation or AI
-authorship. CRUXEval did not supply the difficulty labels.
-
-The review was AI-assisted and involved one human. Public metadata omits reviewer
-names and identifiers. The reference does not establish independent human
-agreement or learner-calibrated difficulty. Original confidence and alternatives
-remain documented without changing the fixed evaluation categories.
+The review completed on 2026-10-15 and was AI-assisted with one human reviewer.
+The labels are the approved reference for this evaluation; they do not establish
+independent reviewer agreement or learner-calibrated difficulty.
