@@ -225,3 +225,48 @@ name/value entries for compatibility with OpenAI structured generation. The
 application converts these to the existing question input dictionary without
 changing values. Ollama can set `OLLAMA_NUM_CTX` explicitly so the entire rubric
 and response schema fit without relying on the service's smaller default context.
+
+## Evaluate the approved dataset
+
+`scripts/evaluate_difficulty_dataset.py` evaluates the final issue 42
+`dataset.json` through the MCP tool. Supply the approved dataset path and its Git
+revision explicitly; it does not use the historical partially reviewed v2 set.
+
+```bash
+OPENAI_MAX_RETRIES=0 SOCLAAS_MAX_RETRIES=0 \
+OPENAI_TIMEOUT_SECONDS=240 SOCLAAS_TIMEOUT_SECONDS=240 \
+OLLAMA_TIMEOUT_SECONDS=240 OLLAMA_NUM_PREDICT=4096 \
+OLLAMA_NUM_CTX=16384 OLLAMA_THINK=false \
+uv run python scripts/evaluate_difficulty_dataset.py \
+  --dataset reference_sets/python_tracing/dataset.json \
+  --dataset-revision <approved-dataset-commit> --env-file .env \
+  --output .artifacts/difficulty-dataset/run-01 --timeout-seconds 250
+```
+
+The default is all three providers; `--providers openai` selects one. Every item
+receives one scheduled assessment per provider, without repair, replacement or
+question correction. The input allowlist excludes the approved difficulty,
+dimension ratings, reference reasons, solution, source identity, topic and split.
+The designated answer is supplied as question context. No code is executed.
+
+The runner snapshots the dataset and writes a configuration manifest before the
+first call. Development and held-out questions retain their splits, with no tuning
+between them. Individual records are saved as calls finish. `results.json` retains
+all questions, references, tool outputs and sanitized failures; `summary.json`
+reports primary-label agreement, confusion, severe disagreements, dimension
+agreement, ordinal alpha and 95% family bootstrap intervals. Errors and unknown
+estimates remain nonmatches in the all-items agreement denominator. A separate
+comparison against the approved level retains uncertainty from alternatives.
+
+This is an explicit adaptation of `python-tracing-agreement-v0.2`, recorded as
+`frozen-difficulty-dataset-evaluation-v1`: the simplified final dataset supplies
+approved levels, but omits original authoring targets and reference match decisions.
+Consequently, original-target decision accuracy, false acceptance/rejection and
+the four-way decision confusion table are unavailable. An approved level must not
+be relabelled as an original authoring request to manufacture those metrics.
+
+The reference is AI-assisted and approved by one human; independent human-human
+agreement and learner calibration remain unavailable. Existing v2 seed questions
+and AI recommendations are present in branch history, so disclose this prior
+exposure when reporting results. Do not tune on these held-out results and then
+reuse the same questions as an untouched benchmark.
