@@ -1,0 +1,3988 @@
+{
+  "providers": {
+    "ollama": {
+      "all": {
+        "total": 6,
+        "reference_support": {
+          "hard": 1,
+          "easy": 3,
+          "medium": 2
+        },
+        "assessed": 4,
+        "judge_labelled": 4,
+        "unknown_estimates": 0,
+        "failures": {
+          "JUDGE_TIMEOUT": 2
+        },
+        "primary_agreement_all_items": {
+          "count": 3,
+          "denominator": 6,
+          "rate": 0.5
+        },
+        "primary_agreement_jointly_labelled": {
+          "count": 3,
+          "denominator": 4,
+          "rate": 0.75
+        },
+        "confirmed_reference_matches": {
+          "count": 3,
+          "denominator": 6,
+          "rate": 0.5
+        },
+        "uncertain_comparisons": 0,
+        "decision_coverage": {
+          "count": 4,
+          "denominator": 6,
+          "rate": 0.6666666666666666
+        },
+        "confusion_rows_reference_columns_judge": {
+          "easy": {
+            "easy": 2,
+            "medium": 0,
+            "hard": 0
+          },
+          "medium": {
+            "easy": 0,
+            "medium": 1,
+            "hard": 0
+          },
+          "hard": {
+            "easy": 0,
+            "medium": 1,
+            "hard": 0
+          }
+        },
+        "severe_disagreements": 0,
+        "dimensions": {
+          "execution_burden": {
+            "count": 3,
+            "denominator": 4,
+            "rate": 0.75
+          },
+          "changing_state": {
+            "count": 3,
+            "denominator": 4,
+            "rate": 0.75
+          },
+          "conceptual_interaction": {
+            "count": 3,
+            "denominator": 4,
+            "rate": 0.75
+          },
+          "answer_discrimination": {
+            "count": 4,
+            "denominator": 4,
+            "rate": 1.0
+          }
+        },
+        "ordinal_alpha": 0.9,
+        "ordinal_alpha_paired_items": 4,
+        "ordinal_alpha_unavailable_reason": null,
+        "bootstrap": {
+          "method": "family percentile bootstrap, 95%",
+          "replicates": 2000,
+          "seed": 43,
+          "families": 6,
+          "intervals": {
+            "primary_agreement_all_items": {
+              "lower": 0.16666666666666666,
+              "upper": 0.8333333333333334,
+              "valid_replicates": 2000
+            },
+            "confirmed_reference_matches": {
+              "lower": 0.16666666666666666,
+              "upper": 0.8333333333333334,
+              "valid_replicates": 2000
+            },
+            "decision_coverage": {
+              "lower": 0.3333333333333333,
+              "upper": 1.0,
+              "valid_replicates": 2000
+            },
+            "ordinal_alpha": {
+              "lower": -0.25,
+              "upper": 1.0,
+              "valid_replicates": 1784
+            }
+          }
+        },
+        "topics": {
+          "arithmetic": {
+            "total": 1,
+            "reference_support": {
+              "hard": 1
+            },
+            "assessed": 1,
+            "judge_labelled": 1,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 0,
+              "denominator": 1,
+              "rate": 0.0
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 0,
+              "denominator": 1,
+              "rate": 0.0
+            },
+            "confirmed_reference_matches": {
+              "count": 0,
+              "denominator": 1,
+              "rate": 0.0
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              },
+              "changing_state": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              },
+              "conceptual_interaction": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              },
+              "answer_discrimination": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              }
+            },
+            "ordinal_alpha": 0.0,
+            "ordinal_alpha_paired_items": 1,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "conditionals": {
+            "total": 2,
+            "reference_support": {
+              "easy": 2
+            },
+            "assessed": 1,
+            "judge_labelled": 1,
+            "unknown_estimates": 0,
+            "failures": {
+              "JUDGE_TIMEOUT": 1
+            },
+            "primary_agreement_all_items": {
+              "count": 1,
+              "denominator": 2,
+              "rate": 0.5
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 2,
+              "rate": 0.5
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 1,
+              "denominator": 2,
+              "rate": 0.5
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "changing_state": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "answer_discrimination": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 1,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          },
+          "functions": {
+            "total": 1,
+            "reference_support": {
+              "easy": 1
+            },
+            "assessed": 1,
+            "judge_labelled": 1,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "changing_state": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "answer_discrimination": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 1,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          },
+          "lists": {
+            "total": 1,
+            "reference_support": {
+              "medium": 1
+            },
+            "assessed": 0,
+            "judge_labelled": 0,
+            "unknown_estimates": 0,
+            "failures": {
+              "JUDGE_TIMEOUT": 1
+            },
+            "primary_agreement_all_items": {
+              "count": 0,
+              "denominator": 1,
+              "rate": 0.0
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 0,
+              "denominator": 0,
+              "rate": null
+            },
+            "confirmed_reference_matches": {
+              "count": 0,
+              "denominator": 1,
+              "rate": 0.0
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 0,
+              "denominator": 1,
+              "rate": 0.0
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 0,
+                "denominator": 0,
+                "rate": null
+              },
+              "changing_state": {
+                "count": 0,
+                "denominator": 0,
+                "rate": null
+              },
+              "conceptual_interaction": {
+                "count": 0,
+                "denominator": 0,
+                "rate": null
+              },
+              "answer_discrimination": {
+                "count": 0,
+                "denominator": 0,
+                "rate": null
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 0,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          },
+          "loops": {
+            "total": 1,
+            "reference_support": {
+              "medium": 1
+            },
+            "assessed": 1,
+            "judge_labelled": 1,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "changing_state": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "answer_discrimination": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 1,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          }
+        }
+      },
+      "development": {
+        "total": 6,
+        "reference_support": {
+          "hard": 1,
+          "easy": 3,
+          "medium": 2
+        },
+        "assessed": 4,
+        "judge_labelled": 4,
+        "unknown_estimates": 0,
+        "failures": {
+          "JUDGE_TIMEOUT": 2
+        },
+        "primary_agreement_all_items": {
+          "count": 3,
+          "denominator": 6,
+          "rate": 0.5
+        },
+        "primary_agreement_jointly_labelled": {
+          "count": 3,
+          "denominator": 4,
+          "rate": 0.75
+        },
+        "confirmed_reference_matches": {
+          "count": 3,
+          "denominator": 6,
+          "rate": 0.5
+        },
+        "uncertain_comparisons": 0,
+        "decision_coverage": {
+          "count": 4,
+          "denominator": 6,
+          "rate": 0.6666666666666666
+        },
+        "confusion_rows_reference_columns_judge": {
+          "easy": {
+            "easy": 2,
+            "medium": 0,
+            "hard": 0
+          },
+          "medium": {
+            "easy": 0,
+            "medium": 1,
+            "hard": 0
+          },
+          "hard": {
+            "easy": 0,
+            "medium": 1,
+            "hard": 0
+          }
+        },
+        "severe_disagreements": 0,
+        "dimensions": {
+          "execution_burden": {
+            "count": 3,
+            "denominator": 4,
+            "rate": 0.75
+          },
+          "changing_state": {
+            "count": 3,
+            "denominator": 4,
+            "rate": 0.75
+          },
+          "conceptual_interaction": {
+            "count": 3,
+            "denominator": 4,
+            "rate": 0.75
+          },
+          "answer_discrimination": {
+            "count": 4,
+            "denominator": 4,
+            "rate": 1.0
+          }
+        },
+        "ordinal_alpha": 0.9,
+        "ordinal_alpha_paired_items": 4,
+        "ordinal_alpha_unavailable_reason": null,
+        "bootstrap": {
+          "method": "family percentile bootstrap, 95%",
+          "replicates": 2000,
+          "seed": 43,
+          "families": 6,
+          "intervals": {
+            "primary_agreement_all_items": {
+              "lower": 0.16666666666666666,
+              "upper": 0.8333333333333334,
+              "valid_replicates": 2000
+            },
+            "confirmed_reference_matches": {
+              "lower": 0.16666666666666666,
+              "upper": 0.8333333333333334,
+              "valid_replicates": 2000
+            },
+            "decision_coverage": {
+              "lower": 0.3333333333333333,
+              "upper": 1.0,
+              "valid_replicates": 2000
+            },
+            "ordinal_alpha": {
+              "lower": -0.25,
+              "upper": 1.0,
+              "valid_replicates": 1784
+            }
+          }
+        },
+        "topics": {
+          "arithmetic": {
+            "total": 1,
+            "reference_support": {
+              "hard": 1
+            },
+            "assessed": 1,
+            "judge_labelled": 1,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 0,
+              "denominator": 1,
+              "rate": 0.0
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 0,
+              "denominator": 1,
+              "rate": 0.0
+            },
+            "confirmed_reference_matches": {
+              "count": 0,
+              "denominator": 1,
+              "rate": 0.0
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              },
+              "changing_state": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              },
+              "conceptual_interaction": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              },
+              "answer_discrimination": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              }
+            },
+            "ordinal_alpha": 0.0,
+            "ordinal_alpha_paired_items": 1,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "conditionals": {
+            "total": 2,
+            "reference_support": {
+              "easy": 2
+            },
+            "assessed": 1,
+            "judge_labelled": 1,
+            "unknown_estimates": 0,
+            "failures": {
+              "JUDGE_TIMEOUT": 1
+            },
+            "primary_agreement_all_items": {
+              "count": 1,
+              "denominator": 2,
+              "rate": 0.5
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 2,
+              "rate": 0.5
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 1,
+              "denominator": 2,
+              "rate": 0.5
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "changing_state": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "answer_discrimination": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 1,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          },
+          "functions": {
+            "total": 1,
+            "reference_support": {
+              "easy": 1
+            },
+            "assessed": 1,
+            "judge_labelled": 1,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "changing_state": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "answer_discrimination": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 1,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          },
+          "lists": {
+            "total": 1,
+            "reference_support": {
+              "medium": 1
+            },
+            "assessed": 0,
+            "judge_labelled": 0,
+            "unknown_estimates": 0,
+            "failures": {
+              "JUDGE_TIMEOUT": 1
+            },
+            "primary_agreement_all_items": {
+              "count": 0,
+              "denominator": 1,
+              "rate": 0.0
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 0,
+              "denominator": 0,
+              "rate": null
+            },
+            "confirmed_reference_matches": {
+              "count": 0,
+              "denominator": 1,
+              "rate": 0.0
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 0,
+              "denominator": 1,
+              "rate": 0.0
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 0,
+                "denominator": 0,
+                "rate": null
+              },
+              "changing_state": {
+                "count": 0,
+                "denominator": 0,
+                "rate": null
+              },
+              "conceptual_interaction": {
+                "count": 0,
+                "denominator": 0,
+                "rate": null
+              },
+              "answer_discrimination": {
+                "count": 0,
+                "denominator": 0,
+                "rate": null
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 0,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          },
+          "loops": {
+            "total": 1,
+            "reference_support": {
+              "medium": 1
+            },
+            "assessed": 1,
+            "judge_labelled": 1,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "changing_state": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "answer_discrimination": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 1,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          }
+        }
+      },
+      "held_out": {
+        "total": 0,
+        "reference_support": {},
+        "assessed": 0,
+        "judge_labelled": 0,
+        "unknown_estimates": 0,
+        "failures": {},
+        "primary_agreement_all_items": {
+          "count": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "primary_agreement_jointly_labelled": {
+          "count": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "confirmed_reference_matches": {
+          "count": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "uncertain_comparisons": 0,
+        "decision_coverage": {
+          "count": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "confusion_rows_reference_columns_judge": {
+          "easy": {
+            "easy": 0,
+            "medium": 0,
+            "hard": 0
+          },
+          "medium": {
+            "easy": 0,
+            "medium": 0,
+            "hard": 0
+          },
+          "hard": {
+            "easy": 0,
+            "medium": 0,
+            "hard": 0
+          }
+        },
+        "severe_disagreements": 0,
+        "dimensions": {
+          "execution_burden": {
+            "count": 0,
+            "denominator": 0,
+            "rate": null
+          },
+          "changing_state": {
+            "count": 0,
+            "denominator": 0,
+            "rate": null
+          },
+          "conceptual_interaction": {
+            "count": 0,
+            "denominator": 0,
+            "rate": null
+          },
+          "answer_discrimination": {
+            "count": 0,
+            "denominator": 0,
+            "rate": null
+          }
+        },
+        "ordinal_alpha": null,
+        "ordinal_alpha_paired_items": 0,
+        "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation",
+        "bootstrap": {
+          "unavailable_reason": "Fewer than two families"
+        },
+        "topics": {}
+      }
+    },
+    "openai": {
+      "all": {
+        "total": 30,
+        "reference_support": {
+          "hard": 6,
+          "easy": 13,
+          "medium": 11
+        },
+        "assessed": 30,
+        "judge_labelled": 30,
+        "unknown_estimates": 0,
+        "failures": {},
+        "primary_agreement_all_items": {
+          "count": 19,
+          "denominator": 30,
+          "rate": 0.6333333333333333
+        },
+        "primary_agreement_jointly_labelled": {
+          "count": 19,
+          "denominator": 30,
+          "rate": 0.6333333333333333
+        },
+        "confirmed_reference_matches": {
+          "count": 9,
+          "denominator": 30,
+          "rate": 0.3
+        },
+        "uncertain_comparisons": 14,
+        "decision_coverage": {
+          "count": 16,
+          "denominator": 30,
+          "rate": 0.5333333333333333
+        },
+        "confusion_rows_reference_columns_judge": {
+          "easy": {
+            "easy": 12,
+            "medium": 1,
+            "hard": 0
+          },
+          "medium": {
+            "easy": 6,
+            "medium": 5,
+            "hard": 0
+          },
+          "hard": {
+            "easy": 0,
+            "medium": 4,
+            "hard": 2
+          }
+        },
+        "severe_disagreements": 0,
+        "dimensions": {
+          "execution_burden": {
+            "count": 17,
+            "denominator": 30,
+            "rate": 0.5666666666666667
+          },
+          "changing_state": {
+            "count": 20,
+            "denominator": 30,
+            "rate": 0.6666666666666666
+          },
+          "conceptual_interaction": {
+            "count": 16,
+            "denominator": 30,
+            "rate": 0.5333333333333333
+          },
+          "answer_discrimination": {
+            "count": 24,
+            "denominator": 30,
+            "rate": 0.8
+          }
+        },
+        "ordinal_alpha": 0.627279013353284,
+        "ordinal_alpha_paired_items": 30,
+        "ordinal_alpha_unavailable_reason": null,
+        "bootstrap": {
+          "method": "family percentile bootstrap, 95%",
+          "replicates": 2000,
+          "seed": 43,
+          "families": 30,
+          "intervals": {
+            "primary_agreement_all_items": {
+              "lower": 0.4666666666666667,
+              "upper": 0.8,
+              "valid_replicates": 2000
+            },
+            "confirmed_reference_matches": {
+              "lower": 0.13333333333333333,
+              "upper": 0.4666666666666667,
+              "valid_replicates": 2000
+            },
+            "decision_coverage": {
+              "lower": 0.36666666666666664,
+              "upper": 0.7,
+              "valid_replicates": 2000
+            },
+            "ordinal_alpha": {
+              "lower": 0.3192307692307692,
+              "upper": 0.8197716651878143,
+              "valid_replicates": 2000
+            }
+          }
+        },
+        "topics": {
+          "arithmetic": {
+            "total": 6,
+            "reference_support": {
+              "hard": 1,
+              "medium": 1,
+              "easy": 4
+            },
+            "assessed": 6,
+            "judge_labelled": 6,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 4,
+              "denominator": 6,
+              "rate": 0.6666666666666666
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 4,
+              "denominator": 6,
+              "rate": 0.6666666666666666
+            },
+            "confirmed_reference_matches": {
+              "count": 2,
+              "denominator": 6,
+              "rate": 0.3333333333333333
+            },
+            "uncertain_comparisons": 2,
+            "decision_coverage": {
+              "count": 4,
+              "denominator": 6,
+              "rate": 0.6666666666666666
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 4,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 4,
+                "denominator": 6,
+                "rate": 0.6666666666666666
+              },
+              "changing_state": {
+                "count": 5,
+                "denominator": 6,
+                "rate": 0.8333333333333334
+              },
+              "conceptual_interaction": {
+                "count": 3,
+                "denominator": 6,
+                "rate": 0.5
+              },
+              "answer_discrimination": {
+                "count": 5,
+                "denominator": 6,
+                "rate": 0.8333333333333334
+              }
+            },
+            "ordinal_alpha": 0.6388888888888888,
+            "ordinal_alpha_paired_items": 6,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "conditionals": {
+            "total": 6,
+            "reference_support": {
+              "easy": 4,
+              "hard": 1,
+              "medium": 1
+            },
+            "assessed": 6,
+            "judge_labelled": 6,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 4,
+              "denominator": 6,
+              "rate": 0.6666666666666666
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 4,
+              "denominator": 6,
+              "rate": 0.6666666666666666
+            },
+            "confirmed_reference_matches": {
+              "count": 3,
+              "denominator": 6,
+              "rate": 0.5
+            },
+            "uncertain_comparisons": 3,
+            "decision_coverage": {
+              "count": 3,
+              "denominator": 6,
+              "rate": 0.5
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 3,
+                "medium": 1,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 3,
+                "denominator": 6,
+                "rate": 0.5
+              },
+              "changing_state": {
+                "count": 5,
+                "denominator": 6,
+                "rate": 0.8333333333333334
+              },
+              "conceptual_interaction": {
+                "count": 4,
+                "denominator": 6,
+                "rate": 0.6666666666666666
+              },
+              "answer_discrimination": {
+                "count": 5,
+                "denominator": 6,
+                "rate": 0.8333333333333334
+              }
+            },
+            "ordinal_alpha": 0.6958333333333333,
+            "ordinal_alpha_paired_items": 6,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "functions": {
+            "total": 6,
+            "reference_support": {
+              "easy": 2,
+              "medium": 3,
+              "hard": 1
+            },
+            "assessed": 6,
+            "judge_labelled": 6,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 3,
+              "denominator": 6,
+              "rate": 0.5
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 3,
+              "denominator": 6,
+              "rate": 0.5
+            },
+            "confirmed_reference_matches": {
+              "count": 2,
+              "denominator": 6,
+              "rate": 0.3333333333333333
+            },
+            "uncertain_comparisons": 2,
+            "decision_coverage": {
+              "count": 4,
+              "denominator": 6,
+              "rate": 0.6666666666666666
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 2,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 2,
+                "medium": 1,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 2,
+                "denominator": 6,
+                "rate": 0.3333333333333333
+              },
+              "changing_state": {
+                "count": 4,
+                "denominator": 6,
+                "rate": 0.6666666666666666
+              },
+              "conceptual_interaction": {
+                "count": 3,
+                "denominator": 6,
+                "rate": 0.5
+              },
+              "answer_discrimination": {
+                "count": 5,
+                "denominator": 6,
+                "rate": 0.8333333333333334
+              }
+            },
+            "ordinal_alpha": 0.4484126984126984,
+            "ordinal_alpha_paired_items": 6,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "lists": {
+            "total": 6,
+            "reference_support": {
+              "medium": 3,
+              "easy": 2,
+              "hard": 1
+            },
+            "assessed": 6,
+            "judge_labelled": 6,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 4,
+              "denominator": 6,
+              "rate": 0.6666666666666666
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 4,
+              "denominator": 6,
+              "rate": 0.6666666666666666
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 6,
+              "rate": 0.16666666666666666
+            },
+            "uncertain_comparisons": 3,
+            "decision_coverage": {
+              "count": 3,
+              "denominator": 6,
+              "rate": 0.5
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 2,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 2,
+                "medium": 1,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 1
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 5,
+                "denominator": 6,
+                "rate": 0.8333333333333334
+              },
+              "changing_state": {
+                "count": 3,
+                "denominator": 6,
+                "rate": 0.5
+              },
+              "conceptual_interaction": {
+                "count": 2,
+                "denominator": 6,
+                "rate": 0.3333333333333333
+              },
+              "answer_discrimination": {
+                "count": 4,
+                "denominator": 6,
+                "rate": 0.6666666666666666
+              }
+            },
+            "ordinal_alpha": 0.6180555555555556,
+            "ordinal_alpha_paired_items": 6,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "loops": {
+            "total": 6,
+            "reference_support": {
+              "medium": 3,
+              "easy": 1,
+              "hard": 2
+            },
+            "assessed": 6,
+            "judge_labelled": 6,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 4,
+              "denominator": 6,
+              "rate": 0.6666666666666666
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 4,
+              "denominator": 6,
+              "rate": 0.6666666666666666
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 6,
+              "rate": 0.16666666666666666
+            },
+            "uncertain_comparisons": 4,
+            "decision_coverage": {
+              "count": 2,
+              "denominator": 6,
+              "rate": 0.3333333333333333
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 1,
+                "medium": 2,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 1
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 3,
+                "denominator": 6,
+                "rate": 0.5
+              },
+              "changing_state": {
+                "count": 3,
+                "denominator": 6,
+                "rate": 0.5
+              },
+              "conceptual_interaction": {
+                "count": 4,
+                "denominator": 6,
+                "rate": 0.6666666666666666
+              },
+              "answer_discrimination": {
+                "count": 5,
+                "denominator": 6,
+                "rate": 0.8333333333333334
+              }
+            },
+            "ordinal_alpha": 0.6944444444444444,
+            "ordinal_alpha_paired_items": 6,
+            "ordinal_alpha_unavailable_reason": null
+          }
+        }
+      },
+      "development": {
+        "total": 18,
+        "reference_support": {
+          "hard": 3,
+          "easy": 9,
+          "medium": 6
+        },
+        "assessed": 18,
+        "judge_labelled": 18,
+        "unknown_estimates": 0,
+        "failures": {},
+        "primary_agreement_all_items": {
+          "count": 12,
+          "denominator": 18,
+          "rate": 0.6666666666666666
+        },
+        "primary_agreement_jointly_labelled": {
+          "count": 12,
+          "denominator": 18,
+          "rate": 0.6666666666666666
+        },
+        "confirmed_reference_matches": {
+          "count": 6,
+          "denominator": 18,
+          "rate": 0.3333333333333333
+        },
+        "uncertain_comparisons": 8,
+        "decision_coverage": {
+          "count": 10,
+          "denominator": 18,
+          "rate": 0.5555555555555556
+        },
+        "confusion_rows_reference_columns_judge": {
+          "easy": {
+            "easy": 8,
+            "medium": 1,
+            "hard": 0
+          },
+          "medium": {
+            "easy": 4,
+            "medium": 2,
+            "hard": 0
+          },
+          "hard": {
+            "easy": 0,
+            "medium": 1,
+            "hard": 2
+          }
+        },
+        "severe_disagreements": 0,
+        "dimensions": {
+          "execution_burden": {
+            "count": 10,
+            "denominator": 18,
+            "rate": 0.5555555555555556
+          },
+          "changing_state": {
+            "count": 15,
+            "denominator": 18,
+            "rate": 0.8333333333333334
+          },
+          "conceptual_interaction": {
+            "count": 11,
+            "denominator": 18,
+            "rate": 0.6111111111111112
+          },
+          "answer_discrimination": {
+            "count": 13,
+            "denominator": 18,
+            "rate": 0.7222222222222222
+          }
+        },
+        "ordinal_alpha": 0.5955105229298778,
+        "ordinal_alpha_paired_items": 18,
+        "ordinal_alpha_unavailable_reason": null,
+        "bootstrap": {
+          "method": "family percentile bootstrap, 95%",
+          "replicates": 2000,
+          "seed": 43,
+          "families": 18,
+          "intervals": {
+            "primary_agreement_all_items": {
+              "lower": 0.4444444444444444,
+              "upper": 0.8888888888888888,
+              "valid_replicates": 2000
+            },
+            "confirmed_reference_matches": {
+              "lower": 0.1111111111111111,
+              "upper": 0.5555555555555556,
+              "valid_replicates": 2000
+            },
+            "decision_coverage": {
+              "lower": 0.3333333333333333,
+              "upper": 0.7777777777777778,
+              "valid_replicates": 2000
+            },
+            "ordinal_alpha": {
+              "lower": 0.07925925925925925,
+              "upper": 0.8697811447811448,
+              "valid_replicates": 2000
+            }
+          }
+        },
+        "topics": {
+          "arithmetic": {
+            "total": 4,
+            "reference_support": {
+              "hard": 1,
+              "medium": 1,
+              "easy": 2
+            },
+            "assessed": 4,
+            "judge_labelled": 4,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 2,
+              "denominator": 4,
+              "rate": 0.5
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 2,
+              "denominator": 4,
+              "rate": 0.5
+            },
+            "confirmed_reference_matches": {
+              "count": 0,
+              "denominator": 4,
+              "rate": 0.0
+            },
+            "uncertain_comparisons": 2,
+            "decision_coverage": {
+              "count": 2,
+              "denominator": 4,
+              "rate": 0.5
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 2,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 2,
+                "denominator": 4,
+                "rate": 0.5
+              },
+              "changing_state": {
+                "count": 3,
+                "denominator": 4,
+                "rate": 0.75
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 4,
+                "rate": 0.25
+              },
+              "answer_discrimination": {
+                "count": 3,
+                "denominator": 4,
+                "rate": 0.75
+              }
+            },
+            "ordinal_alpha": 0.5972222222222222,
+            "ordinal_alpha_paired_items": 4,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "conditionals": {
+            "total": 4,
+            "reference_support": {
+              "easy": 4
+            },
+            "assessed": 4,
+            "judge_labelled": 4,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 3,
+              "denominator": 4,
+              "rate": 0.75
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 3,
+              "denominator": 4,
+              "rate": 0.75
+            },
+            "confirmed_reference_matches": {
+              "count": 3,
+              "denominator": 4,
+              "rate": 0.75
+            },
+            "uncertain_comparisons": 1,
+            "decision_coverage": {
+              "count": 3,
+              "denominator": 4,
+              "rate": 0.75
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 3,
+                "medium": 1,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 3,
+                "denominator": 4,
+                "rate": 0.75
+              },
+              "changing_state": {
+                "count": 4,
+                "denominator": 4,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 3,
+                "denominator": 4,
+                "rate": 0.75
+              },
+              "answer_discrimination": {
+                "count": 3,
+                "denominator": 4,
+                "rate": 0.75
+              }
+            },
+            "ordinal_alpha": 0.0,
+            "ordinal_alpha_paired_items": 4,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "functions": {
+            "total": 3,
+            "reference_support": {
+              "easy": 1,
+              "medium": 2
+            },
+            "assessed": 3,
+            "judge_labelled": 3,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 3,
+              "rate": 0.3333333333333333
+            },
+            "uncertain_comparisons": 1,
+            "decision_coverage": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 1,
+                "medium": 1,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 1,
+                "denominator": 3,
+                "rate": 0.3333333333333333
+              },
+              "changing_state": {
+                "count": 3,
+                "denominator": 3,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 2,
+                "denominator": 3,
+                "rate": 0.6666666666666666
+              },
+              "answer_discrimination": {
+                "count": 3,
+                "denominator": 3,
+                "rate": 1.0
+              }
+            },
+            "ordinal_alpha": 0.44444444444444453,
+            "ordinal_alpha_paired_items": 3,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "lists": {
+            "total": 3,
+            "reference_support": {
+              "medium": 1,
+              "easy": 1,
+              "hard": 1
+            },
+            "assessed": 3,
+            "judge_labelled": 3,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 3,
+              "rate": 0.3333333333333333
+            },
+            "uncertain_comparisons": 1,
+            "decision_coverage": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 1
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 2,
+                "denominator": 3,
+                "rate": 0.6666666666666666
+              },
+              "changing_state": {
+                "count": 2,
+                "denominator": 3,
+                "rate": 0.6666666666666666
+              },
+              "conceptual_interaction": {
+                "count": 2,
+                "denominator": 3,
+                "rate": 0.6666666666666666
+              },
+              "answer_discrimination": {
+                "count": 1,
+                "denominator": 3,
+                "rate": 0.3333333333333333
+              }
+            },
+            "ordinal_alpha": 0.7777777777777778,
+            "ordinal_alpha_paired_items": 3,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "loops": {
+            "total": 4,
+            "reference_support": {
+              "medium": 2,
+              "easy": 1,
+              "hard": 1
+            },
+            "assessed": 4,
+            "judge_labelled": 4,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 3,
+              "denominator": 4,
+              "rate": 0.75
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 3,
+              "denominator": 4,
+              "rate": 0.75
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 4,
+              "rate": 0.25
+            },
+            "uncertain_comparisons": 3,
+            "decision_coverage": {
+              "count": 1,
+              "denominator": 4,
+              "rate": 0.25
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 1,
+                "medium": 1,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 1
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 2,
+                "denominator": 4,
+                "rate": 0.5
+              },
+              "changing_state": {
+                "count": 3,
+                "denominator": 4,
+                "rate": 0.75
+              },
+              "conceptual_interaction": {
+                "count": 3,
+                "denominator": 4,
+                "rate": 0.75
+              },
+              "answer_discrimination": {
+                "count": 3,
+                "denominator": 4,
+                "rate": 0.75
+              }
+            },
+            "ordinal_alpha": 0.79,
+            "ordinal_alpha_paired_items": 4,
+            "ordinal_alpha_unavailable_reason": null
+          }
+        }
+      },
+      "held_out": {
+        "total": 12,
+        "reference_support": {
+          "easy": 4,
+          "hard": 3,
+          "medium": 5
+        },
+        "assessed": 12,
+        "judge_labelled": 12,
+        "unknown_estimates": 0,
+        "failures": {},
+        "primary_agreement_all_items": {
+          "count": 7,
+          "denominator": 12,
+          "rate": 0.5833333333333334
+        },
+        "primary_agreement_jointly_labelled": {
+          "count": 7,
+          "denominator": 12,
+          "rate": 0.5833333333333334
+        },
+        "confirmed_reference_matches": {
+          "count": 3,
+          "denominator": 12,
+          "rate": 0.25
+        },
+        "uncertain_comparisons": 6,
+        "decision_coverage": {
+          "count": 6,
+          "denominator": 12,
+          "rate": 0.5
+        },
+        "confusion_rows_reference_columns_judge": {
+          "easy": {
+            "easy": 4,
+            "medium": 0,
+            "hard": 0
+          },
+          "medium": {
+            "easy": 2,
+            "medium": 3,
+            "hard": 0
+          },
+          "hard": {
+            "easy": 0,
+            "medium": 3,
+            "hard": 0
+          }
+        },
+        "severe_disagreements": 0,
+        "dimensions": {
+          "execution_burden": {
+            "count": 7,
+            "denominator": 12,
+            "rate": 0.5833333333333334
+          },
+          "changing_state": {
+            "count": 5,
+            "denominator": 12,
+            "rate": 0.4166666666666667
+          },
+          "conceptual_interaction": {
+            "count": 5,
+            "denominator": 12,
+            "rate": 0.4166666666666667
+          },
+          "answer_discrimination": {
+            "count": 11,
+            "denominator": 12,
+            "rate": 0.9166666666666666
+          }
+        },
+        "ordinal_alpha": 0.6314102564102564,
+        "ordinal_alpha_paired_items": 12,
+        "ordinal_alpha_unavailable_reason": null,
+        "bootstrap": {
+          "method": "family percentile bootstrap, 95%",
+          "replicates": 2000,
+          "seed": 43,
+          "families": 12,
+          "intervals": {
+            "primary_agreement_all_items": {
+              "lower": 0.3333333333333333,
+              "upper": 0.8333333333333334,
+              "valid_replicates": 2000
+            },
+            "confirmed_reference_matches": {
+              "lower": 0.0,
+              "upper": 0.5,
+              "valid_replicates": 2000
+            },
+            "decision_coverage": {
+              "lower": 0.25,
+              "upper": 0.75,
+              "valid_replicates": 2000
+            },
+            "ordinal_alpha": {
+              "lower": 0.16335978835978837,
+              "upper": 0.9194677871148459,
+              "valid_replicates": 2000
+            }
+          }
+        },
+        "topics": {
+          "arithmetic": {
+            "total": 2,
+            "reference_support": {
+              "easy": 2
+            },
+            "assessed": 2,
+            "judge_labelled": 2,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 2,
+              "denominator": 2,
+              "rate": 1.0
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 2,
+              "denominator": 2,
+              "rate": 1.0
+            },
+            "confirmed_reference_matches": {
+              "count": 2,
+              "denominator": 2,
+              "rate": 1.0
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 2,
+              "denominator": 2,
+              "rate": 1.0
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 2,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 2,
+                "denominator": 2,
+                "rate": 1.0
+              },
+              "changing_state": {
+                "count": 2,
+                "denominator": 2,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 2,
+                "denominator": 2,
+                "rate": 1.0
+              },
+              "answer_discrimination": {
+                "count": 2,
+                "denominator": 2,
+                "rate": 1.0
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 2,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          },
+          "conditionals": {
+            "total": 2,
+            "reference_support": {
+              "hard": 1,
+              "medium": 1
+            },
+            "assessed": 2,
+            "judge_labelled": 2,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 1,
+              "denominator": 2,
+              "rate": 0.5
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 1,
+              "denominator": 2,
+              "rate": 0.5
+            },
+            "confirmed_reference_matches": {
+              "count": 0,
+              "denominator": 2,
+              "rate": 0.0
+            },
+            "uncertain_comparisons": 2,
+            "decision_coverage": {
+              "count": 0,
+              "denominator": 2,
+              "rate": 0.0
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 0,
+                "denominator": 2,
+                "rate": 0.0
+              },
+              "changing_state": {
+                "count": 1,
+                "denominator": 2,
+                "rate": 0.5
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 2,
+                "rate": 0.5
+              },
+              "answer_discrimination": {
+                "count": 2,
+                "denominator": 2,
+                "rate": 1.0
+              }
+            },
+            "ordinal_alpha": 0.0,
+            "ordinal_alpha_paired_items": 2,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "functions": {
+            "total": 3,
+            "reference_support": {
+              "easy": 1,
+              "hard": 1,
+              "medium": 1
+            },
+            "assessed": 3,
+            "judge_labelled": 3,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 1,
+              "denominator": 3,
+              "rate": 0.3333333333333333
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 1,
+              "denominator": 3,
+              "rate": 0.3333333333333333
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 3,
+              "rate": 0.3333333333333333
+            },
+            "uncertain_comparisons": 1,
+            "decision_coverage": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 1,
+                "denominator": 3,
+                "rate": 0.3333333333333333
+              },
+              "changing_state": {
+                "count": 1,
+                "denominator": 3,
+                "rate": 0.3333333333333333
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 3,
+                "rate": 0.3333333333333333
+              },
+              "answer_discrimination": {
+                "count": 2,
+                "denominator": 3,
+                "rate": 0.6666666666666666
+              }
+            },
+            "ordinal_alpha": 0.5277777777777777,
+            "ordinal_alpha_paired_items": 3,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "lists": {
+            "total": 3,
+            "reference_support": {
+              "medium": 2,
+              "easy": 1
+            },
+            "assessed": 3,
+            "judge_labelled": 3,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "confirmed_reference_matches": {
+              "count": 0,
+              "denominator": 3,
+              "rate": 0.0
+            },
+            "uncertain_comparisons": 2,
+            "decision_coverage": {
+              "count": 1,
+              "denominator": 3,
+              "rate": 0.3333333333333333
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 1,
+                "medium": 1,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 3,
+                "denominator": 3,
+                "rate": 1.0
+              },
+              "changing_state": {
+                "count": 1,
+                "denominator": 3,
+                "rate": 0.3333333333333333
+              },
+              "conceptual_interaction": {
+                "count": 0,
+                "denominator": 3,
+                "rate": 0.0
+              },
+              "answer_discrimination": {
+                "count": 3,
+                "denominator": 3,
+                "rate": 1.0
+              }
+            },
+            "ordinal_alpha": 0.44444444444444453,
+            "ordinal_alpha_paired_items": 3,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "loops": {
+            "total": 2,
+            "reference_support": {
+              "medium": 1,
+              "hard": 1
+            },
+            "assessed": 2,
+            "judge_labelled": 2,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 1,
+              "denominator": 2,
+              "rate": 0.5
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 1,
+              "denominator": 2,
+              "rate": 0.5
+            },
+            "confirmed_reference_matches": {
+              "count": 0,
+              "denominator": 2,
+              "rate": 0.0
+            },
+            "uncertain_comparisons": 1,
+            "decision_coverage": {
+              "count": 1,
+              "denominator": 2,
+              "rate": 0.5
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 1,
+                "denominator": 2,
+                "rate": 0.5
+              },
+              "changing_state": {
+                "count": 0,
+                "denominator": 2,
+                "rate": 0.0
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 2,
+                "rate": 0.5
+              },
+              "answer_discrimination": {
+                "count": 2,
+                "denominator": 2,
+                "rate": 1.0
+              }
+            },
+            "ordinal_alpha": 0.0,
+            "ordinal_alpha_paired_items": 2,
+            "ordinal_alpha_unavailable_reason": null
+          }
+        }
+      }
+    },
+    "soclaas": {
+      "all": {
+        "total": 30,
+        "reference_support": {
+          "hard": 6,
+          "easy": 13,
+          "medium": 11
+        },
+        "assessed": 14,
+        "judge_labelled": 14,
+        "unknown_estimates": 0,
+        "failures": {
+          "JUDGE_SCHEMA_VALIDATION": 16
+        },
+        "primary_agreement_all_items": {
+          "count": 11,
+          "denominator": 30,
+          "rate": 0.36666666666666664
+        },
+        "primary_agreement_jointly_labelled": {
+          "count": 11,
+          "denominator": 14,
+          "rate": 0.7857142857142857
+        },
+        "confirmed_reference_matches": {
+          "count": 8,
+          "denominator": 30,
+          "rate": 0.26666666666666666
+        },
+        "uncertain_comparisons": 3,
+        "decision_coverage": {
+          "count": 11,
+          "denominator": 30,
+          "rate": 0.36666666666666664
+        },
+        "confusion_rows_reference_columns_judge": {
+          "easy": {
+            "easy": 5,
+            "medium": 0,
+            "hard": 0
+          },
+          "medium": {
+            "easy": 3,
+            "medium": 2,
+            "hard": 0
+          },
+          "hard": {
+            "easy": 0,
+            "medium": 0,
+            "hard": 4
+          }
+        },
+        "severe_disagreements": 0,
+        "dimensions": {
+          "execution_burden": {
+            "count": 10,
+            "denominator": 14,
+            "rate": 0.7142857142857143
+          },
+          "changing_state": {
+            "count": 11,
+            "denominator": 14,
+            "rate": 0.7857142857142857
+          },
+          "conceptual_interaction": {
+            "count": 7,
+            "denominator": 14,
+            "rate": 0.5
+          },
+          "answer_discrimination": {
+            "count": 4,
+            "denominator": 14,
+            "rate": 0.2857142857142857
+          }
+        },
+        "ordinal_alpha": 0.8163265306122449,
+        "ordinal_alpha_paired_items": 14,
+        "ordinal_alpha_unavailable_reason": null,
+        "bootstrap": {
+          "method": "family percentile bootstrap, 95%",
+          "replicates": 2000,
+          "seed": 43,
+          "families": 30,
+          "intervals": {
+            "primary_agreement_all_items": {
+              "lower": 0.2,
+              "upper": 0.5333333333333333,
+              "valid_replicates": 2000
+            },
+            "confirmed_reference_matches": {
+              "lower": 0.1,
+              "upper": 0.43333333333333335,
+              "valid_replicates": 2000
+            },
+            "decision_coverage": {
+              "lower": 0.2,
+              "upper": 0.5333333333333333,
+              "valid_replicates": 2000
+            },
+            "ordinal_alpha": {
+              "lower": 0.35185185185185186,
+              "upper": 1.0,
+              "valid_replicates": 1999
+            }
+          }
+        },
+        "topics": {
+          "arithmetic": {
+            "total": 6,
+            "reference_support": {
+              "hard": 1,
+              "medium": 1,
+              "easy": 4
+            },
+            "assessed": 1,
+            "judge_labelled": 1,
+            "unknown_estimates": 0,
+            "failures": {
+              "JUDGE_SCHEMA_VALIDATION": 5
+            },
+            "primary_agreement_all_items": {
+              "count": 1,
+              "denominator": 6,
+              "rate": 0.16666666666666666
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 6,
+              "rate": 0.16666666666666666
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 1,
+              "denominator": 6,
+              "rate": 0.16666666666666666
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "changing_state": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              },
+              "answer_discrimination": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 1,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          },
+          "conditionals": {
+            "total": 6,
+            "reference_support": {
+              "easy": 4,
+              "hard": 1,
+              "medium": 1
+            },
+            "assessed": 1,
+            "judge_labelled": 1,
+            "unknown_estimates": 0,
+            "failures": {
+              "JUDGE_SCHEMA_VALIDATION": 5
+            },
+            "primary_agreement_all_items": {
+              "count": 1,
+              "denominator": 6,
+              "rate": 0.16666666666666666
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confirmed_reference_matches": {
+              "count": 0,
+              "denominator": 6,
+              "rate": 0.0
+            },
+            "uncertain_comparisons": 1,
+            "decision_coverage": {
+              "count": 0,
+              "denominator": 6,
+              "rate": 0.0
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 1
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              },
+              "changing_state": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "answer_discrimination": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 1,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          },
+          "functions": {
+            "total": 6,
+            "reference_support": {
+              "easy": 2,
+              "medium": 3,
+              "hard": 1
+            },
+            "assessed": 3,
+            "judge_labelled": 3,
+            "unknown_estimates": 0,
+            "failures": {
+              "JUDGE_SCHEMA_VALIDATION": 3
+            },
+            "primary_agreement_all_items": {
+              "count": 2,
+              "denominator": 6,
+              "rate": 0.3333333333333333
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "confirmed_reference_matches": {
+              "count": 2,
+              "denominator": 6,
+              "rate": 0.3333333333333333
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 3,
+              "denominator": 6,
+              "rate": 0.5
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 1
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 2,
+                "denominator": 3,
+                "rate": 0.6666666666666666
+              },
+              "changing_state": {
+                "count": 3,
+                "denominator": 3,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 2,
+                "denominator": 3,
+                "rate": 0.6666666666666666
+              },
+              "answer_discrimination": {
+                "count": 1,
+                "denominator": 3,
+                "rate": 0.3333333333333333
+              }
+            },
+            "ordinal_alpha": 0.7777777777777778,
+            "ordinal_alpha_paired_items": 3,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "lists": {
+            "total": 6,
+            "reference_support": {
+              "medium": 3,
+              "easy": 2,
+              "hard": 1
+            },
+            "assessed": 6,
+            "judge_labelled": 6,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 4,
+              "denominator": 6,
+              "rate": 0.6666666666666666
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 4,
+              "denominator": 6,
+              "rate": 0.6666666666666666
+            },
+            "confirmed_reference_matches": {
+              "count": 3,
+              "denominator": 6,
+              "rate": 0.5
+            },
+            "uncertain_comparisons": 1,
+            "decision_coverage": {
+              "count": 5,
+              "denominator": 6,
+              "rate": 0.8333333333333334
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 2,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 2,
+                "medium": 1,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 1
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 5,
+                "denominator": 6,
+                "rate": 0.8333333333333334
+              },
+              "changing_state": {
+                "count": 3,
+                "denominator": 6,
+                "rate": 0.5
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 6,
+                "rate": 0.16666666666666666
+              },
+              "answer_discrimination": {
+                "count": 1,
+                "denominator": 6,
+                "rate": 0.16666666666666666
+              }
+            },
+            "ordinal_alpha": 0.6180555555555556,
+            "ordinal_alpha_paired_items": 6,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "loops": {
+            "total": 6,
+            "reference_support": {
+              "medium": 3,
+              "easy": 1,
+              "hard": 2
+            },
+            "assessed": 3,
+            "judge_labelled": 3,
+            "unknown_estimates": 0,
+            "failures": {
+              "JUDGE_SCHEMA_VALIDATION": 3
+            },
+            "primary_agreement_all_items": {
+              "count": 3,
+              "denominator": 6,
+              "rate": 0.5
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 3,
+              "denominator": 3,
+              "rate": 1.0
+            },
+            "confirmed_reference_matches": {
+              "count": 2,
+              "denominator": 6,
+              "rate": 0.3333333333333333
+            },
+            "uncertain_comparisons": 1,
+            "decision_coverage": {
+              "count": 2,
+              "denominator": 6,
+              "rate": 0.3333333333333333
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 1
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 2,
+                "denominator": 3,
+                "rate": 0.6666666666666666
+              },
+              "changing_state": {
+                "count": 3,
+                "denominator": 3,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 3,
+                "denominator": 3,
+                "rate": 1.0
+              },
+              "answer_discrimination": {
+                "count": 2,
+                "denominator": 3,
+                "rate": 0.6666666666666666
+              }
+            },
+            "ordinal_alpha": 1.0,
+            "ordinal_alpha_paired_items": 3,
+            "ordinal_alpha_unavailable_reason": null
+          }
+        }
+      },
+      "development": {
+        "total": 18,
+        "reference_support": {
+          "hard": 3,
+          "easy": 9,
+          "medium": 6
+        },
+        "assessed": 8,
+        "judge_labelled": 8,
+        "unknown_estimates": 0,
+        "failures": {
+          "JUDGE_SCHEMA_VALIDATION": 10
+        },
+        "primary_agreement_all_items": {
+          "count": 6,
+          "denominator": 18,
+          "rate": 0.3333333333333333
+        },
+        "primary_agreement_jointly_labelled": {
+          "count": 6,
+          "denominator": 8,
+          "rate": 0.75
+        },
+        "confirmed_reference_matches": {
+          "count": 6,
+          "denominator": 18,
+          "rate": 0.3333333333333333
+        },
+        "uncertain_comparisons": 0,
+        "decision_coverage": {
+          "count": 8,
+          "denominator": 18,
+          "rate": 0.4444444444444444
+        },
+        "confusion_rows_reference_columns_judge": {
+          "easy": {
+            "easy": 4,
+            "medium": 0,
+            "hard": 0
+          },
+          "medium": {
+            "easy": 2,
+            "medium": 1,
+            "hard": 0
+          },
+          "hard": {
+            "easy": 0,
+            "medium": 0,
+            "hard": 1
+          }
+        },
+        "severe_disagreements": 0,
+        "dimensions": {
+          "execution_burden": {
+            "count": 6,
+            "denominator": 8,
+            "rate": 0.75
+          },
+          "changing_state": {
+            "count": 7,
+            "denominator": 8,
+            "rate": 0.875
+          },
+          "conceptual_interaction": {
+            "count": 4,
+            "denominator": 8,
+            "rate": 0.5
+          },
+          "answer_discrimination": {
+            "count": 3,
+            "denominator": 8,
+            "rate": 0.375
+          }
+        },
+        "ordinal_alpha": 0.6354166666666667,
+        "ordinal_alpha_paired_items": 8,
+        "ordinal_alpha_unavailable_reason": null,
+        "bootstrap": {
+          "method": "family percentile bootstrap, 95%",
+          "replicates": 2000,
+          "seed": 43,
+          "families": 18,
+          "intervals": {
+            "primary_agreement_all_items": {
+              "lower": 0.1111111111111111,
+              "upper": 0.5555555555555556,
+              "valid_replicates": 2000
+            },
+            "confirmed_reference_matches": {
+              "lower": 0.1111111111111111,
+              "upper": 0.5555555555555556,
+              "valid_replicates": 2000
+            },
+            "decision_coverage": {
+              "lower": 0.2222222222222222,
+              "upper": 0.6666666666666666,
+              "valid_replicates": 2000
+            },
+            "ordinal_alpha": {
+              "lower": -0.22222222222222232,
+              "upper": 1.0,
+              "valid_replicates": 1979
+            }
+          }
+        },
+        "topics": {
+          "arithmetic": {
+            "total": 4,
+            "reference_support": {
+              "hard": 1,
+              "medium": 1,
+              "easy": 2
+            },
+            "assessed": 1,
+            "judge_labelled": 1,
+            "unknown_estimates": 0,
+            "failures": {
+              "JUDGE_SCHEMA_VALIDATION": 3
+            },
+            "primary_agreement_all_items": {
+              "count": 1,
+              "denominator": 4,
+              "rate": 0.25
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 4,
+              "rate": 0.25
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 1,
+              "denominator": 4,
+              "rate": 0.25
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "changing_state": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              },
+              "answer_discrimination": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 1,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          },
+          "conditionals": {
+            "total": 4,
+            "reference_support": {
+              "easy": 4
+            },
+            "assessed": 0,
+            "judge_labelled": 0,
+            "unknown_estimates": 0,
+            "failures": {
+              "JUDGE_SCHEMA_VALIDATION": 4
+            },
+            "primary_agreement_all_items": {
+              "count": 0,
+              "denominator": 4,
+              "rate": 0.0
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 0,
+              "denominator": 0,
+              "rate": null
+            },
+            "confirmed_reference_matches": {
+              "count": 0,
+              "denominator": 4,
+              "rate": 0.0
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 0,
+              "denominator": 4,
+              "rate": 0.0
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 0,
+                "denominator": 0,
+                "rate": null
+              },
+              "changing_state": {
+                "count": 0,
+                "denominator": 0,
+                "rate": null
+              },
+              "conceptual_interaction": {
+                "count": 0,
+                "denominator": 0,
+                "rate": null
+              },
+              "answer_discrimination": {
+                "count": 0,
+                "denominator": 0,
+                "rate": null
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 0,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          },
+          "functions": {
+            "total": 3,
+            "reference_support": {
+              "easy": 1,
+              "medium": 2
+            },
+            "assessed": 2,
+            "judge_labelled": 2,
+            "unknown_estimates": 0,
+            "failures": {
+              "JUDGE_SCHEMA_VALIDATION": 1
+            },
+            "primary_agreement_all_items": {
+              "count": 1,
+              "denominator": 3,
+              "rate": 0.3333333333333333
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 1,
+              "denominator": 2,
+              "rate": 0.5
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 3,
+              "rate": 0.3333333333333333
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 1,
+                "denominator": 2,
+                "rate": 0.5
+              },
+              "changing_state": {
+                "count": 2,
+                "denominator": 2,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 2,
+                "rate": 0.5
+              },
+              "answer_discrimination": {
+                "count": 1,
+                "denominator": 2,
+                "rate": 0.5
+              }
+            },
+            "ordinal_alpha": 0.0,
+            "ordinal_alpha_paired_items": 2,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "lists": {
+            "total": 3,
+            "reference_support": {
+              "medium": 1,
+              "easy": 1,
+              "hard": 1
+            },
+            "assessed": 3,
+            "judge_labelled": 3,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "confirmed_reference_matches": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 3,
+              "denominator": 3,
+              "rate": 1.0
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 1
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 2,
+                "denominator": 3,
+                "rate": 0.6666666666666666
+              },
+              "changing_state": {
+                "count": 2,
+                "denominator": 3,
+                "rate": 0.6666666666666666
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 3,
+                "rate": 0.3333333333333333
+              },
+              "answer_discrimination": {
+                "count": 0,
+                "denominator": 3,
+                "rate": 0.0
+              }
+            },
+            "ordinal_alpha": 0.7777777777777778,
+            "ordinal_alpha_paired_items": 3,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "loops": {
+            "total": 4,
+            "reference_support": {
+              "medium": 2,
+              "easy": 1,
+              "hard": 1
+            },
+            "assessed": 2,
+            "judge_labelled": 2,
+            "unknown_estimates": 0,
+            "failures": {
+              "JUDGE_SCHEMA_VALIDATION": 2
+            },
+            "primary_agreement_all_items": {
+              "count": 2,
+              "denominator": 4,
+              "rate": 0.5
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 2,
+              "denominator": 2,
+              "rate": 1.0
+            },
+            "confirmed_reference_matches": {
+              "count": 2,
+              "denominator": 4,
+              "rate": 0.5
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 2,
+              "denominator": 4,
+              "rate": 0.5
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 1,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 2,
+                "denominator": 2,
+                "rate": 1.0
+              },
+              "changing_state": {
+                "count": 2,
+                "denominator": 2,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 2,
+                "denominator": 2,
+                "rate": 1.0
+              },
+              "answer_discrimination": {
+                "count": 2,
+                "denominator": 2,
+                "rate": 1.0
+              }
+            },
+            "ordinal_alpha": 1.0,
+            "ordinal_alpha_paired_items": 2,
+            "ordinal_alpha_unavailable_reason": null
+          }
+        }
+      },
+      "held_out": {
+        "total": 12,
+        "reference_support": {
+          "easy": 4,
+          "hard": 3,
+          "medium": 5
+        },
+        "assessed": 6,
+        "judge_labelled": 6,
+        "unknown_estimates": 0,
+        "failures": {
+          "JUDGE_SCHEMA_VALIDATION": 6
+        },
+        "primary_agreement_all_items": {
+          "count": 5,
+          "denominator": 12,
+          "rate": 0.4166666666666667
+        },
+        "primary_agreement_jointly_labelled": {
+          "count": 5,
+          "denominator": 6,
+          "rate": 0.8333333333333334
+        },
+        "confirmed_reference_matches": {
+          "count": 2,
+          "denominator": 12,
+          "rate": 0.16666666666666666
+        },
+        "uncertain_comparisons": 3,
+        "decision_coverage": {
+          "count": 3,
+          "denominator": 12,
+          "rate": 0.25
+        },
+        "confusion_rows_reference_columns_judge": {
+          "easy": {
+            "easy": 1,
+            "medium": 0,
+            "hard": 0
+          },
+          "medium": {
+            "easy": 1,
+            "medium": 1,
+            "hard": 0
+          },
+          "hard": {
+            "easy": 0,
+            "medium": 0,
+            "hard": 3
+          }
+        },
+        "severe_disagreements": 0,
+        "dimensions": {
+          "execution_burden": {
+            "count": 4,
+            "denominator": 6,
+            "rate": 0.6666666666666666
+          },
+          "changing_state": {
+            "count": 4,
+            "denominator": 6,
+            "rate": 0.6666666666666666
+          },
+          "conceptual_interaction": {
+            "count": 3,
+            "denominator": 6,
+            "rate": 0.5
+          },
+          "answer_discrimination": {
+            "count": 1,
+            "denominator": 6,
+            "rate": 0.16666666666666666
+          }
+        },
+        "ordinal_alpha": 0.9320987654320988,
+        "ordinal_alpha_paired_items": 6,
+        "ordinal_alpha_unavailable_reason": null,
+        "bootstrap": {
+          "method": "family percentile bootstrap, 95%",
+          "replicates": 2000,
+          "seed": 43,
+          "families": 12,
+          "intervals": {
+            "primary_agreement_all_items": {
+              "lower": 0.16666666666666666,
+              "upper": 0.6666666666666666,
+              "valid_replicates": 2000
+            },
+            "confirmed_reference_matches": {
+              "lower": 0.0,
+              "upper": 0.4166666666666667,
+              "valid_replicates": 2000
+            },
+            "decision_coverage": {
+              "lower": 0.0,
+              "upper": 0.5,
+              "valid_replicates": 2000
+            },
+            "ordinal_alpha": {
+              "lower": 0.38888888888888895,
+              "upper": 1.0,
+              "valid_replicates": 1935
+            }
+          }
+        },
+        "topics": {
+          "arithmetic": {
+            "total": 2,
+            "reference_support": {
+              "easy": 2
+            },
+            "assessed": 0,
+            "judge_labelled": 0,
+            "unknown_estimates": 0,
+            "failures": {
+              "JUDGE_SCHEMA_VALIDATION": 2
+            },
+            "primary_agreement_all_items": {
+              "count": 0,
+              "denominator": 2,
+              "rate": 0.0
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 0,
+              "denominator": 0,
+              "rate": null
+            },
+            "confirmed_reference_matches": {
+              "count": 0,
+              "denominator": 2,
+              "rate": 0.0
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 0,
+              "denominator": 2,
+              "rate": 0.0
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 0,
+                "denominator": 0,
+                "rate": null
+              },
+              "changing_state": {
+                "count": 0,
+                "denominator": 0,
+                "rate": null
+              },
+              "conceptual_interaction": {
+                "count": 0,
+                "denominator": 0,
+                "rate": null
+              },
+              "answer_discrimination": {
+                "count": 0,
+                "denominator": 0,
+                "rate": null
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 0,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          },
+          "conditionals": {
+            "total": 2,
+            "reference_support": {
+              "hard": 1,
+              "medium": 1
+            },
+            "assessed": 1,
+            "judge_labelled": 1,
+            "unknown_estimates": 0,
+            "failures": {
+              "JUDGE_SCHEMA_VALIDATION": 1
+            },
+            "primary_agreement_all_items": {
+              "count": 1,
+              "denominator": 2,
+              "rate": 0.5
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confirmed_reference_matches": {
+              "count": 0,
+              "denominator": 2,
+              "rate": 0.0
+            },
+            "uncertain_comparisons": 1,
+            "decision_coverage": {
+              "count": 0,
+              "denominator": 2,
+              "rate": 0.0
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 1
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              },
+              "changing_state": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "answer_discrimination": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 1,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          },
+          "functions": {
+            "total": 3,
+            "reference_support": {
+              "easy": 1,
+              "hard": 1,
+              "medium": 1
+            },
+            "assessed": 1,
+            "judge_labelled": 1,
+            "unknown_estimates": 0,
+            "failures": {
+              "JUDGE_SCHEMA_VALIDATION": 2
+            },
+            "primary_agreement_all_items": {
+              "count": 1,
+              "denominator": 3,
+              "rate": 0.3333333333333333
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 3,
+              "rate": 0.3333333333333333
+            },
+            "uncertain_comparisons": 0,
+            "decision_coverage": {
+              "count": 1,
+              "denominator": 3,
+              "rate": 0.3333333333333333
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 1
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "changing_state": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "answer_discrimination": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 1,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          },
+          "lists": {
+            "total": 3,
+            "reference_support": {
+              "medium": 2,
+              "easy": 1
+            },
+            "assessed": 3,
+            "judge_labelled": 3,
+            "unknown_estimates": 0,
+            "failures": {},
+            "primary_agreement_all_items": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "confirmed_reference_matches": {
+              "count": 1,
+              "denominator": 3,
+              "rate": 0.3333333333333333
+            },
+            "uncertain_comparisons": 1,
+            "decision_coverage": {
+              "count": 2,
+              "denominator": 3,
+              "rate": 0.6666666666666666
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 1,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 1,
+                "medium": 1,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 3,
+                "denominator": 3,
+                "rate": 1.0
+              },
+              "changing_state": {
+                "count": 1,
+                "denominator": 3,
+                "rate": 0.3333333333333333
+              },
+              "conceptual_interaction": {
+                "count": 0,
+                "denominator": 3,
+                "rate": 0.0
+              },
+              "answer_discrimination": {
+                "count": 1,
+                "denominator": 3,
+                "rate": 0.3333333333333333
+              }
+            },
+            "ordinal_alpha": 0.44444444444444453,
+            "ordinal_alpha_paired_items": 3,
+            "ordinal_alpha_unavailable_reason": null
+          },
+          "loops": {
+            "total": 2,
+            "reference_support": {
+              "medium": 1,
+              "hard": 1
+            },
+            "assessed": 1,
+            "judge_labelled": 1,
+            "unknown_estimates": 0,
+            "failures": {
+              "JUDGE_SCHEMA_VALIDATION": 1
+            },
+            "primary_agreement_all_items": {
+              "count": 1,
+              "denominator": 2,
+              "rate": 0.5
+            },
+            "primary_agreement_jointly_labelled": {
+              "count": 1,
+              "denominator": 1,
+              "rate": 1.0
+            },
+            "confirmed_reference_matches": {
+              "count": 0,
+              "denominator": 2,
+              "rate": 0.0
+            },
+            "uncertain_comparisons": 1,
+            "decision_coverage": {
+              "count": 0,
+              "denominator": 2,
+              "rate": 0.0
+            },
+            "confusion_rows_reference_columns_judge": {
+              "easy": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "medium": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+              },
+              "hard": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 1
+              }
+            },
+            "severe_disagreements": 0,
+            "dimensions": {
+              "execution_burden": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              },
+              "changing_state": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "conceptual_interaction": {
+                "count": 1,
+                "denominator": 1,
+                "rate": 1.0
+              },
+              "answer_discrimination": {
+                "count": 0,
+                "denominator": 1,
+                "rate": 0.0
+              }
+            },
+            "ordinal_alpha": null,
+            "ordinal_alpha_paired_items": 1,
+            "ordinal_alpha_unavailable_reason": "No paired labels or no pooled category variation"
+          }
+        }
+      }
+    }
+  },
+  "usage": {
+    "model_call_count": 66,
+    "unavailable_call_count": 2,
+    "input_tokens": null,
+    "output_tokens": null,
+    "reported_input_tokens": 416323,
+    "reported_output_tokens": 141476
+  }
+}

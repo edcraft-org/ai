@@ -7,6 +7,140 @@ not be treated as its current pass rates.
 Historical records may use `beginner`, `intermediate`, and `advanced`. The current
 labels are `easy`, `medium`, and `hard`.
 
+## Approved difficulty dataset: 15 October 2026
+
+The frozen issue 42 dataset (`python-tracing-evaluation-2026-10-15`) contains
+30 approved questions: 13 easy, 11 medium and six hard, split into 18 development
+and 12 held-out items. Its bytes at dataset revision `498f6ff` match the dataset
+merged into main by `7df7e77` (PR #83). The dataset SHA-256 is
+`fe1a31cf08c6c1ec8457336332b0e4fa79f1c1e6422fdab5b0a771a9d7bddd2a`.
+The approved questions, labels, dimension ratings and splits were not edited.
+
+Each question was explicitly assessed through MCP with its reference label,
+dimensions, explanation, solution, identity, topic and split withheld. The
+supplied answer designation remained visible. The unchanged `code-difficulty-v4`
+prompt used rubric `python-tracing-v0.2`, hash
+`f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f`.
+One scheduled assessment per item/provider was allowed, with no application or
+SDK retries, replacement judgments, generated questions or correctness checks.
+Question correction would change the approved test item and was not performed.
+Configuration was recorded before the first call; development results did not
+change the configuration used for held-out calls.
+
+Protocol `frozen-difficulty-dataset-evaluation-v1` adapts the rubric's v0.2
+agreement protocol to the final dataset schema. Primary-label agreement compares
+the judge's first estimate with the approved label; failures and null estimates
+count as nonmatches over all items. The separate confirmed-match measure applies
+the existing comparison rule against the approved level, retaining uncertainty
+when alternatives cross its boundary. This is not an original authoring-target
+acceptance decision: those targets and human match decisions are absent from the
+final dataset. Original-target decision accuracy, false acceptance/rejection and
+a four-way decision confusion table are unavailable rather than fabricated.
+
+| Provider/model | All-item label agreement | Development | Held out | Confirmed matches | Uncertain comparisons | Failed assessments |
+| --- | --- | --- | --- | --- | --- | --- |
+| OpenAI / `gpt-5-mini` | 19/30 (63.3%) | 12/18 | 7/12 (58.3%) | 9/30 | 14 | 0 |
+| SocLaas / `default` | 11/30 (36.7%) | 6/18 | 5/12 (41.7%) | 8/30 | 3 | 16 |
+| Ollama / installed Qwen distill 9B (six-item subset) | 3/6 (50.0%) | 3/6 | Not run | 3/6 | 0 | 2 |
+
+The user limited Ollama to six questions after the remote passes completed.
+Its primary subset is the first six scheduled development items in dataset order,
+including both timeouts, covering all five topics: `arithmetic-coupled-arithmetic-01`,
+`cruxeval-082`, `lists-adjacent-differences-02`, `cruxeval-274`,
+`conditionals-boolean-01` and `functions-single-helper-01`. Four produced valid
+assessments: three agreed, and the hard arithmetic question was rated medium.
+This convenience subset has no local held-out result and is not comparable to a
+full 30-item provider pass. Its 95% primary-agreement bootstrap interval is broad
+(see summary). Alpha is 0.900 over only four paired items and does not establish
+reliable alignment. Dimension matches are 3/4, 3/4, 3/4 and 4/4 respectively.
+
+A seventh local result (`cruxeval-506`) completed before the user's limit arrived;
+it is retained as supplemental evidence and excluded from every primary score.
+The next call (`cruxeval-253`) was interrupted without an accepted tool report;
+its usage is unknown. The remaining 22 local questions were not dispatched.
+The evaluation process and temporary local server were stopped. These untested
+items are not model failures and are not added to the six-item denominator.
+The original pre-call manifest remains intact; the separate completion audit
+records the changed scope, supplemental result and interrupted call.
+
+OpenAI's all-item confusion counts (rows approved, columns judge) are:
+
+| Approved level | Easy | Medium | Hard |
+| --- | ---: | ---: | ---: |
+| Easy | 12 | 1 | 0 |
+| Medium | 6 | 5 | 0 |
+| Hard | 0 | 4 | 2 |
+
+OpenAI underestimated ten questions and overestimated one. All three held-out
+hard questions were rated medium. The six-round coupled arithmetic development
+question was rated medium despite the approved hard label: the judge called its
+repeated tuple/modular updates a straightforward short trace. Conversely,
+`cruxeval-082` was rated medium instead of easy because the judge treated Python
+short-circuit semantics as unfamiliar, although the assessment conditions assume
+that the semantics are understood. Ten of the 19 correct primary estimates still
+had boundary-crossing alternatives, reducing confirmed matches to nine.
+
+SocLaas produced 14 valid assessments, of which 11 matched (78.6%); this conditional
+rate must not replace the 11/30 overall score. Fifteen failures included a non-text
+`concepts_and_dependencies` value; one response omitted required fields. One
+failing response also exceeded the option-evidence length constraint. Raw invalid
+values are intentionally omitted; the diagnostics retain field locations and
+validation codes. The valid SocLaas confusion counts are easy→easy 5,
+medium→easy 3, medium→medium 2 and hard→hard 4; the other 16 responses are errors,
+not additional rows of a difficulty category. Neither remote provider had an
+easy↔hard disagreement among valid estimates.
+
+OpenAI's dimension matches were execution burden 17/30, changing state 20/30,
+conceptual interaction 16/30 and answer discrimination 24/30. SocLaas's were
+10/14, 11/14, 7/14 and 4/14 respectively, over its valid jointly rated questions.
+Two-rater ordinal alpha was 0.627 for OpenAI (30 paired items) and 0.816 for
+SocLaas (14 paired items). Alpha and valid-response rates must be read alongside
+failures and category support, not as a provider ranking.
+
+The summary includes 95% whole-family percentile bootstrap intervals using
+2,000 replicates and seed 43. The final collection has one item per code family;
+question IDs identify those families. OpenAI's all-item agreement interval is
+43.3–80.0%; its held-out interval is 25.0–83.3%. SocLaas's respective intervals
+are 20.0–53.3% and 16.7–66.7%. These broad intervals reflect the small sample;
+one held-out result changes agreement by about 8.3 percentage points.
+
+The SocLaas model name is the configured alias `default`; its underlying backend
+is not independently identified. OpenAI and SocLaas use provider-default sampling,
+240-second transport timeouts and zero SDK retries. Ollama uses the installed
+`tobestyledintro/qwen3.8-9b-distill:latest` model, temperature 0.2, 16,384-token
+context, 4,096 output tokens and thinking disabled. The tool's outer deadline is
+250 seconds. Runtime source and request-schema hashes are recorded in the manifest.
+
+This is agreement with an AI-assisted, single-human approved reference, not
+independent human agreement or learner-calibrated difficulty. Earlier v2 seed
+questions and AI recommendations exist in this branch's history. No final-set
+results were used for tuning, but the collection is not an untouched external
+benchmark. Future tuning informed by these held-out results needs fresh held-out
+families for confirmatory evaluation.
+
+Full [results](evidence/difficulty-dataset-2026-10-15/results.json) retain all
+66 primary records and the supplemental record, including exact MCQs, references,
+full valid tool outputs, sanitized failures, timings and usage. The
+[summary](evidence/difficulty-dataset-2026-10-15/summary.json) includes split/topic
+breakdowns, confusion, dimensions, category support, ordinal alpha and bootstrap
+intervals. The [pre-call manifest](evidence/difficulty-dataset-2026-10-15/manifest.json),
+[completion audit](evidence/difficulty-dataset-2026-10-15/completion.json),
+[local model identities](evidence/difficulty-dataset-2026-10-15/ollama-models.json)
+and [verification](evidence/difficulty-dataset-2026-10-15/verification.json)
+bind the records to the frozen dataset, request/schema hashes, source and settings.
+The runner at `c38f367` materializes the recorded source fingerprint; merging main
+later left the judge and runner source bytes unchanged. Invalid-response values
+are not archived. Unknown timeout/interrupted-call usage is not reported as zero.
+
+Post-merge offline verification: 471 tests passed, five opt-in live tests skipped.
+Main's removal of historical reference-review tests accounts for the difference
+from the pre-merge 524-test result. Focused tests verify blinding through MCP,
+no execution, error denominators, uncertainty, ordinal-alpha examples and
+whole-family bootstrap reproducibility. Lint, formatting and diff checks passed.
+An independent audit checked all 67 completed question/reference bindings,
+reconstructed request hashes, one-call records, frozen provider settings and
+absence of configured API key values. Reference data is unchanged from main.
+
 ## Confidence-free generation and correction: 15 October 2026
 
 The runtime difficulty assessment no longer contains a confidence field.

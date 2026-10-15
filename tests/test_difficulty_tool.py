@@ -197,9 +197,7 @@ async def test_no_requested_level_means_no_match_decision():
 )
 async def test_each_answer_target_is_forwarded_without_execution(target):
     # Forward exact MCQ content, keeping reference ratings out of the fake judge.
-    data = json.loads(
-        Path("reference_sets/python_tracing/dataset.json").read_text()
-    )
+    data = json.loads(Path("reference_sets/python_tracing/dataset.json").read_text())
     raw = next(q for q in data["questions"] if q["answer_target"] == target)
     item = CodeDifficultyQuestion.model_validate(
         {name: raw[name] for name in CodeDifficultyQuestion.model_fields}
