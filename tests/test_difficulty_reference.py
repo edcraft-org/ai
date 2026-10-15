@@ -365,3 +365,29 @@ def test_live_assessment_matching_remains_separate_from_frozen_labels(
     assert reference.match_decision(rating, requested) == expected
     rating.status = "pending"
     assert reference.match_decision(rating, requested) is None
+
+
+def test_public_dataset_omits_reviewer_identifiers():
+    data = read_data()
+    identifying_fields = {
+        "reviewer_id",
+        "reviewer_name",
+        "reviewer_email",
+        "annotator_id",
+        "annotator_name",
+        "annotator_email",
+    }
+
+    def check(value):
+        if isinstance(value, dict):
+            assert not identifying_fields.intersection(value)
+            for child in value.values():
+                check(child)
+        elif isinstance(value, list):
+            for child in value:
+                check(child)
+
+    check(data)
+    assert data["reference_type"] == "ai_assisted_single_human_reviewer"
+    assert data["review_date"] == "2026-10-15"
+    assert reference.load_dataset().questions

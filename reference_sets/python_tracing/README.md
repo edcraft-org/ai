@@ -1,7 +1,7 @@
 # Frozen Python tracing evaluation dataset
 
 Use **[dataset.json](dataset.json)** as the single final reference for evaluation.
-Keith approved all 30 questions on 2026-10-15. The categories are fixed:
+All 30 questions completed human review on 2026-10-15. The categories are fixed:
 
 | Difficulty | Questions |
 | --- | ---: |
@@ -59,11 +59,13 @@ reject reassignment on loaded question objects. Regression tests separately pin
 the exact approved difficulty, dimension, topic and split assignments, so keeping
 the totals while swapping individual labels is rejected.
 
-Pin evaluation runs to Git tag `python-tracing-evaluation-2026-10-15` and the
+Pin evaluation runs to Git tag `python-tracing-evaluation-2026-10-15-r1` and the
 reported dataset fingerprint. The tag also preserves the earlier review history.
 
-Do not edit this final dataset. Any future correction requires an explicitly
-agreed new benchmark identity, with this reference preserved for prior results.
+Questions, categories, dimension ratings, topics and splits are frozen. Changes
+to them require an explicitly agreed new benchmark identity. Metadata-only
+corrections use a new Git tag and fingerprint without changing evaluation labels;
+existing tags remain fixed for reproducing earlier runs.
 The original reviews and superseded collections are recoverable from Git history;
 they are no longer active dataset files.
 
@@ -76,7 +78,9 @@ IDs, links, record hashes and modification notes inside the dataset. Preserve
 AI authorship. CRUXEval did not supply the difficulty labels.
 
 These are fixed, human-confirmed evaluation categories under the recorded manual
-tracing conditions. The review was AI-assisted and involved one human. It does
-not establish independent human agreement or learner-calibrated difficulty.
+tracing conditions. The review was AI-assisted and involved one human. Public
+metadata records the review method and date and omits reviewer names and
+identifiers. This does not establish independent human agreement or
+learner-calibrated difficulty.
 Freezing the labels makes evaluations comparable; it does not erase their
 original uncertainty or guarantee every learner will find them equally difficult.

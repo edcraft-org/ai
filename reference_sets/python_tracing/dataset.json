@@ -7,7 +7,6 @@
   "assessment_conditions_version": "manual-tracing-v0.1",
   "assessment_conditions": "Untimed manual tracing with scratch paper, assuming the Python semantics are understood; no execution, calculator or AI assistance for the hypothetical learner.",
   "reference_type": "ai_assisted_single_human_reviewer",
-  "reviewer_id": "keith",
   "review_date": "2026-10-15",
   "approved_revision": "240704a008cfb1bb4fc405e9f2fd9e1512e42b24",
   "approved_review_sha256": "de61d45a4cac39c3b41fac5dc43642a87ff001d3b1d67d447a2f3daf8a92b18c",

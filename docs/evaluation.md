@@ -114,7 +114,7 @@ override failed technical checks.
 
 For issue 42, use the single [frozen evaluation dataset](../reference_sets/python_tracing/README.md)
 in `reference_sets/python_tracing/dataset.json`. It contains 30 complete,
-execution-verified MCQs with Keith's approved categories: 13 easy, 11 medium and
+execution-verified MCQs with human-reviewed categories: 13 easy, 11 medium and
 six hard. Each question has one fixed `difficulty` label, four dimension ratings,
 a topic and a development/reserved split (18/12). These assignments are frozen;
 judge outputs and later model disagreements must never rewrite them.

@@ -29,7 +29,7 @@ DIMENSIONS = (
     "answer_discrimination",
 )
 FROZEN_DATASET_SHA256 = (
-    "15526570cb3b60ca8eb7ebfca02bbbd12f81788dc4fd7fa3a46ac1b899df2fe7"
+    "046d3a20928e22b17b523ed22269cad677560dc03ef02677a283ff3cb517f23e"
 )
 CRUXEVAL_LICENSE_SHA256 = (
     "055ca9e3fa33562173156e02e2350ceff4089deab480b368a849b6bc04f09719"
@@ -224,7 +224,6 @@ class FrozenDataset(Record):
     assessment_conditions_version: str
     assessment_conditions: str
     reference_type: Literal["ai_assisted_single_human_reviewer"]
-    reviewer_id: str
     review_date: str
     approved_revision: str
     approved_review_sha256: str
