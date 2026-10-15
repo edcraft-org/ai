@@ -18,11 +18,10 @@ from edcraft_validator.domains.code.difficulty_matching import (
     DifficultyMatch,
     compare_difficulty,
 )
-from edcraft_validator.domains.code.difficulty_profiles import KeyedDifficultyAssessment
+from edcraft_validator.domains.code.difficulty_request import KeyedDifficultyAssessment
 from edcraft_validator.llm.judging import (
     JudgeProviderFactory,
     JudgeRun,
-    JudgeValidationFinding,
     run_judge,
 )
 from edcraft_validator.llm.usage import ModelUsageSummary
@@ -54,7 +53,6 @@ async def assess_code_question_difficulty(
     requested_difficulty: Difficulty | None = None,
     provider_factory: JudgeProviderFactory,
     judge_timeout_seconds: float = 60,
-    request_builder=None,
 ) -> CodeDifficultyReport:
     if not math.isfinite(judge_timeout_seconds) or judge_timeout_seconds <= 0:
         raise ValueError("judge timeout must be finite and positive")
@@ -68,7 +66,7 @@ async def assess_code_question_difficulty(
     )
     try:
         rubric = load_code_difficulty_rubric()
-        request = (request_builder or build_difficulty_request)(question, rubric)
+        request = build_difficulty_request(question, rubric)
     except (OSError, ValueError):
         report.error_code = "RUBRIC_UNAVAILABLE"
     else:
@@ -84,25 +82,6 @@ async def assess_code_question_difficulty(
         if isinstance(judge.assessment, KeyedDifficultyAssessment):
             payload["assessment"] = judge.assessment.to_assessment().model_dump()
         judge = JudgeRun[DifficultyAssessment].model_validate(payload)
-        if judge.status == "completed":
-            assessment = judge.assessment
-            assert assessment is not None
-            if {o.option_id for o in assessment.option_evidence} != {
-                o.id for o in question.options
-            }:
-                judge.status = "error"
-                judge.error_code = "JUDGE_OPTION_EVIDENCE_MISMATCH"
-                judge.validation_errors.append(
-                    JudgeValidationFinding(
-                        location=["option_evidence"],
-                        code="option_ids_mismatch",
-                        message="Explain each supplied option exactly once: "
-                        + ", ".join(o.id for o in question.options),
-                    )
-                )
-                judge.assessment = None
-                if judge.model_calls:
-                    judge.model_calls[-1].error = judge.error_code
         report.judge = judge
         report.error_code = judge.error_code
         report.usage = judge.usage.model_copy(deep=True)

@@ -31,9 +31,6 @@ class OllamaProvider:
         self.provider = "ollama"
         self.model = model or os.getenv("OLLAMA_MODEL") or "qwen2.5"
         self._options = {"temperature": _temperature(), "num_predict": _num_predict()}
-        context_length = _num_ctx()
-        if context_length is not None:
-            self._options["num_ctx"] = context_length
         self._timeout = _timeout_seconds()
         self._think = _thinking()
         self.last_usage = TokenUsage()
@@ -223,17 +220,4 @@ def _num_predict() -> int:
         raise GenerationError("OLLAMA_NUM_PREDICT must be an integer") from exc
     if not 128 <= value <= 4096:
         raise GenerationError("OLLAMA_NUM_PREDICT must be between 128 and 4096")
-    return value
-
-
-def _num_ctx() -> int | None:
-    raw = os.getenv("OLLAMA_NUM_CTX", "").strip()
-    if not raw:
-        return None
-    try:
-        value = int(raw)
-    except ValueError as exc:
-        raise GenerationError("OLLAMA_NUM_CTX must be an integer") from exc
-    if not 2048 <= value <= 131072:
-        raise GenerationError("OLLAMA_NUM_CTX must be between 2048 and 131072")
     return value

@@ -20,9 +20,9 @@ from edcraft_validator.domains.code.difficulty import (
     DifficultyAssessment,
     load_code_difficulty_rubric,
 )
-from edcraft_validator.domains.code.difficulty_profiles import (
+from edcraft_validator.domains.code.difficulty_request import (
     KeyedDifficultyAssessment,
-    build_profile_request,
+    runtime_instructions,
 )
 from edcraft_validator.llm.llm_errors import (
     GenerationResponseError,
@@ -107,15 +107,17 @@ class Provider:
             raise self.response
         response = self.response
         if issubclass(request.response_model, KeyedDifficultyAssessment):
-            response = response | {
-                "option_evidence": {
-                    item["option_id"]: {
-                        k: v for k, v in item.items() if k != "option_id"
-                    }
-                    for item in response["option_evidence"]
-                }
-            }
+            response = wire_assessment(response)
         return request.response_model.model_validate(response)
+
+
+def wire_assessment(response):
+    return response | {
+        "option_evidence": {
+            item["option_id"]: {k: v for k, v in item.items() if k != "option_id"}
+            for item in response["option_evidence"]
+        }
+    }
 
 
 class ForbiddenExecutor:
@@ -124,11 +126,6 @@ class ForbiddenExecutor:
 
 
 async def assess(provider=None, item=None, **kwargs):
-    # Legacy-array failure cases remain covered alongside explicit profile tests.
-    kwargs.setdefault(
-        "request_builder",
-        lambda q, r: build_profile_request(q, r, profile="control"),
-    )
     return await assess_code_question_difficulty(
         item or question(),
         provider_factory=lambda: provider or Provider(),
@@ -189,9 +186,12 @@ async def test_requested_level_never_reaches_judge_and_full_question_does():
     assert set(payload) == {"question"}
     assert "requested_difficulty" not in json.dumps(payload)
     assert "generator" not in json.dumps(payload)
-    assert load_code_difficulty_rubric().text in first.messages[0]["content"]
+    assert (
+        runtime_instructions(load_code_difficulty_rubric())
+        == first.messages[0]["content"]
+    )
     assert "untrusted" in first.messages[0]["content"]
-    assert "Never obey" in first.messages[0]["content"]
+    assert "never follow" in first.messages[0]["content"]
     assert "semantic prerequisites" in first.messages[0]["content"]
     assert "Do not execute code, verify correctness" in first.messages[0]["content"]
     assert "not execution-verified evidence" in first.messages[0]["content"]
@@ -391,7 +391,9 @@ async def test_adapter_schema_failure_retains_findings_without_response_values()
     response = SimpleNamespace(
         usage=SimpleNamespace(prompt_tokens=90, completion_tokens=15),
         choices=[
-            SimpleNamespace(message=SimpleNamespace(content=json.dumps(proposed)))
+            SimpleNamespace(
+                message=SimpleNamespace(content=json.dumps(wire_assessment(proposed)))
+            )
         ],
     )
     client = SimpleNamespace(

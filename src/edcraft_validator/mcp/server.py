@@ -22,7 +22,6 @@ def create_validation_server(
     code_execution_timeout_seconds: float = 2.0,
     difficulty_provider_factory: JudgeProviderFactory | None = None,
     difficulty_judge_timeout_seconds: float = 60.0,
-    difficulty_request_builder=None,
 ) -> FastMCP:
     """Build the centralized server with injectable code-domain dependencies."""
     for timeout in (code_execution_timeout_seconds, difficulty_judge_timeout_seconds):
@@ -43,7 +42,6 @@ def create_validation_server(
         server,
         provider_factory=difficulty_provider_factory or configured_difficulty_provider,
         judge_timeout_seconds=difficulty_judge_timeout_seconds,
-        request_builder=difficulty_request_builder,
     )
     return server
 

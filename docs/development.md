@@ -153,26 +153,14 @@ construct another plan.
 The 15 historical topic/difficulty fixtures remain regression tests and evaluation
 examples. They do not restrict free-form authoring or select its checks.
 
-Advisory tools use separate tags and response contracts. In particular,
-`assess_code_difficulty` uses `quality:code`, not `domain:code`, and returns a
-`CodeDifficultyReport` rather than `ToolEvidence`. A produced assessment never
-becomes a correctness pass. See the [configuration and reporting guide](difficulty-judging.md).
-The difficulty service does not call the executor, analyser or correctness tools;
-applications combine those tools' independent outputs when needed.
-`application/difficulty_authoring.py` owns the separate generate/assess/correct
-operation. It freezes the brief and requested level, retains all question
-versions and tool reports, and permits three corrections followed by reassessment.
-The v2 judge selects one closest label in one call. Checks have no corrections or
-reassessment; invalid responses and operational failures remain errors. Only the
-authoring caller revises questions following valid mismatch/missing-information
-feedback. A failed check ends that authoring job.
-Production difficulty checks default to SocLaas and reject other configured
-providers. Host-side request-builder injection supports fixed rubric/schema
-experiments without exposing experiment controls in the MCP input. The compact
-rubric reuses the three existing anchors; the exact-option wire schema normalizes
-to the same public report. No reference question or label is added to a prompt.
-The wheel bundles the rubric document using Hatch's force-include mapping; the
-editable source tree reads the original document in `docs/`.
+`assess_code_difficulty` uses the separate `quality:code` tag and returns an
+advisory `CodeDifficultyReport`. It uses SocLaas once per check and never calls
+the executor or correctness tools. The compact prompt and exact-option wire
+schema are in `domains/code/difficulty_request.py`; the public report keeps an
+ordered option-evidence list. The wheel bundles `docs/difficulty-rubric.md`.
+`application/difficulty_authoring.py` owns generation and up to three question
+revisions; a failed assessment ends the job immediately. See the
+[configuration and reporting guide](difficulty-judging.md).
 
 ## Supported answer targets
 

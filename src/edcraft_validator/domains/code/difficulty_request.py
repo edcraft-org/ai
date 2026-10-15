@@ -1,31 +1,20 @@
-"""Small, fixed SocLaas ablations; no examples drawn from evaluation questions."""
+"""Production difficulty instructions and exact-option response schemas."""
 
 import copy
 import json
-from dataclasses import replace
 from functools import lru_cache
-from typing import Literal
 
 from pydantic import create_model, model_validator
 
 from edcraft_validator.domains.code.difficulty import (
+    DIFFICULTY_PROMPT_VERSION,
     CodeDifficultyQuestion,
     CodeDifficultyRubric,
     DifficultyAssessment,
     Record,
     Text,
-    _build_control_difficulty_request,
 )
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
-
-DifficultyProfile = Literal["control", "runtime_rubric", "exact_options", "combined"]
-PROFILES = ("control", "runtime_rubric", "exact_options", "combined")
-PROFILE_VERSIONS = {
-    "control": "code-difficulty-v5-single-label",
-    "runtime_rubric": "code-difficulty-v6-runtime-rubric",
-    "exact_options": "code-difficulty-v5-exact-options",
-    "combined": "code-difficulty-v6-runtime-exact-options",
-}
 
 
 class OptionExplanation(Record):
@@ -153,37 +142,21 @@ def runtime_instructions(rubric: CodeDifficultyRubric) -> str:
     )
 
 
-def build_profile_request(
+def build_judge_request(
     question: CodeDifficultyQuestion,
     rubric: CodeDifficultyRubric,
-    *,
-    profile: DifficultyProfile,
 ) -> StructuredGenerationRequest:
-    if profile not in PROFILES:
-        raise ValueError("unknown difficulty profile")
-    if profile in {"control", "exact_options"}:
-        request = _build_control_difficulty_request(question, rubric)
-    else:
-        request = StructuredGenerationRequest(
-            messages=[
-                {"role": "system", "content": runtime_instructions(rubric)},
-                {
-                    "role": "user",
-                    "content": json.dumps(
-                        {"question": question.model_dump(mode="json")}, allow_nan=False
-                    ),
-                },
-            ],
-            response_model=DifficultyAssessment,
-            prompt_version=PROFILE_VERSIONS[profile],
-            schema_name="code_difficulty_assessment",
-        )
-    return replace(
-        request,
-        response_model=(
-            keyed_assessment_model(len(question.options))
-            if profile in {"exact_options", "combined"}
-            else DifficultyAssessment
-        ),
-        prompt_version=PROFILE_VERSIONS[profile],
+    return StructuredGenerationRequest(
+        messages=[
+            {"role": "system", "content": runtime_instructions(rubric)},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {"question": question.model_dump(mode="json")}, allow_nan=False
+                ),
+            },
+        ],
+        response_model=keyed_assessment_model(len(question.options)),
+        prompt_version=DIFFICULTY_PROMPT_VERSION,
+        schema_name="code_difficulty_assessment",
     )

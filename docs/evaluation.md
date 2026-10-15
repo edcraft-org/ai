@@ -119,19 +119,14 @@ six hard. Each question has one fixed `difficulty` label, four dimension ratings
 a topic and a development/reserved split (18/12). These assignments are frozen;
 judge outputs and later model disagreements must never rewrite them.
 
-Use the [dataset evaluation runner](difficulty-judging.md#evaluate-the-approved-dataset)
-to assess fixed questions through MCP with the reference labels and explanations
-hidden. It reports primary-label agreement, uncertainty, failures and dimension
-agreement separately for development and held-out questions. The human-approved
-`difficulty` categories and dimension ratings are the authoritative reference.
-The dataset retains questions, answers, difficulty reasons and solution explanations; review notes,
-alternative ratings and execution logs are omitted. Earlier datasets and review
-history remain in Git. This remains
-an AI-assisted, single-human reference, not independent human agreement or
-learner calibration.
-Technical verification is not a human difficulty label. The advisory judge and
-evaluation protocol are documented in [difficulty judging](difficulty-judging.md);
-results belong in [evaluation history](evaluation-history.md).
+The human-approved `difficulty` categories and dimension ratings are the
+authoritative reference. When evaluating the advisory judge, send only the MCQ
+content; keep reference labels, dimensions, reasons and solutions hidden. Count
+failed assessments as nonmatches and report valid-only agreement separately.
+The dataset remains an AI-assisted, single-human reference, not independent
+human agreement or learner calibration. Technical verification is not a human
+difficulty label. See [difficulty judging](difficulty-judging.md) for the tool
+contract; record evaluation results in the pull request.
 
 ## What to report
 

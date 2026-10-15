@@ -3,9 +3,8 @@
 import json
 
 import pytest
-from fastmcp import Client
 from test_difficulty_authoring import run
-from test_difficulty_tool import ForbiddenExecutor, Provider, assessment, question
+from test_difficulty_tool import Provider, assessment, question
 
 from edcraft_validator.application.code_difficulty import (
     CodeDifficultyReport,
@@ -16,8 +15,6 @@ from edcraft_validator.llm.llm_errors import (
     GenerationTimeoutError,
     GenerationTransportError,
 )
-from edcraft_validator.mcp.server import create_validation_server
-from scripts.evaluate_difficulty_dataset import all_summaries, evaluate_item
 
 
 def factory_for(responses):
@@ -132,27 +129,3 @@ async def test_generation_recovers_on_third_correction_with_unchanged_brief_targ
         assert payload["requested_difficulty"] == first["requested_difficulty"]
         assert payload["generation_feedback"]["error_code"] == "AUTHOR_INVALID_RESPONSE"
     assert "private" not in report.model_dump_json()
-
-
-async def test_dataset_preserves_first_pass_failure_in_accuracy_denominator(tmp_path):
-    malformed = assessment() | {"concepts_and_dependencies": []}
-    correct = assessment() | {"estimated_difficulty": "hard"}
-    factory, providers = factory_for([malformed, correct])
-    item = question().model_dump(mode="json") | {
-        "question_id": "fixed",
-        "difficulty": "hard",
-        "topic": "arithmetic",
-        "split": "development",
-        "dimensions": {k: "low" for k in correct["dimensions"]},
-    }
-    server = create_validation_server(
-        difficulty_provider_factory=factory, code_execution_tool=ForbiddenExecutor()
-    )
-    async with Client(server) as client:
-        record = await evaluate_item(client, "test", item, tmp_path, 5)
-    result = all_summaries([record])["providers"]["test"]["all"]
-    assert result["primary_agreement_all_items"]["rate"] == 0
-    assert result["first_pass"]["primary_agreement_all_items"]["rate"] == 0
-    assert result["corrective_calls"] == result["recovered_to_label"] == 0
-    assert result["failures"] == {"JUDGE_INVALID_RESPONSE": 1}
-    assert len(providers) == 1

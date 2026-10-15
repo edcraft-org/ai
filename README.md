@@ -166,7 +166,6 @@ adds a separate provisional LLM assessment of a complete concrete MCQ. It record
 one closest difficulty label, reasons, model usage and comparison in a single
 assessment call. Failed checks return errors without correction or reassessment.
 Difficulty checks use SocLaas only, with no provider fallback.
-See [evaluation history](docs/evaluation-history.md) for human-reference results.
 
 ## Tests
 

@@ -34,7 +34,6 @@ def register_difficulty_tools(
     *,
     provider_factory: JudgeProviderFactory,
     judge_timeout_seconds: float,
-    request_builder=None,
 ) -> None:
     # Model responses are not deterministic; read-only still sends question data
     # to the host-configured provider and may incur inference cost.
@@ -73,5 +72,4 @@ def register_difficulty_tools(
             requested_difficulty=requested_difficulty,
             provider_factory=provider_factory,
             judge_timeout_seconds=judge_timeout_seconds,
-            request_builder=request_builder,
         )

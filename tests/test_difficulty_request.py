@@ -1,6 +1,5 @@
-"""Blinded rubric/schema experiments retain the original three training anchors."""
+"""Production schema, rubric and SocLaas routing contracts."""
 
-import hashlib
 import json
 
 import pytest
@@ -10,11 +9,10 @@ from test_difficulty_tool import ForbiddenExecutor, Provider, assessment, questi
 
 from edcraft_validator.domains.code.difficulty import (
     DifficultyAssessment,
+    build_difficulty_request,
     load_code_difficulty_rubric,
 )
-from edcraft_validator.domains.code.difficulty_profiles import (
-    PROFILES,
-    build_profile_request,
+from edcraft_validator.domains.code.difficulty_request import (
     keyed_assessment_model,
     runtime_instructions,
     worked_anchors,
@@ -87,8 +85,7 @@ def test_runtime_has_only_three_original_anchors_and_no_review_prerequisites():
     assert "Do not sum dimension ratings" in prompt
 
 
-@pytest.mark.parametrize("profile", PROFILES)
-async def test_profile_is_blinded_single_pass_and_mcp_output_remains_canonical(profile):
+async def test_request_is_blinded_single_pass_and_mcp_output_remains_canonical():
     providers = []
 
     def factory():
@@ -99,9 +96,6 @@ async def test_profile_is_blinded_single_pass_and_mcp_output_remains_canonical(p
     async with Client(
         create_validation_server(
             difficulty_provider_factory=factory,
-            difficulty_request_builder=lambda q, r: build_profile_request(
-                q, r, profile=profile
-            ),
             code_execution_tool=ForbiddenExecutor(),
         )
     ) as client:
@@ -117,18 +111,12 @@ async def test_profile_is_blinded_single_pass_and_mcp_output_remains_canonical(p
     assert value["judge"]["assessment"] == assessment()
     assert value["usage"]["model_call_count"] == len(providers) == 1
     request = providers[0].requests[0]
+    assert request == build_difficulty_request(
+        question(), load_code_difficulty_rubric()
+    )
     assert json.loads(request.messages[1]["content"]) == {
         "question": question().model_dump(mode="json")
     }
-    if profile == "control":
-        assert (
-            hashlib.sha256(
-                json.dumps(
-                    request.response_model.model_json_schema(), sort_keys=True
-                ).encode()
-            ).hexdigest()
-            == "8662c389dc673db9874153fc740cc4602932ad96fd730ad467ccda9bea17f24f"
-        )
 
 
 def test_soclaas_is_default_and_other_providers_are_rejected(monkeypatch):
