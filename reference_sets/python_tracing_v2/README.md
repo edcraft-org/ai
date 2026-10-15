@@ -6,6 +6,11 @@ Prepared for [issue 42](https://github.com/edcraft-org/ai/issues/42), using
 single-human-review reference**, not a training dataset or learner-calibrated
 benchmark. Technical execution establishes correct answers, not difficulty.
 
+**Follow-up audit:** all 30 answers remain correct, but Q14 and Q19 need targeted
+difficulty adjudication. Q30 is a medium/hard boundary, not a clean hard anchor.
+The original human record remains unchanged; see the audit below before using
+these labels as reference targets.
+
 ## What changed after Keith's review
 
 The previous 30-item collection contained only 15 distinct programs, with two
@@ -88,6 +93,9 @@ collection remains separate from the 15 frozen authoring requests in `profiles.p
   items reviewed, with no recorded question-quality concerns.
 - `reviews/comparison-2026-10-15.json`: reproducible comparison with the original
   authoring requests, bound to the exact final review hash.
+- `quality-audit-2026-10-15.json`: follow-up AI assessment of every complete MCQ,
+  with manual solutions, boundary notes, annotation addenda and execution-checked
+  shortcut observations. It is not a human-approved replacement review.
 
 The 15 new proposals are provisional. In particular, growing-string indexing can
 be answered from the first two updates with these options, pair-counting admits
@@ -116,6 +124,48 @@ The three corrections include both transferred v1 decisions and Keith's new Q14
 correction to `hard`. Human reasons remain separate from AI explanations; neither
 is silently rewritten to make the two agree. All question, option and proposal
 contents remain unchanged by recording the completed review.
+
+## Follow-up question-quality audit
+
+The audit rechecked all 30 complete questions, including the target, concrete
+inputs and actual options. All designated answers remain correct and distinct.
+Fourteen levels can be kept, thirteen have a defensible adjacent boundary, two
+need correction or adjudication, and one is an uncertain hard candidate. These
+audit categories are separate from the original requested-level comparisons.
+
+| Question | Recorded primary | Audit recommendation | Deciding evidence |
+| --- | --- | --- | --- |
+| Q19 | hard | easy | The stem asks for loop invocations: one outer plus four inner invocations is five. No subtotal or accumulator trace is needed. |
+| Q14 | hard | medium, with hard at most an alternative | After two updates the text starts `abcdefgbd`, which matches only option B. The remaining four updates cannot be required to identify the answer. |
+| Q30 | hard, alternative medium | medium/hard boundary; medium is a reasonable primary | The first two prefixes select B/C, while the base suffix selects B/D. Their intersection is B, without assembling the full recursive output. |
+
+Q19's human reason describes accumulator tracing, which is irrelevant to its
+count target. Q14's reason cites the number of concepts, but the rubric assesses
+their interaction and the work needed for these options. The earlier AI proposal
+for Q30 also overstated answer discrimination by treating full concatenation as
+necessary. None of these observations silently changes the human record.
+
+Other shortcuts are already compatible with the recorded boundaries: Q09's
+prefix `snts` selects A after its first loop update; Q03 telescopes to the last
+element; Q13's last-element write is irrelevant to the return; Q17's reversals
+cancel; Q25 admits pair counting; Q28's auxiliary counter has an invariant.
+Q06 is correctly easy because `total(0)` never recurses. For Q18 both guards are
+false, so its overall easy level is reasonable even though the human tracing
+dimension/reason overstates the work for this input.
+
+The audit also supplies annotation addenda. In Q07, counting the one evaluated
+condition and one executed return gives two, not option D's three; three requires
+also counting the unreached inner condition. Q08's option B needs an explicit
+single-return counting error, since counting both returns gives four. For Q24,
+multiplication gives a more specific hypothesis for option C's six than adding
+one. These are still hypotheses; no observed learner misconceptions are claimed.
+
+Preserve the original review, comparison and proposals. Human acceptance of any
+revised ratings must be a new dated record, with uncertainty retained where
+appropriate. **Do not report three clean hard anchors or treat Q14/Q19 as settled
+labels before adjudication.** The audit inspected quality in both splits, not
+judge performance. Reserved-item-specific findings must not inform judge tuning;
+if they do, disclose the inspection and replace the reserved families.
 
 ## Verify or reproduce the review workflow
 
@@ -175,7 +225,8 @@ performance. Human–human agreement and learner correctness/timing/option-selec
 data remain unavailable. A reviewer unexposed to the proposals is needed for an
 independent human benchmark.
 
-Issue 42's collection and human-review evidence are complete; PR #83 is ready for
-review. Runtime judging and held-out scoring remain issue 43 work: tune only on
+The original human review is complete, but PR #83 returns to draft pending
+targeted adjudication of Q14 and Q19 after this quality audit. Runtime judging
+and held-out scoring remain issue 43 work: tune only on
 development families and freeze the judge before reserved scoring. If reserved
 results inform tuning, disclose that inspection and use fresh reserved families.

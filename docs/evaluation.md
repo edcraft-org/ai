@@ -115,7 +115,10 @@ for issue 42 contains 30 distinct, execution-verified Python tracing MCQs and an
 AI-assisted human review form. Keith completed all 30 ratings on 2026-10-15:
 27 approvals and three corrections; the original export and comparison are
 versioned with the collection. Fourteen requested-level comparisons retain
-uncertainty; none is an unfinished review. Technical verification is not a human
+uncertainty; none is an unfinished review. A follow-up content audit flags Q14 and
+Q19 for difficulty adjudication and Q30 as a medium/hard boundary; the original
+review remains unchanged, and these are not three clean hard anchors.
+Technical verification is not a human
 difficulty label. The automated judge and held-out scoring are
 [issue 43](https://github.com/edcraft-org/ai/issues/43) work.
 

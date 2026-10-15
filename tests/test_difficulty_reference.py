@@ -710,3 +710,58 @@ def test_completed_human_reference_and_comparison_are_bound_to_original_export()
         "too_easy": 3,
         "uncertain": 14,
     }
+
+
+def test_follow_up_audit_covers_frozen_items_and_replays_shortcut_evidence():
+    from edcraft_validator.tools.python_execution import LocalPythonTool
+
+    directory = reference.DEFAULT_SET
+    audit = reference.read_json(directory / "quality-audit-2026-10-15.json")
+    questions, manifest = reference.load_set(directory)
+    original = reference.read_json(directory / manifest["completed_review"]["path"])
+    by_id = {q.question_id: q for q in questions}
+    assert audit["review_sha256"] == reference.digest(original)
+    assert audit["questions_sha256"] == reference.digest(
+        reference.read_json(directory / "questions.json")
+    )
+    assert audit["assessor_kind"] == "AI"
+    assert len(audit["records"]) == len(questions) == 30
+    assert {r["question_id"] for r in audit["records"]} == set(by_id)
+    assert all(not r["human_approval_of_audit"] for r in audit["records"])
+    for record in audit["records"]:
+        question = by_id[record["question_id"]]
+        assert record["question_sha256"] == reference.digest(question.model_dump())
+        assert record["verified_correct_option"] == question.correct_option
+    choices = {}
+    for observation in audit["shortcut_observations"]["observations"]:
+        result = LocalPythonTool().execute_batch(
+            observation["observer_code"],
+            observation["entry_function"],
+            [observation["inputs"]],
+            timeout_seconds=2,
+        )[0]
+        assert result.ok
+        assert result.answer == observation["observed_answer"]
+        rule = observation["option_filter"]
+        suffix = rule == "ends_with_observed_string"
+        fragment = (
+            "".join(result.answer)
+            if rule == ("starts_with_joined_observed_prefixes")
+            else result.answer
+        )
+        compatible = [
+            option.id
+            for option in by_id[observation["question_id"]].options
+            if (
+                option.value.endswith(fragment)
+                if suffix
+                else option.value.startswith(fragment)
+            )
+        ]
+        assert compatible == observation["compatible_options"]
+        choices[observation["observation_id"]] = set(compatible)
+    assert choices["Q14-first-two-updates"] == {"B"}
+    assert choices["Q09-first-loop-update"] == {"A"}
+    assert choices["Q30-first-two-pending-prefixes"] & choices["Q30-base-return"] == {
+        "B"
+    }

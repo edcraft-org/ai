@@ -1,0 +1,709 @@
+{
+  "audit_version": "python-tracing-question-quality-audit-v1",
+  "set_version": "python-tracing-reference-v2",
+  "created_date": "2026-10-15",
+  "assessor": "Codex",
+  "assessor_kind": "AI",
+  "independent_blinded_assessment": false,
+  "source_context": "The assessor has seen the original AI proposals, human ratings and source questions. This is a follow-up content audit, not a new independent human review.",
+  "packet_sha256": "9cc3a68fd23ebabb03d8c79effdb47a8210da39d7edb647f5897a652989787ae",
+  "questions_sha256": "071a876ea1d8f07ecffe5e665af3db9412e2644de6a04c97bd0462767c0b6342",
+  "review_sha256": "a2c6dd75f8cdf0e4b25c76d5cc69661c03fc1160c6cd2dd84abba8b8dee8203d",
+  "recommendations_sha256": "52ea9247d88573cd2074bd6a0704fc6d7e10e46675ff0ad336b0655cf395c465",
+  "technical_summary": {
+    "questions_checked": 30,
+    "answers_verified": 30,
+    "ambiguous_designated_answers_found": 0,
+    "code_changes": 0,
+    "human_rating_changes": 0,
+    "ai_proposal_changes": 0
+  },
+  "readiness": "Targeted difficulty adjudication required for Q14 and Q19 before treating the approved levels as settled. Q30 remains a medium/hard boundary and is not a clean hard anchor.",
+  "adjudication_required": [
+    "Q14",
+    "Q19"
+  ],
+  "boundary_clarification": [
+    "Q30"
+  ],
+  "hard_coverage": "All three primary-hard items have a shortcut or target issue. Q30 is the only remaining plausible hard boundary; the current labels do not establish three clean hard anchors.",
+  "human_record_policy": "Keep the original export and comparison unchanged. These suggestions are AI findings, not human-approved replacement ratings. A later human correction must be a new dated record.",
+  "reserved_set_policy": "This audit inspected question/reference quality in both splits, not judge performance. Do not use reserved-item-specific solutions or anomalies for judge prompt tuning; if that happens, disclose it and replace the reserved families.",
+  "status_counts": {
+    "keep": 14,
+    "boundary_supported": 13,
+    "reassess": 2,
+    "borderline_hard_not_anchor": 1
+  },
+  "annotation_addenda": [
+    {
+      "review_id": "Q07",
+      "option_id": "D",
+      "original_problem": "Counting the one evaluated condition and one executed return gives 2, not the stated option 3.",
+      "suggested_explanation": "Count both syntactic if statements, including the unreached inner condition, and add the executed final return: 2 + 1 = 3. This is a compound-error hypothesis and a weak distractor.",
+      "changes_question_or_original_proposal": false
+    },
+    {
+      "review_id": "Q08",
+      "option_id": "B",
+      "original_problem": "Count return as a call is underspecified; both executed returns would give 4.",
+      "suggested_explanation": "Count the two real calls and additionally count only the outer calculate return as a call: 2 + 1 = 3. Counting both returns instead gives option D (4).",
+      "changes_question_or_original_proposal": false
+    },
+    {
+      "review_id": "Q24",
+      "option_id": "C",
+      "original_problem": "Add one is a generic arithmetic error without a particular program-reading misconception.",
+      "suggested_explanation": "Multiply 2 and 3 instead of summing them, giving 6. This is still a hypothesis, not an observed learner error.",
+      "changes_question_or_original_proposal": false
+    }
+  ],
+  "records": [
+    {
+      "review_id": "Q01",
+      "question_id": "arithmetic-quotient-remainder-01",
+      "question_sha256": "9ed2ee3a688d3ce953569684eefb557b64855e5fe6bd3f99ac7249928bea95b9",
+      "answer_verified": true,
+      "verified_correct_option": "A",
+      "verified_answer": 32,
+      "human_primary": "easy",
+      "human_alternatives": [],
+      "audit_status": "keep",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [],
+      "manual_solution_or_shortcut": "17 // 5 = 3 and 17 % 5 = 2, giving 32. A short fixed calculation with no dependent state.",
+      "assessment_note": "The alternatives correspond to divisor/remainder confusion, swapped results and a ceiling quotient.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q02",
+      "question_id": "cruxeval-082",
+      "question_sha256": "1f89d939a463a2b290f403bcb31321b28a3e78d9d063f1e9c3b934d275958be5",
+      "answer_verified": true,
+      "verified_correct_option": "C",
+      "verified_answer": "D",
+      "human_primary": "easy",
+      "human_alternatives": [
+        "medium"
+      ],
+      "audit_status": "boundary_supported",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [
+        "medium"
+      ],
+      "manual_solution_or_shortcut": "The empty a short-circuits a and b; the truthy c makes c and d return D. Short operand selection under known Python semantics.",
+      "assessment_note": "The main difficulty is operand-valued Boolean semantics, not lengthy tracing. The existing easy/medium boundary is reasonable.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q03",
+      "question_id": "lists-adjacent-differences-02",
+      "question_sha256": "555df92dd5ecb02c569a7a6f6978d8c9fa3a45a01184c145fd59ea56ff0904b8",
+      "answer_verified": true,
+      "verified_correct_option": "D",
+      "verified_answer": 6,
+      "human_primary": "medium",
+      "human_alternatives": [
+        "easy"
+      ],
+      "audit_status": "boundary_supported",
+      "suggested_primary": "medium",
+      "suggested_alternatives": [
+        "easy"
+      ],
+      "manual_solution_or_shortcut": "The contributions are 4, -3 and 5, totalling 6. More generally, result equals previous after each iteration, so the last element is a shortcut.",
+      "assessment_note": "A short trace supports medium/easy; the invariant reduces work. The -5 distractor requires both overwriting the accumulator and reversing subtraction.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q04",
+      "question_id": "cruxeval-274",
+      "question_sha256": "9128f762b1a214b0b6d06259725b15e9738c8ab990ba30e4ac363ce9f23f6dd5",
+      "answer_verified": true,
+      "verified_correct_option": "C",
+      "verified_answer": 3,
+      "human_primary": "medium",
+      "human_alternatives": [
+        "easy"
+      ],
+      "audit_status": "boundary_supported",
+      "suggested_primary": "medium",
+      "suggested_alternatives": [
+        "easy"
+      ],
+      "manual_solution_or_shortcut": "The qualifying ordered pairs are (1,3), (2,2), (3,1), so the count is 3.",
+      "assessment_note": "Nested syntax alone does not justify hard. The current medium/easy boundary is reasonable.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q05",
+      "question_id": "cruxeval-752",
+      "question_sha256": "840dfa5c28c2142081a0ae3e4e6e933fe5a696a4ba9bcbd8e4722eab6941f73a",
+      "answer_verified": true,
+      "verified_correct_option": "A",
+      "verified_answer": "zzzzzabc",
+      "human_primary": "easy",
+      "human_alternatives": [],
+      "audit_status": "keep",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [],
+      "manual_solution_or_shortcut": "8 - 3 = 5 copies of z followed by abc gives zzzzzabc.",
+      "assessment_note": "A single expression, no changing state; the options are distinct and relevant.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q06",
+      "question_id": "functions-recursive-sum-01",
+      "question_sha256": "33fe0bb8028d153a5b9c20431271b85c7a39a690ec952e41fec4fc00954f73b6",
+      "answer_verified": true,
+      "verified_correct_option": "C",
+      "verified_answer": 0,
+      "human_primary": "easy",
+      "human_alternatives": [],
+      "audit_status": "keep",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [],
+      "manual_solution_or_shortcut": "The input is 0, so the base case returns 0 immediately; no recursion occurs.",
+      "assessment_note": "Keep as a base-case/early-return check, not evidence of recursive tracing ability. The option 2 is a weak event-counting distractor for a return-value question.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q07",
+      "question_id": "conditionals-boolean-01",
+      "question_sha256": "6f086aff490b160207e62a7506fd922921e5fd9f274d4bff0dee13a5cbb19f71",
+      "answer_verified": true,
+      "verified_correct_option": "C",
+      "verified_answer": 1,
+      "human_primary": "easy",
+      "human_alternatives": [],
+      "audit_status": "keep",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [],
+      "manual_solution_or_shortcut": "Only the outer if condition is evaluated. It is false; the inner condition is not reached. Total: 1.",
+      "assessment_note": "The correct answer and stem are clear. The original explanation for option D (3) is inconsistent: one evaluated condition plus the one executed return gives 2, not 3.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q08",
+      "question_id": "functions-single-helper-01",
+      "question_sha256": "9a153188e3d3fc546367fbe5b9ba16a757ae60ec19fdc65aa10f971a036cbbc4",
+      "answer_verified": true,
+      "verified_correct_option": "C",
+      "verified_answer": 2,
+      "human_primary": "easy",
+      "human_alternatives": [],
+      "audit_status": "keep",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [],
+      "manual_solution_or_shortcut": "One entry call and one helper call give 2; return statements are not calls.",
+      "assessment_note": "Option B (3) needs a more specific error rule than counting returns in general, because both executed returns would give 4.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q09",
+      "question_id": "cruxeval-506",
+      "question_sha256": "4fd19bdd56971218f1af9211b78adf345b2805e142a9b420b6c49696d4dd357f",
+      "answer_verified": true,
+      "verified_correct_option": "A",
+      "verified_answer": "sntstotstots",
+      "human_primary": "medium",
+      "human_alternatives": [
+        "easy"
+      ],
+      "audit_status": "boundary_supported",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [
+        "medium"
+      ],
+      "manual_solution_or_shortcut": "For n=5 the prefix is sn, and the first loop update appends ts. The prefix snts already selects A uniquely. All later updates only append, so this prefix is preserved.",
+      "assessment_note": "The full output is correct, but five loop iterations are unnecessary to select among these options. Easy is defensible; medium is already paired with easy in the human record.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q10",
+      "question_id": "functions-composition-01",
+      "question_sha256": "bc3a61a75aee373ccf24a2d1db9b51adc4d824ef92c42f8ca1dd925ef944c77a",
+      "answer_verified": true,
+      "verified_correct_option": "A",
+      "verified_answer": 12,
+      "human_primary": "medium",
+      "human_alternatives": [
+        "easy"
+      ],
+      "audit_status": "boundary_supported",
+      "suggested_primary": "medium",
+      "suggested_alternatives": [
+        "easy"
+      ],
+      "manual_solution_or_shortcut": "The two calls return 5 and 7, and the result is 12.",
+      "assessment_note": "A short dependent call chain fits the easy/medium boundary; there is no sustained call-stack bookkeeping.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q11",
+      "question_id": "arithmetic-linear-01",
+      "question_sha256": "930de1957038082f7ddb5a7b297a61d87d48e4c0a7dc0c9d8fbc7ba7ca0dd363",
+      "answer_verified": true,
+      "verified_correct_option": "A",
+      "verified_answer": 6,
+      "human_primary": "easy",
+      "human_alternatives": [],
+      "audit_status": "keep",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [],
+      "manual_solution_or_shortcut": "2 + 5 - 1 = 6.",
+      "assessment_note": "All alternatives are distinct; one local arithmetic calculation settles the question.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q12",
+      "question_id": "cruxeval-253",
+      "question_sha256": "828255a925a525b39412c00b52dda08bbef25b3ec6303a4faaf7a921c71a99e6",
+      "answer_verified": true,
+      "verified_correct_option": "B",
+      "verified_answer": "ana",
+      "human_primary": "easy",
+      "human_alternatives": [],
+      "audit_status": "keep",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [],
+      "manual_solution_or_shortcut": "The prefix ban matches banana[:3]; banana[3:] is ana.",
+      "assessment_note": "A single branch and slice make the easy level reasonable.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q13",
+      "question_id": "lists-endpoint-swap-02",
+      "question_sha256": "2a4931477dbd06827610747c14fffd66a25373fa9e6b770a1facbaa0d7efcf65",
+      "answer_verified": true,
+      "verified_correct_option": "B",
+      "verified_answer": 8,
+      "human_primary": "medium",
+      "human_alternatives": [
+        "easy"
+      ],
+      "audit_status": "boundary_supported",
+      "suggested_primary": "medium",
+      "suggested_alternatives": [
+        "easy"
+      ],
+      "manual_solution_or_shortcut": "Only the new first element 6 and unchanged middle element 1 matter: 6 + 2*1 = 8. The last-element write is irrelevant to this return.",
+      "assessment_note": "The full swap need not be traced. Easy is defensible and already retained as an alternative.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q14",
+      "question_id": "cruxeval-250",
+      "question_sha256": "e603b0b275534d189458d980af8ecc90b4c15ad21e86cfcab83836c1c6876729",
+      "answer_verified": true,
+      "verified_correct_option": "B",
+      "verified_answer": "abcdefgbdfbff",
+      "human_primary": "hard",
+      "human_alternatives": [
+        "hard"
+      ],
+      "audit_status": "reassess",
+      "suggested_primary": "medium",
+      "suggested_alternatives": [
+        "hard"
+      ],
+      "manual_solution_or_shortcut": "After the first two updates the text is abcdefgbd. Only option B starts with that prefix, so the remaining four updates are unnecessary. Later updates only append, so the observed prefix is preserved.",
+      "assessment_note": "The full trace has coupled indexing and growing state, but the complete MCQ can be solved with two updates. A count of required concepts does not establish hard difficulty. The repeated hard alternative adds no uncertainty.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q15",
+      "question_id": "cruxeval-783",
+      "question_sha256": "028f1404109694ba6db046ef8147c8c9d6171709b48559be7e733546915aad92",
+      "answer_verified": true,
+      "verified_correct_option": "C",
+      "verified_answer": 3,
+      "human_primary": "medium",
+      "human_alternatives": [
+        "easy"
+      ],
+      "audit_status": "boundary_supported",
+      "suggested_primary": "medium",
+      "suggested_alternatives": [
+        "easy"
+      ],
+      "manual_solution_or_shortcut": "Right-to-left pairs d/d, c/c and b/b match; x/a fails at index 3. Return the index, not the fourth-comparison count.",
+      "assessment_note": "Four local comparisons support medium/easy; no state accumulation is needed.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q16",
+      "question_id": "cruxeval-147",
+      "question_sha256": "8f3142dfaaeceb6aa2a733d8af00e9516c20af48835a86fedf36448696f38c43",
+      "answer_verified": true,
+      "verified_correct_option": "A",
+      "verified_answer": [
+        3,
+        4,
+        5,
+        1,
+        2
+      ],
+      "human_primary": "easy",
+      "human_alternatives": [
+        "medium"
+      ],
+      "audit_status": "boundary_supported",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [
+        "medium"
+      ],
+      "manual_solution_or_shortcut": "The midpoint is 2; concatenate [3,4,5] and [1,2] to get [3,4,5,1,2].",
+      "assessment_note": "Floor division and two slices interact locally; no repeated state is tracked.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q17",
+      "question_id": "cruxeval-356",
+      "question_sha256": "75877598dee79e434d9d708548b34f9055504801a82c6128421fa9b19341850b",
+      "answer_verified": true,
+      "verified_correct_option": "B",
+      "verified_answer": [
+        1,
+        2,
+        3,
+        1,
+        2,
+        3
+      ],
+      "human_primary": "medium",
+      "human_alternatives": [
+        "easy"
+      ],
+      "audit_status": "boundary_supported",
+      "suggested_primary": "medium",
+      "suggested_alternatives": [
+        "easy"
+      ],
+      "manual_solution_or_shortcut": "The negative input becomes 2; reversing, repeating twice and reversing again yields [1,2,3,1,2,3].",
+      "assessment_note": "The two reversals restore original order across identical copies; the variable l is unused. The existing boundary is reasonable.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q18",
+      "question_id": "conditionals-sequential-02",
+      "question_sha256": "bd64cf8817cad246d7a8c680db437ce6e690682576d4e2d280b178efcd80cc3b",
+      "answer_verified": true,
+      "verified_correct_option": "B",
+      "verified_answer": 6,
+      "human_primary": "easy",
+      "human_alternatives": [
+        "medium"
+      ],
+      "audit_status": "keep",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [],
+      "manual_solution_or_shortcut": "With x=6 both conditions are false and the return is 6. Neither update executes.",
+      "assessment_note": "The human overall level is sensible, but tracing burden can be low for this input. Adding 4 preserves parity, so the first update never changes the truth of the oddness guard, although it can change a later multiplied value for other inputs.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q19",
+      "question_id": "loops-triangular-reset-02",
+      "question_sha256": "61e3e028fcdb5a7eca42ebcf407cf0905dab29e50793fa82b1fb2e91b556b0f5",
+      "answer_verified": true,
+      "verified_correct_option": "D",
+      "verified_answer": 5,
+      "human_primary": "hard",
+      "human_alternatives": [],
+      "audit_status": "reassess",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [],
+      "manual_solution_or_shortcut": "The stem asks for loop invocations: one outer invocation plus one inner invocation on each of four outer iterations gives 1 + 4 = 5.",
+      "assessment_note": "The return value, subtotal arithmetic and ten inner body iterations are irrelevant to this question. The hard rating and high tracing/state dimensions assess work the target does not require.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q20",
+      "question_id": "cruxeval-498",
+      "question_sha256": "a4f175270270b06f538910eded32b0faf1d1fdf823e20aaf4e7e2dabc23b370e",
+      "answer_verified": true,
+      "verified_correct_option": "C",
+      "verified_answer": [
+        1,
+        9,
+        4,
+        7
+      ],
+      "human_primary": "easy",
+      "human_alternatives": [
+        "medium"
+      ],
+      "audit_status": "boundary_supported",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [
+        "medium"
+      ],
+      "manual_solution_or_shortcut": "The empty slice nums[1:1] inserts 9 before 4, giving [1,9,4,7].",
+      "assessment_note": "This relies on one slice-assignment rule. Familiarity with the rule is not itself sustained tracing effort under this rubric.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q21",
+      "question_id": "loops-conditional-reset-02",
+      "question_sha256": "5489e94b5dcdb620c8ae9e90fab8aac178c97dfabf60a245346e8945a5800c3c",
+      "answer_verified": true,
+      "verified_correct_option": "B",
+      "verified_answer": 12,
+      "human_primary": "medium",
+      "human_alternatives": [
+        "hard"
+      ],
+      "audit_status": "keep",
+      "suggested_primary": "medium",
+      "suggested_alternatives": [],
+      "manual_solution_or_shortcut": "After each iteration (current,total) is (1,2), (2,4), (1,8), (4,12), so return 12.",
+      "assessment_note": "A small table coordinates an updated current value, persistent total and reset timing. Medium is defensible; there is no clear need to invoke hard for this four-step input.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q22",
+      "question_id": "conditionals-early-return-01",
+      "question_sha256": "23390e65e282735dd861bb6ca1312f2871663993ec35cee9a3024a9df5b5c1a2",
+      "answer_verified": true,
+      "verified_correct_option": "C",
+      "verified_answer": 2,
+      "human_primary": "easy",
+      "human_alternatives": [],
+      "audit_status": "keep",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [],
+      "manual_solution_or_shortcut": "The first condition is true for -2, so return 2 immediately.",
+      "assessment_note": "No later condition or final return is reached; easy is appropriate.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q23",
+      "question_id": "loops-iteration-count-01",
+      "question_sha256": "4a6e9c04747830c45a5592d7ce2d5892a010fd2bed13f4c6147dbe35579ab2ed",
+      "answer_verified": true,
+      "verified_correct_option": "A",
+      "verified_answer": 2,
+      "human_primary": "easy",
+      "human_alternatives": [],
+      "audit_status": "keep",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [],
+      "manual_solution_or_shortcut": "range(2) contains two values, so the loop body runs twice.",
+      "assessment_note": "Accumulator arithmetic is irrelevant to the requested count.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q24",
+      "question_id": "lists-sum-01",
+      "question_sha256": "b39c8633b00693a22ea725bdc03ce9e9e22c8856c33d3fe8ff01a8605ca38fc5",
+      "answer_verified": true,
+      "verified_correct_option": "A",
+      "verified_answer": 5,
+      "human_primary": "easy",
+      "human_alternatives": [],
+      "audit_status": "keep",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [],
+      "manual_solution_or_shortcut": "sum([2,3]) is 5.",
+      "assessment_note": "The question is valid but the generic plus/minus-one distractor stories are weak. Option C (6) has a more specific hypothesis: multiply the two elements instead of summing them.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q25",
+      "question_id": "cruxeval-793",
+      "question_sha256": "551df614bddf46b93d00e34c6c84e9ed98d242667e1c4b19207c58ddc96a213d",
+      "answer_verified": true,
+      "verified_correct_option": "C",
+      "verified_answer": 13,
+      "human_primary": "medium",
+      "human_alternatives": [
+        "hard"
+      ],
+      "audit_status": "boundary_supported",
+      "suggested_primary": "medium",
+      "suggested_alternatives": [
+        "hard"
+      ],
+      "manual_solution_or_shortcut": "There are 15 pairs of distinct positions and two equal-value pairs to exclude, giving 13. Equivalently count 4+3+3+2+1+0.",
+      "assessment_note": "A full trace has 21 comparisons, but pair counting reduces the work. Medium with a hard alternative is more defensible than inferring hard solely from the nested loops.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q26",
+      "question_id": "arithmetic-reassignment-01",
+      "question_sha256": "a6fa70ad98f646facbb8395345be92585d62b8dabcffe554f0b15b9ea6164c02",
+      "answer_verified": true,
+      "verified_correct_option": "C",
+      "verified_answer": 114,
+      "human_primary": "medium",
+      "human_alternatives": [
+        "easy"
+      ],
+      "audit_status": "boundary_supported",
+      "suggested_primary": "medium",
+      "suggested_alternatives": [
+        "easy"
+      ],
+      "manual_solution_or_shortcut": "The ordered updates give x=11 and y=4, then 11*10+4=114.",
+      "assessment_note": "Only two dependent assignments are needed. The existing medium/easy boundary is reasonable; no long state trace occurs.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q27",
+      "question_id": "cruxeval-197",
+      "question_sha256": "5ecffcf90afb220d6079f52c0258904e5dca9670eb00e8be2ad9c738d2579328",
+      "answer_verified": true,
+      "verified_correct_option": "C",
+      "verified_answer": "5 3",
+      "human_primary": "easy",
+      "human_alternatives": [
+        "medium"
+      ],
+      "audit_status": "boundary_supported",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [
+        "medium"
+      ],
+      "manual_solution_or_shortcut": "The quotient is 5 and remainder 3. True indexes the second string, so the result is '5 3'.",
+      "assessment_note": "Boolean list indexing is an unusual semantic rule, but the working is short once understood. The existing boundary is reasonable.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q28",
+      "question_id": "cruxeval-223",
+      "question_sha256": "956b3f850fdf0e1cf168b0adb55585aa5dc2ac18aa4cfc81a91ab7ef43f54845",
+      "answer_verified": true,
+      "verified_correct_option": "B",
+      "verified_answer": 2,
+      "human_primary": "medium",
+      "human_alternatives": [
+        "hard"
+      ],
+      "audit_status": "keep",
+      "suggested_primary": "medium",
+      "suggested_alternatives": [],
+      "manual_solution_or_shortcut": "The successive (count,i) values are (1,1),(1,1),(1,2),(1,3),(1,1),(2,1),(2,2), giving 2.",
+      "assessment_note": "i can exceed 1 only on ascending steps above the target and resets before any later qualifying rise. A seven-step table or this invariant supports medium; the hard alternative is weak for this input.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q29",
+      "question_id": "cruxeval-598",
+      "question_sha256": "fb8eaa102b856bc31f8ef2149f690671fc1678e834b8542309aa6f30bc5e79e4",
+      "answer_verified": true,
+      "verified_correct_option": "D",
+      "verified_answer": "",
+      "human_primary": "easy",
+      "human_alternatives": [],
+      "audit_status": "keep",
+      "suggested_primary": "easy",
+      "suggested_alternatives": [],
+      "manual_solution_or_shortcut": "3*(5%4) is 3; text[3:3] is the empty string.",
+      "assessment_note": "A short modulo and slice calculation establishes the answer.",
+      "human_approval_of_audit": false
+    },
+    {
+      "review_id": "Q30",
+      "question_id": "cruxeval-629",
+      "question_sha256": "b5ebb08c85e0bc163be512af46c9fcf3d6eca91067ec2e849ed6491b2bab0b5a",
+      "answer_verified": true,
+      "verified_correct_option": "B",
+      "verified_answer": "abNGcdefghabNGcdefabNGcdabNGabN",
+      "human_primary": "hard",
+      "human_alternatives": [
+        "medium"
+      ],
+      "audit_status": "borderline_hard_not_anchor",
+      "suggested_primary": "medium",
+      "suggested_alternatives": [
+        "hard"
+      ],
+      "manual_solution_or_shortcut": "The first two pending prefixes are abNGcdefgh and abNGcdef, leaving B/C. The base return is abN, so the output must end with abN, leaving B/D. Their intersection is B.",
+      "assessment_note": "The actual options allow solving by two prefixes and the base suffix without assembling all five frames. Medium is a reasonable primary recommendation; hard remains a possible boundary, not a clean high-confidence hard anchor. My earlier all-high-dimensions recommendation overstated the option-discrimination requirement.",
+      "human_approval_of_audit": false
+    }
+  ],
+  "shortcut_observations": {
+    "observations": [
+      {
+        "observation_id": "Q14-first-two-updates",
+        "question_id": "cruxeval-250",
+        "question_sha256": "e603b0b275534d189458d980af8ecc90b4c15ad21e86cfcab83836c1c6876729",
+        "observer_code": "def f(text):\n    count = len(text)\n    for i in range(-count+1, 0):\n        text = text + text[i]\n        if i == -count + 2:\n            return text\n    return text",
+        "entry_function": "f",
+        "inputs": {
+          "text": "abcdefg"
+        },
+        "observed_answer": "abcdefgbd",
+        "compatible_options": [
+          "B"
+        ],
+        "executor": "LocalPythonTool / StepTracer",
+        "timeout_seconds": 2,
+        "option_filter": "starts_with_observed_string"
+      },
+      {
+        "observation_id": "Q09-first-loop-update",
+        "question_id": "cruxeval-506",
+        "question_sha256": "4fd19bdd56971218f1af9211b78adf345b2805e142a9b420b6c49696d4dd357f",
+        "observer_code": "def f(n):\n    p = ''\n    if n%2 == 1:\n        p+='sn'\n    else:\n        return n*n\n    for x in range(1, n+1):\n        if x%2 == 0:\n            p+='to'\n        else:\n            p+='ts'\n        return p",
+        "entry_function": "f",
+        "inputs": {
+          "n": 5
+        },
+        "observed_answer": "snts",
+        "compatible_options": [
+          "A"
+        ],
+        "executor": "LocalPythonTool / StepTracer",
+        "timeout_seconds": 2,
+        "option_filter": "starts_with_observed_string"
+      },
+      {
+        "observation_id": "Q30-first-two-pending-prefixes",
+        "question_id": "cruxeval-629",
+        "question_sha256": "b5ebb08c85e0bc163be512af46c9fcf3d6eca91067ec2e849ed6491b2bab0b5a",
+        "observer_code": "def prefixes(text):\n    return [text[:-1], text[:-2][:-1]]",
+        "entry_function": "prefixes",
+        "inputs": {
+          "text": "abNGcdefghi"
+        },
+        "observed_answer": [
+          "abNGcdefgh",
+          "abNGcdef"
+        ],
+        "compatible_options": [
+          "B",
+          "C"
+        ],
+        "executor": "LocalPythonTool / StepTracer",
+        "timeout_seconds": 2,
+        "option_filter": "starts_with_joined_observed_prefixes"
+      },
+      {
+        "observation_id": "Q30-base-return",
+        "question_id": "cruxeval-629",
+        "question_sha256": "b5ebb08c85e0bc163be512af46c9fcf3d6eca91067ec2e849ed6491b2bab0b5a",
+        "observer_code": "def f(text, dng):\n    if dng not in text:\n        return text\n    if text[-len(dng):] == dng:\n        return text[:-len(dng)]\n    return text[:-1] + f(text[:-2], dng)",
+        "entry_function": "f",
+        "inputs": {
+          "text": "abN",
+          "dng": "NG"
+        },
+        "observed_answer": "abN",
+        "compatible_options": [
+          "B",
+          "D"
+        ],
+        "executor": "LocalPythonTool / StepTracer",
+        "timeout_seconds": 2,
+        "option_filter": "ends_with_observed_string"
+      }
+    ],
+    "Q30_intersection": [
+      "B"
+    ],
+    "Q30_base_reachability": "Removing two trailing characters per call gives abNGcdefghi, abNGcdefg, abNGcde, abNGc and abN. None of the first four strings ends with NG. The final string lacks NG and is returned unchanged. This establishes the ending without constructing all pending concatenations."
+  }
+}
