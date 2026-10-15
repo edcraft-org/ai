@@ -91,7 +91,7 @@ def client_with_content(content: str) -> SimpleNamespace:
 def test_generates_template_using_strict_structured_outputs(
     monkeypatch, provider_name
 ) -> None:
-    monkeypatch.setenv("SOCLAAS_RESPONSE_FORMAT", "json_schema")
+    monkeypatch.delenv("SOCLAAS_RESPONSE_FORMAT", raising=False)
     client = client_with(code_response())
     provider = OpenAICompatibleProvider(provider_name, client, model="test-model")
 
@@ -530,7 +530,7 @@ def test_soclaas_json_mode_shows_current_schema_and_preserves_code(
 ):
     from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
 
-    monkeypatch.delenv("SOCLAAS_RESPONSE_FORMAT", raising=False)
+    monkeypatch.setenv("SOCLAAS_RESPONSE_FORMAT", "json_object")
     request = generation_request()
     payload = code_response()
     if revision:

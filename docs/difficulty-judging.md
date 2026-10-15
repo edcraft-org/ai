@@ -202,13 +202,14 @@ revised MCQ. A remaining mismatch/uncertainty is recorded without further attemp
 Provider failures and malformed judge outputs remain errors, not correction cues.
 The difficulty tool itself neither generates nor corrects questions.
 
-Run the two development briefs for all three configured providers with:
+Run the easy arithmetic, medium conditional-state and hard interacting-state
+briefs for the two remote providers with:
 
 ```bash
 OPENAI_MAX_RETRIES=0 SOCLAAS_MAX_RETRIES=0 \
-OLLAMA_NUM_PREDICT=4096 OLLAMA_NUM_CTX=16384 OLLAMA_THINK=false \
+SOCLAAS_RESPONSE_FORMAT=json_schema \
 uv run python scripts/evaluate_difficulty_authoring.py \
-  --provider all --env-file .env \
+  --providers openai soclaas --env-file .env \
   --output .artifacts/difficulty-correction/run-01 --timeout-seconds 300
 ```
 
@@ -227,6 +228,13 @@ application converts these to the existing question input dictionary without
 changing values. Ollama can set `OLLAMA_NUM_CTX` explicitly so the entire rubric
 and response schema fit without relying on the service's smaller default context.
 
+The runner writes provider settings and fixed briefs to `manifest.json` before
+any call. Its summary separates initial/final primary estimates, confirmed
+matches, corrections attempted, changed questions, unresolved outcomes and errors.
+`--provider all` retains the option to include local Ollama. OpenAI and SocLaas
+now both default to the same strict `json_schema` response path; an explicit
+SocLaas `json_object` setting is an opt-in compatibility fallback.
+
 ## Evaluate the approved dataset
 
 `scripts/evaluate_difficulty_dataset.py` evaluates the final issue 42
@@ -241,6 +249,7 @@ OLLAMA_NUM_CTX=16384 OLLAMA_THINK=false \
 uv run python scripts/evaluate_difficulty_dataset.py \
   --dataset reference_sets/python_tracing/dataset.json \
   --dataset-revision <approved-dataset-commit> --env-file .env \
+  --providers openai soclaas \
   --output .artifacts/difficulty-dataset/run-01 --timeout-seconds 250
 ```
 

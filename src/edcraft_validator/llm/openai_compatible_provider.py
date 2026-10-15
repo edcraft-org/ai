@@ -308,7 +308,7 @@ def _positive_int_setting(variable: str, default: int) -> int:
 
 
 def _soclaas_response_format() -> str:
-    value = os.getenv("SOCLAAS_RESPONSE_FORMAT", "json_object").strip()
+    value = os.getenv("SOCLAAS_RESPONSE_FORMAT", "json_schema").strip()
     if value not in {"json_object", "json_schema"}:
         raise OpenAIGenerationError(
             "SOCLAAS_RESPONSE_FORMAT must be json_object or json_schema"

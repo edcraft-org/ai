@@ -329,6 +329,7 @@ async def evaluate(args):
         "dataset_id": data["dataset_id"],
         "dataset_sha256": sha256(args.dataset.read_bytes()),
         "dataset_revision": args.dataset_revision,
+        "followup_of": args.followup_of,
         "judge_revision": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
         ).strip(),
@@ -395,7 +396,9 @@ async def evaluate(args):
                 "Configuration frozen before all calls. Prior v2 seed "
                 "questions and AI recommendations exist in branch "
                 "history; this is not an untouched external benchmark. No "
-                "prompt tuning or repeats on final results."
+                "within-run replacements or prompt tuning. A followup_of value "
+                "identifies a requested repeat of an inspected collection, "
+                "not fresh confirmatory validation."
             ),
             "alpha": (
                 "Two-rater ordinal Krippendorff alpha with pooled "
@@ -421,6 +424,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", type=Path, required=True)
     parser.add_argument("--dataset-revision", required=True)
+    parser.add_argument(
+        "--followup-of", help="Prior evaluation identifier, if repeated"
+    )
     parser.add_argument(
         "--providers",
         nargs="+",

@@ -41,9 +41,10 @@ Enabled thinking may require a larger `OLLAMA_NUM_PREDICT` budget.
 Always select a provider with `--provider`. Use `--model` to override its configured
 model. OpenAI, Ollama, and SocLaas are available providers. SocLaas uses the
 OpenAI-compatible interface with `SOCLAAS_API_KEY`, `SOCLAAS_BASE_URL`, and
-`SOCLAAS_MODEL`. SocLaas defaults to JSON mode with the response schema included
-in the prompt; local schema validation and all template checks still apply.
-Set `SOCLAAS_RESPONSE_FORMAT=json_schema` to use strict structured output.
+`SOCLAAS_MODEL`. OpenAI and SocLaas both default to strict JSON-schema output.
+Local schema validation and all template checks still apply.
+`SOCLAAS_RESPONSE_FORMAT=json_object` explicitly opts into the weaker JSON mode
+for endpoints without strict-schema support; its schema is supplied in the prompt.
 `SOCLAAS_REASONING_EFFORT=default` leaves reasoning to the model; an explicit value
 such as `none` or `medium` is sent when configured. The default request timeout is
 300 seconds. Generation and tool/acknowledgement output budgets are 16384 and 4096
