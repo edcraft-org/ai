@@ -1,0 +1,2421 @@
+{
+  "dataset_id": "python-tracing-evaluation-2026-10-15",
+  "frozen": true,
+  "frozen_date": "2026-10-15",
+  "rubric_version": "python-tracing-v0.2",
+  "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+  "assessment_conditions_version": "manual-tracing-v0.1",
+  "assessment_conditions": "Untimed manual tracing with scratch paper, assuming the Python semantics are understood; no execution, calculator or AI assistance for the hypothetical learner.",
+  "reference_type": "ai_assisted_single_human_reviewer",
+  "reviewer_id": "keith",
+  "review_date": "2026-10-15",
+  "approved_revision": "240704a008cfb1bb4fc405e9f2fd9e1512e42b24",
+  "approved_review_sha256": "de61d45a4cac39c3b41fac5dc43642a87ff001d3b1d67d447a2f3daf8a92b18c",
+  "label_policy": "Use difficulty as the fixed evaluation category. Review confidence and alternatives are historical context only and must not replace or recalculate this category. Questions, topics, splits and dimension ratings are frozen with the categories.",
+  "questions": [
+    {
+      "question_id": "arithmetic-coupled-arithmetic-01",
+      "code": "def encode(values):\n    first = 2\n    second = 1\n    result = 0\n    for value in values:\n        first, second = (first + value * second) % 7, (first + second + value) % 5\n        result = result * 2 + first - second\n    return result",
+      "entry_function": "encode",
+      "inputs": {
+        "values": [
+          3,
+          1,
+          4,
+          2,
+          5,
+          2
+        ]
+      },
+      "seed": null,
+      "question": "What does encode return for the input shown?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 120
+        },
+        {
+          "id": "B",
+          "value": 175
+        },
+        {
+          "id": "C",
+          "value": 44
+        },
+        {
+          "id": "D",
+          "value": 197
+        }
+      ],
+      "correct_option": "B",
+      "review_id": "Q01",
+      "topic": "arithmetic",
+      "family_id": "coupled-arithmetic",
+      "split": "development",
+      "difficulty": "hard",
+      "dimensions": {
+        "execution_burden": "high",
+        "changing_state": "high",
+        "conceptual_interaction": "high",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "Six rounds couple two simultaneous arithmetic updates to a weighted running result. The next round depends on both previous values, so a single expression or final-round calculation is insufficient.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "After each outer pass, [first, second, running result] is [[5, 1, 4], [6, 2, 12], [0, 2, 22], [4, 4, 44], [3, 3, 88], [2, 3, 175]]. The final return is 175.",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "coupled-arithmetic",
+        "source_revision": null,
+        "url": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for v3 after the v2 review, to improve provisional hard-question coverage."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "26ac8ee14dde576dbab7e564f1546410cdcd46346cd0fb0ca4d69a4730217101"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "medium"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 175,
+      "trace_summary": {
+        "entry_function": "encode",
+        "function_calls": 1,
+        "loop_executions": 1,
+        "loop_iterations": 6,
+        "branch_executions": 0,
+        "variable_snapshots": 28
+      }
+    },
+    {
+      "question_id": "arithmetic-quotient-remainder-01",
+      "code": "def calculate(x, y):\n    quotient = x // y\n    remainder = x % y\n    return quotient * 10 + remainder",
+      "entry_function": "calculate",
+      "inputs": {
+        "x": 17,
+        "y": 5
+      },
+      "seed": null,
+      "question": "What does calculate(17, 5) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 32
+        },
+        {
+          "id": "B",
+          "value": 35
+        },
+        {
+          "id": "C",
+          "value": 23
+        },
+        {
+          "id": "D",
+          "value": 42
+        }
+      ],
+      "correct_option": "A",
+      "review_id": "Q02",
+      "topic": "arithmetic",
+      "family_id": "arithmetic-quotient-remainder",
+      "split": "held_out",
+      "difficulty": "easy",
+      "dimensions": {
+        "execution_burden": "low",
+        "changing_state": "low",
+        "conceptual_interaction": "low",
+        "answer_discrimination": "low"
+      },
+      "difficulty_reason": "The quotient and remainder can be calculated directly without tracing repeated updates.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "Floor division gives 3, remainder gives 2; the return is 3 \u00d7 10 + 2 = 32.",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "arithmetic-quotient-remainder",
+        "source_revision": null,
+        "url": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "ae0c0902a805166f96e2deac1643b8787c17459665e1e175c4afa880748ff08c"
+      },
+      "review_notes": {
+        "confidence": "high",
+        "alternative_levels": [],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 32,
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      }
+    },
+    {
+      "question_id": "cruxeval-082",
+      "code": "def f(a, b, c, d):\n    return a and b or c and d",
+      "entry_function": "f",
+      "inputs": {
+        "a": "",
+        "b": "B",
+        "c": "C",
+        "d": "D"
+      },
+      "seed": null,
+      "question": "What does f('', 'B', 'C', 'D') return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": "B"
+        },
+        {
+          "id": "B",
+          "value": "C"
+        },
+        {
+          "id": "C",
+          "value": "D"
+        },
+        {
+          "id": "D",
+          "value": ""
+        }
+      ],
+      "correct_option": "C",
+      "review_id": "Q03",
+      "topic": "conditionals",
+      "family_id": "cruxeval-sample-82",
+      "split": "development",
+      "difficulty": "easy",
+      "dimensions": {
+        "execution_burden": "low",
+        "changing_state": "low",
+        "conceptual_interaction": "moderate",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "The short-circuit rules select an operand in a short expression; no full execution table is needed.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "a is empty, so a and b yields ''. c is nonempty, so c and d yields 'D'. The or expression therefore returns 'D'.",
+      "provenance": {
+        "kind": "cruxeval_adaptation",
+        "source_id": "sample_82",
+        "source_revision": "190faf16d175b5847b0af05d937872b1fb395942",
+        "url": "https://github.com/facebookresearch/cruxeval/blob/190faf16d175b5847b0af05d937872b1fb395942/data/cruxeval.jsonl",
+        "source_record_sha256": "579de7978842da8f4fcd0ee523c11643b48d5c7d9af66584005669aaed37a14c",
+        "license": "MIT",
+        "modifications": [
+          "Original Python source retained byte-for-byte.",
+          "Selected the concrete input shown; source input/output retained separately.",
+          "Added output-prediction stem and four answer options. No source difficulty label was inherited."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "db5229201b0137b2b18942b3173d73899c741752850828ad0fb3921243cdb05f"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "medium"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": "D",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      }
+    },
+    {
+      "question_id": "lists-adjacent-differences-02",
+      "code": "def total(values):\n    result = 0\n    previous = 0\n    for value in values:\n        result += value - previous\n        previous = value\n    return result",
+      "entry_function": "total",
+      "inputs": {
+        "values": [
+          4,
+          1,
+          6
+        ]
+      },
+      "seed": null,
+      "question": "What does total([4, 1, 6]) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 11
+        },
+        {
+          "id": "B",
+          "value": -5
+        },
+        {
+          "id": "C",
+          "value": -6
+        },
+        {
+          "id": "D",
+          "value": 6
+        }
+      ],
+      "correct_option": "D",
+      "review_id": "Q04",
+      "topic": "lists",
+      "family_id": "lists-adjacent-differences",
+      "split": "development",
+      "difficulty": "medium",
+      "dimensions": {
+        "execution_burden": "low",
+        "changing_state": "moderate",
+        "conceptual_interaction": "moderate",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "The dependency between previous and result must be understood; recognising cancellation avoids a full trace.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "After each element, result and previous both equal that element. The differences cancel, leaving the last value, 6.",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "lists-adjacent-differences",
+        "source_revision": null,
+        "url": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "d39dbfa36f50afeab60ee482ac7e54d61b8f0a84eeb806a2a58a53f036da6d3d"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "easy"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 6,
+      "trace_summary": {
+        "entry_function": "total",
+        "function_calls": 1,
+        "loop_executions": 1,
+        "loop_iterations": 3,
+        "branch_executions": 0,
+        "variable_snapshots": 12
+      }
+    },
+    {
+      "question_id": "cruxeval-274",
+      "code": "def f(nums, target):\n    count = 0\n    for n1 in nums:\n        for n2 in nums:\n            count += (n1+n2==target)\n    return count",
+      "entry_function": "f",
+      "inputs": {
+        "nums": [
+          1,
+          2,
+          3
+        ],
+        "target": 4
+      },
+      "seed": null,
+      "question": "What does f([1, 2, 3], 4) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 1
+        },
+        {
+          "id": "B",
+          "value": 2
+        },
+        {
+          "id": "C",
+          "value": 3
+        },
+        {
+          "id": "D",
+          "value": 9
+        }
+      ],
+      "correct_option": "C",
+      "review_id": "Q05",
+      "topic": "loops",
+      "family_id": "cruxeval-sample-274",
+      "split": "development",
+      "difficulty": "medium",
+      "dimensions": {
+        "execution_burden": "moderate",
+        "changing_state": "moderate",
+        "conceptual_interaction": "moderate",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "The nested loops count ordered pairs, including the pair that uses 2 twice. A complementary-pair shortcut can make it easy.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "The qualifying ordered pairs are (1,3), (2,2) and (3,1). Each True contributes 1, so count is 3. An element may be selected by both loops.",
+      "provenance": {
+        "kind": "cruxeval_adaptation",
+        "source_id": "sample_274",
+        "source_revision": "190faf16d175b5847b0af05d937872b1fb395942",
+        "url": "https://github.com/facebookresearch/cruxeval/blob/190faf16d175b5847b0af05d937872b1fb395942/data/cruxeval.jsonl",
+        "source_record_sha256": "0c91b952ffb1a1297b325d67a1c67826b2ccc3c26e9739461dc19253494216a5",
+        "license": "MIT",
+        "modifications": [
+          "Original Python source retained byte-for-byte.",
+          "Selected the concrete input shown; source input/output retained separately.",
+          "Added output-prediction stem and four answer options. No source difficulty label was inherited."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "f4f3a543ce2452afc3c5651d2dd4e9734dd8259362922630be8b7209c2332bd5"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "easy"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 3,
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 1,
+        "loop_executions": 4,
+        "loop_iterations": 12,
+        "branch_executions": 0,
+        "variable_snapshots": 24
+      }
+    },
+    {
+      "question_id": "cruxeval-752",
+      "code": "def f(s, amount):\n    return (amount - len(s)) * 'z' + s",
+      "entry_function": "f",
+      "inputs": {
+        "s": "abc",
+        "amount": 8
+      },
+      "seed": null,
+      "question": "What does f('abc', 8) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": "zzzzzabc"
+        },
+        {
+          "id": "B",
+          "value": "zzzabc"
+        },
+        {
+          "id": "C",
+          "value": "zzzzzzzzabc"
+        },
+        {
+          "id": "D",
+          "value": "abc"
+        }
+      ],
+      "correct_option": "A",
+      "review_id": "Q06",
+      "topic": "arithmetic",
+      "family_id": "cruxeval-sample-752",
+      "split": "held_out",
+      "difficulty": "easy",
+      "dimensions": {
+        "execution_burden": "low",
+        "changing_state": "low",
+        "conceptual_interaction": "low",
+        "answer_discrimination": "low"
+      },
+      "difficulty_reason": "One length subtraction and a string repeat give the result directly.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "8 - len('abc') is 5, so the result is 'zzzzzabc'.",
+      "provenance": {
+        "kind": "cruxeval_adaptation",
+        "source_id": "sample_752",
+        "source_revision": "190faf16d175b5847b0af05d937872b1fb395942",
+        "url": "https://github.com/facebookresearch/cruxeval/blob/190faf16d175b5847b0af05d937872b1fb395942/data/cruxeval.jsonl",
+        "source_record_sha256": "a1cd7c8517394c2798486c27cc6378c7e58cc29f3553c9bffe2dd6ed6c058a78",
+        "license": "MIT",
+        "modifications": [
+          "Original Python source retained byte-for-byte.",
+          "Selected the concrete input shown; source input/output retained separately.",
+          "Added output-prediction stem and four answer options. No source difficulty label was inherited."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "8bbb95ef56826e3943395e21c199e76bf2f8f5374bcb00def7fed868ef1139a1"
+      },
+      "review_notes": {
+        "confidence": "high",
+        "alternative_levels": [],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": "zzzzzabc",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 2,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 2
+      }
+    },
+    {
+      "question_id": "functions-recursive-sum-01",
+      "code": "def total(n):\n    if n == 0:\n        return 0\n    return n + total(n - 1)",
+      "entry_function": "total",
+      "inputs": {
+        "n": 0
+      },
+      "seed": null,
+      "question": "What does total(0) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 1
+        },
+        {
+          "id": "B",
+          "value": -1
+        },
+        {
+          "id": "C",
+          "value": 0
+        },
+        {
+          "id": "D",
+          "value": 2
+        }
+      ],
+      "correct_option": "C",
+      "review_id": "Q07",
+      "topic": "functions",
+      "family_id": "functions-recursive-sum",
+      "split": "held_out",
+      "difficulty": "easy",
+      "dimensions": {
+        "execution_burden": "low",
+        "changing_state": "low",
+        "conceptual_interaction": "low",
+        "answer_discrimination": "low"
+      },
+      "difficulty_reason": "The concrete input stops at the base case; recursion in the source does not make this trace hard.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "The base-case condition is true and returns 0. No recursive call occurs.",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "functions-recursive-sum",
+        "source_revision": null,
+        "url": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "6e0d2775d33e49dfc91fefd51ea0c71c283d8ad61396e170b9849ca03c3b4312"
+      },
+      "review_notes": {
+        "confidence": "high",
+        "alternative_levels": [],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 0,
+      "trace_summary": {
+        "entry_function": "total",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 1,
+        "variable_snapshots": 1
+      }
+    },
+    {
+      "question_id": "conditionals-boolean-01",
+      "code": "def decide(enabled):\n    if enabled:\n        if 3 > 2:\n            return 1\n    return 0",
+      "entry_function": "decide",
+      "inputs": {
+        "enabled": false
+      },
+      "seed": null,
+      "question": "How many if conditions are evaluated when decide(False) runs? Count both true and false evaluations; do not count conditions that are never reached.",
+      "answer_target": "branch_executions",
+      "options": [
+        {
+          "id": "A",
+          "value": 0
+        },
+        {
+          "id": "B",
+          "value": 2
+        },
+        {
+          "id": "C",
+          "value": 1
+        },
+        {
+          "id": "D",
+          "value": 3
+        }
+      ],
+      "correct_option": "C",
+      "review_id": "Q08",
+      "topic": "conditionals",
+      "family_id": "conditionals-boolean",
+      "split": "development",
+      "difficulty": "easy",
+      "dimensions": {
+        "execution_burden": "low",
+        "changing_state": "low",
+        "conceptual_interaction": "low",
+        "answer_discrimination": "low"
+      },
+      "difficulty_reason": "Only the reached condition checks need counting; values and return calculations can be ignored.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "The outer condition is evaluated once. It is false, so the inner condition is not reached: one evaluation total.",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "conditionals.boolean_branch_count",
+        "source_revision": "3d5d97f",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/conditional_boolean.json",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "6f63b4d064a6e4447b21b88b159c9fdc8111d142aac3f9813ad9cedf081d3f4f"
+      },
+      "review_notes": {
+        "confidence": "high",
+        "alternative_levels": [],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 1,
+      "trace_summary": {
+        "entry_function": "decide",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 1,
+        "variable_snapshots": 1
+      }
+    },
+    {
+      "question_id": "functions-single-helper-01",
+      "code": "def increment(value):\n    return value + 1\n\ndef calculate(value):\n    return increment(value)",
+      "entry_function": "calculate",
+      "inputs": {
+        "value": 2
+      },
+      "seed": null,
+      "question": "How many function calls are traced when calculate(2) runs? Include the entry call, helper calls, and any safe built-in calls; do not count return statements.",
+      "answer_target": "function_calls",
+      "options": [
+        {
+          "id": "A",
+          "value": 1
+        },
+        {
+          "id": "B",
+          "value": 3
+        },
+        {
+          "id": "C",
+          "value": 2
+        },
+        {
+          "id": "D",
+          "value": 4
+        }
+      ],
+      "correct_option": "C",
+      "review_id": "Q09",
+      "topic": "functions",
+      "family_id": "functions-single-helper",
+      "split": "development",
+      "difficulty": "easy",
+      "dimensions": {
+        "execution_burden": "low",
+        "changing_state": "low",
+        "conceptual_interaction": "low",
+        "answer_discrimination": "low"
+      },
+      "difficulty_reason": "One direct helper call can be handled without a substantial call/return trace.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "There is one entry call to calculate and one call to increment; no built-ins are called. The total is two calls.",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "functions.single_helper",
+        "source_revision": "3d5d97f",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/function_helper.json",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "70470b8514e381bb170de4601ca5783c299030356c8db2ab2574e0297d2474e5"
+      },
+      "review_notes": {
+        "confidence": "high",
+        "alternative_levels": [],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 2,
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 2,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 2
+      }
+    },
+    {
+      "question_id": "cruxeval-506",
+      "code": "def f(n):\n    p = ''\n    if n%2 == 1:\n        p+='sn'\n    else:\n        return n*n\n    for x in range(1, n+1):\n        if x%2 == 0:\n            p+='to'\n        else:\n            p+='ts'\n    return p",
+      "entry_function": "f",
+      "inputs": {
+        "n": 5
+      },
+      "seed": null,
+      "question": "What does f(5) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": "sntstotstots"
+        },
+        {
+          "id": "B",
+          "value": "sntotstotsto"
+        },
+        {
+          "id": "C",
+          "value": "tstotstots"
+        },
+        {
+          "id": "D",
+          "value": "sn"
+        }
+      ],
+      "correct_option": "A",
+      "review_id": "Q10",
+      "topic": "functions",
+      "family_id": "cruxeval-sample-506",
+      "split": "development",
+      "difficulty": "medium",
+      "dimensions": {
+        "execution_burden": "moderate",
+        "changing_state": "moderate",
+        "conceptual_interaction": "moderate",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "An early-return alternative and a five-step parity pattern determine a string; the alternating pattern is a useful shortcut.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "n=5 takes the odd path and starts p as 'sn'. x=1,2,3,4,5 append ts,to,ts,to,ts, producing 'sntstotstots'. The even-input n*n return is not reached.",
+      "provenance": {
+        "kind": "cruxeval_adaptation",
+        "source_id": "sample_506",
+        "source_revision": "190faf16d175b5847b0af05d937872b1fb395942",
+        "url": "https://github.com/facebookresearch/cruxeval/blob/190faf16d175b5847b0af05d937872b1fb395942/data/cruxeval.jsonl",
+        "source_record_sha256": "db016276ca30e68fa6258e621953051459c3cade7fade53aa02beda7f8c48fa8",
+        "license": "MIT",
+        "modifications": [
+          "Original Python source retained byte-for-byte.",
+          "Selected the concrete input shown; source input/output retained separately.",
+          "Added output-prediction stem and four answer options. No source difficulty label was inherited."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "b120cf85652896970609872ec76563ea32875166f8357cf4eff9b99b9c6f98a9"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "easy"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": "sntstotstots",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 2,
+        "loop_executions": 1,
+        "loop_iterations": 5,
+        "branch_executions": 6,
+        "variable_snapshots": 13
+      }
+    },
+    {
+      "question_id": "conditionals-conditional-feedback-01",
+      "code": "def adjust(values):\n    score = 4\n    step = 1\n    for value in values:\n        if value % 2 == 0:\n            score -= value\n        elif value > score:\n            score += step\n        else:\n            step += value\n        if score < 0:\n            score = -score\n            step = 1\n        elif score % 3 == 0:\n            score, step = step, score // 3\n        else:\n            step = (step + score) % 5 + 1\n    return score * 10 + step",
+      "entry_function": "adjust",
+      "inputs": {
+        "values": [
+          2,
+          7,
+          3,
+          4,
+          6,
+          1
+        ]
+      },
+      "seed": null,
+      "question": "What does adjust return for the input shown?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 22
+        },
+        {
+          "id": "B",
+          "value": 13
+        },
+        {
+          "id": "C",
+          "value": 25
+        },
+        {
+          "id": "D",
+          "value": 14
+        }
+      ],
+      "correct_option": "D",
+      "review_id": "Q11",
+      "topic": "conditionals",
+      "family_id": "conditional-feedback",
+      "split": "held_out",
+      "difficulty": "hard",
+      "dimensions": {
+        "execution_burden": "high",
+        "changing_state": "high",
+        "conceptual_interaction": "high",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "Two conditional chains interact on every pass: the first changes the value tested by the second, and resets or swaps then change later decisions. All three paths of both chains occur for this input.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "After each outer pass, [score, step] is [[2, 4], [4, 2], [4, 5], [5, 0], [1, 1], [1, 4]]. The final return is 14.",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "conditional-feedback",
+        "source_revision": null,
+        "url": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for v3 after the v2 review, to improve provisional hard-question coverage."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "da2a230fa6218412a8219ab95296ada872796e00d30cbe97125f3c2d9eb24e38"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "medium"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 14,
+      "trace_summary": {
+        "entry_function": "adjust",
+        "function_calls": 1,
+        "loop_executions": 1,
+        "loop_iterations": 6,
+        "branch_executions": 20,
+        "variable_snapshots": 24
+      }
+    },
+    {
+      "question_id": "functions-branching-recursion-01",
+      "code": "def weave(n, bias):\n    if n <= 1:\n        return n + bias\n    left = weave(n - 1, bias + 1)\n    if left % 2 == 0:\n        right = weave(n - 2, bias - 1)\n    else:\n        right = weave(n - 2, bias + 2)\n    return left - right + bias",
+      "entry_function": "weave",
+      "inputs": {
+        "n": 5,
+        "bias": 1
+      },
+      "seed": null,
+      "question": "What does weave return for the input shown?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 14
+        },
+        {
+          "id": "B",
+          "value": 7
+        },
+        {
+          "id": "C",
+          "value": -1
+        },
+        {
+          "id": "D",
+          "value": 2
+        }
+      ],
+      "correct_option": "D",
+      "review_id": "Q12",
+      "topic": "functions",
+      "family_id": "branching-recursion",
+      "split": "held_out",
+      "difficulty": "hard",
+      "dimensions": {
+        "execution_burden": "high",
+        "changing_state": "high",
+        "conceptual_interaction": "high",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "Each recursive frame must obtain the left result before choosing the bias for the right call, then combine both results with that frame's bias. The return is numeric, removing the old prefix/suffix elimination shortcut.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "Postorder rows [n, bias, return] for base cases, or [n, bias, left, right, return] for other frames: [[1, 5, 6], [0, 3, 3], [2, 4, 6, 3, 7], [1, 5, 6], [3, 3, 7, 6, 4], [1, 2, 3], [0, 3, 3], [2, 1, 3, 3, 1], [4, 2, 4, 1, 5], [1, 5, 6], [0, 3, 3], [2, 4, 6, 3, 7], [1, 5, 6], [3, 3, 7, 6, 4], [5, 1, 5, 4, 2]]. The root returns 2. Identical (n, bias) calls can share a calculation.",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "branching-recursion",
+        "source_revision": null,
+        "url": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for v3 after the v2 review, to improve provisional hard-question coverage."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "a0625615582ca0b7900a33fd1d92570d48068c93e9f09de65efd93c19bddabf4"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "medium"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 2,
+      "trace_summary": {
+        "entry_function": "weave",
+        "function_calls": 15,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 22,
+        "variable_snapshots": 44
+      }
+    },
+    {
+      "question_id": "functions-composition-01",
+      "code": "def bump(x):\n    return x + 2\n\ndef combine(x):\n    left = bump(x)\n    right = bump(left)\n    return left + right",
+      "entry_function": "combine",
+      "inputs": {
+        "x": 3
+      },
+      "seed": null,
+      "question": "What does combine(3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 12
+        },
+        {
+          "id": "B",
+          "value": 10
+        },
+        {
+          "id": "C",
+          "value": 7
+        },
+        {
+          "id": "D",
+          "value": 14
+        }
+      ],
+      "correct_option": "A",
+      "review_id": "Q13",
+      "topic": "functions",
+      "family_id": "functions-composition",
+      "split": "held_out",
+      "difficulty": "medium",
+      "dimensions": {
+        "execution_burden": "moderate",
+        "changing_state": "moderate",
+        "conceptual_interaction": "moderate",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "The answer needs a short chain of dependent helper results, not two independent calls on the original input.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "bump(3) returns 5; bump(5) returns 7; their sum is 12.",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "functions-composition",
+        "source_revision": null,
+        "url": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "b86cf6f3b9d7853320630866f02719436856077e141e92cb855d4dbbc900a4fc"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "easy"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 12,
+      "trace_summary": {
+        "entry_function": "combine",
+        "function_calls": 3,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 5
+      }
+    },
+    {
+      "question_id": "cruxeval-253",
+      "code": "def f(text, pref):\n    length = len(pref)\n    if pref == text[:length]:\n        return text[length:]\n    return text",
+      "entry_function": "f",
+      "inputs": {
+        "text": "banana",
+        "pref": "ban"
+      },
+      "seed": null,
+      "question": "What does f('banana', 'ban') return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": "ban"
+        },
+        {
+          "id": "B",
+          "value": "ana"
+        },
+        {
+          "id": "C",
+          "value": "banana"
+        },
+        {
+          "id": "D",
+          "value": "nana"
+        }
+      ],
+      "correct_option": "B",
+      "review_id": "Q14",
+      "topic": "conditionals",
+      "family_id": "cruxeval-sample-253",
+      "split": "development",
+      "difficulty": "easy",
+      "dimensions": {
+        "execution_burden": "low",
+        "changing_state": "low",
+        "conceptual_interaction": "moderate",
+        "answer_discrimination": "low"
+      },
+      "difficulty_reason": "A single prefix check selects a straightforward slice.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "len(pref) is 3 and text[:3] is 'ban', so the branch returns text[3:], which is 'ana'.",
+      "provenance": {
+        "kind": "cruxeval_adaptation",
+        "source_id": "sample_253",
+        "source_revision": "190faf16d175b5847b0af05d937872b1fb395942",
+        "url": "https://github.com/facebookresearch/cruxeval/blob/190faf16d175b5847b0af05d937872b1fb395942/data/cruxeval.jsonl",
+        "source_record_sha256": "bfb5e6bbe454a50a0f909da7540d76359daec5b4722a0bcf10ddd24de6355fab",
+        "license": "MIT",
+        "modifications": [
+          "Original Python source retained byte-for-byte.",
+          "Selected the concrete input shown; source input/output retained separately.",
+          "Added output-prediction stem and four answer options. No source difficulty label was inherited."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "4d512bc250e37ff61a17a0be207fd10cc73ce06ed05df3557afaf0a40a2c7051"
+      },
+      "review_notes": {
+        "confidence": "high",
+        "alternative_levels": [],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": "ana",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 2,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 1,
+        "variable_snapshots": 3
+      }
+    },
+    {
+      "question_id": "lists-endpoint-swap-02",
+      "code": "def calculate(values):\n    first = values[0]\n    values[0] = values[-1]\n    values[-1] = first\n    return values[0] + values[1] * 2",
+      "entry_function": "calculate",
+      "inputs": {
+        "values": [
+          4,
+          1,
+          6
+        ]
+      },
+      "seed": null,
+      "question": "What does calculate([4, 1, 6]) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 6
+        },
+        {
+          "id": "B",
+          "value": 8
+        },
+        {
+          "id": "C",
+          "value": 7
+        },
+        {
+          "id": "D",
+          "value": 16
+        }
+      ],
+      "correct_option": "B",
+      "review_id": "Q15",
+      "topic": "lists",
+      "family_id": "lists-endpoint-swap",
+      "split": "held_out",
+      "difficulty": "medium",
+      "dimensions": {
+        "execution_burden": "low",
+        "changing_state": "moderate",
+        "conceptual_interaction": "moderate",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "Use the mutated first element when evaluating the return; recognising that the final write is irrelevant shortens the trace.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "The first element becomes 6, the middle stays 1, and the return is 6 + 1 \u00d7 2 = 8. The final-element write does not affect this answer.",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "lists-endpoint-swap",
+        "source_revision": null,
+        "url": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "77a6fc45fde30917fa727c10f6ea5d268d3af10edad36d54cfc9ba3a2990ae66"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "easy"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 8,
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      }
+    },
+    {
+      "question_id": "cruxeval-783",
+      "code": "def f(text, comparison):\n    length = len(comparison)\n    if length <= len(text):\n        for i in range(length):\n            if comparison[length - i - 1] != text[len(text) - i - 1]:\n                return i\n    return length",
+      "entry_function": "f",
+      "inputs": {
+        "text": "abcd",
+        "comparison": "xbcd"
+      },
+      "seed": null,
+      "question": "What does f('abcd', 'xbcd') return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 0
+        },
+        {
+          "id": "B",
+          "value": 1
+        },
+        {
+          "id": "C",
+          "value": 3
+        },
+        {
+          "id": "D",
+          "value": 4
+        }
+      ],
+      "correct_option": "C",
+      "review_id": "Q16",
+      "topic": "functions",
+      "family_id": "cruxeval-sample-783",
+      "split": "development",
+      "difficulty": "medium",
+      "dimensions": {
+        "execution_burden": "moderate",
+        "changing_state": "low",
+        "conceptual_interaction": "moderate",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "A short reverse comparison returns the loop index at the first mismatch, rather than the number of comparisons.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "length is 4. At i=0,1,2 the pairs d/d, c/c, b/b match. At i=3, x differs from a, so return i=3 instead of the final length=4.",
+      "provenance": {
+        "kind": "cruxeval_adaptation",
+        "source_id": "sample_783",
+        "source_revision": "190faf16d175b5847b0af05d937872b1fb395942",
+        "url": "https://github.com/facebookresearch/cruxeval/blob/190faf16d175b5847b0af05d937872b1fb395942/data/cruxeval.jsonl",
+        "source_record_sha256": "aebceadc0846d6ba3f2be084f34d6884b682df661e7289de34889ea5046e3b52",
+        "license": "MIT",
+        "modifications": [
+          "Original Python source retained byte-for-byte.",
+          "Selected the concrete input shown; source input/output retained separately.",
+          "Added output-prediction stem and four answer options. No source difficulty label was inherited."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "4034601a7f63dcfc0f5f4e2774bd5109b6f29ed84ab7ebdcac5b1a370249d8bc"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "easy"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 3,
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 3,
+        "loop_executions": 1,
+        "loop_iterations": 4,
+        "branch_executions": 5,
+        "variable_snapshots": 7
+      }
+    },
+    {
+      "question_id": "cruxeval-147",
+      "code": "def f(nums):\n    middle = len(nums)//2\n    return nums[middle:] + nums[0:middle]",
+      "entry_function": "f",
+      "inputs": {
+        "nums": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "seed": null,
+      "question": "What does f([1, 2, 3, 4, 5]) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": [
+            3,
+            4,
+            5,
+            1,
+            2
+          ]
+        },
+        {
+          "id": "B",
+          "value": [
+            4,
+            5,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": "C",
+          "value": [
+            5,
+            4,
+            3,
+            2,
+            1
+          ]
+        },
+        {
+          "id": "D",
+          "value": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        }
+      ],
+      "correct_option": "A",
+      "review_id": "Q17",
+      "topic": "lists",
+      "family_id": "cruxeval-sample-147",
+      "split": "development",
+      "difficulty": "easy",
+      "dimensions": {
+        "execution_burden": "low",
+        "changing_state": "low",
+        "conceptual_interaction": "moderate",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "Two slices and concatenation rotate a five-element list; the only boundary calculation is floor division.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "5 // 2 is 2. nums[2:] is [3,4,5] and nums[0:2] is [1,2], so the result is [3,4,5,1,2].",
+      "provenance": {
+        "kind": "cruxeval_adaptation",
+        "source_id": "sample_147",
+        "source_revision": "190faf16d175b5847b0af05d937872b1fb395942",
+        "url": "https://github.com/facebookresearch/cruxeval/blob/190faf16d175b5847b0af05d937872b1fb395942/data/cruxeval.jsonl",
+        "source_record_sha256": "e0e700804a9c7650953b2b2db64875269c23e64fe9a426c44613367c475e5234",
+        "license": "MIT",
+        "modifications": [
+          "Original Python source retained byte-for-byte.",
+          "Selected the concrete input shown; source input/output retained separately.",
+          "Added output-prediction stem and four answer options. No source difficulty label was inherited."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "71baa4237fe8fbd35531d66cc12f9d2987f0ee57de29847cf4c6bce9e09ae40f"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "medium"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": [
+        3,
+        4,
+        5,
+        1,
+        2
+      ],
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 2,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 2
+      }
+    },
+    {
+      "question_id": "cruxeval-356",
+      "code": "def f(array, num):\n    reverse = False\n    if num < 0:\n        reverse = True\n        num *= -1\n    array = array[::-1] * num\n    l = len(array)\n    \n    if reverse:\n        array = array[::-1]\n    return array",
+      "entry_function": "f",
+      "inputs": {
+        "array": [
+          1,
+          2,
+          3
+        ],
+        "num": -2
+      },
+      "seed": null,
+      "question": "What does f([1, 2, 3], -2) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": [
+            3,
+            2,
+            1,
+            3,
+            2,
+            1
+          ]
+        },
+        {
+          "id": "B",
+          "value": [
+            1,
+            2,
+            3,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": "C",
+          "value": []
+        },
+        {
+          "id": "D",
+          "value": [
+            1,
+            2,
+            3
+          ]
+        }
+      ],
+      "correct_option": "B",
+      "review_id": "Q18",
+      "topic": "conditionals",
+      "family_id": "cruxeval-sample-356",
+      "split": "held_out",
+      "difficulty": "medium",
+      "dimensions": {
+        "execution_burden": "moderate",
+        "changing_state": "moderate",
+        "conceptual_interaction": "moderate",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "The negative multiplier changes a flag and the repetition count; a final reversal must be applied to the repeated list.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "num < 0 sets reverse to True and num to 2. Reversal and repetition give [3,2,1,3,2,1]. The final reversal returns [1,2,3,1,2,3]. l is unused. A shortcut is to notice that two reversals restore the original order, with two copies.",
+      "provenance": {
+        "kind": "cruxeval_adaptation",
+        "source_id": "sample_356",
+        "source_revision": "190faf16d175b5847b0af05d937872b1fb395942",
+        "url": "https://github.com/facebookresearch/cruxeval/blob/190faf16d175b5847b0af05d937872b1fb395942/data/cruxeval.jsonl",
+        "source_record_sha256": "0383b87eac96609a0fb8f71cfc45e683eaff46f09f5ff17206ebf07746ff108e",
+        "license": "MIT",
+        "modifications": [
+          "Original Python source retained byte-for-byte.",
+          "Selected the concrete input shown; source input/output retained separately.",
+          "Added output-prediction stem and four answer options. No source difficulty label was inherited."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "17656f2ec462cf521f7bfa03a54afb20ac3ab5aab08c26c0323bf938f63f6628"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "easy"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": [
+        1,
+        2,
+        3,
+        1,
+        2,
+        3
+      ],
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 2,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 2,
+        "variable_snapshots": 8
+      }
+    },
+    {
+      "question_id": "conditionals-sequential-02",
+      "code": "def decide(x):\n    if x < 5:\n        x = x + 4\n    if x % 2 == 1:\n        x = x * 2\n    return x",
+      "entry_function": "decide",
+      "inputs": {
+        "x": 6
+      },
+      "seed": null,
+      "question": "What does decide(6) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 10
+        },
+        {
+          "id": "B",
+          "value": 6
+        },
+        {
+          "id": "C",
+          "value": 12
+        },
+        {
+          "id": "D",
+          "value": 20
+        }
+      ],
+      "correct_option": "B",
+      "review_id": "Q19",
+      "topic": "conditionals",
+      "family_id": "conditionals-sequential",
+      "split": "development",
+      "difficulty": "easy",
+      "dimensions": {
+        "execution_burden": "moderate",
+        "changing_state": "low",
+        "conceptual_interaction": "low",
+        "answer_discrimination": "low"
+      },
+      "difficulty_reason": "2 Checks require moderate tracing since the first check may affect the other",
+      "reason_source": "human_correction",
+      "solution": "6 is not less than 5 and is even. Both conditions are false, so x stays 6.",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "conditionals-sequential",
+        "source_revision": null,
+        "url": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "b6b526222221f3e552127b04cb6edaaaf787eadcaeb871ae0d81bc45a96de872"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "medium"
+        ],
+        "human_decision": "corrected",
+        "human_note": "2 Checks require moderate tracing since the first check may affect the other",
+        "quality_concerns": ""
+      },
+      "verified_answer": 6,
+      "trace_summary": {
+        "entry_function": "decide",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 2,
+        "variable_snapshots": 1
+      }
+    },
+    {
+      "question_id": "lists-mutating-selection-score-01",
+      "code": "def transform(values):\n    total = 0\n    for index in range(len(values) - 1):\n        smallest = values[index]\n        for other in range(index + 1, len(values)):\n            if values[other] < smallest:\n                values[index], values[other] = values[other], values[index]\n                smallest = values[index]\n            total += values[other] - smallest\n        values[-1] += index\n    return total",
+      "entry_function": "transform",
+      "inputs": {
+        "values": [
+          4,
+          1,
+          5,
+          2,
+          3
+        ]
+      },
+      "seed": null,
+      "question": "What does transform return for the input shown?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 17
+        },
+        {
+          "id": "B",
+          "value": 15
+        },
+        {
+          "id": "C",
+          "value": 16
+        },
+        {
+          "id": "D",
+          "value": 20
+        }
+      ],
+      "correct_option": "C",
+      "review_id": "Q20",
+      "topic": "lists",
+      "family_id": "mutating-selection-score",
+      "split": "development",
+      "difficulty": "hard",
+      "dimensions": {
+        "execution_burden": "high",
+        "changing_state": "high",
+        "conceptual_interaction": "high",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "The running score depends on values after each possible swap, while the changing list and end-of-pass tail update feed future comparisons. Recognising a selection-sort pattern alone does not give the score.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "After each outer pass, [list, cached smallest, total] is [[[1, 4, 5, 2, 3], 1, 10], [[1, 2, 5, 4, 4], 2, 14], [[1, 2, 4, 5, 6], 4, 15], [[1, 2, 4, 5, 9], 5, 16]]. The final return is 16.",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "mutating-selection-score",
+        "source_revision": null,
+        "url": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for v3 after the v2 review, to improve provisional hard-question coverage."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "deee99469531ec3c28022533abf9a065210856594ced85155ffe5f2d6a215b2b"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "medium"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 16,
+      "trace_summary": {
+        "entry_function": "transform",
+        "function_calls": 11,
+        "loop_executions": 5,
+        "loop_iterations": 14,
+        "branch_executions": 10,
+        "variable_snapshots": 43
+      }
+    },
+    {
+      "question_id": "cruxeval-498",
+      "code": "def f(nums, idx, added):\n    nums[idx:idx] = (added,)\n    return nums",
+      "entry_function": "f",
+      "inputs": {
+        "nums": [
+          1,
+          4,
+          7
+        ],
+        "idx": 1,
+        "added": 9
+      },
+      "seed": null,
+      "question": "What does f([1, 4, 7], 1, 9) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": [
+            1,
+            9,
+            7
+          ]
+        },
+        {
+          "id": "B",
+          "value": [
+            1,
+            4,
+            9,
+            7
+          ]
+        },
+        {
+          "id": "C",
+          "value": [
+            1,
+            9,
+            4,
+            7
+          ]
+        },
+        {
+          "id": "D",
+          "value": [
+            9,
+            1,
+            4,
+            7
+          ]
+        }
+      ],
+      "correct_option": "C",
+      "review_id": "Q21",
+      "topic": "lists",
+      "family_id": "cruxeval-sample-498",
+      "split": "held_out",
+      "difficulty": "easy",
+      "dimensions": {
+        "execution_burden": "low",
+        "changing_state": "moderate",
+        "conceptual_interaction": "moderate",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "One empty-slice assignment inserts an element; no repeated trace is necessary.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "nums[1:1] is an empty slice before 4. Assigning the one-element tuple (9,) inserts 9 and shifts 4 and 7 right, returning [1,9,4,7].",
+      "provenance": {
+        "kind": "cruxeval_adaptation",
+        "source_id": "sample_498",
+        "source_revision": "190faf16d175b5847b0af05d937872b1fb395942",
+        "url": "https://github.com/facebookresearch/cruxeval/blob/190faf16d175b5847b0af05d937872b1fb395942/data/cruxeval.jsonl",
+        "source_record_sha256": "00f204bd1821e07492986a41b3b2fa7f62482b6c501e4dc738e4c4376c5c363f",
+        "license": "MIT",
+        "modifications": [
+          "Original Python source retained byte-for-byte.",
+          "Selected the concrete input shown; source input/output retained separately.",
+          "Added output-prediction stem and four answer options. No source difficulty label was inherited."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "38dc41d00a80ffee2e06b87a80ac1c9414ed3da06d7dff60d34a03df167a80ef"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "medium"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": [
+        1,
+        9,
+        4,
+        7
+      ],
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      }
+    },
+    {
+      "question_id": "loops-conditional-reset-02",
+      "code": "def accumulate(n):\n    current = 2\n    total = 0\n    for i in range(n):\n        current += i\n        total += current\n        if i % 2 == 0:\n            current = 1\n    return total",
+      "entry_function": "accumulate",
+      "inputs": {
+        "n": 4
+      },
+      "seed": null,
+      "question": "What does accumulate(4) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 18
+        },
+        {
+          "id": "B",
+          "value": 12
+        },
+        {
+          "id": "C",
+          "value": 8
+        },
+        {
+          "id": "D",
+          "value": 4
+        }
+      ],
+      "correct_option": "B",
+      "review_id": "Q22",
+      "topic": "loops",
+      "family_id": "loops-conditional-reset",
+      "split": "held_out",
+      "difficulty": "medium",
+      "dimensions": {
+        "execution_burden": "moderate",
+        "changing_state": "high",
+        "conceptual_interaction": "moderate",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "Two coupled values and reset timing need an organised trace, but the small fixed loop avoids the varying inner bounds of the hard anchor.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "The totals after i = 0, 1, 2 are 2, 4, 8. After the reset at i = 2, i = 3 contributes 4, so the final total is 12.",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "loops-conditional-reset",
+        "source_revision": null,
+        "url": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "19be94ea1074eb7a1817942ba028fbe4a790a3838f97648a208482dcc3e92767"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "hard"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 12,
+      "trace_summary": {
+        "entry_function": "accumulate",
+        "function_calls": 2,
+        "loop_executions": 1,
+        "loop_iterations": 4,
+        "branch_executions": 4,
+        "variable_snapshots": 17
+      }
+    },
+    {
+      "question_id": "loops-coupled-prefix-fold-01",
+      "code": "def tally(values):\n    carry = 2\n    total = 0\n    for index in range(len(values)):\n        subtotal = carry\n        for offset in range(index + 1):\n            if (subtotal + values[offset]) % 2 == 0:\n                subtotal += values[index]\n            else:\n                subtotal -= values[offset]\n        total += subtotal\n        carry = (subtotal + total) % 5\n    return total",
+      "entry_function": "tally",
+      "inputs": {
+        "values": [
+          2,
+          5,
+          1,
+          4,
+          3
+        ]
+      },
+      "seed": null,
+      "question": "What does tally return for the input shown?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 26
+        },
+        {
+          "id": "B",
+          "value": 28
+        },
+        {
+          "id": "C",
+          "value": 22
+        },
+        {
+          "id": "D",
+          "value": 21
+        }
+      ],
+      "correct_option": "C",
+      "review_id": "Q23",
+      "topic": "loops",
+      "family_id": "coupled-prefix-fold",
+      "split": "held_out",
+      "difficulty": "hard",
+      "dimensions": {
+        "execution_burden": "high",
+        "changing_state": "high",
+        "conceptual_interaction": "high",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "A nested trace coordinates a subtotal reset, a persistent total and a carry value. Inner decisions change the subtotal used by later decisions; each completed pass changes the next reset value.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "After each outer pass, [subtotal, total, next carry] is [[4, 4, 3], [6, 10, 1], [-1, 9, 3], [5, 14, 4], [8, 22, 0]]. The final return is 22.",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "coupled-prefix-fold",
+        "source_revision": null,
+        "url": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for v3 after the v2 review, to improve provisional hard-question coverage."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "5f4d5a408e60423a98f35f839b17c547d18dc2c6de8b4109d178342c1270e293"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "medium"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 22,
+      "trace_summary": {
+        "entry_function": "tally",
+        "function_calls": 8,
+        "loop_executions": 6,
+        "loop_iterations": 20,
+        "branch_executions": 15,
+        "variable_snapshots": 53
+      }
+    },
+    {
+      "question_id": "loops-iteration-count-01",
+      "code": "def accumulate(n):\n    total = 0\n    for i in range(n):\n        total += i\n    return total",
+      "entry_function": "accumulate",
+      "inputs": {
+        "n": 2
+      },
+      "seed": null,
+      "question": "How many total loop-body iterations occur when accumulate(2) runs?",
+      "answer_target": "loop_iterations",
+      "options": [
+        {
+          "id": "A",
+          "value": 2
+        },
+        {
+          "id": "B",
+          "value": 1
+        },
+        {
+          "id": "C",
+          "value": 3
+        },
+        {
+          "id": "D",
+          "value": 4
+        }
+      ],
+      "correct_option": "A",
+      "review_id": "Q24",
+      "topic": "loops",
+      "family_id": "loops-iteration-count",
+      "split": "development",
+      "difficulty": "easy",
+      "dimensions": {
+        "execution_burden": "low",
+        "changing_state": "low",
+        "conceptual_interaction": "low",
+        "answer_discrimination": "low"
+      },
+      "difficulty_reason": "The answer is available from the loop bound; there is no need to trace the accumulator.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "range(2) has 2 values, so the loop body runs 2 times. The accumulated total is irrelevant to this target.",
+      "provenance": {
+        "kind": "fixture_adaptation",
+        "source_id": "loops.iteration_count",
+        "source_revision": "3d5d97f",
+        "url": "https://github.com/edcraft-org/ai/blob/3d5d97f/examples/templates/loop_iterations.json",
+        "modifications": [
+          "Selected a concrete input; no seeded sampling.",
+          "Fixed and reordered concrete options.",
+          "Clarified counting convention when needed."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "8ac8bab36394cc678e48a249fe95e6289f37b9d8e6133e85793aa1aec5db0cd6"
+      },
+      "review_notes": {
+        "confidence": "high",
+        "alternative_levels": [],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 2,
+      "trace_summary": {
+        "entry_function": "accumulate",
+        "function_calls": 2,
+        "loop_executions": 1,
+        "loop_iterations": 2,
+        "branch_executions": 0,
+        "variable_snapshots": 6
+      }
+    },
+    {
+      "question_id": "cruxeval-793",
+      "code": "def f(list, start, end):\n    count = 0\n    for i in range(start, end):\n        for j in range(i, end):\n            if list[i] != list[j]:\n                count += 1\n    return count",
+      "entry_function": "f",
+      "inputs": {
+        "list": [
+          1,
+          2,
+          4,
+          3,
+          2,
+          1
+        ],
+        "start": 0,
+        "end": 6
+      },
+      "seed": null,
+      "question": "What does f([1, 2, 4, 3, 2, 1], 0, 6) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 15
+        },
+        {
+          "id": "B",
+          "value": 14
+        },
+        {
+          "id": "C",
+          "value": 13
+        },
+        {
+          "id": "D",
+          "value": 9
+        }
+      ],
+      "correct_option": "C",
+      "review_id": "Q25",
+      "topic": "lists",
+      "family_id": "cruxeval-sample-793",
+      "split": "held_out",
+      "difficulty": "medium",
+      "dimensions": {
+        "execution_burden": "moderate",
+        "changing_state": "moderate",
+        "conceptual_interaction": "high",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "A direct trace has 21 visits, but unordered-pair counting and two equal-value exclusions give a shorter defensible solution.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "The inner loop visits each pair of positions with j >= i: 21 visits including six diagonals. The 15 remaining pairs include two equal-value pairs, the two 1s and the two 2s. Exclude both, giving 13. A direct count by outer index is 4+3+3+2+1+0=13. Pair counting is an accessible shortcut.",
+      "provenance": {
+        "kind": "cruxeval_adaptation",
+        "source_id": "sample_793",
+        "source_revision": "190faf16d175b5847b0af05d937872b1fb395942",
+        "url": "https://github.com/facebookresearch/cruxeval/blob/190faf16d175b5847b0af05d937872b1fb395942/data/cruxeval.jsonl",
+        "source_record_sha256": "16f3ac64ea8b2991d0b5711fd3f65e73a83316fc5f9a3d1e2eae093287cece2e",
+        "license": "MIT",
+        "modifications": [
+          "Original Python source retained byte-for-byte.",
+          "Selected the concrete input shown; source input/output retained separately.",
+          "Added output-prediction stem and four answer options. No source difficulty label was inherited."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "f8771ec78e72d1f2e2754c25efdeb380268deda1e2b8d0a9169e3f4bab46465d"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "hard"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 13,
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 8,
+        "loop_executions": 7,
+        "loop_iterations": 27,
+        "branch_executions": 21,
+        "variable_snapshots": 44
+      }
+    },
+    {
+      "question_id": "arithmetic-reassignment-01",
+      "code": "def calculate(x, y):\n    x = x + y\n    y = x - y\n    return x * 10 + y",
+      "entry_function": "calculate",
+      "inputs": {
+        "x": 4,
+        "y": 7
+      },
+      "seed": null,
+      "question": "What does calculate(4, 7) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 47
+        },
+        {
+          "id": "B",
+          "value": 74
+        },
+        {
+          "id": "C",
+          "value": 114
+        },
+        {
+          "id": "D",
+          "value": 51
+        }
+      ],
+      "correct_option": "C",
+      "review_id": "Q26",
+      "topic": "arithmetic",
+      "family_id": "arithmetic-reassignment",
+      "split": "development",
+      "difficulty": "medium",
+      "dimensions": {
+        "execution_burden": "moderate",
+        "changing_state": "moderate",
+        "conceptual_interaction": "moderate",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "The answer needs linked updates to two values, rather than treating the assignments as a simultaneous swap.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "x becomes 11; y then becomes 11 - 7 = 4. The result is 114.",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "arithmetic-reassignment",
+        "source_revision": null,
+        "url": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for this reference set."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "73ec23b014d6e08ce4af33e54a1eae001cbce199d8ae76203a5c5151279671b3"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "easy"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 114,
+      "trace_summary": {
+        "entry_function": "calculate",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      }
+    },
+    {
+      "question_id": "cruxeval-197",
+      "code": "def f(temp, timeLimit):\n    s = timeLimit // temp\n    e = timeLimit % temp\n    return [f'{e} oC', f'{s} {e}'][s > 1]",
+      "entry_function": "f",
+      "inputs": {
+        "temp": 4,
+        "timeLimit": 23
+      },
+      "seed": null,
+      "question": "What does f(4, 23) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": "3 oC"
+        },
+        {
+          "id": "B",
+          "value": "3 5"
+        },
+        {
+          "id": "C",
+          "value": "5 3"
+        },
+        {
+          "id": "D",
+          "value": "5 0"
+        }
+      ],
+      "correct_option": "C",
+      "review_id": "Q27",
+      "topic": "arithmetic",
+      "family_id": "cruxeval-sample-197",
+      "split": "development",
+      "difficulty": "easy",
+      "dimensions": {
+        "execution_burden": "low",
+        "changing_state": "low",
+        "conceptual_interaction": "moderate",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "Two integer calculations and one Boolean list index settle the answer. Several rules interact, but no sustained trace is needed.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "23 // 4 is 5 and 23 % 4 is 3. s > 1 is True, which indexes the second element, so the result is '5 3'.",
+      "provenance": {
+        "kind": "cruxeval_adaptation",
+        "source_id": "sample_197",
+        "source_revision": "190faf16d175b5847b0af05d937872b1fb395942",
+        "url": "https://github.com/facebookresearch/cruxeval/blob/190faf16d175b5847b0af05d937872b1fb395942/data/cruxeval.jsonl",
+        "source_record_sha256": "d6f2df0c7ca3f48a2344b958b08aa8609c01826b98e70ab2c68ca8e2723ebeb0",
+        "license": "MIT",
+        "modifications": [
+          "Original Python source retained byte-for-byte.",
+          "Selected the concrete input shown; source input/output retained separately.",
+          "Added output-prediction stem and four answer options. No source difficulty label was inherited."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "ba44f6873d675b2a699326d715297adbd6ee9120d469d7459bf60c8b817df61d"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "medium"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": "5 3",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 1,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 4
+      }
+    },
+    {
+      "question_id": "cruxeval-223",
+      "code": "def f(array, target):\n    count, i = 0, 1\n    for j in range(1, len(array)):\n        if ((array[j] > array[j-1]) and (array[j] <= target)): count += i\n        elif array[j] <= array[j-1]: i = 1\n        else: i += 1\n    return count",
+      "entry_function": "f",
+      "inputs": {
+        "array": [
+          1,
+          3,
+          2,
+          4,
+          5,
+          1,
+          3,
+          5
+        ],
+        "target": 3
+      },
+      "seed": null,
+      "question": "What does f([1, 3, 2, 4, 5, 1, 3, 5], 3) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": 3
+        },
+        {
+          "id": "B",
+          "value": 2
+        },
+        {
+          "id": "C",
+          "value": 4
+        },
+        {
+          "id": "D",
+          "value": 1
+        }
+      ],
+      "correct_option": "B",
+      "review_id": "Q28",
+      "topic": "loops",
+      "family_id": "cruxeval-sample-223",
+      "split": "development",
+      "difficulty": "medium",
+      "dimensions": {
+        "execution_burden": "moderate",
+        "changing_state": "moderate",
+        "conceptual_interaction": "moderate",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "Seven adjacent-pair checks update a count. The apparent auxiliary state has an invariant that reduces the work; it should not automatically make this hard.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "Starting from count=0 and i=1, the successive (count,i) pairs are (1,1), (1,1), (1,2), (1,3), (1,1), (2,1), (2,2). Return 2. Shortcut: i grows only on rises above target and must reset on a descent before a later rise at or below target, so each qualifying rise contributes 1.",
+      "provenance": {
+        "kind": "cruxeval_adaptation",
+        "source_id": "sample_223",
+        "source_revision": "190faf16d175b5847b0af05d937872b1fb395942",
+        "url": "https://github.com/facebookresearch/cruxeval/blob/190faf16d175b5847b0af05d937872b1fb395942/data/cruxeval.jsonl",
+        "source_record_sha256": "2867ed858459df9cafffc555c26c514ff66005d05f3a2a04d648e6d23816ec0d",
+        "license": "MIT",
+        "modifications": [
+          "Original Python source retained byte-for-byte.",
+          "Selected the concrete input shown; source input/output retained separately.",
+          "Added output-prediction stem and four answer options. No source difficulty label was inherited."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "90601d32893a3d4bf12fe3710c5dbd238ce3ca10cc1f301e0bb431154c157ba3"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "hard"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 2,
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 3,
+        "loop_executions": 1,
+        "loop_iterations": 7,
+        "branch_executions": 12,
+        "variable_snapshots": 18
+      }
+    },
+    {
+      "question_id": "loops-guarded-sweep-01",
+      "code": "def sweep(values):\n    state = 1\n    for value in values:\n        width = 1 + (state + value) % 3\n        for step in range(width):\n            state = (state + value + step) % 7\n        if state % 2 == 0:\n            for step in range(2):\n                state = (2 * state + step) % 7\n    return state",
+      "entry_function": "sweep",
+      "inputs": {
+        "values": [
+          2,
+          5,
+          1,
+          4,
+          3,
+          2
+        ]
+      },
+      "seed": null,
+      "question": "How many loop invocations occur when sweep(values) runs with the input shown? Count each reached for statement once per time it is entered, including the outer loop; do not count individual body iterations.",
+      "answer_target": "loop_executions",
+      "options": [
+        {
+          "id": "A",
+          "value": 10
+        },
+        {
+          "id": "B",
+          "value": 11
+        },
+        {
+          "id": "C",
+          "value": 12
+        },
+        {
+          "id": "D",
+          "value": 13
+        }
+      ],
+      "correct_option": "B",
+      "review_id": "Q29",
+      "topic": "loops",
+      "family_id": "guarded-sweep",
+      "split": "development",
+      "difficulty": "hard",
+      "dimensions": {
+        "execution_burden": "high",
+        "changing_state": "high",
+        "conceptual_interaction": "high",
+        "answer_discrimination": "moderate"
+      },
+      "difficulty_reason": "Counting the conditional loop invocations requires tracking state through the primary loops and the earlier conditional loops. Unlike the replaced counting question, the input length alone does not determine the answer.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "After each outer pass, [primary width, state before guard, state after optional loop] is [[1, 3, 3], [3, 0, 1], [3, 0, 1], [3, 2, 2], [3, 0, 1], [1, 3, 3]]. The six pre-guard states are 3, 0, 0, 2, 0, 3: four even guards. One outer plus six primary plus four conditional loop invocations gives 11.",
+      "provenance": {
+        "kind": "newly_authored",
+        "source_id": "guarded-sweep",
+        "source_revision": null,
+        "url": null,
+        "modifications": [
+          "New code, concrete input, stem and four options authored for v3 after the v2 review, to improve provisional hard-question coverage."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "50c9702828e218ca8c02e40089706ea8fa8a268ae44f7379c07672b7ccc56abc"
+      },
+      "review_notes": {
+        "confidence": "medium",
+        "alternative_levels": [
+          "medium"
+        ],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": 11,
+      "trace_summary": {
+        "entry_function": "sweep",
+        "function_calls": 11,
+        "loop_executions": 11,
+        "loop_iterations": 28,
+        "branch_executions": 6,
+        "variable_snapshots": 58
+      }
+    },
+    {
+      "question_id": "cruxeval-598",
+      "code": "def f(text, n):\n    length = len(text)\n    return text[length*(n%4):length ]",
+      "entry_function": "f",
+      "inputs": {
+        "text": "abc",
+        "n": 5
+      },
+      "seed": null,
+      "question": "What does f('abc', 5) return?",
+      "answer_target": "return_value",
+      "options": [
+        {
+          "id": "A",
+          "value": "abc"
+        },
+        {
+          "id": "B",
+          "value": "bc"
+        },
+        {
+          "id": "C",
+          "value": "a"
+        },
+        {
+          "id": "D",
+          "value": ""
+        }
+      ],
+      "correct_option": "D",
+      "review_id": "Q30",
+      "topic": "arithmetic",
+      "family_id": "cruxeval-sample-598",
+      "split": "development",
+      "difficulty": "easy",
+      "dimensions": {
+        "execution_burden": "low",
+        "changing_state": "low",
+        "conceptual_interaction": "moderate",
+        "answer_discrimination": "low"
+      },
+      "difficulty_reason": "A short modulo calculation determines an empty slice; there is no changing state.",
+      "reason_source": "AI_proposal_approved_by_human",
+      "solution": "length is 3 and n % 4 is 1. text[3:3] is the empty string ''.",
+      "provenance": {
+        "kind": "cruxeval_adaptation",
+        "source_id": "sample_598",
+        "source_revision": "190faf16d175b5847b0af05d937872b1fb395942",
+        "url": "https://github.com/facebookresearch/cruxeval/blob/190faf16d175b5847b0af05d937872b1fb395942/data/cruxeval.jsonl",
+        "source_record_sha256": "822fc0f7969ea974f11ad6e325de1983c2ddce40775e4b0c5caba54fd9089969",
+        "license": "MIT",
+        "modifications": [
+          "Original Python source retained byte-for-byte.",
+          "Selected the concrete input shown; source input/output retained separately.",
+          "Added output-prediction stem and four answer options. No source difficulty label was inherited."
+        ],
+        "curator": "Codex (AI-assisted curation; not a human rating)",
+        "code_sha256": "8d96a4e98a0999cc3f7abec26152786b576df65f1a8407e59a0216ae63305dc4"
+      },
+      "review_notes": {
+        "confidence": "high",
+        "alternative_levels": [],
+        "human_decision": "approved",
+        "human_note": "",
+        "quality_concerns": ""
+      },
+      "verified_answer": "",
+      "trace_summary": {
+        "entry_function": "f",
+        "function_calls": 2,
+        "loop_executions": 0,
+        "loop_iterations": 0,
+        "branch_executions": 0,
+        "variable_snapshots": 3
+      }
+    }
+  ]
+}

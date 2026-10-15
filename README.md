@@ -180,6 +180,6 @@ For live model calls and workflow evaluation, see the [evaluation guide](docs/ev
 - [Goals and milestones](GOALS.md)
 - [Evaluation guide](docs/evaluation.md)
 - [Provisional Python difficulty rubric](docs/difficulty-rubric.md)
-- [Python tracing reference set and blinded review](reference_sets/python_tracing_v3/README.md)
+- [Frozen Python tracing evaluation dataset](reference_sets/python_tracing/README.md)
 - [Developer reference](docs/development.md)
 - [Earlier evaluation results](docs/evaluation-history.md)
