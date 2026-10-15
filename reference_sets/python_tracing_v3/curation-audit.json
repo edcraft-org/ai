@@ -1,6 +1,6 @@
 {
   "set_version": "python-tracing-reference-v3",
-  "questions_sha256": "8ae2781db890b6a9e3aa4ab3efc9d8ebe1560507862cf7a7095dbe3e7fadf0df",
+  "questions_sha256": "b56592e6a82162dea8c01930562f457819686a8eb069f1c96214e81ad21b0a25",
   "curator": "Codex (AI-assisted structural and reasoning-pattern review)",
   "primary_count": 30,
   "distinct_code_bodies": 30,

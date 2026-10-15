@@ -1,14 +1,14 @@
 {
   "evidence_version": "python-tracing-technical-v1",
-  "questions_sha256": "8ae2781db890b6a9e3aa4ab3efc9d8ebe1560507862cf7a7095dbe3e7fadf0df",
-  "manifest_sha256": "180e8bbcd4ffdd6eb0306739376b9de0eec73d39a15344f9ba43fc61470e4026",
+  "questions_sha256": "b56592e6a82162dea8c01930562f457819686a8eb069f1c96214e81ad21b0a25",
+  "manifest_sha256": "a1d1466135bfc7e25d0dcc69e0228ab73d0149d640dcf01645e2a4613f19f663",
   "executor": "LocalPythonTool / StepTracer",
   "step_tracer_revision": "ab7e22ef18b776a9cbd5260bef4b4eeacc17db11",
   "timeout_seconds_per_case": 2,
   "records": [
     {
       "question_id": "arithmetic-coupled-arithmetic-01",
-      "question_sha256": "991521f6e830b8f89ea9531e4b19b36ff4b18532e5ba57e1ebf107c8dfbda500",
+      "question_sha256": "cf989aa8b2d75e4bf9248849a2aa1582869b1b7f66af247ed4aec84929ef866d",
       "verified_answer": 175,
       "correct_option": "B",
       "trace_summary": {
@@ -415,7 +415,7 @@
     },
     {
       "question_id": "functions-branching-recursion-01",
-      "question_sha256": "311828f67482f6a158f938df5bfd51f397f90df067446477d7a5e103a13377cb",
+      "question_sha256": "1257c8e3a137851dd74616791856bf6a53c1635952487cff386305a9e2f3b51f",
       "verified_answer": 2,
       "correct_option": "D",
       "trace_summary": {

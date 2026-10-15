@@ -4,14 +4,14 @@
   "reviewer_kind": "human",
   "review_date": "2026-10-15",
   "independent_blinded_review": false,
-  "packet_sha256": "c7736706349985e6d28e27f1c0e6a63757a7bf0df2c57e33a21e5aa15247b76a",
+  "packet_sha256": "0b7a5e93d82dc92367c6a09145703a5bf35084b51923e38ebda4289ec20c7321",
   "rubric_version": "python-tracing-v0.2",
   "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
   "assessment_conditions_version": "manual-tracing-v0.1",
   "ratings": [
     {
       "review_id": "Q01",
-      "question_sha256": "991521f6e830b8f89ea9531e4b19b36ff4b18532e5ba57e1ebf107c8dfbda500",
+      "question_sha256": "cf989aa8b2d75e4bf9248849a2aa1582869b1b7f66af247ed4aec84929ef866d",
       "status": "pending",
       "estimated_difficulty": "hard",
       "confidence": "medium",
@@ -309,7 +309,7 @@
     },
     {
       "review_id": "Q12",
-      "question_sha256": "311828f67482f6a158f938df5bfd51f397f90df067446477d7a5e103a13377cb",
+      "question_sha256": "1257c8e3a137851dd74616791856bf6a53c1635952487cff386305a9e2f3b51f",
       "status": "pending",
       "estimated_difficulty": "hard",
       "confidence": "medium",
@@ -834,6 +834,6 @@
       "human_decision": "approved"
     }
   ],
-  "recommendations_sha256": "028438f2b8c93be0a6424650716b0aee4d228cf3281d10550f9f2c94d8b9babb",
+  "recommendations_sha256": "1d928e5656d3d9287156f1eb0710518a64fd89d321596e1664aa12a04b171879",
   "assisted_review_confirmed": true
 }

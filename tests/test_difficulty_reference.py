@@ -909,6 +909,14 @@ def test_v3_distractors_and_worked_traces_replay_in_the_bounded_worker():
         assert record["question_sha256"] == reference.digest(question.model_dump())
         assert record["verified_answer"] == expected_answers[question.question_id]
         assert options[record["verified_correct_option"]] == record["verified_answer"]
+        correct = record["verified_answer"]
+        assert (
+            sum(
+                value % 2 == correct % 2 and (value > 0) == (correct > 0)
+                for value in options.values()
+            )
+            >= 2
+        )
         observer = record["observer"]
         assert (
             PythonSubsetAnalyzer(observer["entry_function"])

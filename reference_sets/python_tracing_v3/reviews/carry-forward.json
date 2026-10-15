@@ -3,7 +3,7 @@
   "source_review_sha256": "a2c6dd75f8cdf0e4b25c76d5cc69661c03fc1160c6cd2dd84abba8b8dee8203d",
   "source_review_date": "2026-10-15",
   "destination_set_version": "python-tracing-reference-v3",
-  "initial_destination_review_sha256": "4066fe669dae5640fc164ede0c423f6a8458f9aff5c92e5c6cab2ddecb6feaac",
+  "initial_destination_review_sha256": "83c7ef27c72894627d3632e8192a8a565c24a78ffabf232005eb15471951185b",
   "policy": "Unchanged full questions and exact AI proposals only; original human notes and corrections retained. New items remain pending.",
   "carried_count": 24,
   "pending_count": 6,

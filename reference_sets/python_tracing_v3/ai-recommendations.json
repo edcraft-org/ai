@@ -13,7 +13,7 @@
   "records": [
     {
       "question_id": "arithmetic-coupled-arithmetic-01",
-      "question_sha256": "991521f6e830b8f89ea9531e4b19b36ff4b18532e5ba57e1ebf107c8dfbda500",
+      "question_sha256": "cf989aa8b2d75e4bf9248849a2aa1582869b1b7f66af247ed4aec84929ef866d",
       "estimated_difficulty": "hard",
       "confidence": "medium",
       "alternative_levels": [
@@ -36,7 +36,7 @@
         },
         "answer_discrimination": {
           "rating": "moderate",
-          "reason": "All options are positive integers from specific update-order or arithmetic mistakes; check the coupled trace rather than sign or type."
+          "reason": "All options are positive integers from specific update-order or arithmetic mistakes; check the coupled trace rather than sign or type. At least two options share the correct answer's parity and sign, so these properties alone do not select it."
         }
       },
       "solution_reasoning": "After each outer pass, [first, second, running result] is [[5, 1, 4], [6, 2, 12], [0, 2, 22], [4, 4, 44], [3, 3, 88], [2, 3, 175]]. The final return is 175.",
@@ -45,7 +45,7 @@
         "A": "Result before updates. This executed hypothetical mistake predicts 120; it is not an observed learner error.",
         "B": "The verified answer is 175. After each outer pass, [first, second, running result] is [[5, 1, 4], [6, 2, 12], [0, 2, 22], [4, 4, 44], [3, 3, 88], [2, 3, 175]]. The final return is 175.",
         "C": "Sequential assignment. This executed hypothetical mistake predicts 44; it is not an observed learner error.",
-        "D": "First uses addition. This executed hypothetical mistake predicts 136; it is not an observed learner error."
+        "D": "Result uses old second. This executed hypothetical mistake predicts 197; it is not an observed learner error."
       },
       "quality_concerns": "New AI-authored hard candidate, not a human-approved hard label. A six-row table is enough; no call-stack tracing is needed. Backward reasoning about the weighted result still needs the intermediate differences. Arithmetic fluency may make this a medium/hard boundary."
     },
@@ -947,7 +947,7 @@
     },
     {
       "question_id": "functions-branching-recursion-01",
-      "question_sha256": "311828f67482f6a158f938df5bfd51f397f90df067446477d7a5e103a13377cb",
+      "question_sha256": "1257c8e3a137851dd74616791856bf6a53c1635952487cff386305a9e2f3b51f",
       "estimated_difficulty": "hard",
       "confidence": "medium",
       "alternative_levels": [
@@ -970,13 +970,13 @@
         },
         "answer_discrimination": {
           "rating": "moderate",
-          "reason": "Small numeric alternatives reflect different base-case or argument rules; evaluating only an output fragment cannot select an option."
+          "reason": "Small numeric alternatives reflect different base-case or argument rules; evaluating only an output fragment cannot select an option. At least two options share the correct answer's parity and sign, so these properties alone do not select it."
         }
       },
       "solution_reasoning": "Postorder rows [n, bias, return] for base cases, or [n, bias, left, right, return] for other frames: [[1, 5, 6], [0, 3, 3], [2, 4, 6, 3, 7], [1, 5, 6], [3, 3, 7, 6, 4], [1, 2, 3], [0, 3, 3], [2, 1, 3, 3, 1], [4, 2, 4, 1, 5], [1, 5, 6], [0, 3, 3], [2, 4, 6, 3, 7], [1, 5, 6], [3, 3, 7, 6, 4], [5, 1, 5, 4, 2]]. The root returns 2. Identical (n, bias) calls can share a calculation.",
       "concepts_and_dependencies": "Evaluate the left subtree first; use its return parity to choose the right argument; combine results in the caller's frame.",
       "option_evidence": {
-        "A": "Base returns bias. This executed hypothetical mistake predicts 0; it is not an observed learner error.",
+        "A": "Swap left right. This executed hypothetical mistake predicts 14; it is not an observed learner error.",
         "B": "Left bias unchanged. This executed hypothetical mistake predicts 7; it is not an observed learner error.",
         "C": "Right uses odd bias always. This executed hypothetical mistake predicts -1; it is not an observed learner error.",
         "D": "The verified answer is 2. Postorder rows [n, bias, return] for base cases, or [n, bias, left, right, return] for other frames: [[1, 5, 6], [0, 3, 3], [2, 4, 6, 3, 7], [1, 5, 6], [3, 3, 7, 6, 4], [1, 2, 3], [0, 3, 3], [2, 1, 3, 3, 1], [4, 2, 4, 1, 5], [1, 5, 6], [0, 3, 3], [2, 4, 6, 3, 7], [1, 5, 6], [3, 3, 7, 6, 4], [5, 1, 5, 4, 2]]. The root returns 2. Identical (n, bias) calls can share a calculation."

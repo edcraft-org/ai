@@ -50,6 +50,8 @@ options reproduced by specific code mutations representing hypothetical tracing
 mistakes. Both the original programs and all 18 selected mutations were checked
 in a separate bounded Python process as well as the tracing worker. These checks
 establish answer consistency, not difficulty or observed student misconceptions.
+At least two options in each replacement share the correct answer's parity and
+sign; these properties alone cannot select the answer.
 
 `replacement-audit-2026-10-15.json` records the six old/new identities and hashes,
 verified answers, worked trace observers, mutation programs and their outputs.

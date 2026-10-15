@@ -31,7 +31,7 @@
       "distractor_hypotheses": {
         "A": "Result before updates.",
         "C": "Sequential assignment.",
-        "D": "First uses addition."
+        "D": "Result uses old second."
       }
     },
     {
@@ -689,7 +689,7 @@
         "curator": "Codex (AI-assisted curation; not a human rating)"
       },
       "distractor_hypotheses": {
-        "A": "Base returns bias.",
+        "A": "Swap left right.",
         "B": "Left bias unchanged.",
         "C": "Right uses odd bias always."
       }

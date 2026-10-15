@@ -14,7 +14,7 @@
       "source_review_id": "Q11",
       "source_question_sha256": "930de1957038082f7ddb5a7b297a61d87d48e4c0a7dc0c9d8fbc7ba7ca0dd363",
       "question_id": "arithmetic-coupled-arithmetic-01",
-      "question_sha256": "991521f6e830b8f89ea9531e4b19b36ff4b18532e5ba57e1ebf107c8dfbda500",
+      "question_sha256": "cf989aa8b2d75e4bf9248849a2aa1582869b1b7f66af247ed4aec84929ef866d",
       "topic": "arithmetic",
       "split": "development",
       "proposed_difficulty": "hard",
@@ -89,10 +89,10 @@
         },
         {
           "option": "D",
-          "hypothesis": "First uses addition.",
-          "mutated_code": "def encode(values):\n    first = 2\n    second = 1\n    result = 0\n    for value in values:\n        first, second = (first + value + second) % 7, (first + second + value) % 5\n        result = result * 2 + first - second\n    return result",
-          "verified_answer": 136,
-          "native_return_value": 136,
+          "hypothesis": "Result uses old second.",
+          "mutated_code": "def encode(values):\n    first = 2\n    second = 1\n    result = 0\n    for value in values:\n        old_second = second\n        first, second = (first + value * second) % 7, (first + second + value) % 5\n        result = result * 2 + first - old_second\n    return result",
+          "verified_answer": 197,
+          "native_return_value": 197,
           "evidence_type": "Executed hypothetical tracing mistake; not an observed learner misconception."
         }
       ]
@@ -455,7 +455,7 @@
       "source_review_id": "Q30",
       "source_question_sha256": "b5ebb08c85e0bc163be512af46c9fcf3d6eca91067ec2e849ed6491b2bab0b5a",
       "question_id": "functions-branching-recursion-01",
-      "question_sha256": "311828f67482f6a158f938df5bfd51f397f90df067446477d7a5e103a13377cb",
+      "question_sha256": "1257c8e3a137851dd74616791856bf6a53c1635952487cff386305a9e2f3b51f",
       "topic": "functions",
       "split": "held_out",
       "proposed_difficulty": "hard",
@@ -570,10 +570,10 @@
       "distractor_checks": [
         {
           "option": "A",
-          "hypothesis": "Base returns bias.",
-          "mutated_code": "def weave(n, bias):\n    if n <= 1:\n        return bias\n    left = weave(n - 1, bias + 1)\n    if left % 2 == 0:\n        right = weave(n - 2, bias - 1)\n    else:\n        right = weave(n - 2, bias + 2)\n    return left - right + bias",
-          "verified_answer": 0,
-          "native_return_value": 0,
+          "hypothesis": "Swap left right.",
+          "mutated_code": "def weave(n, bias):\n    if n <= 1:\n        return n + bias\n    left = weave(n - 1, bias + 1)\n    if left % 2 == 0:\n        right = weave(n - 2, bias - 1)\n    else:\n        right = weave(n - 2, bias + 2)\n    return right - left + bias",
+          "verified_answer": 14,
+          "native_return_value": 14,
           "evidence_type": "Executed hypothetical tracing mistake; not an observed learner misconception."
         },
         {
