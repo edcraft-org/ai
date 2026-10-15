@@ -207,10 +207,11 @@ briefs for the two remote providers with:
 
 ```bash
 OPENAI_MAX_RETRIES=0 SOCLAAS_MAX_RETRIES=0 \
+OPENAI_TIMEOUT_SECONDS=240 SOCLAAS_TIMEOUT_SECONDS=240 \
 SOCLAAS_RESPONSE_FORMAT=json_schema \
 uv run python scripts/evaluate_difficulty_authoring.py \
   --providers openai soclaas --env-file .env \
-  --output .artifacts/difficulty-correction/run-01 --timeout-seconds 300
+  --output .artifacts/difficulty-correction/run-01 --timeout-seconds 250
 ```
 
 Use a new output directory for each experiment. Each record retains the full
@@ -258,6 +259,10 @@ receives one scheduled assessment per provider, without repair, replacement or
 question correction. The input allowlist excludes the approved difficulty,
 dimension ratings, reference reasons, solution, source identity, topic and split.
 The designated answer is supplied as question context. No code is executed.
+
+For a separately scheduled configuration follow-up on an already inspected set,
+record `--followup-of <prior-evaluation-id>`. Preserve both runs and report it as
+regression evidence rather than fresh held-out validation.
 
 The runner snapshots the dataset and writes a configuration manifest before the
 first call. Development and held-out questions retain their splits, with no tuning

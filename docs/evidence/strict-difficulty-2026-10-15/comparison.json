@@ -1,0 +1,567 @@
+{
+  "previous": "difficulty-dataset-2026-10-15",
+  "current": "strict-difficulty-2026-10-15",
+  "interpretation": "Separate scheduled follow-up on an inspected dataset; provider-default sampling and service behavior may vary. OpenAI already used strict mode previously. Do not attribute accuracy deltas solely to schema mode or claim fresh held-out validation.",
+  "providers": {
+    "openai": {
+      "counts": {
+        "nonmatch_to_nonmatch": 9,
+        "nonmatch_to_correct": 2,
+        "correct_to_correct": 14,
+        "correct_to_nonmatch": 5
+      },
+      "items": [
+        {
+          "question_id": "arithmetic-coupled-arithmetic-01",
+          "reference": "hard",
+          "before_estimate": "medium",
+          "after_estimate": "medium",
+          "before_error": null,
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "cruxeval-082",
+          "reference": "easy",
+          "before_estimate": "medium",
+          "after_estimate": "medium",
+          "before_error": null,
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "lists-adjacent-differences-02",
+          "reference": "medium",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "cruxeval-274",
+          "reference": "medium",
+          "before_estimate": "easy",
+          "after_estimate": "medium",
+          "before_error": null,
+          "after_error": null,
+          "transition": "nonmatch_to_correct"
+        },
+        {
+          "question_id": "conditionals-boolean-01",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "functions-single-helper-01",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "cruxeval-506",
+          "reference": "medium",
+          "before_estimate": "medium",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_nonmatch"
+        },
+        {
+          "question_id": "cruxeval-253",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "cruxeval-783",
+          "reference": "medium",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "cruxeval-147",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "conditionals-sequential-02",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "lists-mutating-selection-score-01",
+          "reference": "hard",
+          "before_estimate": "hard",
+          "after_estimate": null,
+          "before_error": null,
+          "after_error": "JUDGE_TIMEOUT",
+          "transition": "correct_to_nonmatch"
+        },
+        {
+          "question_id": "loops-iteration-count-01",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": null,
+          "before_error": null,
+          "after_error": "JUDGE_TIMEOUT",
+          "transition": "correct_to_nonmatch"
+        },
+        {
+          "question_id": "arithmetic-reassignment-01",
+          "reference": "medium",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "cruxeval-197",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": "medium",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_nonmatch"
+        },
+        {
+          "question_id": "cruxeval-223",
+          "reference": "medium",
+          "before_estimate": "medium",
+          "after_estimate": "medium",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "loops-guarded-sweep-01",
+          "reference": "hard",
+          "before_estimate": "hard",
+          "after_estimate": "medium",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_nonmatch"
+        },
+        {
+          "question_id": "cruxeval-598",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "arithmetic-quotient-remainder-01",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "cruxeval-752",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "functions-recursive-sum-01",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "conditionals-conditional-feedback-01",
+          "reference": "hard",
+          "before_estimate": "medium",
+          "after_estimate": "medium",
+          "before_error": null,
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "functions-branching-recursion-01",
+          "reference": "hard",
+          "before_estimate": "medium",
+          "after_estimate": "medium",
+          "before_error": null,
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "functions-composition-01",
+          "reference": "medium",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "lists-endpoint-swap-02",
+          "reference": "medium",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "cruxeval-356",
+          "reference": "medium",
+          "before_estimate": "medium",
+          "after_estimate": "medium",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "cruxeval-498",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "loops-conditional-reset-02",
+          "reference": "medium",
+          "before_estimate": "medium",
+          "after_estimate": "medium",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "loops-coupled-prefix-fold-01",
+          "reference": "hard",
+          "before_estimate": "medium",
+          "after_estimate": "hard",
+          "before_error": null,
+          "after_error": null,
+          "transition": "nonmatch_to_correct"
+        },
+        {
+          "question_id": "cruxeval-793",
+          "reference": "medium",
+          "before_estimate": "medium",
+          "after_estimate": "medium",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        }
+      ]
+    },
+    "soclaas": {
+      "counts": {
+        "nonmatch_to_nonmatch": 13,
+        "nonmatch_to_correct": 6,
+        "correct_to_correct": 6,
+        "correct_to_nonmatch": 5
+      },
+      "items": [
+        {
+          "question_id": "arithmetic-coupled-arithmetic-01",
+          "reference": "hard",
+          "before_estimate": null,
+          "after_estimate": null,
+          "before_error": "JUDGE_SCHEMA_VALIDATION",
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "cruxeval-082",
+          "reference": "easy",
+          "before_estimate": null,
+          "after_estimate": "easy",
+          "before_error": "JUDGE_SCHEMA_VALIDATION",
+          "after_error": null,
+          "transition": "nonmatch_to_correct"
+        },
+        {
+          "question_id": "lists-adjacent-differences-02",
+          "reference": "medium",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "cruxeval-274",
+          "reference": "medium",
+          "before_estimate": null,
+          "after_estimate": "easy",
+          "before_error": "JUDGE_SCHEMA_VALIDATION",
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "conditionals-boolean-01",
+          "reference": "easy",
+          "before_estimate": null,
+          "after_estimate": "easy",
+          "before_error": "JUDGE_SCHEMA_VALIDATION",
+          "after_error": null,
+          "transition": "nonmatch_to_correct"
+        },
+        {
+          "question_id": "functions-single-helper-01",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "cruxeval-506",
+          "reference": "medium",
+          "before_estimate": null,
+          "after_estimate": "easy",
+          "before_error": "JUDGE_SCHEMA_VALIDATION",
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "cruxeval-253",
+          "reference": "easy",
+          "before_estimate": null,
+          "after_estimate": "easy",
+          "before_error": "JUDGE_SCHEMA_VALIDATION",
+          "after_error": null,
+          "transition": "nonmatch_to_correct"
+        },
+        {
+          "question_id": "cruxeval-783",
+          "reference": "medium",
+          "before_estimate": "easy",
+          "after_estimate": null,
+          "before_error": null,
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "cruxeval-147",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": null,
+          "before_error": null,
+          "after_error": "JUDGE_OPTION_EVIDENCE_MISMATCH",
+          "transition": "correct_to_nonmatch"
+        },
+        {
+          "question_id": "conditionals-sequential-02",
+          "reference": "easy",
+          "before_estimate": null,
+          "after_estimate": "easy",
+          "before_error": "JUDGE_SCHEMA_VALIDATION",
+          "after_error": null,
+          "transition": "nonmatch_to_correct"
+        },
+        {
+          "question_id": "lists-mutating-selection-score-01",
+          "reference": "hard",
+          "before_estimate": "hard",
+          "after_estimate": "medium",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_nonmatch"
+        },
+        {
+          "question_id": "loops-iteration-count-01",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": null,
+          "before_error": null,
+          "after_error": "JUDGE_OPTION_EVIDENCE_MISMATCH",
+          "transition": "correct_to_nonmatch"
+        },
+        {
+          "question_id": "arithmetic-reassignment-01",
+          "reference": "medium",
+          "before_estimate": null,
+          "after_estimate": "easy",
+          "before_error": "JUDGE_SCHEMA_VALIDATION",
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "cruxeval-197",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "cruxeval-223",
+          "reference": "medium",
+          "before_estimate": "medium",
+          "after_estimate": null,
+          "before_error": null,
+          "after_error": "JUDGE_TIMEOUT",
+          "transition": "correct_to_nonmatch"
+        },
+        {
+          "question_id": "loops-guarded-sweep-01",
+          "reference": "hard",
+          "before_estimate": null,
+          "after_estimate": null,
+          "before_error": "JUDGE_SCHEMA_VALIDATION",
+          "after_error": "JUDGE_TIMEOUT",
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "cruxeval-598",
+          "reference": "easy",
+          "before_estimate": null,
+          "after_estimate": null,
+          "before_error": "JUDGE_SCHEMA_VALIDATION",
+          "after_error": "JUDGE_TIMEOUT",
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "arithmetic-quotient-remainder-01",
+          "reference": "easy",
+          "before_estimate": null,
+          "after_estimate": "easy",
+          "before_error": "JUDGE_SCHEMA_VALIDATION",
+          "after_error": null,
+          "transition": "nonmatch_to_correct"
+        },
+        {
+          "question_id": "cruxeval-752",
+          "reference": "easy",
+          "before_estimate": null,
+          "after_estimate": null,
+          "before_error": "JUDGE_SCHEMA_VALIDATION",
+          "after_error": "JUDGE_SCHEMA_VALIDATION",
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "functions-recursive-sum-01",
+          "reference": "easy",
+          "before_estimate": null,
+          "after_estimate": "easy",
+          "before_error": "JUDGE_SCHEMA_VALIDATION",
+          "after_error": null,
+          "transition": "nonmatch_to_correct"
+        },
+        {
+          "question_id": "conditionals-conditional-feedback-01",
+          "reference": "hard",
+          "before_estimate": "hard",
+          "after_estimate": "hard",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "functions-branching-recursion-01",
+          "reference": "hard",
+          "before_estimate": "hard",
+          "after_estimate": "hard",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "functions-composition-01",
+          "reference": "medium",
+          "before_estimate": null,
+          "after_estimate": null,
+          "before_error": "JUDGE_SCHEMA_VALIDATION",
+          "after_error": "JUDGE_SCHEMA_VALIDATION",
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "lists-endpoint-swap-02",
+          "reference": "medium",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "cruxeval-356",
+          "reference": "medium",
+          "before_estimate": null,
+          "after_estimate": null,
+          "before_error": "JUDGE_SCHEMA_VALIDATION",
+          "after_error": "JUDGE_SCHEMA_VALIDATION",
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "cruxeval-498",
+          "reference": "easy",
+          "before_estimate": "easy",
+          "after_estimate": "easy",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "loops-conditional-reset-02",
+          "reference": "medium",
+          "before_estimate": null,
+          "after_estimate": "easy",
+          "before_error": "JUDGE_SCHEMA_VALIDATION",
+          "after_error": null,
+          "transition": "nonmatch_to_nonmatch"
+        },
+        {
+          "question_id": "loops-coupled-prefix-fold-01",
+          "reference": "hard",
+          "before_estimate": "hard",
+          "after_estimate": "hard",
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_correct"
+        },
+        {
+          "question_id": "cruxeval-793",
+          "reference": "medium",
+          "before_estimate": "medium",
+          "after_estimate": null,
+          "before_error": null,
+          "after_error": null,
+          "transition": "correct_to_nonmatch"
+        }
+      ]
+    }
+  }
+}

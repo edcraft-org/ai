@@ -7,6 +7,156 @@ not be treated as its current pass rates.
 Historical records may use `beginner`, `intermediate`, and `advanced`. The current
 labels are `easy`, `medium`, and `hard`.
 
+## Shared strict schema: complete workflow and dataset follow-up, 15 October 2026
+
+OpenAI and SocLaas now both default to the shared strict JSON-schema response
+path. The former SocLaas JSON-object mode remains an explicit compatibility
+opt-in. This follow-up used runtime revision `4b94b53`, the unchanged
+`code-difficulty-v4` judge prompt and
+`concrete-question-difficulty-authoring-v2` author prompt, rubric
+`python-tracing-v0.2`, 240-second provider timeouts, 250-second application
+deadlines and zero SDK retries. Cases and provider settings were recorded before
+calls. No model-output repairs, replacement judgments or prompt tuning were made.
+Provider identity and output budgets remain explicit: OpenAI used `gpt-5-mini`
+with its existing uncapped output request; SocLaas used alias `default`, a
+16,384-token generation cap and provider-default reasoning. Strict schema output,
+prompts, deadlines and retry policy were shared; the provider-specific adapters
+were not represented as having identical model settings.
+
+### Generate, assess, revise and reassess
+
+Both providers received three fresh briefs: easy direct arithmetic, medium
+conditional accumulation and hard list/helper processing with interacting state.
+The medium and hard briefs are retained from the earlier smoke experiment; the
+easy brief adds a control. One initial generation and MCP assessment was allowed,
+followed by one revision and reassessment for a valid mismatch or uncertain
+comparison. Errors remain errors. These are authoring-target comparisons by the
+same provider/model in separate conversations, not agreement with human labels.
+No reference questions were used in generation and no correctness checks or
+code execution were performed.
+
+| Provider | Initial confirmed matches | Revisions attempted | Changed MCQs | Revisions reaching a confirmed match | Final outcomes |
+| --- | ---: | ---: | ---: | ---: | --- |
+| OpenAI | 1/3 | 2 | 2 | 0/2 | 1 match, 1 uncertain, 1 mismatch |
+| SocLaas | 0/3 | 1 | 1 | 0/1 | 3 errors |
+
+OpenAI's easy question matched immediately. Its medium question kept the same
+code while revising other question content; both assessments selected medium
+with alternatives, so uncertainty remained. Its hard question changed the helper,
+state updates and list mutation, but both assessments selected medium, leaving
+`too_easy`. Both revisions changed the normalized full-MCQ hash. OpenAI's primary
+estimate equalled the target on two of three initial and final questions, but only
+one was a confirmed match because of alternatives.
+
+SocLaas's easy generation and its revision each produced a 20,000-character,
+one-line function signature, despite a brief asking for a short arithmetic
+program. The designated inputs were only x, y and z. The first judge inferred a
+likely arithmetic operation from the stem/answer context and rated it medium
+with an easy alternative; the supplied code did not show that inferred body.
+The revision changed the MCQ but its reassessment failed because the primary
+level also appeared in alternative levels. The medium and hard author requests
+returned transport errors after about 120 seconds, before an accepted question
+existed. The stored generation records identify the failure category and unknown
+usage; they do not retain the HTTP status or response body, so the upstream cause
+is unresolved. No correction was attempted for those errors.
+
+This exposes a generation-quality failure alongside assessment inconsistency:
+strictly shaped JSON still allowed content that did not fulfil the brief.
+The pure difficulty tool is advisory and supplies no correctness guarantee.
+The generation experiment made 16 application calls across six jobs and nine
+generation/revision stages. None of the three revision attempts produced a
+confirmed match. OpenAI reported 39,072 input and 32,562 output tokens. SocLaas
+reported 40,990 input and 21,324 output tokens for known calls; two transport
+failures have unknown usage, so its complete totals are unavailable.
+
+### Repeat the fixed 30-question evaluation
+
+After the generation workflow completed, each provider assessed all 30 unchanged
+approved MCQs through MCP, with reference labels, dimensions, solutions, reasons,
+IDs, topic and split hidden. The original 18/12 split was retained. This is a
+requested configuration follow-up on an already inspected collection, recorded
+with `followup_of`; its held-out results are regression evidence rather than fresh
+confirmatory validation. The dataset SHA-256 remains
+`fe1a31cf08c6c1ec8457336332b0e4fa79f1c1e6422fdab5b0a771a9d7bddd2a`.
+
+| Provider | Primary-label agreement, all items | Jointly labelled agreement | Held out | Confirmed matches | Uncertain comparisons | Failed responses |
+| --- | --- | --- | --- | --- | ---: | --- |
+| OpenAI | 16/30 (53.3%) | 16/28 | 8/12 (66.7%) | 9/30 | 13 | 2 timeouts |
+| SocLaas | 12/30 (40.0%) | 12/19 | 6/12 (50.0%) | 8/30 | 8 | 8 |
+
+SocLaas returned 22 accepted assessments, including three null primary
+estimates with explicit uncertainty. It had **zero recurrences of the earlier
+non-text-field or missing-required-field errors**. Its eight failures were:
+
+- Three model-level consistency validation failures: two missing a required
+  uncertainty reason and one repeating the primary level among alternatives.
+- Two option-evidence mismatches: the assessment did not cover the supplied option
+  IDs exactly, despite satisfying the global response schema.
+- Three timeouts with unknown usage.
+
+These are distinct from the 16 JSON-mode structural schema failures in the
+previous run. No runtime consistency guard was weakened or normalized away.
+OpenAI's two failures were timeouts. Errors and null estimates remain nonmatches
+in the all-items denominator; uncertainty and failures are reported separately.
+Neither provider had an easy↔hard disagreement among jointly labelled items.
+
+| Approved level | OpenAI easy / medium / hard | SocLaas easy / medium / hard |
+| --- | --- | --- |
+| Easy | 10 / 2 / 0 | 9 / 0 / 0 |
+| Medium | 6 / 5 / 0 | 6 / 0 / 0 |
+| Hard | 0 / 4 / 1 | 0 / 1 / 3 |
+
+The confusion counts exclude failures and null estimates, both retained separately
+in the summary. OpenAI dimension matches were 18/28 execution burden, 18/28
+changing state, 15/28 conceptual interaction and 24/28 answer discrimination.
+SocLaas's were 15/22, 16/22, 13/22 and 10/22. Ordinal alpha was 0.523 over
+28 pairs for OpenAI and 0.569 over 19 pairs for SocLaas. The 95% family-bootstrap
+primary-agreement intervals were 36.7–73.3% and 20.0–56.7%; held-out intervals
+were 41.7–91.7% and 25.0–75.0%. These small-sample intervals do not establish a
+provider ranking or learner calibration.
+
+Compared with the previous scheduled run, OpenAI changed from 19/30 to 16/30
+primary matches: two previously nonmatching items became matches, while five
+previously matching items became nonmatches. SocLaas changed from 11/30 to
+12/30: six became matches and five became nonmatches. These are repeat-run
+transitions, not review corrections. OpenAI already used strict mode previously;
+provider-default sampling, availability and the opaque SocLaas backend alias can
+vary. The observed type-error reduction supports using strict output, while the
+accuracy results and failed revisions do not demonstrate reliable difficulty
+alignment. Reference labels were kept fixed.
+
+The dataset run made 60 application calls. Five timeout records have unknown
+usage; known calls reported 332,015 input and 133,049 output tokens. The complete
+workflow plus dataset evaluation made 76 calls, with seven having incomplete
+usage metadata. Missing counts are not zero-cost claims.
+
+### Evidence and verification
+
+The [workflow records](evidence/strict-difficulty-2026-10-15/workflow-results.json)
+retain every accepted initial/revised MCQ and complete tool output. Its
+[pre-call manifest](evidence/strict-difficulty-2026-10-15/workflow-manifest.json)
+and [summary](evidence/strict-difficulty-2026-10-15/workflow-summary.json) preserve
+the fixed briefs, provider settings, revision counts and unresolved outcomes.
+The workflow source fingerprint is
+`47f777577810178435fd151e5fb8ae696624ac38e783aad5cf0b50237e2cf055`.
+
+The [dataset records](evidence/strict-difficulty-2026-10-15/dataset-results.json),
+[manifest](evidence/strict-difficulty-2026-10-15/dataset-manifest.json),
+[summary](evidence/strict-difficulty-2026-10-15/dataset-summary.json),
+[paired comparison](evidence/strict-difficulty-2026-10-15/comparison.json) and
+[verification](evidence/strict-difficulty-2026-10-15/verification.json) preserve
+the follow-up separately from the original results. The dataset runner source
+fingerprint is `92275bf52b3dd5542cead60ad86ad95361fbd046148a79b70fa0ff50020c7db7`.
+
+Verification: 472 offline tests passed, with five opt-in live tests skipped.
+Lint, formatting and diff checks passed. An independent offline audit reproduced
+both summaries, all generation/feedback and judge request hashes, exact MCQ and
+reference bindings, unchanged dataset bytes, frozen provider settings and one
+application call per stage. It checked all six workflow jobs and 60 dataset
+records and found no configured API key values in the saved JSON. The tests
+specifically verify that both providers default to strict output and that summary
+counts retain failed revisions and uncertain primary matches.
+
 ## Approved difficulty dataset: 15 October 2026
 
 The frozen issue 42 dataset (`python-tracing-evaluation-2026-10-15`) contains

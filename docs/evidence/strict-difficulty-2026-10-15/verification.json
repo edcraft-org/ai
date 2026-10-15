@@ -1,0 +1,38 @@
+{
+  "runtime_revision": "4b94b53",
+  "workflow_jobs": 6,
+  "generation_or_revision_stages": 9,
+  "workflow_application_calls": 16,
+  "dataset_records": 60,
+  "dataset_application_calls": 60,
+  "strict_schema_shared": true,
+  "shared_timeout_seconds": 240,
+  "shared_outer_deadline_seconds": 250,
+  "sdk_retries": 0,
+  "reference_questions_labels_dimensions_and_splits_unchanged": true,
+  "generation_feedback_and_judge_request_hashes_reconstructed": true,
+  "one_call_per_stage": true,
+  "summaries_recomputed_exactly": true,
+  "configured_api_key_values_absent": true,
+  "tests": {
+    "passed": 472,
+    "opt_in_live_skipped": 5
+  },
+  "limitations": [
+    "Models/endpoints remain provider-specific; SocLaas default is an alias.",
+    "Provider-specific output budgets remain recorded: OpenAI omits a token cap, SocLaas generation cap is 16384.",
+    "Generated questions are not correctness-verified; pure difficulty tooling performs no code execution.",
+    "The three correction attempts did not produce confirmed matches.",
+    "Follow-up on already inspected held-out items; not fresh confirmatory validation."
+  ],
+  "archive_sha256": {
+    "comparison.json": "50f7ce69d80ae8e6bdcff66d73ed4e0c14c1ddfdca6e19473bf93ca65bf29756",
+    "workflow-summary.json": "84b1e161cd78dc77f81487f68d49e1595af3fc099fb907fbf78fc3cefc889c83",
+    "dataset-results.json": "913cbfeb023749dea87800aea3644fdf311b6215672709c69cf8cb47c17c9ead",
+    "dataset-manifest.json": "f4523bff7fb7c09210717a916c7cd528fe7087d6f218c8dc99a9d53f546d243d",
+    "workflow-manifest.json": "1b6ca443981e47deb7fa24bdffd93c24c8c2ef7331849bce4cedae3cf3240a5c",
+    "workflow-results.json": "f97376273d348f50b0fab88c261a35eb36a9f758add4ef8ace905949f4dd79b9",
+    "dataset-summary.json": "507b466bedd3e78d3138b9acd3e1a314f71374e8e450ee317bcde17a0ac9ae61"
+  },
+  "domain_prompt_versions_and_rubric_unchanged": true
+}

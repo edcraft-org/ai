@@ -1,0 +1,1464 @@
+{
+  "experiment_version": "difficulty-correction-smoke-v2",
+  "generated_at": "2026-10-15T14:42:00.794463+00:00",
+  "source_fingerprint_sha256": "47f777577810178435fd151e5fb8ae696624ac38e783aad5cf0b50237e2cf055",
+  "timeout_seconds": 250.0,
+  "cases": [
+    {
+      "id": "direct_arithmetic",
+      "requested_difficulty": "easy",
+      "brief": "Create a Python tracing MCQ with a short sequence of arithmetic assignments and one concrete input. Ask for the return value. Choose distractors linked to plausible order-of-operations or assignment mistakes."
+    },
+    {
+      "id": "conditional_state",
+      "requested_difficulty": "medium",
+      "brief": "Create a Python tracing MCQ involving a loop, conditional updates and an accumulator. Use a short concrete integer list and ask for the return value. Choose distractors linked to specific plausible tracing mistakes."
+    },
+    {
+      "id": "interacting_state",
+      "requested_difficulty": "hard",
+      "brief": "Create a Python tracing MCQ with list processing and a helper function. Use several interacting state dependencies that matter to the returned value, while keeping the concrete input small enough for manual tracing. Choose distractors linked to specific plausible tracing mistakes."
+    }
+  ],
+  "providers": [
+    "openai",
+    "soclaas"
+  ],
+  "records": [
+    {
+      "protocol_version": "difficulty-authoring-v1",
+      "generated_at": "2026-10-15T14:35:17.681988Z",
+      "brief": "Create a Python tracing MCQ with a short sequence of arithmetic assignments and one concrete input. Ask for the return value. Choose distractors linked to plausible order-of-operations or assignment mistakes.",
+      "requested_difficulty": "easy",
+      "status": "matches",
+      "attempts": [
+        {
+          "number": 1,
+          "operation": "generation",
+          "generation": {
+            "status": "completed",
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "provider_settings": {
+              "sampling": "provider_defaults",
+              "response_format": "json_schema",
+              "strict": true,
+              "tool_choice": "required",
+              "parallel_tool_calls": true,
+              "timeout_seconds": 240.0,
+              "max_retries": 0
+            },
+            "prompt_version": "concrete-question-difficulty-authoring-v2",
+            "request_sha256": "bfca0223b55e987c44d1a1892c2626c1e3f9a9f341dfda718a0ff8305062e680",
+            "model_calls": [
+              {
+                "input_tokens": 571,
+                "output_tokens": 1747,
+                "operation": "generation",
+                "duration_ms": 15694.465458043851,
+                "error": null,
+                "usage_unavailable_reason": null
+              }
+            ],
+            "usage": {
+              "model_call_count": 1,
+              "unavailable_call_count": 0,
+              "input_tokens": 571,
+              "output_tokens": 1747,
+              "reported_input_tokens": 571,
+              "reported_output_tokens": 1747
+            },
+            "error_code": null,
+            "duration_ms": 15698.618458933197
+          },
+          "question": {
+            "code": "def process(x):\n    a = x + 2\n    b = a * 3\n    a = a + b\n    return b - a\n",
+            "entry_function": "process",
+            "question": "Given the following function and the input x = 5, what value does process(x) return?",
+            "answer_target": "return_value",
+            "options": [
+              {
+                "id": "A",
+                "value": -7
+              },
+              {
+                "id": "B",
+                "value": 14
+              },
+              {
+                "id": "C",
+                "value": 16
+              },
+              {
+                "id": "D",
+                "value": 7
+              }
+            ],
+            "correct_option": "A",
+            "inputs": {
+              "x": 5
+            }
+          },
+          "tool_output": {
+            "tool": "assess_code_difficulty",
+            "version": "1.0.0",
+            "advisory": true,
+            "status": "assessed",
+            "generated_at": "2026-10-15T14:35:33.386053Z",
+            "question_sha256": "8e31eab27e889f96ef1b4a062ad4dfd49b652f0f6d8fce42723a7385b223b463",
+            "requested_difficulty": "easy",
+            "rubric_version": "python-tracing-v0.2",
+            "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+            "assessment_conditions_version": "manual-tracing-v0.1",
+            "judge": {
+              "status": "completed",
+              "provider": "openai",
+              "model": "gpt-5-mini",
+              "provider_settings": {
+                "sampling": "provider_defaults",
+                "response_format": "json_schema",
+                "strict": true,
+                "tool_choice": "required",
+                "parallel_tool_calls": true,
+                "timeout_seconds": 240.0,
+                "max_retries": 0
+              },
+              "prompt_version": "code-difficulty-v4",
+              "request_sha256": "3a7db3e628e671e6eb4a401fc14c9318434ded12b91d22c75a6f75c808687b70",
+              "timeout_seconds": 250.0,
+              "assessment": {
+                "estimated_difficulty": "easy",
+                "dimensions": {
+                  "execution_burden": {
+                    "rating": "low",
+                    "reason": "The function is a short straight-line sequence of three assignments and a return. A single-pass arithmetic evaluation with no loops, conditionals, or calls is needed."
+                  },
+                  "changing_state": {
+                    "rating": "low",
+                    "reason": "Only two local variables (a and b) change, with a simple linear dependency: a updated, b computed from that a, then a updated once more. State changes are few and easy to track."
+                  },
+                  "conceptual_interaction": {
+                    "rating": "low",
+                    "reason": "A single semantic rule (assignment and arithmetic) governs the result. There is no control-flow interaction or nested dependencies; the update order is the only relevant concept."
+                  },
+                  "answer_discrimination": {
+                    "rating": "low",
+                    "reason": "Distractors reflect simple, common arithmetic or bookkeeping slips (e.g., forgetting an update or using the wrong variable). Distinguishing the correct option requires only the straightforward trace or an easy algebraic shortcut."
+                  }
+                },
+                "reason": "A basic sequential trace of three assignments yields the return value; this matches the 'easy' anchor where a short, direct calculation is sufficient.",
+                "solution_reasoning": "Trace with x = 5: a = x + 2 => a = 7. b = a * 3 => b = 21. a = a + b => a = 7 + 21 = 28. return b - a => 21 - 28 = -7. Thus the function returns -7.",
+                "concepts_and_dependencies": "Relevant concepts: evaluation order of assignments, arithmetic operations (+, * and subtraction), and variable update semantics (a is reassigned before the final subtraction). There are no loops, conditionals, function calls, or scope changes to consider.",
+                "shortcuts": "Algebraic shortcut: after b = 3*a and a becomes a + b = 4*a, the return is b - a = 3*a - 4*a = -a, and initial a = x + 2, so result = -(x + 2) = -7 for x = 5.",
+                "nearest_anchor": "Easy arithmetic anchor: a short sequential computation with a single pass of assignments (similar to the provided 'easy' example where only a few arithmetic steps are needed).",
+                "option_evidence": [
+                  {
+                    "option_id": "A",
+                    "reasoning": "Correct. Tracing yields a = 7, b = 21, updated a = 28, and return 21 - 28 = -7.",
+                    "hypothesised_error": null,
+                    "shortcut_or_cue": "Algebraic simplification to -a (and then substitute a = x+2) is a quick shortcut to this answer."
+                  },
+                  {
+                    "option_id": "B",
+                    "reasoning": "Incorrect. 14 matches the value b - original a (21 - 7 = 14), which arises if the solver forgot that 'a' was reassigned after computing b and used the pre-update a in the final subtraction.",
+                    "hypothesised_error": "Forgetting the reassignment of 'a' (using the original a = x+2 instead of the updated a when computing b - a).",
+                    "shortcut_or_cue": "A cue to this error is noticing both a and b are computed from the same initial a; a solver might subtract the initial a from b without tracking the later reassignment."
+                  },
+                  {
+                    "option_id": "C",
+                    "reasoning": "Incorrect. 16 could come from subtracting the input x from b (21 - 5 = 16) or from other arithmetic slips; it implies using the wrong variable in the final subtraction.",
+                    "hypothesised_error": "Using x instead of (the updated) a in the final subtraction (i.e., computing b - x).",
+                    "shortcut_or_cue": "A misleading cue is that x appears in the problem and might be mistaken for the relevant current value to subtract."
+                  },
+                  {
+                    "option_id": "D",
+                    "reasoning": "Incorrect. 7 equals the initial value of a (x + 2). This is what you get if you return a immediately after the first assignment or otherwise ignore later updates and b.",
+                    "hypothesised_error": "Returning the initial a (x + 2) or ignoring the subsequent statements and using the first assigned value of a as the result.",
+                    "shortcut_or_cue": "The presence of a small positive number matching x+2 can cue the solver to an early-return or ignored-update mistake."
+                  }
+                ],
+                "alternative_levels": [],
+                "uncertainty_reason": null,
+                "quality_concerns": []
+              },
+              "error_code": null,
+              "validation_errors": [],
+              "model_calls": [
+                {
+                  "input_tokens": 6137,
+                  "output_tokens": 2334,
+                  "operation": "judging",
+                  "duration_ms": 20358.003917033784,
+                  "error": null,
+                  "usage_unavailable_reason": null
+                }
+              ],
+              "usage": {
+                "model_call_count": 1,
+                "unavailable_call_count": 0,
+                "input_tokens": 6137,
+                "output_tokens": 2334,
+                "reported_input_tokens": 6137,
+                "reported_output_tokens": 2334
+              },
+              "duration_ms": 20363.569875014946
+            },
+            "difficulty_match": "matches",
+            "error_code": null,
+            "duration_ms": 20364.195790956728
+          }
+        }
+      ],
+      "error_code": null,
+      "duration_ms": 36108.829500037245,
+      "case_id": "direct_arithmetic",
+      "provider": "openai",
+      "source_fingerprint_sha256": "47f777577810178435fd151e5fb8ae696624ac38e783aad5cf0b50237e2cf055",
+      "author_and_judge": "same configured provider/model; separate calls",
+      "correctness": "not assessed by this difficulty-only experiment"
+    },
+    {
+      "protocol_version": "difficulty-authoring-v1",
+      "generated_at": "2026-10-15T14:35:53.790819Z",
+      "brief": "Create a Python tracing MCQ involving a loop, conditional updates and an accumulator. Use a short concrete integer list and ask for the return value. Choose distractors linked to specific plausible tracing mistakes.",
+      "requested_difficulty": "medium",
+      "status": "uncertain",
+      "attempts": [
+        {
+          "number": 1,
+          "operation": "generation",
+          "generation": {
+            "status": "completed",
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "provider_settings": {
+              "sampling": "provider_defaults",
+              "response_format": "json_schema",
+              "strict": true,
+              "tool_choice": "required",
+              "parallel_tool_calls": true,
+              "timeout_seconds": 240.0,
+              "max_retries": 0
+            },
+            "prompt_version": "concrete-question-difficulty-authoring-v2",
+            "request_sha256": "d80c029e615e8cbabd3e56d500764f6526e396b2d66eff3ba930222cf49191cd",
+            "model_calls": [
+              {
+                "input_tokens": 572,
+                "output_tokens": 2359,
+                "operation": "generation",
+                "duration_ms": 20390.793166006915,
+                "error": null,
+                "usage_unavailable_reason": null
+              }
+            ],
+            "usage": {
+              "model_call_count": 1,
+              "unavailable_call_count": 0,
+              "input_tokens": 572,
+              "output_tokens": 2359,
+              "reported_input_tokens": 572,
+              "reported_output_tokens": 2359
+            },
+            "error_code": null,
+            "duration_ms": 20395.177583908662
+          },
+          "question": {
+            "code": "def compute(nums):\n    total = 0\n    i = 0\n    while i < len(nums):\n        n = nums[i]\n        if n % 2 == 0:\n            total += n // 2\n            i += 1\n        else:\n            total += n * 2\n            i += 2\n        if n < 0:\n            total -= 3\n    return total",
+            "entry_function": "compute",
+            "question": "Given the function compute and the input list nums = [3, 4, -1, 2, 5], what integer value does compute(nums) return? Trace the loop and updates manually.",
+            "answer_target": "return_value",
+            "options": [
+              {
+                "id": "A",
+                "value": 14
+              },
+              {
+                "id": "B",
+                "value": 5
+              },
+              {
+                "id": "C",
+                "value": 11
+              },
+              {
+                "id": "D",
+                "value": 18
+              }
+            ],
+            "correct_option": "C",
+            "inputs": {
+              "nums": [
+                3,
+                4,
+                -1,
+                2,
+                5
+              ]
+            }
+          },
+          "tool_output": {
+            "tool": "assess_code_difficulty",
+            "version": "1.0.0",
+            "advisory": true,
+            "status": "assessed",
+            "generated_at": "2026-10-15T14:36:14.189910Z",
+            "question_sha256": "0e90065601f294de479682ad1d019b9e42ce393eb7de9aec05a8480fba6bd0d8",
+            "requested_difficulty": "medium",
+            "rubric_version": "python-tracing-v0.2",
+            "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+            "assessment_conditions_version": "manual-tracing-v0.1",
+            "judge": {
+              "status": "completed",
+              "provider": "openai",
+              "model": "gpt-5-mini",
+              "provider_settings": {
+                "sampling": "provider_defaults",
+                "response_format": "json_schema",
+                "strict": true,
+                "tool_choice": "required",
+                "parallel_tool_calls": true,
+                "timeout_seconds": 240.0,
+                "max_retries": 0
+              },
+              "prompt_version": "code-difficulty-v4",
+              "request_sha256": "1b0b9a38138b0630d8e6ae5cd75aa5e44e989ced4237d395e238db0902171436",
+              "timeout_seconds": 250.0,
+              "assessment": {
+                "estimated_difficulty": "medium",
+                "dimensions": {
+                  "execution_burden": {
+                    "rating": "moderate",
+                    "reason": "The trace requires stepping through a while loop with nonuniform index increments (i can increase by 1 or 2) across 3 actual visits for the given input. Work is bounded and short, but the student must follow several iterations and updates."
+                  },
+                  "changing_state": {
+                    "rating": "moderate",
+                    "reason": "Two variables change across iterations: the index i (which controls which elements are visited and sometimes skips elements) and the accumulator total. The accumulator depends on prior updates, and i's nonconstant step size must be remembered between iterations."
+                  },
+                  "conceptual_interaction": {
+                    "rating": "moderate",
+                    "reason": "A loop-control rule (i += 1 vs i += 2) interacts with the update rule (different updates for even vs odd) and an extra conditional (subtract 3 for negative n). These rules are coupled but limited in number."
+                  },
+                  "answer_discrimination": {
+                    "rating": "moderate",
+                    "reason": "Distractors map to plausible single-step mistakes (forgetting the negative adjustment, misapplying the multiplier for odds, or skipping/skewing index increments). Rejecting them typically requires performing the short trace or using a clear shortcut."
+                  }
+                },
+                "reason": "Tracing requires tracking i and total with a nonuniform step (i += 1 or i += 2) and applying an extra subtraction for negative values. The problem is longer than a single expression but short enough for a compact manual trace or a simple index-visit shortcut.",
+                "solution_reasoning": "Start total=0, i=0. Determine which indices will be visited and apply the updates.\n- i=0 -> n=3 (odd): total += 3*2 => total = 6. Then i += 2 => i = 2. n is not < 0, so no subtraction.\n- i=2 -> n=-1 (odd): total += (-1)*2 => total = 6 + (-2) = 4. Then i += 2 => i = 4. Since n < 0, total -= 3 => total = 4 - 3 = 1.\n- i=4 -> n=5 (odd): total += 5*2 => total = 1 + 10 = 11. Then i += 2 => i = 6, which ends the loop (6 >= len(nums)=5).\nReturn total = 11. This matches option C.",
+                "concepts_and_dependencies": "Key semantics: while loop execution with index i compared to len(nums); reading n = nums[i]; parity test n % 2 == 0 deciding whether to add n//2 and increment i by 1, or add n*2 and increment i by 2; and the independent check if n < 0 that subtracts 3 from total. Dependencies: which indices get visited depends on the i increments chosen by the parity branch; the accumulator total carries across iterations; the negative check is applied per visited element and changes the accumulator after the main update.",
+                "shortcuts": "Accessible shortcut: determine which indices are visited instead of simulating every i. Starting at i=0 (odd) causes i to advance by 2 each time, so with this input the visited indices are 0, 2, and 4. Compute contributions from those elements only: nums[0]=3 -> +6, nums[2]=-1 -> -2 then -3 (negative), nums[4]=5 -> +10. Summing: 6 - 2 - 3 + 10 = 11.",
+                "nearest_anchor": "medium conditional accumulation (similar to the rubric's medium anchor where a loop and conditional updates to an accumulator must be traced). Similarities: accumulator carries across repeated conditional updates; loop control affects which elements are processed. Differences: here the loop control is nonuniform (i += 1 or 2) which gives a small extra bookkeeping step but still fits the medium anchor.",
+                "option_evidence": [
+                  {
+                    "option_id": "A",
+                    "reasoning": "Option A (14) is incorrect. It equals the correct trace result but without applying the extra subtraction for the negative element (n = -1). If a student forgets to apply 'if n < 0: total -= 3' after processing -1, the sums would be: 3->+6, -1->-2 (no -3), 5->+10 giving 6 - 2 + 10 = 14.",
+                    "hypothesised_error": "Forgetting or omitting the 'n < 0' branch (the -3 adjustment) after processing the negative element.",
+                    "shortcut_or_cue": "The value 14 is close to the correct answer and can be produced by a single omitted subtraction; spotting the negative element in the visited indices is the cue to reject this option."
+                  },
+                  {
+                    "option_id": "B",
+                    "reasoning": "Option B (5) is incorrect. There is no straightforward, natural single-step mis-evaluation of the code that yields exactly 5 for this input; common straightforward mistakes produce other nearby totals. This option appears less plausible than the others.",
+                    "hypothesised_error": null,
+                    "shortcut_or_cue": "Because 5 is not an obvious arithmetic near-miss for the real trace, learners who can at least identify visited indices (0,2,4) will quickly reject 5. Plausibility evidence: hypothesised (unlikely)."
+                  },
+                  {
+                    "option_id": "C",
+                    "reasoning": "Option C (11) is correct. A short manual trace or the visited-indices shortcut (0,2,4) gives total = 6 (from 3) + (-2 then -3) (from -1) + 10 (from 5) = 11.",
+                    "hypothesised_error": null,
+                    "shortcut_or_cue": "Visited-indices shortcut (recognise i increments of 2 for odd elements) quickly yields the answer."
+                  },
+                  {
+                    "option_id": "D",
+                    "reasoning": "Option D (18) is incorrect. A plausible single-step mistake that yields 18 is applying an incorrect multiplier for odd numbers (for example using n*3 instead of n*2): 3*3=9, -1*3=-3 then -3 adjustment => -6 net effect for that step, and 5*3=15 leading to 9 + (-6) + 15 = 18. This is a less common arithmetic slip but maps to D.",
+                    "hypothesised_error": "Misapplying the odd-element update (e.g., using n*3 or some other wrong multiplier instead of n*2).",
+                    "shortcut_or_cue": "The magnitude (18) is higher than the correct result; it can be spotted by checking per-element contributions against the code's multiplier for odd values."
+                  }
+                ],
+                "alternative_levels": [
+                  "easy",
+                  "hard"
+                ],
+                "uncertainty_reason": "Moderate confidence in a 'medium' label. Evidence for 'easy': a strong shortcut (identifying visited indices 0,2,4) reduces the trace to a few arithmetic steps, so an instructor could plausibly classify this as easy for learners who recognise the skipping pattern. Evidence for 'hard': a novice who misses the nonuniform i increment or the negative adjustment might need more sustained step-by-step bookkeeping, which could push perceived difficulty upward. Because both interpretations are defensible, alternate levels are listed.",
+                "quality_concerns": [
+                  "Option B (5) is not clearly produced by a single natural trace error and thus is a weak distractor compared with the others. Explicitly plausible distractors that map to single, common mistakes (like forgetting the negative adjustment or misapplying the multiplier) would improve discrimination."
+                ]
+              },
+              "error_code": null,
+              "validation_errors": [],
+              "model_calls": [
+                {
+                  "input_tokens": 6230,
+                  "output_tokens": 4727,
+                  "operation": "judging",
+                  "duration_ms": 39750.69779192563,
+                  "error": null,
+                  "usage_unavailable_reason": null
+                }
+              ],
+              "usage": {
+                "model_call_count": 1,
+                "unavailable_call_count": 0,
+                "input_tokens": 6230,
+                "output_tokens": 4727,
+                "reported_input_tokens": 6230,
+                "reported_output_tokens": 4727
+              },
+              "duration_ms": 39758.05283302907
+            },
+            "difficulty_match": "uncertain",
+            "error_code": null,
+            "duration_ms": 39758.645249996334
+          }
+        },
+        {
+          "number": 2,
+          "operation": "correction",
+          "generation": {
+            "status": "completed",
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "provider_settings": {
+              "sampling": "provider_defaults",
+              "response_format": "json_schema",
+              "strict": true,
+              "tool_choice": "required",
+              "parallel_tool_calls": true,
+              "timeout_seconds": 240.0,
+              "max_retries": 0
+            },
+            "prompt_version": "concrete-question-difficulty-authoring-v2",
+            "request_sha256": "57ad379cebee754759e0e92e762aacb8ba0eba4e29086522dc777514915685c0",
+            "model_calls": [
+              {
+                "input_tokens": 2933,
+                "output_tokens": 1729,
+                "operation": "revision",
+                "duration_ms": 13487.05733299721,
+                "error": null,
+                "usage_unavailable_reason": null
+              }
+            ],
+            "usage": {
+              "model_call_count": 1,
+              "unavailable_call_count": 0,
+              "input_tokens": 2933,
+              "output_tokens": 1729,
+              "reported_input_tokens": 2933,
+              "reported_output_tokens": 1729
+            },
+            "error_code": null,
+            "duration_ms": 13493.12337511219
+          },
+          "question": {
+            "code": "def compute(nums):\n    total = 0\n    i = 0\n    while i < len(nums):\n        n = nums[i]\n        if n % 2 == 0:\n            total += n // 2\n            i += 1\n        else:\n            total += n * 2\n            i += 2\n        if n < 0:\n            total -= 3\n    return total",
+            "entry_function": "compute",
+            "question": "Given the function compute and the input list nums = [3, 4, -1, 2, 5], what integer value does compute(nums) return? Trace the loop, index updates, and accumulator changes manually (scratch paper allowed).",
+            "answer_target": "return_value",
+            "options": [
+              {
+                "id": "A",
+                "value": 14
+              },
+              {
+                "id": "B",
+                "value": 4
+              },
+              {
+                "id": "C",
+                "value": 11
+              },
+              {
+                "id": "D",
+                "value": 18
+              }
+            ],
+            "correct_option": "C",
+            "inputs": {
+              "nums": [
+                3,
+                4,
+                -1,
+                2,
+                5
+              ]
+            }
+          },
+          "tool_output": {
+            "tool": "assess_code_difficulty",
+            "version": "1.0.0",
+            "advisory": true,
+            "status": "assessed",
+            "generated_at": "2026-10-15T14:37:07.447885Z",
+            "question_sha256": "aba1fc7ac5b42ae3720c6530184643706dccc136e6e608a1abb5af5707cff7ee",
+            "requested_difficulty": "medium",
+            "rubric_version": "python-tracing-v0.2",
+            "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+            "assessment_conditions_version": "manual-tracing-v0.1",
+            "judge": {
+              "status": "completed",
+              "provider": "openai",
+              "model": "gpt-5-mini",
+              "provider_settings": {
+                "sampling": "provider_defaults",
+                "response_format": "json_schema",
+                "strict": true,
+                "tool_choice": "required",
+                "parallel_tool_calls": true,
+                "timeout_seconds": 240.0,
+                "max_retries": 0
+              },
+              "prompt_version": "code-difficulty-v4",
+              "request_sha256": "ae48872fba0442bcd55701edcff84c48cc9df8139b964ab333d08ae279676fc2",
+              "timeout_seconds": 250.0,
+              "assessment": {
+                "estimated_difficulty": "medium",
+                "dimensions": {
+                  "execution_burden": {
+                    "rating": "moderate",
+                    "reason": "The loop executes a small number of iterations (3 visits: indices 0, 2, 4) but each iteration requires branching (parity) and an additional negative check. A short organised trace with several decisions is needed."
+                  },
+                  "changing_state": {
+                    "rating": "moderate",
+                    "reason": "Two pieces of changing state must be tracked: the accumulator total and the loop index i. The index update depends on parity (i += 1 or i += 2), so which elements are visited depends on earlier updates."
+                  },
+                  "conceptual_interaction": {
+                    "rating": "moderate",
+                    "reason": "Parity (even/odd) selects both how total is updated and how i advances, while a separate negative check can further modify total. These interactions must be coordinated but are not deeply nested or recursive."
+                  },
+                  "answer_discrimination": {
+                    "rating": "moderate",
+                    "reason": "Distractors correspond to identifiable single-step mistakes (e.g., forgetting the negative adjustment, using n instead of n*2 for odds, or mishandling visited indices). Distinguishing the correct choice requires applying the conditional index updates and negative adjustment together."
+                  }
+                },
+                "reason": "The code requires tracing a while-loop with conditional index increments and an extra negative-value adjustment. The actual trace is short but learners must coordinate index jumps and accumulator updates, which is typical of a medium-difficulty conditional-accumulation MCQ.",
+                "solution_reasoning": "Initial state: total = 0, i = 0, nums = [3, 4, -1, 2, 5].\n- Iteration 1: i = 0 -> n = 3 (odd). Branch: total += n * 2 => total = 0 + 6 = 6. i += 2 => i = 2. n < 0? No. \n- Iteration 2: i = 2 -> n = -1 (odd). Branch: total += n * 2 => total = 6 + (-2) = 4. i += 2 => i = 4. n < 0? Yes -> total -= 3 => total = 4 - 3 = 1.\n- Iteration 3: i = 4 -> n = 5 (odd). Branch: total += n * 2 => total = 1 + 10 = 11. i += 2 => i = 6. n < 0? No.\nLoop ends (i = 6 >= len(nums)). The function returns total = 11. This matches option C.",
+                "concepts_and_dependencies": "Relevant semantics: while loop iteration condition (i < len(nums)); parity test n % 2 == 0 controls both how 'total' is updated (n//2 for even, n*2 for odd) and how the index 'i' is advanced (i += 1 for even, i += 2 for odd). A separate conditional (n < 0) subtracts 3 from total when true. Dependencies: the index update changes which elements are visited next, so you must carry i forward correctly; the negative check applies to the same n after the primary update. The learner must coordinate index, value updates, and the extra negative adjustment.",
+                "shortcuts": "Accessible shortcuts: list the visited indices (0, 2, 4) quickly by simulating only the index updates rather than stepping through every potential element. For each visited index compute the contribution: index 0 -> +6, index 2 -> -2 then -3, index 4 -> +10, then sum. Irrelevant statements: elements not visited (indices 1 and 3) can be ignored after determining the index-stepping pattern.",
+                "nearest_anchor": "medium conditional accumulation (similar to the rubric's medium anchor where an accumulator is updated inside a loop and a condition controls its update each iteration). Similarities: an accumulator carries forward and a branch selects each update; differences: index skipping (i += 2 on odd) adds a small extra bookkeeping step absent in the simpler medium anchor.",
+                "option_evidence": [
+                  {
+                    "option_id": "A",
+                    "reasoning": "Value 14 is incorrect. One simple error that yields 14 is: follow the correct visited indices (0,2,4) and compute contributions but forget to apply the n < 0 adjustment at index 2. Contributions would be: index0: +6, index2: -2 (but no -3), index4: +10 => 6 - 2 + 10 = 14. This is a plausible single-step omission (forgetting the negative adjustment).",
+                    "hypothesised_error": "Forgetting to subtract 3 when n < 0 (i.e., omitting the 'if n < 0: total -= 3' effect).",
+                    "shortcut_or_cue": "Numeric closeness to the correct answer (14 vs 11) may cue a single missed adjustment error rather than a more complex trace mistake."
+                  },
+                  {
+                    "option_id": "B",
+                    "reasoning": "Value 4 is incorrect. A plausible error that gives 4 is: treat odd numbers as 'total += n' (not n * 2) while still using the intended index jumps. Trace under that mistake: index0: +3 -> total 3; index2: +(-1) then subtract 3 -> total becomes -1; index4: +5 -> final total 4. This is a simple arithmetic/operation substitution error.",
+                    "hypothesised_error": "Mistakenly using total += n for odd numbers instead of total += n * 2.",
+                    "shortcut_or_cue": "Confusing n and n*2 is an easy arithmetic substitution that bypasses the intended parity-based multiplication."
+                  },
+                  {
+                    "option_id": "C",
+                    "reasoning": "Correct. Exact trace: index 0 (3) => +6, i -> 2; index 2 (-1) => +(-2) then -3 => net -5, cumulative 6 + (-5) = 1; index 4 (5) => +10 => final total 11. This matches option C.",
+                    "hypothesised_error": null,
+                    "shortcut_or_cue": null
+                  },
+                  {
+                    "option_id": "D",
+                    "reasoning": "Value 18 is incorrect. No single simple, consistent single-step misinterpretation of the code (with the standard integer operations and index updates) maps cleanly to 18 for this input. Producing 18 would require a combination of mistakes (for example, processing unvisited indices plus arithmetic mistakes), which is less clean and therefore less pedagogically supported as a single common error. Because no clear single erroneous trace uniquely yields 18, this distractor is weaker as an interpretable error.",
+                    "hypothesised_error": null,
+                    "shortcut_or_cue": "Numeric proximity to other options could make 18 tempting, but the option does not correspond to a single straightforward mis-trace; its plausibility is therefore only 'hypothesised' (a compound arithmetic/indexing mistake)."
+                  }
+                ],
+                "alternative_levels": [
+                  "easy"
+                ],
+                "uncertainty_reason": "Borderline because the concrete input yields a short trace (favoring 'easy') but the conditional index skipping (i += 1 vs i += 2) plus the negative adjustment require coordinating multiple state updates (favoring 'medium'). I selected 'medium' as the closest anchor with 'easy' as a plausible adjacent alternative for some solvers who only count visited indices and compute contributions without much bookkeeping.",
+                "quality_concerns": [
+                  "Distractor D (18) does not map cleanly to a single simple, identifiable erroneous execution trace; this weakens its pedagogical interpretability as a distractor."
+                ]
+              },
+              "error_code": null,
+              "validation_errors": [],
+              "model_calls": [
+                {
+                  "input_tokens": 6240,
+                  "output_tokens": 6908,
+                  "operation": "judging",
+                  "duration_ms": 49642.70970900543,
+                  "error": null,
+                  "usage_unavailable_reason": null
+                }
+              ],
+              "usage": {
+                "model_call_count": 1,
+                "unavailable_call_count": 0,
+                "input_tokens": 6240,
+                "output_tokens": 6908,
+                "reported_input_tokens": 6240,
+                "reported_output_tokens": 6908
+              },
+              "duration_ms": 49650.206708931364
+            },
+            "difficulty_match": "uncertain",
+            "error_code": null,
+            "duration_ms": 49650.68620897364
+          }
+        }
+      ],
+      "error_code": null,
+      "duration_ms": 123311.54487503227,
+      "case_id": "conditional_state",
+      "provider": "openai",
+      "source_fingerprint_sha256": "47f777577810178435fd151e5fb8ae696624ac38e783aad5cf0b50237e2cf055",
+      "author_and_judge": "same configured provider/model; separate calls",
+      "correctness": "not assessed by this difficulty-only experiment"
+    },
+    {
+      "protocol_version": "difficulty-authoring-v1",
+      "generated_at": "2026-10-15T14:37:57.101813Z",
+      "brief": "Create a Python tracing MCQ with list processing and a helper function. Use several interacting state dependencies that matter to the returned value, while keeping the concrete input small enough for manual tracing. Choose distractors linked to specific plausible tracing mistakes.",
+      "requested_difficulty": "hard",
+      "status": "mismatch",
+      "attempts": [
+        {
+          "number": 1,
+          "operation": "generation",
+          "generation": {
+            "status": "completed",
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "provider_settings": {
+              "sampling": "provider_defaults",
+              "response_format": "json_schema",
+              "strict": true,
+              "tool_choice": "required",
+              "parallel_tool_calls": true,
+              "timeout_seconds": 240.0,
+              "max_retries": 0
+            },
+            "prompt_version": "concrete-question-difficulty-authoring-v2",
+            "request_sha256": "dce7bda76bea714f1c2c7e15fbaf2f62afa8fe5b243e065fce97d58f4838b5b1",
+            "model_calls": [
+              {
+                "input_tokens": 580,
+                "output_tokens": 3434,
+                "operation": "generation",
+                "duration_ms": 27211.80412499234,
+                "error": null,
+                "usage_unavailable_reason": null
+              }
+            ],
+            "usage": {
+              "model_call_count": 1,
+              "unavailable_call_count": 0,
+              "input_tokens": 580,
+              "output_tokens": 3434,
+              "reported_input_tokens": 580,
+              "reported_output_tokens": 3434
+            },
+            "error_code": null,
+            "duration_ms": 27217.95458404813
+          },
+          "question": {
+            "code": "def helper(x, inc):\n    # if x is even, increase it by inc; otherwise decrease it\n    if x % 2 == 0:\n        return x + inc\n    return x - inc\n\n\ndef process_list(lst, threshold):\n    total = 0\n    offset = 1\n    i = 0\n    # mutate lst as we go\n    while i < len(lst):\n        v = lst[i]\n        if helper(v, offset) > threshold:\n            total += v\n            # remove the next element if it exists and increase offset\n            if i + 1 < len(lst):\n                lst.pop(i + 1)\n                offset += 1\n            i += 1\n        else:\n            total -= v\n            # insert the current offset right after current position\n            lst.insert(i + 1, offset)\n            offset *= 2\n            i += 2\n    return total\n",
+            "entry_function": "process_list",
+            "question": "Using the inputs below, what integer does process_list(lst, threshold) return? Manually trace the code; the function mutates lst during execution.",
+            "answer_target": "return_value",
+            "options": [
+              {
+                "id": "A",
+                "value": 1
+              },
+              {
+                "id": "B",
+                "value": -1
+              },
+              {
+                "id": "C",
+                "value": -9
+              },
+              {
+                "id": "D",
+                "value": -5
+              }
+            ],
+            "correct_option": "A",
+            "inputs": {
+              "lst": [
+                3,
+                4,
+                2
+              ],
+              "threshold": 5
+            }
+          },
+          "tool_output": {
+            "tool": "assess_code_difficulty",
+            "version": "1.0.0",
+            "advisory": true,
+            "status": "assessed",
+            "generated_at": "2026-10-15T14:38:24.324296Z",
+            "question_sha256": "04c8e531f63ac820b48f44cc5c5c087a93531ed52e2a0977fc6285cea74571e1",
+            "requested_difficulty": "hard",
+            "rubric_version": "python-tracing-v0.2",
+            "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+            "assessment_conditions_version": "manual-tracing-v0.1",
+            "judge": {
+              "status": "completed",
+              "provider": "openai",
+              "model": "gpt-5-mini",
+              "provider_settings": {
+                "sampling": "provider_defaults",
+                "response_format": "json_schema",
+                "strict": true,
+                "tool_choice": "required",
+                "parallel_tool_calls": true,
+                "timeout_seconds": 240.0,
+                "max_retries": 0
+              },
+              "prompt_version": "code-difficulty-v4",
+              "request_sha256": "7de3b5588f3f849d688acdd34d6459f3de72c55d1ed601827e6d15ca76554def",
+              "timeout_seconds": 250.0,
+              "assessment": {
+                "estimated_difficulty": "medium",
+                "dimensions": {
+                  "execution_burden": {
+                    "rating": "moderate",
+                    "reason": "The code requires tracing a while loop with a small number of iterations (here 2\u20133), repeated condition checks, and occasional list mutation. Work is not just a single arithmetic step but remains bounded and short."
+                  },
+                  "changing_state": {
+                    "rating": "moderate",
+                    "reason": "Several values change over time (total, offset, i) and the list is mutated (insert/pop), so the learner must track element positions, dynamic length, and offset updates across iterations."
+                  },
+                  "conceptual_interaction": {
+                    "rating": "moderate",
+                    "reason": "The helper's parity rule combined with threshold check controls whether the code adds/subtracts and whether it inserts or pops, which in turn affects later iterations. These rules interact but only over a couple of steps for the supplied input."
+                  },
+                  "answer_discrimination": {
+                    "rating": "moderate",
+                    "reason": "Distractors are numerically distinct and require tracing the sequence of mutations and updates to rule them out. Rejecting wrong options requires applying the conditional behavior and the list-mutation effects correctly."
+                  }
+                },
+                "reason": "The concrete input produces a short but nontrivial trace: mutation of the list plus changes to offset and index require coordinated bookkeeping across a couple of iterations. This matches the medium anchor (conditional accumulation with some state changes) rather than a trivial single-step easy item or a heavy hard item with nested loops or many interdependent updates.",
+                "solution_reasoning": "Initial state: lst = [3, 4, 2], threshold = 5, total = 0, offset = 1, i = 0.\n- i = 0: v = lst[0] = 3. helper(3, 1) => odd so 3 - 1 = 2, which is not > 5. Take else branch: total -= 3 => total = -3. Insert offset (1) after current position => lst becomes [3, 1, 4, 2]. offset *= 2 => offset = 2. i += 2 => i = 2.\n- Now len(lst) = 4 and i = 2 < 4: v = lst[2] = 4. helper(4, 2) => even so 4 + 2 = 6, which is > 5. Take then branch: total += 4 => total = 1. If i+1 < len(lst) (3 < 4) pop the next element => remove lst[3] (which is 2), so lst becomes [3, 1, 4]. offset += 1 => offset = 3. i += 1 => i = 3.\n- Now i = 3 and len(lst) = 3, so while loop ends. Return total = 1.",
+                "concepts_and_dependencies": "Important semantics: helper's parity rule (even -> +inc, odd -> -inc); the comparison helper(v, offset) > threshold selects two very different branches; in the then-branch a pop may shorten the list and increment offset, while in the else-branch an insert increases list length and doubles offset. The index i is manually advanced by 1 or 2 depending on the branch, so the learner must track how insert/pop affect the positions of remaining elements relative to i. All these influence the next v value and the final total.",
+                "shortcuts": "Because the list and offsets are small, an accessible shortcut is stepwise simulation focusing only on the positions visited (i values) rather than every element after every mutation. Also, helper results can be predicted by parity (odd subtracts inc, even adds inc) so you rarely need to recompute full arithmetic beyond small additions/subtractions.",
+                "nearest_anchor": "medium conditional accumulation (similar to the rubric's medium anchor where an accumulator is updated conditionally within a loop and requires carrying state forward, but here mutation of the list adds trace complexity).",
+                "option_evidence": [
+                  {
+                    "option_id": "A",
+                    "reasoning": "Correct. A step-by-step manual trace (see solution_reasoning) yields total = 1. The first iteration subtracts 3 and inserts 1 (total = -3), the second iteration adds 4 and pops the following 2 (total = 1), then the loop ends. This matches option A.",
+                    "hypothesised_error": null,
+                    "shortcut_or_cue": "Recognise only two meaningful loop visits (i = 0 and i = 2 in the actual run) and use parity to evaluate helper quickly."
+                  },
+                  {
+                    "option_id": "B",
+                    "reasoning": "Incorrect. To get -1 a learner might mis-evaluate the second iteration's branch (for example, treating helper(4,2) as not exceeding threshold and subtracting 4 instead of adding it) or mishandle index increments so that different elements are visited. That error path could plausibly produce a negative result near -1, but it conflicts with the correct branch decision on helper(4,2) > 5. Distinction: the correct evaluation of helper(4,2) as 6 (even rule) forces adding 4, which rules out -1.",
+                    "hypothesised_error": "Treating helper(4,2) as <= threshold (so subtracting 4) or mis-advancing i leading to a different subsequent element being processed.",
+                    "shortcut_or_cue": "Numeric sign errors (forgetting to add vs subtract) or mis-evaluating parity could lead quickly to a negative distractor like this."
+                  },
+                  {
+                    "option_id": "C",
+                    "reasoning": "Incorrect. A value like -9 suggests compounding subtraction across multiple iterations (e.g., incorrectly visiting more elements and subtracting them). One plausible mistaken trace: if a student always chose the else-branch or failed to pop (so the 2 remains and is later subtracted), they could accumulate several subtractions producing a larger negative total. Distinction: correct execution performs only one subtraction of 3 and one addition of 4, not repeated subtractions yielding -9.",
+                    "hypothesised_error": "Failing to pop or inserting incorrectly so that the original 2 is visited and subtracted as well, or always taking else-branch due to mis-evaluating helper.",
+                    "shortcut_or_cue": "Assuming list is static (ignoring pop/insert) can produce extra iterations and larger magnitude negatives."
+                  },
+                  {
+                    "option_id": "D",
+                    "reasoning": "Incorrect. -5 could come from an off-by-one in index updates or from misapplying offset multiplication/addition (for example, doubling offset too often or forgetting to increment offset in the then-branch). Distinction: the correct combination of insert/pop and offset updates yields 1, and any path giving -5 requires at least one incorrect branch decision or incorrect handling of list mutation or index increments.",
+                    "hypothesised_error": "Index increment mistakes (using i += 1 in the else-branch instead of i += 2) or wrong offset updates that change subsequent helper results.",
+                    "shortcut_or_cue": "Off-by-one index updates are a common cue that produce near-miss numbers like -5."
+                  }
+                ],
+                "alternative_levels": [
+                  "easy"
+                ],
+                "uncertainty_reason": "This item sits near the easy/medium boundary: the concrete input yields only a couple of iterations (suggesting an easy trace), but list mutation (insert/pop), manual index increments, and offset changes require coordinated bookkeeping that justify a medium rating. I selected medium while acknowledging an easy reading is defensible for some reviewers.",
+                "quality_concerns": [
+                  "The stem explicitly warns that lst is mutated, which is good; no missing execution detail observed.",
+                  "A potential minor wording pitfall: students unfamiliar with whether helper is evaluated before checking list bounds might be confused, but helper is strictly applied to the current v and offset so this is not ambiguous here."
+                ]
+              },
+              "error_code": null,
+              "validation_errors": [],
+              "model_calls": [
+                {
+                  "input_tokens": 6334,
+                  "output_tokens": 3541,
+                  "operation": "judging",
+                  "duration_ms": 23854.530125041492,
+                  "error": null,
+                  "usage_unavailable_reason": null
+                }
+              ],
+              "usage": {
+                "model_call_count": 1,
+                "unavailable_call_count": 0,
+                "input_tokens": 6334,
+                "output_tokens": 3541,
+                "reported_input_tokens": 6334,
+                "reported_output_tokens": 3541
+              },
+              "duration_ms": 23864.07412495464
+            },
+            "difficulty_match": "too_easy",
+            "error_code": null,
+            "duration_ms": 23864.75462501403
+          }
+        },
+        {
+          "number": 2,
+          "operation": "correction",
+          "generation": {
+            "status": "completed",
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "provider_settings": {
+              "sampling": "provider_defaults",
+              "response_format": "json_schema",
+              "strict": true,
+              "tool_choice": "required",
+              "parallel_tool_calls": true,
+              "timeout_seconds": 240.0,
+              "max_retries": 0
+            },
+            "prompt_version": "concrete-question-difficulty-authoring-v2",
+            "request_sha256": "5d104c7e76cf9d0b8bb78cf0c16f0c63144e98400c0c7d674ede0ea2f270f927",
+            "model_calls": [
+              {
+                "input_tokens": 3078,
+                "output_tokens": 2268,
+                "operation": "revision",
+                "duration_ms": 15859.949459088966,
+                "error": null,
+                "usage_unavailable_reason": null
+              }
+            ],
+            "usage": {
+              "model_call_count": 1,
+              "unavailable_call_count": 0,
+              "input_tokens": 3078,
+              "output_tokens": 2268,
+              "reported_input_tokens": 3078,
+              "reported_output_tokens": 2268
+            },
+            "error_code": null,
+            "duration_ms": 15866.408250061795
+          },
+          "question": {
+            "code": "def helper(x, inc):\n    # helper: even -> x + inc ; divisible by 3 (but not even) -> x + inc//2 ; otherwise -> x - inc\n    if x % 2 == 0:\n        return x + inc\n    if x % 3 == 0:\n        return x + (inc // 2)\n    return x - inc\n\n\ndef process_list(lst):\n    total = 0\n    offset = 1\n    i = 0\n    # mutate lst as we go\n    while i < len(lst):\n        v = lst[i]\n        h = helper(v, offset)\n        # branch on parity of helper result\n        if h % 2 == 0:\n            # add half of helper result\n            total += h // 2\n            # replace the next element with offset if it exists and increase offset\n            if i + 1 < len(lst):\n                lst[i + 1] = offset\n                offset += 2\n            i += 1\n        else:\n            # subtract the current value and insert offset after current position\n            total -= v\n            lst.insert(i + 1, offset)\n            offset *= 3\n            i += 2\n    return total\n",
+            "entry_function": "process_list",
+            "question": "Using the inputs below, what integer does process_list(lst) return? Manually trace the code; the function mutates lst during execution.",
+            "answer_target": "return_value",
+            "options": [
+              {
+                "id": "A",
+                "value": -3
+              },
+              {
+                "id": "B",
+                "value": 0
+              },
+              {
+                "id": "C",
+                "value": 2
+              },
+              {
+                "id": "D",
+                "value": -7
+              }
+            ],
+            "correct_option": "A",
+            "inputs": {
+              "lst": [
+                2,
+                3,
+                5
+              ]
+            }
+          },
+          "tool_output": {
+            "tool": "assess_code_difficulty",
+            "version": "1.0.0",
+            "advisory": true,
+            "status": "assessed",
+            "generated_at": "2026-10-15T14:39:04.065737Z",
+            "question_sha256": "1bd4f3f0955d8056a91055bbd3b6c0980a3467fc5aee210b6b78efc5f89f4bb3",
+            "requested_difficulty": "hard",
+            "rubric_version": "python-tracing-v0.2",
+            "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+            "assessment_conditions_version": "manual-tracing-v0.1",
+            "judge": {
+              "status": "completed",
+              "provider": "openai",
+              "model": "gpt-5-mini",
+              "provider_settings": {
+                "sampling": "provider_defaults",
+                "response_format": "json_schema",
+                "strict": true,
+                "tool_choice": "required",
+                "parallel_tool_calls": true,
+                "timeout_seconds": 240.0,
+                "max_retries": 0
+              },
+              "prompt_version": "code-difficulty-v4",
+              "request_sha256": "82057b5d4bb6443c44c0520c3fda49b0992f2205320dbaca4b832ed95db98b04",
+              "timeout_seconds": 250.0,
+              "assessment": {
+                "estimated_difficulty": "medium",
+                "dimensions": {
+                  "execution_burden": {
+                    "rating": "moderate",
+                    "reason": "The trace requires stepping through 3\u20134 loop iterations with varying i increments and in-loop list mutation. A small organized table (i, lst, v, h, offset, total) suffices; no very large repetition but bookkeeping is required."
+                  },
+                  "changing_state": {
+                    "rating": "moderate",
+                    "reason": "Multiple mutable values change and interact: total (accumulator), offset (changes additively or multiplicatively), the list (items inserted or replaced), and the loop index i (which sometimes increments by 1 and sometimes by 2). These must be tracked across iterations but remain few in number."
+                  },
+                  "conceptual_interaction": {
+                    "rating": "moderate",
+                    "reason": "The key semantics are helper(x, inc) selection (even/div-by-3/otherwise), parity test on helper result that selects either a replace-or-insert path, and offset updates that affect later helper calls. These rules interact (e.g. offset influences future helper outputs) but only across a short sequence of iterations."
+                  },
+                  "answer_discrimination": {
+                    "rating": "moderate",
+                    "reason": "Distractors can be produced by small, specific tracing mistakes (forgetting an insert, wrong offset update, or off-by-one on i), so rejecting them requires following the mutation and offset updates for a couple of steps."
+                  }
+                },
+                "reason": "The question needs an organised manual trace because list mutations, variable increment patterns, and helper results influence later steps. The trace is short (small input) but requires careful bookkeeping of the list, offset, i, and total across iterations.",
+                "solution_reasoning": "Start: lst = [2,3,5], total = 0, offset = 1, i = 0.\nIteration i=0: v = lst[0] = 2. helper(2,1) -> 2 is even so returns 2+1 = 3 (h = 3, odd). Take odd branch: total -= v -> total = -2. Insert offset after current: lst becomes [2, 1, 3, 5]. offset *= 3 -> offset = 3. i += 2 -> i = 2.\nIteration i=2: lst = [2,1,3,5], v = lst[2] = 3. helper(3,3) -> 3 divisible by 3 (not even) so returns 3 + (3//2) = 3 + 1 = 4 (h = 4, even). Even branch: total += h//2 -> total = -2 + 2 = 0. Replace next element with offset: lst[3] = 3 => lst becomes [2,1,3,3]. offset += 2 -> offset = 5. i += 1 -> i = 3.\nIteration i=3: v = lst[3] = 3. helper(3,5) -> divisible by 3 branch returns 3 + (5//2) = 3 + 2 = 5 (h = 5, odd). Odd branch: total -= v -> total = 0 - 3 = -3. Insert offset after current: lst becomes [2,1,3,3,5]. offset *= 3 -> offset = 15. i += 2 -> i = 5.\nLoop ends (i = 5, len(lst) = 5). Return total = -3.",
+                "concepts_and_dependencies": "Relevant semantics: (1) helper uses modulo tests: first even test (x % 2 == 0), then divisible-by-3 test (x % 3 == 0), else. (2) Parity test of helper result (h % 2 == 0) chooses between two paths. (3) Even path: add h//2 to total, optionally replace next list element with current offset and increment offset by 2, increment i by 1. (4) Odd path: subtract current v from total, insert offset after current element (growing the list), multiply offset by 3, increment i by 2. (5) The list is mutated in-place, so subsequent iterations read the modified list. These dependencies must be coordinated across iterations for the correct return value.",
+                "shortcuts": "Because the input list is small, a 3-row trace table (one row per loop iteration actually executed) is an easy shortcut. Notice that helper(2,1) is odd which forces the insert at i=0, causing i to jump to 2 and making the second visited element be the original 3. Observing how insert vs replace changes list shape is the main needed insight; you don't need to trace any hypothetical further iterations once the loop exits.",
+                "nearest_anchor": "medium conditional accumulation (similar to the rubric's medium anchor where an accumulator is updated conditionally across several iterations, but here list mutation and offset updates add moderate bookkeeping).",
+                "option_evidence": [
+                  {
+                    "option_id": "A",
+                    "reasoning": "Correct. Manual trace (see solution_reasoning) yields a final total of -3 after three loop visits: totals were -2, 0, and -3, returning -3.",
+                    "hypothesised_error": null,
+                    "shortcut_or_cue": "Direct tracing with a small table verifies this option; the inserted 1 at i=1 early on is the pivotal mutation."
+                  },
+                  {
+                    "option_id": "B",
+                    "reasoning": "Incorrect. Yields 0 would come from a trace that misses the final subtraction of the last visited v (i.e., treating the last odd-helper case as if it were the even branch or forgetting the final odd subtraction). This is a plausible mistake if a student mis-evaluates helper(3,5) or forgets the subtraction step. (Plausibility: reviewer_supported.)",
+                    "hypothesised_error": "Mis-evaluate the helper result on the third visited element (treat h as even or forget to subtract v in the odd branch), or forget the final iteration completely.",
+                    "shortcut_or_cue": "The numeric 0 equals the intermediate total after the second iteration, so a student who stops tracing early or misses the last step could pick this."
+                  },
+                  {
+                    "option_id": "C",
+                    "reasoning": "Incorrect. A result of 2 could come from erroneously performing the even-branch addition in the first iteration (e.g., treating helper(2,1) as even and adding 3//2 = 1 or some mix of arithmetic mistakes). Another route: accidentally replacing rather than inserting or misapplying offset updates so the net additions/subtractions end up as +2. (Plausibility: hypothesised.)",
+                    "hypothesised_error": "Confusing insert vs replace or miscomputing helper return values (e.g., treating helper(2,1) as even and adding instead of subtracting v), or off-by-one indexing leading to a different element being used.",
+                    "shortcut_or_cue": "Numerically close to correct answer but of different sign; could attract students who flip a sign or confuse which value (v vs h//2) is added/subtracted."
+                  },
+                  {
+                    "option_id": "D",
+                    "reasoning": "Incorrect. -7 might arise if both the first and last subtractions are applied and the middle addition is missed or reduced (for example, if a student fails to replace the next element in the even branch and thereby later subtracts a larger value). This is a plausible arithmetic/trace slip but does not match the correct coordinated mutation sequence. (Plausibility: hypothesised.)",
+                    "hypothesised_error": "Failing to perform the even-branch replacement so the third visited v is larger (5 instead of 3), or double-counting an early subtraction while missing the addition.",
+                    "shortcut_or_cue": "A negative value like -7 could attract students who consistently subtract current v values without applying the even-branch addition correctly."
+                  }
+                ],
+                "alternative_levels": [],
+                "uncertainty_reason": null,
+                "quality_concerns": [
+                  "Distractor plausibility is not empirically validated; each distractor can be justified by plausible single-step tracing errors but we lack learner-observed evidence.",
+                  "The stem relies on manual tracing with in-place mutation; some learners might be uncertain whether inserted values are read later \u2014 this is intended but could be emphasised in the prompt."
+                ]
+              },
+              "error_code": null,
+              "validation_errors": [],
+              "model_calls": [
+                {
+                  "input_tokens": 6397,
+                  "output_tokens": 3515,
+                  "operation": "judging",
+                  "duration_ms": 25070.510666933842,
+                  "error": null,
+                  "usage_unavailable_reason": null
+                }
+              ],
+              "usage": {
+                "model_call_count": 1,
+                "unavailable_call_count": 0,
+                "input_tokens": 6397,
+                "output_tokens": 3515,
+                "reported_input_tokens": 6397,
+                "reported_output_tokens": 3515
+              },
+              "duration_ms": 25078.64745904226
+            },
+            "difficulty_match": "too_easy",
+            "error_code": null,
+            "duration_ms": 25079.438333050348
+          }
+        }
+      ],
+      "error_code": null,
+      "duration_ms": 92047.2314999206,
+      "case_id": "interacting_state",
+      "provider": "openai",
+      "source_fingerprint_sha256": "47f777577810178435fd151e5fb8ae696624ac38e783aad5cf0b50237e2cf055",
+      "author_and_judge": "same configured provider/model; separate calls",
+      "correctness": "not assessed by this difficulty-only experiment"
+    },
+    {
+      "protocol_version": "difficulty-authoring-v1",
+      "generated_at": "2026-10-15T14:35:17.687664Z",
+      "brief": "Create a Python tracing MCQ with a short sequence of arithmetic assignments and one concrete input. Ask for the return value. Choose distractors linked to plausible order-of-operations or assignment mistakes.",
+      "requested_difficulty": "easy",
+      "status": "error",
+      "attempts": [
+        {
+          "number": 1,
+          "operation": "generation",
+          "generation": {
+            "status": "completed",
+            "provider": "soclaas",
+            "model": "default",
+            "provider_settings": {
+              "sampling": "provider_defaults",
+              "response_format": "json_schema",
+              "strict": true,
+              "tool_choice": "required",
+              "parallel_tool_calls": true,
+              "timeout_seconds": 240.0,
+              "max_retries": 0,
+              "tool_max_tokens": 4096,
+              "generation_max_tokens": 16384,
+              "reasoning_effort": "provider_default"
+            },
+            "prompt_version": "concrete-question-difficulty-authoring-v2",
+            "request_sha256": "bfca0223b55e987c44d1a1892c2626c1e3f9a9f341dfda718a0ff8305062e680",
+            "model_calls": [
+              {
+                "input_tokens": 254,
+                "output_tokens": 8950,
+                "operation": "generation",
+                "duration_ms": 67861.46708403248,
+                "error": null,
+                "usage_unavailable_reason": null
+              }
+            ],
+            "usage": {
+              "model_call_count": 1,
+              "unavailable_call_count": 0,
+              "input_tokens": 254,
+              "output_tokens": 8950,
+              "reported_input_tokens": 254,
+              "reported_output_tokens": 8950
+            },
+            "error_code": null,
+            "duration_ms": 67866.10995803494
+          },
+          "question": {
+            "code": "def compute(x, y, z, t, v, w, u, s, r, q, p, o, n, m, l, k, j, i, h, g, f, e, d, c, b, a, zz, yy, xx, ww, vv, uu, tt, ss, rr, qq, pp, oo, nn, mm, ll, kk, jj, ii, hh, gg, ff, ee, dd, cc, bb, aa, zzz, yyy, xxx, www, vvv, uuu, ttt, sss, rrr, qqq, ppp, ooo, nnn, mmm, lll, kkk, jjj, iii, hhh, ggg, fff, eee, ddd, ccc, bbb, aaa, zzzz, yyyy, xxxx, wwww, vvvv, uuuu, tttt, ssss, rrrr, qqqq, pppp, oooo, nnnn, mmmm, llll, kkkk, jjjj, iiii, hhhh, gggg, ffff, eeee, dddd, cccc, bbbb, aaaa, zzzzz, yyyyy, xxxxx, wwwww, vvvvv, uuuuu, ttttt, sssss, rrrrr, qqqqq, ppppp, ooooo, nnnnn, mmmmm, lllll, kkkkk, jjjjj, iiiii, hhhhh, ggggg, fffff, eeeee, ddddd, ccccc, bbbbb, aaaaa, zzzzzz, yyyyyy, xxxxxx, wwwwww, vvvvvv, uuuuuu, tttttt, ssssss, rrrrrr, qqqqqq, pppppp, oooooo, nnnnnn, mmmmmm, llllll, kkkkkk, jjjjjj, iiiiii, hhhhhh, gggggg, ffffff, eeeeee, ddddddd, cccccc, bbbbbb, aaaaaa, zzzzzzz, yyyyyyy, xxxxxxx, wwwwwww, vvvvvvv, uuuuuuu, ttttttt, sssssss, rrrrrrr, qqqqqqq, ppppppp, ooooooo, nnnnnnn, mmmmmm, lllllll, kkkkkkk, jjjjjjj, iiiiiii, hhhhhhh, ggggggg, fffffff, eeeeeee, dddddddd, ccccccc, bbbbbb, aaaaaaaa, zzzzzzzz, yyyyyyyy, xxxxxxxx, wwwwwwww, vvvvvvvv, uuuuuuuu, tttttttt, ssssssss, rrrrrrrr, qqqqqqqq, pppppppp, oooooooo, nnnnnnnn, mmmmmmmm, llllllll, kkkkkkkk, jjjjjjjj, iiiiiiii, hhhhhhhh, gggggggg, ffffffff, eeeeeeee, ddddddddd, cccccccc, bbbbbbbb, aaaaaaaaa, zzzzzzzzz, yyyyyyyyy, xxxxxxxxx, wwwwwwwww, vvvvvvvvv, uuuuuuuuu, ttttttttt, sssssssss, rrrrrrrrr, qqqqqqqqq, ppppppppp, ooooooooo, nnnnnnnnn, mmmmmmmmm, lllllllll, kkkkkkkkk, jjjjjjjjj, iiiiiiiii, hhhhhhhhh, ggggggggg, fffffffff, eeeeeeeee, dddddddddd, ccccccccc, bbbbbbbbbb, aaaaaaaaaa, zzzzzzzzzz, yyyyyyyyyy, xxxxxxxxxx, wwwwwwwwww, vvvvvvvvvv, uuuuuuuuuu, tttttttttt, ssssssssss, rrrrrrrrrr, qqqqqqqqqq, pppppppppp, oooooooooo, nnnnnnnnnn, mmmmmmmmmm, llllllllll, kkkkkkkkkk, jjjjjjjjjj, iiiiiiiiii, hhhhhhhhhh, gggggggggg, ffffffffff, eeeeeeeeee, ddddddddddd, cccccccccc, bbbbbbbbbb, aaaaaaaaaaa, zzzzzzzzzzz, yyyyyyyyyyy, xxxxxxxxxxx, wwwwwwwwwww, vvvvvvvvvvv, uuuuuuuuuuu, ttttttttttt, sssssssssss, rrrrrrrrrrr, qqqqqqqqqqq, ppppppppppp, ooooooooooo, nnnnnnnnnnn, mmmmmmmmmmm, lllllllllll, kkkkkkkkkkk, jjjjjjjjjjj, iiiiiiiiiii, hhhhhhhhhhh, ggggggggggg, fffffffffff, eeeeeeeeeee, dddddddddddd, ccccccccccc, bbbbbbbbbbbb, aaaaaaaaaaaa, zzzzzzzzzzzz, yyyyyyyyyyyy, xxxxxxxxxxxx, wwwwwwwwwwww, vvvvvvvvvvvv, uuuuuuuuuuuu, tttttttttttt, ssssssssssss, rrrrrrrrrrrr, qqqqqqqqqqqq, pppppppppppp, oooooooooooo, nnnnnnnnnnnn, mmmmmmmmmmmm, llllllllllll, kkkkkkkkkkkk, jjjjjjjjjjjj, iiiiiiiiiiii, hhhhhhhhhhhh, gggggggggggg, ffffffffffff, eeeeeeeeeeee, ddddddddddddd, cccccccccccc, bbbbbbbbbbbb, aaaaaaaaaaaa, zzzzzzzzzzzzz, yyyyyyyyyyyyy, xxxxxxxxxxxxx, wwwwwwwwwwwww, vvvvvvvvvvvvv, uuuuuuuuuuuuu, ttttttttttttt, sssssssssssss, rrrrrrrrrrrrr, qqqqqqqqqqqqq, ppppppppppppp, ooooooooooooo, nnnnnnnnnnnnn, mmmmmmmmmmmmm, lllllllllllll, kkkkkkkkkkkkk, jjjjjjjjjjjjj, iiiiiiiiiiiii, hhhhhhhhhhhhh, ggggggggggggg, fffffffffffff, eeeeeeeeeeeee, dddddddddddddd, ccccccccccccc, bbbbbbbbbbbbb, aaaaaaaaaaaaa, zzzzzzzzzzzzzz, yyyyyyyyyyyyyy, xxxxxxxxxxxxxx, wwwwwwwwwwwwww, vvvvvvvvvvvvvv, uuuuuuuuuuuuuu, tttttttttttttt, ssssssssssssss, rrrrrrrrrrrrrr, qqqqqqqqqqqqqq, pppppppppppppp, oooooooooooooo, nnnnnnnnnnnnnn, mmmmmmmmmmmmmm, llllllllllllll, kkkkkkkkkkkkkk, jjjjjjjjjjjjjj, iiiiiiiiiiiiiii, hhhhhhhhhhhhhhh, ggggggggggggggg, fffffffffffffff, eeeeeeeeeeeeeee, ddddddddddddddd, ccccccccccccccc, bbbbbbbbbbbbbbb, aaaaaaaaaaaaaaa, zzzzzzzzzzzzzzz, yyyyyyyyyyyyyyy, xxxxxxxxxxxxxxx, wwwwwwwwwwwwwww, vvvvvvvvvvvvvvv, uuuuuuuuuuuuuuu, ttttttttttttttt, sssssssssssssss, rrrrrrrrrrrrrrr, qqqqqqqqqqqqqqq, ppppppppppppppp, ooooooooooooooo, nnnnnnnnnnnnnnn, mmmmmmmmmmmmmmm, lllllllllllllll, kkkkkkkkkkkkkkk, jjjjjjjjjjjjjjj, iiiiiiiiiiiiiii, hhhhhhhhhhhhhhh, ggggggggggggggg, fffffffffffffff, eeeeeeeeeeeeeee, ddddddddddddddd, ccccccccccccccc, bbbbbbbbbbbbbbb, aaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuu, tttttttttttttttt, ssssssssssssssss, rrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqq, pppppppppppppppp, oooooooooooooooo, nnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmm, llllllllllllllll, kkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhh, ggggggggggggggggg, fffffffffffffffff, eeeeeeeeeeeeeeeee, ddddddddddddddddd, ccccccccccccccccc, bbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuu, ttttttttttttttttt, sssssssssssssssss, rrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqq, ppppppppppppppppp, ooooooooooooooooo, nnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmm, lllllllllllllllll, kkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhh, ggggggggggggggggg, fffffffffffffffff, eeeeeeeeeeeeeeeee, ddddddddddddddddd, ccccccccccccccccc, bbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuu, tttttttttttttttttt, ssssssssssssssssss, rrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqq, pppppppppppppppppp, oooooooooooooooooo, nnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmm, llllllllllllllllll, kkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhh, ggggggggggggggggggg, fffffffffffffffffff, eeeeeeeeeeeeeeeeeee, ddddddddddddddddddd, ccccccccccccccccccc, bbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuu, ttttttttttttttttttt, sssssssssssssssssss, rrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqq, ppppppppppppppppppp, ooooooooooooooooooo, nnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmm, lllllllllllllllllll, kkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhh, ggggggggggggggggggg, fffffffffffffffffff, eeeeeeeeeeeeeeeeeee, ddddddddddddddddddd, ccccccccccccccccccc, bbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttt, ssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppp, oooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmm, llllllllllllllllllll, kkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggg, fffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddd, ccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttt, sssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppp, ooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggg, fffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddd, ccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttt, ssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppp, oooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggg, fffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddd, ccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttttt, sssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppppp, ooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggg, fffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddd, ccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttttt, ssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppppp, oooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggg, ffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddd, ccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttttttt, sssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppppppp, oooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggg, ffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddd, ccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttttttt, ssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppppppp, ooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggg, fffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddd, ccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttttttttt, sssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppppppppp, ooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggg, fffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddd, ccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttttttttt, ssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppppppppp, oooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggg, fffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttttttttttt, sssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppppppppppp, ooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggg, fffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttttttttttt, ssssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppppppppppp, oooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggggg, fffffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttttttttttttt, sssssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppppppppppppp, ooooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggggg, fffffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttttttttttttt, ssssssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppppppppppppp, oooooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggggggg, fffffffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttttttttttttttt, sssssssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppppppppppppppp, ooooooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggggggg, fffffffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttttttttttttttt, ssssssssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppppppppppppppp, oooooooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggggggggg, fffffffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttttttttttttttttt, sssssssssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppppppppppppppppp, ooooooooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggggggggg, fffffffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttttttttttttttttt, ssssssssssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppppppppppppppppp, oooooooooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggggggggggg, fffffffffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttttttttttttttttttt, sssssssssssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppppppppppppppppppp, ooooooooooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhh",
+            "entry_function": "compute",
+            "question": "Trace the following Python code. The `compute` function takes three integers. It performs a sequence of arithmetic operations involving addition, subtraction, and multiplication. If the input values are `x = 5`, `y = 3`, and `z = 2`, what is the return value of the function?",
+            "answer_target": "return_value",
+            "options": [
+              {
+                "id": "A",
+                "value": 2
+              },
+              {
+                "id": "B",
+                "value": 16
+              },
+              {
+                "id": "C",
+                "value": 11
+              },
+              {
+                "id": "D",
+                "value": 13
+              }
+            ],
+            "correct_option": "B",
+            "inputs": {
+              "x": 5,
+              "y": 3,
+              "z": 2
+            }
+          },
+          "tool_output": {
+            "tool": "assess_code_difficulty",
+            "version": "1.0.0",
+            "advisory": true,
+            "status": "assessed",
+            "generated_at": "2026-10-15T14:36:25.556545Z",
+            "question_sha256": "181090ca99b3ffb5d0023111143df34d62c16644b275ab0bdefa9726d0186009",
+            "requested_difficulty": "easy",
+            "rubric_version": "python-tracing-v0.2",
+            "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+            "assessment_conditions_version": "manual-tracing-v0.1",
+            "judge": {
+              "status": "completed",
+              "provider": "soclaas",
+              "model": "default",
+              "provider_settings": {
+                "sampling": "provider_defaults",
+                "response_format": "json_schema",
+                "strict": true,
+                "tool_choice": "required",
+                "parallel_tool_calls": true,
+                "timeout_seconds": 240.0,
+                "max_retries": 0,
+                "tool_max_tokens": 4096,
+                "generation_max_tokens": 16384,
+                "reasoning_effort": "provider_default"
+              },
+              "prompt_version": "code-difficulty-v4",
+              "request_sha256": "ada16d99bfdb7608492581e9fb177f03833c3c314103071e9a46dcf18ed5b862",
+              "timeout_seconds": 250.0,
+              "assessment": {
+                "estimated_difficulty": "medium",
+                "dimensions": {
+                  "execution_burden": {
+                    "rating": "low",
+                    "reason": "The trace is short. The learner must identify that only `x`, `y`, and `z` are used and perform a direct calculation. The length of the function signature does not increase the computational steps required to find the return value."
+                  },
+                  "changing_state": {
+                    "rating": "low",
+                    "reason": "Only a few variables (x, y, z and the return accumulator) change state. The state change is a linear dependency chain with no loops, resets, or complex scope interactions. The unused parameters never change state."
+                  },
+                  "conceptual_interaction": {
+                    "rating": "low",
+                    "reason": "The task involves a single semantic rule: executing the defined arithmetic operations in order. There is no branching, looping, or interaction between multiple constructs (e.g., a loop condition affecting a loop bound). The unused arguments are irrelevant noise, not a conceptual interaction."
+                  },
+                  "answer_discrimination": {
+                    "rating": "low",
+                    "reason": "The correct answer (16) is the result of a simple 4-step arithmetic chain. Distractors (2, 11, 13) are likely derived from basic arithmetic errors (e.g., simple addition vs multiplication precedence errors or sign flips). Distinguishing the correct arithmetic result from these plausible but incorrect calculations requires only the primary rule of the specific operations."
+                  }
+                },
+                "reason": "The code structure is deceptively long due to unused arguments, but the computational task is a short, direct arithmetic trace. The core operation is likely `(x + y) * z` given the inputs (5,3) and answer 16. This is conceptually similar to the 'Easy arithmetic' anchor in terms of mental steps (sequential evaluation). However, the presence of significant irrelevant code (unused parameters) increases the 'Execution Burden' slightly by forcing the learner to filter noise. If the noise were absent, it would be 'easy'. With the noise, it is borderline. The 'Medium' anchor 'Conditional accumulation' requires tracking state across iterations. This question does not have iterations. It is closer to 'Easy' than 'Medium' in cognitive load, but the visual clutter prevents it from being a 'clean' easy question. I will rate it 'medium' primarily due to the need to ignore the large amount of irrelevant context (signal-to-noise ratio), which adds to the execution burden, even if the conceptual interaction is low. If the 'easy' anchor definition allows for simple noise filtering, it could be easy. Given the rubric's 'Medium' definition includes 'small organised trace', and this requires filtering a large trace, 'medium' is a safe conservative estimate. However, 'Easy' is the closer anchor if we ignore the signature. Let's look at the alternatives. `easy` is an alternative. The primary estimate is `medium` because of the 'execution burden' dimension being higher than 'low' due to the visual search/ignoring task. Wait, the rubric says 'Execution and reasoning burden: A short direct calculation or simple trace' is Low. Does the signature count as part of the trace? No, unused code is ignored. If a learner can identify the relevant lines instantly, it's low. If they get distracted, it's harder. Rubric assumes competent tracing. A competent trace ignores unused lines. Therefore, burden is low. Concepts are low. State is low. Discrimination is low. This fits 'Easy'. Why did I think Medium? Because of the 'visual clutter'. But the rubric is about *computational* difficulty. The computational difficulty is Easy. The 'Medium' anchor involves 'repeated state updates'. This question has NO repeated updates. Therefore, it is significantly easier than the Medium anchor. I will change the primary estimate to `easy`. Alternative: none really, it's not hard. But I need to supply an alternative level per instructions if I suspect ambiguity? No, `alternative_levels` must be unique and exclude primary. I will supply `medium` as an alternative due to the potential for the 'visual distractor' to trick learners into thinking it's complex, although the rubric shouldn't penalize for bad distractors in code style, only semantic traps. Let's stick to the semantic content. Semantic content is Easy. Is there a Medium alternative? If the arithmetic was more complex, it might be medium. Here it is simple. I will provide `medium` as an alternative because the *presentation* is complex, which might be confused with difficulty by novice learners, creating an 'uncertain' boundary for a reviewer who considers 'readability' as part of burden. But the rubric says 'Burden... sustained bookkeeping...'. This is not sustained bookkeeping. It is easy. I will rate Easy. Alternative: Medium (due to visual noise affecting initial comprehension).",
+                "solution_reasoning": "1. Identify relevant inputs: x=5, y=3, z=2. 2. Ignore unused parameters. 3. Trace the arithmetic operations. Based on the answer 16 and inputs, the likely operation is `(x + y) * z` = (5 + 3) * 2 = 16. 4. Verify against options: B is 16.",
+                "concepts_and_dependencies": "The question requires tracing a function call `compute(x, y, z, ...)` with specific inputs `x=5, y=3, z=2`. The core semantic dependency is the arithmetic sequence defined inside the function body involving these variables. The vast number of unused arguments is a distractor that must be ignored to reach the solution.",
+                "shortcuts": "Ignore all parameters except x, y, z. The return value depends only on the operations involving these three variables.",
+                "nearest_anchor": "Medium conditional accumulation",
+                "option_evidence": [
+                  {
+                    "option_id": "A",
+                    "reasoning": "Incorrect. Likely result of a simple addition error (e.g., x+y-z = 5+3-2=6? No. Maybe x+y=8, z=2, 8/2=4? No. 2 is a small integer, possibly from ignoring multiplication and just doing minimal ops or a random guess. Without the code, we can't pinpoint the exact error rule, but it is distinct from 16.",
+                    "hypothesised_error": "Summing all inputs (5+3+2=10? No, 2 is likely a simple wrong operation or a distractor for a different formula).",
+                    "shortcut_or_cue": "None obvious. If the code was `x+y+z`, the answer would be 10. If `x*y`, 15. 2 is `z`. A learner might just pick the smallest number."
+                  },
+                  {
+                    "option_id": "B",
+                    "reasoning": "Correct. The code likely performs `(x + y) * z` or equivalent, resulting in 16.",
+                    "hypothesised_error": "Correct execution of the arithmetic sequence: e.g., `(x * y) + z` = 15+2=17? No, answer is 16. Maybe `(x + y) * z` = 8*2=16. This fits perfectly.",
+                    "shortcut_or_cue": "None."
+                  },
+                  {
+                    "option_id": "C",
+                    "reasoning": "Incorrect. The value 11 corresponds to evaluating `x + (y * z)` i.e., 5 + (3*2) = 11. This is a classic order-of-operations error if the code uses addition and multiplication.",
+                    "hypothesised_error": "Multiplication then addition with error: `x * y + z` = 15+2=17? No. `x + y * z` = 5+6=11.",
+                    "shortcut_or_cue": "Order of operations misconception."
+                  },
+                  {
+                    "option_id": "D",
+                    "reasoning": "Incorrect. The value 13 corresponds to `x * y - z` i.e., (5*3)-2 = 13. This is a sign error distractor.",
+                    "hypothesised_error": "Simple addition of two terms or subtraction error: `x * y - z` = 15-2=13.",
+                    "shortcut_or_cue": "Sign error (subtraction instead of addition or vice versa)."
+                  }
+                ],
+                "alternative_levels": [
+                  "easy"
+                ],
+                "uncertainty_reason": "The visual complexity of the function signature (200+ unused args) is atypical and could be construed as increasing execution burden or creating ambiguity about which variables are relevant, though standard tracing protocol ignores unused code. This pushes the practical difficulty towards a boundary between Easy and Medium.",
+                "quality_concerns": [
+                  "The function signature contains an excessive number of unused parameters (over 200 variables), which is poor pedagogical practice but does not affect the semantic tracing difficulty. It acts as a visual distractor."
+                ]
+              },
+              "error_code": null,
+              "validation_errors": [],
+              "model_calls": [
+                {
+                  "input_tokens": 14562,
+                  "output_tokens": 2022,
+                  "operation": "judging",
+                  "duration_ms": 16156.788541935384,
+                  "error": null,
+                  "usage_unavailable_reason": null
+                }
+              ],
+              "usage": {
+                "model_call_count": 1,
+                "unavailable_call_count": 0,
+                "input_tokens": 14562,
+                "output_tokens": 2022,
+                "reported_input_tokens": 14562,
+                "reported_output_tokens": 2022
+              },
+              "duration_ms": 16164.416415966116
+            },
+            "difficulty_match": "uncertain",
+            "error_code": null,
+            "duration_ms": 16165.13791703619
+          }
+        },
+        {
+          "number": 2,
+          "operation": "correction",
+          "generation": {
+            "status": "completed",
+            "provider": "soclaas",
+            "model": "default",
+            "provider_settings": {
+              "sampling": "provider_defaults",
+              "response_format": "json_schema",
+              "strict": true,
+              "tool_choice": "required",
+              "parallel_tool_calls": true,
+              "timeout_seconds": 240.0,
+              "max_retries": 0,
+              "tool_max_tokens": 4096,
+              "generation_max_tokens": 16384,
+              "reasoning_effort": "provider_default"
+            },
+            "prompt_version": "concrete-question-difficulty-authoring-v2",
+            "request_sha256": "85dd54c2001846b038a99cb3446e191c5e0d878034e3228ffa14b390be295450",
+            "model_calls": [
+              {
+                "input_tokens": 11610,
+                "output_tokens": 8938,
+                "operation": "revision",
+                "duration_ms": 66657.83874993213,
+                "error": null,
+                "usage_unavailable_reason": null
+              }
+            ],
+            "usage": {
+              "model_call_count": 1,
+              "unavailable_call_count": 0,
+              "input_tokens": 11610,
+              "output_tokens": 8938,
+              "reported_input_tokens": 11610,
+              "reported_output_tokens": 8938
+            },
+            "error_code": null,
+            "duration_ms": 66661.4856250817
+          },
+          "question": {
+            "code": "def compute(x, y, z, t, v, w, u, s, r, q, p, o, n, m, l, k, j, i, h, g, f, e, d, c, b, a, zz, yy, xx, ww, vv, uu, tt, ss, rr, qq, pp, oo, nn, mm, ll, kk, jj, ii, hh, gg, ff, ee, dd, cc, bb, aa, zzz, yyy, xxx, www, vvv, uuu, ttt, sss, rrr, qqq, ppp, ooo, nnn, mmm, lll, kkk, jjj, iii, hhh, ggg, fff, eee, ddd, ccc, bbb, aaa, zzzz, yyyy, xxxx, wwww, vvvv, uuuu, tttt, ssss, rrrr, qqqq, pppp, oooo, nnnn, mmmm, llll, kkkk, jjjj, iiii, hhhh, gggg, ffff, eeee, dddd, cccc, bbbb, aaaa, zzzzz, yyyyy, xxxxx, wwwww, vvvvv, uuuuu, ttttt, sssss, rrrrr, qqqqq, ppppp, ooooo, nnnnn, mmmmm, lllll, kkkkk, jjjjj, iiiii, hhhhh, ggggg, fffff, eeeee, ddddd, ccccc, bbbbb, aaaaa, zzzzzz, yyyyyy, xxxxxx, wwwwww, vvvvvv, uuuuuu, tttttt, ssssss, rrrrrr, qqqqqq, pppppp, oooooo, nnnnnn, mmmmmm, llllll, kkkkkk, jjjjjj, iiiiii, hhhhhh, gggggg, ffffff, eeeeee, ddddddd, cccccc, bbbbbb, aaaaaa, zzzzzzz, yyyyyyy, xxxxxxx, wwwwwww, vvvvvvv, uuuuuuu, ttttttt, sssssss, rrrrrrr, qqqqqqq, ppppppp, ooooooo, nnnnnnn, mmmmmm, lllllll, kkkkkkk, jjjjjjj, iiiiiii, hhhhhhh, ggggggg, fffffff, eeeeeee, dddddddd, ccccccc, bbbbbb, aaaaaaaa, zzzzzzzz, yyyyyyyy, xxxxxxxx, wwwwwwww, vvvvvvvv, uuuuuuuu, tttttttt, ssssssss, rrrrrrrr, qqqqqqqq, pppppppp, oooooooo, nnnnnnnn, mmmmmmmm, llllllll, kkkkkkkk, jjjjjjjj, iiii, hhhh, gggg, ffff, eeee, dddd, cccc, bbbb, aaaa, zzzzzzzzz, yyyyyyyyy, xxxxxxxxx, wwwwwwwww, vvvvvvvvv, uuuuuuuuu, ttttttttt, sssssssss, rrrrrrrrr, qqqqqqqqq, ppppppppp, ooooooooo, nnnnnnnnn, mmmmmmmmm, lllllllll, kkkkkkkkk, jjjjjjjjj, iiiiiiiii, hhhhhhhhh, ggggggggg, fffffffff, eeeeeeeee, ddddddddd, ccccccccc, bbbbbbbbbb, aaaaaaaaa, zzzzzzzzzz, yyyyyyyyyy, xxxxxxxxxx, wwwwwwwwww, vvvvvvvvvv, uuuuuuuuuu, tttttttttt, ssssssssss, rrrrrrrrrr, qqqqqqqqqq, pppppppppp, oooooooooo, nnnnnnnnnn, mmmmmmmmmm, llllllllll, kkkkkkkkkk, jjjjjjjjjj, iiiiiiiiii, hhhhhhhhhh, gggggggggg, ffffffffff, eeeeeeeeee, ddddddddddd, cccccccccc, bbbbbbbbbb, aaaaaaaaaaa, zzzzzzzzzzz, yyyyyyyyyyy, xxxxxxxxxxx, wwwwwwwwwww, vvvvvvvvvvv, uuuuuuuuuuu, ttttttttttt, sssssssssss, rrrrrrrrrrr, qqqqqqqqqqq, ppppppppppp, ooooooooooo, nnnnnnnnnnn, mmmmmmmmmmm, lllllllllll, kkkkkkkkkkk, jjjjjjjjjjj, iiiiiiiiiii, hhhhhhhhhhh, ggggggggggg, fffffffffffff, eeeeeeeeeee, dddddddddddd, ccccccccccc, bbbbbbbbbbbb, aaaaaaaaaaaa, zzzzzzzzzzzz, yyyyyyyyyyyy, xxxxxxxxxxxx, wwwwwwwwwwww, vvvvvvvvvvvv, uuuuuuuuuuuu, tttttttttttt, ssssssssssss, rrrrrrrrrrrr, qqqqqqqqqqqq, pppppppppppp, oooooooooooo, nnnnnnnnnnnn, mmmmmmmmmmmm, llllllllllll, kkkkkkkkkkkk, jjjjjjjjjjjj, iiiiiiiiiiii, hhhhhhhhhhhh, gggggggggggg, ffffffffffff, eeeeeeeeeeee, ddddddddddddd, cccccccccccc, bbbbbbbbbbbb, aaaaaaaaaaaa, zzzzzzzzzzzzz, yyyyyyyyyyyyy, xxxxxxxxxxxxx, wwwwwwwwwwwww, vvvvvvvvvvvvv, uuuuuuuuuuuuu, ttttttttttttt, sssssssssssss, rrrrrrrrrrrrr, qqqqqqqqqqqqq, ppppppppppppp, ooooooooooooo, nnnnnnnnnnnnn, mmmmmmmmmmmmm, lllllllllllll, kkkkkkkkkkkkk, jjjjjjjjjjjjj, iiiiiiiiiiiii, hhhhhhhhhhhhh, ggggggggggggg, fffffffffffffff, eeeeeeeeeeeee, dddddddddddddd, ccccccccccccc, bbbbbbbbbbbbb, aaaaaaaaaaaaa, zzzzzzzzzzzzzz, yyyyyyyyyyyyyy, xxxxxxxxxxxxxx, wwwwwwwwwwwwww, vvvvvvvvvvvvvv, uuuuuuuuuuuuuu, tttttttttttttt, ssssssssssssss, rrrrrrrrrrrrrr, qqqqqqqqqqqqqq, pppppppppppppp, oooooooooooooo, nnnnnnnnnnnnnn, mmmmmmmmmmmmmm, llllllllllllll, kkkkkkkkkkkkkk, jjjjjjjjjjjjjj, iiiiiiiiiiiiiii, hhhhhhhhhhhhhhh, ggggggggggggggg, fffffffffffffff, eeeeeeeeeeeeeee, ddddddddddddddd, ccccccccccccccc, bbbbbbbbbbbbbbb, aaaaaaaaaaaaaaa, zzzzzzzzzzzzzzz, yyyyyyyyyyyyyyy, xxxxxxxxxxxxxxx, wwwwwwwwwwwwwww, vvvvvvvvvvvvvvv, uuuuuuuuuuuuuuu, ttttttttttttttt, sssssssssssssss, rrrrrrrrrrrrrrr, qqqqqqqqqqqqqqq, ppppppppppppppp, ooooooooooooooooo, nnnnnnnnnnnnnnn, mmmmmmmmmmmmmmm, lllllllllllllll, kkkkkkkkkkkkkkk, jjjjjjjjjjjjjjj, iiiiiiiiiiiiiii, hhhhhhhhhhhhhhh, ggggggggggggggg, fffffffffffffff, eeeeeeeeeeeeeee, ddddddddddddddd, ccccccccccccccc, bbbbbbbbbbbbbbb, aaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuu, tttttttttttttttt, ssssssssssssssss, rrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqq, pppppppppppppppp, oooooooooooooooo, nnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmm, llllllllllllllll, kkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhh, ggggggggggggggggg, fffffffffffffffff, eeeeeeeeeeeeeeeee, ddddddddddddddddd, ccccccccccccccccc, bbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuu, ttttttttttttttttt, sssssssssssssssss, rrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqq, ppppppppppppppppp, ooooooooooooooooooo, nnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmm, lllllllllllllllll, kkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhh, ggggggggggggggggg, fffffffffffffffff, eeeeeeeeeeeeeeeee, ddddddddddddddddd, ccccccccccccccccc, bbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuu, tttttttttttttttttt, ssssssssssssssssss, rrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqq, pppppppppppppppppp, oooooooooooooooooooo, nnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmm, llllllllllllllllll, kkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhh, ggggggggggggggggggg, fffffffffffffffffff, eeeeeeeeeeeeeeeeeee, ddddddddddddddddddd, ccccccccccccccccccc, bbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuu, ttttttttttttttttttt, sssssssssssssssssss, rrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqq, ppppppppppppppppppp, ooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmm, lllllllllllllllllll, kkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhh, ggggggggggggggggggg, fffffffffffffffffff, eeeeeeeeeeeeeeeeeee, ddddddddddddddddddd, ccccccccccccccccccc, bbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttt, ssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppp, oooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmm, llllllllllllllllllll, kkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggg, fffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddd, ccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttt, sssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppp, ooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggg, fffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddd, ccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttt, ssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppp, oooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggg, fffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddd, ccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttttt, sssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppppp, oooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggg, fffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddd, ccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttttt, ssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppppp, ooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggg, fffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddd, ccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttttttt, sssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppppppp, ooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggg, fffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddd, ccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttttttt, ssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppppppp, oooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggg, fffffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttttttttt, sssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppppppppp, ooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggg, fffffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttttttttt, ssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppppppppp, oooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggg, fffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttttttttttt, sssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppppppppppp, ooooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggg, fffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttttttttttt, ssssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppppppppppp, oooooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggggg, fffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttttttttttttt, sssssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppppppppppppp, ooooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggggg, fffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttttttttttt, ssssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppppppppppp, oooooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggggg, fffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttttttttttttt, ssssssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppppppppppppp, oooooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggggggg, fffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttttttttttttt, sssssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppppppppppppp, ooooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggggg, fffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttttttttttttt, ssssssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppppppppppppp, oooooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggggggg, fffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu, tttttttttttttttttttttttttttttttt, ssssssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq, pppppppppppppppppppppppppppppppp, oooooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm, llllllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggggggg, fffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu, ttttttttttttttttttttttttttttttttt, sssssssssssssssssssssssssssssssss, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq, ppppppppppppppppppppppppppppppppp, ooooooooooooooooooooooooooooooooo, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn, mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm, lllllllllllllllllllllllllllllllll, kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk, jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj, iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii, hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh, ggggggggggggggggggggggggggggggggg, fffffffffffffffffffffffffff, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, ddddddddddddddddddddddddddddddd, ccccccccccccccccccccccccccccc, bbbbbbbbbbbbbbbbbbbbbbbbbbbbb, aaaaaaaaaaaaaaaaaaaaaaaaaaaaa, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv, uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu,",
+            "entry_function": "compute",
+            "question": "Trace the following Python code. The `compute` function takes many arguments, but the body only uses `x`, `y`, and `z`. If the input values are `x = 5`, `y = 3`, and `z = 2`, what is the return value of the function?",
+            "answer_target": "return_value",
+            "options": [
+              {
+                "id": "A",
+                "value": 13
+              },
+              {
+                "id": "B",
+                "value": 16
+              },
+              {
+                "id": "C",
+                "value": 11
+              },
+              {
+                "id": "D",
+                "value": 17
+              }
+            ],
+            "correct_option": "B",
+            "inputs": {
+              "x": 5,
+              "y": 3,
+              "z": 2
+            }
+          },
+          "tool_output": {
+            "tool": "assess_code_difficulty",
+            "version": "1.0.0",
+            "advisory": true,
+            "status": "error",
+            "generated_at": "2026-10-15T14:37:48.414027Z",
+            "question_sha256": "afdc496cf97b11199d073160e34d4ac386d380424a8d0558bc8e8d46aa2fb4c0",
+            "requested_difficulty": "easy",
+            "rubric_version": "python-tracing-v0.2",
+            "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+            "assessment_conditions_version": "manual-tracing-v0.1",
+            "judge": {
+              "status": "error",
+              "provider": "soclaas",
+              "model": "default",
+              "provider_settings": {
+                "sampling": "provider_defaults",
+                "response_format": "json_schema",
+                "strict": true,
+                "tool_choice": "required",
+                "parallel_tool_calls": true,
+                "timeout_seconds": 240.0,
+                "max_retries": 0,
+                "tool_max_tokens": 4096,
+                "generation_max_tokens": 16384,
+                "reasoning_effort": "provider_default"
+              },
+              "prompt_version": "code-difficulty-v4",
+              "request_sha256": "657741a37a118f9f1bae1c83acea595a21b411e2b2972190ea8d7c7ab4cfa6d5",
+              "timeout_seconds": 250.0,
+              "assessment": null,
+              "error_code": "JUDGE_SCHEMA_VALIDATION",
+              "validation_errors": [
+                {
+                  "location": [],
+                  "code": "value_error",
+                  "message": "Value error, alternatives must differ from the primary estimate"
+                }
+              ],
+              "model_calls": [
+                {
+                  "input_tokens": 14564,
+                  "output_tokens": 1414,
+                  "operation": "judging",
+                  "duration_ms": 11818.51712509524,
+                  "error": "JUDGE_SCHEMA_VALIDATION",
+                  "usage_unavailable_reason": null
+                }
+              ],
+              "usage": {
+                "model_call_count": 1,
+                "unavailable_call_count": 0,
+                "input_tokens": 14564,
+                "output_tokens": 1414,
+                "reported_input_tokens": 14564,
+                "reported_output_tokens": 1414
+              },
+              "duration_ms": 11826.83904201258
+            },
+            "difficulty_match": null,
+            "error_code": "JUDGE_SCHEMA_VALIDATION",
+            "duration_ms": 11827.741791959852
+          }
+        }
+      ],
+      "error_code": "JUDGE_SCHEMA_VALIDATION",
+      "duration_ms": 162558.59450006392,
+      "case_id": "direct_arithmetic",
+      "provider": "soclaas",
+      "source_fingerprint_sha256": "47f777577810178435fd151e5fb8ae696624ac38e783aad5cf0b50237e2cf055",
+      "author_and_judge": "same configured provider/model; separate calls",
+      "correctness": "not assessed by this difficulty-only experiment"
+    },
+    {
+      "protocol_version": "difficulty-authoring-v1",
+      "generated_at": "2026-10-15T14:38:00.245070Z",
+      "brief": "Create a Python tracing MCQ involving a loop, conditional updates and an accumulator. Use a short concrete integer list and ask for the return value. Choose distractors linked to specific plausible tracing mistakes.",
+      "requested_difficulty": "medium",
+      "status": "error",
+      "attempts": [
+        {
+          "number": 1,
+          "operation": "generation",
+          "generation": {
+            "status": "error",
+            "provider": "soclaas",
+            "model": "default",
+            "provider_settings": {
+              "sampling": "provider_defaults",
+              "response_format": "json_schema",
+              "strict": true,
+              "tool_choice": "required",
+              "parallel_tool_calls": true,
+              "timeout_seconds": 240.0,
+              "max_retries": 0,
+              "tool_max_tokens": 4096,
+              "generation_max_tokens": 16384,
+              "reasoning_effort": "provider_default"
+            },
+            "prompt_version": "concrete-question-difficulty-authoring-v2",
+            "request_sha256": "d80c029e615e8cbabd3e56d500764f6526e396b2d66eff3ba930222cf49191cd",
+            "model_calls": [
+              {
+                "input_tokens": null,
+                "output_tokens": null,
+                "operation": "generation",
+                "duration_ms": 120151.57266694587,
+                "error": "AUTHOR_TRANSPORT",
+                "usage_unavailable_reason": "Provider did not report complete token usage for this call"
+              }
+            ],
+            "usage": {
+              "model_call_count": 1,
+              "unavailable_call_count": 1,
+              "input_tokens": null,
+              "output_tokens": null,
+              "reported_input_tokens": 0,
+              "reported_output_tokens": 0
+            },
+            "error_code": "AUTHOR_TRANSPORT",
+            "duration_ms": 120158.06166594848
+          },
+          "question": null,
+          "tool_output": null
+        }
+      ],
+      "error_code": "AUTHOR_TRANSPORT",
+      "duration_ms": 120159.57904199604,
+      "case_id": "conditional_state",
+      "provider": "soclaas",
+      "source_fingerprint_sha256": "47f777577810178435fd151e5fb8ae696624ac38e783aad5cf0b50237e2cf055",
+      "author_and_judge": "same configured provider/model; separate calls",
+      "correctness": "not assessed by this difficulty-only experiment"
+    },
+    {
+      "protocol_version": "difficulty-authoring-v1",
+      "generated_at": "2026-10-15T14:40:00.403882Z",
+      "brief": "Create a Python tracing MCQ with list processing and a helper function. Use several interacting state dependencies that matter to the returned value, while keeping the concrete input small enough for manual tracing. Choose distractors linked to specific plausible tracing mistakes.",
+      "requested_difficulty": "hard",
+      "status": "error",
+      "attempts": [
+        {
+          "number": 1,
+          "operation": "generation",
+          "generation": {
+            "status": "error",
+            "provider": "soclaas",
+            "model": "default",
+            "provider_settings": {
+              "sampling": "provider_defaults",
+              "response_format": "json_schema",
+              "strict": true,
+              "tool_choice": "required",
+              "parallel_tool_calls": true,
+              "timeout_seconds": 240.0,
+              "max_retries": 0,
+              "tool_max_tokens": 4096,
+              "generation_max_tokens": 16384,
+              "reasoning_effort": "provider_default"
+            },
+            "prompt_version": "concrete-question-difficulty-authoring-v2",
+            "request_sha256": "dce7bda76bea714f1c2c7e15fbaf2f62afa8fe5b243e065fce97d58f4838b5b1",
+            "model_calls": [
+              {
+                "input_tokens": null,
+                "output_tokens": null,
+                "operation": "generation",
+                "duration_ms": 120382.06637499388,
+                "error": "AUTHOR_TRANSPORT",
+                "usage_unavailable_reason": "Provider did not report complete token usage for this call"
+              }
+            ],
+            "usage": {
+              "model_call_count": 1,
+              "unavailable_call_count": 1,
+              "input_tokens": null,
+              "output_tokens": null,
+              "reported_input_tokens": 0,
+              "reported_output_tokens": 0
+            },
+            "error_code": "AUTHOR_TRANSPORT",
+            "duration_ms": 120388.70025007054
+          },
+          "question": null,
+          "tool_output": null
+        }
+      ],
+      "error_code": "AUTHOR_TRANSPORT",
+      "duration_ms": 120390.50400000997,
+      "case_id": "interacting_state",
+      "provider": "soclaas",
+      "source_fingerprint_sha256": "47f777577810178435fd151e5fb8ae696624ac38e783aad5cf0b50237e2cf055",
+      "author_and_judge": "same configured provider/model; separate calls",
+      "correctness": "not assessed by this difficulty-only experiment"
+    }
+  ],
+  "limitations": [
+    "Small integration experiment; no provider ranking or calibration.",
+    "Author and judge use the same provider/model in separate calls.",
+    "No reference-set or held-out questions are used.",
+    "One correction on too_easy, too_hard or uncertain; errors stay errors.",
+    "No correctness checks or generated-code execution are performed."
+  ]
+}
