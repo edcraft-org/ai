@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from edcraft_validator.domains.code.code_types import AnswerTarget, Difficulty
+from edcraft_validator.domains.code.difficulty_matching import compare_difficulty
 from edcraft_validator.tools.python_analysis import PythonSubsetAnalyzer
 from edcraft_validator.tools.python_execution import LocalPythonTool
 from edcraft_validator.value_comparison import equivalent, same_value_shape
@@ -434,18 +435,12 @@ class HumanReview(Record):
 def match_decision(rating: Rating, requested: Difficulty) -> str | None:
     if rating.status == "pending":
         return None
-    if rating.estimated_difficulty is None or rating.confidence == "low":
-        return "uncertain"
-    order = {"easy": 0, "medium": 1, "hard": 2}
-
-    def compare(level):
-        delta = order[level] - order[requested]
-        return "matches" if delta == 0 else "too_easy" if delta < 0 else "too_hard"
-
-    decision = compare(rating.estimated_difficulty)
-    if any(compare(level) != decision for level in rating.alternative_levels):
-        return "uncertain"
-    return decision
+    return compare_difficulty(
+        rating.estimated_difficulty,
+        requested,
+        rating.confidence,
+        rating.alternative_levels,
+    )
 
 
 def load_recommendations(

@@ -7,6 +7,54 @@ not be treated as its current pass rates.
 Historical records may use `beginner`, `intermediate`, and `advanced`. The current
 labels are `easy`, `medium`, and `hard`.
 
+## Issue 43 difficulty-tool live smoke: 15 October 2026
+
+The [advisory difficulty tool](difficulty-judging.md) was exercised through the
+full discovered MCP catalogue using OpenAI `gpt-5-mini`. Two worked-rubric MCQs
+asked for difficulty assessment without naming a tool; a correctness-only
+template request served as a control. The selector supplied tool arguments,
+the selected calls ran through MCP, and the selector consumed their results for
+a final summary. No reserved reference questions were used.
+
+The final `code-difficulty-v3` run passed all three smoke tests:
+
+| Request | Model-selected tool | Outcome | End-to-end time |
+| --- | --- | --- | --- |
+| Arithmetic MCQ, requested hard | `assess_code_difficulty` | Assessed easy; `too_easy` | 27.18 s |
+| Conditional accumulation MCQ, requested easy | `assess_code_difficulty` | Assessed medium; `too_hard` | 24.87 s |
+| Answer/distractor correctness only | `code_validate_answers_and_distractors` | Technical check passed; no difficulty call | 11.66 s |
+
+The initial v2 run selected the intended tools in all three cases, but its
+conditional-accumulation judge response failed local schema validation. The
+service returned `JUDGE_SCHEMA_VALIDATION`, retained reported tokens and timing,
+and produced no match decision. The precise validation finding was not retained
+in that initial implementation. The follow-up added field-level diagnostics that
+exclude response values and made the existing uncertainty/alternative constraints
+explicit in the response schema descriptions and prompt. Validation rules were
+not relaxed, and production did not retry or substitute a judgment. The original
+failure and the separate final run are both retained in the
+[machine-readable evidence](evidence/difficulty-tool-live-2026-10-15.json).
+
+Both runs used strict JSON schema generation, provider-default sampling, a
+120-second provider timeout, zero SDK retries, and a 120-second judge deadline
+in the test host. Selector turns used `tool_choice=required` and
+`parallel_tool_calls=true`. Therefore this tests selection among tools and
+successful dispatch, not whether a model spontaneously decides to use tools.
+The ordinary authoring workflow still exposes only its correctness tools.
+
+The evidence records the final source fingerprint, exact tool names, model and
+settings, rubric/prompt/request hashes, usage including failed calls, timings,
+assessment reasons and final summaries. Full local transcripts remain under
+ignored `.artifacts/difficulty-live/`. These tiny worked-anchor smoke tests are
+not held-out agreement measurements or learner calibration. Issue 43's empirical
+reference evaluation remains pending completion/freezing of the human references.
+
+Final offline verification: 506 tests passed, five opt-in live tests skipped;
+the three new live smoke tests passed separately. Lint, formatting, lockfile and
+diff checks passed, and a wheel build verified the bundled rubric against its
+source bytes. The separate original live authoring/provider tests were not rerun
+in this smoke experiment.
+
 ## Issue 41 rubric verification: 14 October 2026
 
 The [difficulty rubric](difficulty-rubric.md) defines `python-tracing-v0.2`,

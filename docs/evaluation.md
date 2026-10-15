@@ -114,8 +114,9 @@ override failed technical checks. The [provisional reference collection](../refe
 for issue 42 contains 30 distinct, execution-verified Python tracing MCQs and an
 AI-assisted human review form. Fifteen unchanged human decisions carry forward;
 the 15 new CRUXEval adaptations await confirmation. Technical verification is not
-a human difficulty label. The automated judge and held-out scoring are
-[issue 43](https://github.com/edcraft-org/ai/issues/43) work.
+a human difficulty label. The callable advisory judge is documented in
+[difficulty judging](difficulty-judging.md); held-out scoring and empirical
+agreement remain pending [issue 43](https://github.com/edcraft-org/ai/issues/43) work.
 
 ## What to report
 

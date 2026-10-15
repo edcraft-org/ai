@@ -21,6 +21,7 @@ All paths below are under `src/edcraft_validator/`.
 | Checking algorithms | `mcp/code_tools.py`, `mcp/code_checks/` | Structure, execution, answers, distractors, and feature detection. |
 | Question generation | `domains/code/question_generator.py`, expressions and rendering | Local expansion from saved answers and recipes. |
 | Python tools | `tools/python_analysis.py`, `tools/python_execution.py`, `tools/python_worker.py` | Supported syntax and batched tracing. |
+| Advisory difficulty | `mcp/difficulty_tools.py`, `application/code_difficulty.py`, `domains/code/difficulty.py`, `llm/judging.py` | Explicit concrete-MCQ judging, separate from technical validation. |
 
 ## Model and tool calls
 
@@ -151,6 +152,15 @@ construct another plan.
 
 The 15 historical topic/difficulty fixtures remain regression tests and evaluation
 examples. They do not restrict free-form authoring or select its checks.
+
+Advisory tools use separate tags and response contracts. In particular,
+`assess_code_difficulty` uses `quality:code`, not `domain:code`, and returns a
+`CodeDifficultyReport` rather than `ToolEvidence`. A produced assessment never
+becomes a correctness pass. See the [configuration and reporting guide](difficulty-judging.md).
+The difficulty service does not call the executor, analyser or correctness tools;
+applications combine those tools' independent outputs when needed.
+The wheel bundles the rubric document using Hatch's force-include mapping; the
+editable source tree reads the original document in `docs/`.
 
 ## Supported answer targets
 

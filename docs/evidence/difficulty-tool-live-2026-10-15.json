@@ -1,0 +1,771 @@
+{
+  "protocol": "difficulty-tool-selection-smoke-v1",
+  "recorded_at": "2026-10-15T02:41:26.148124+00:00",
+  "fingerprint_method": "SHA256 over sorted relative path + NUL + exact bytes + NUL for source_paths",
+  "source_paths": [
+    "docs/difficulty-rubric.md",
+    "examples/templates/arithmetic_linear.json",
+    "src/edcraft_validator/__init__.py",
+    "src/edcraft_validator/application/__init__.py",
+    "src/edcraft_validator/application/authoring_contracts.py",
+    "src/edcraft_validator/application/code_difficulty.py",
+    "src/edcraft_validator/application/template_workflow.py",
+    "src/edcraft_validator/artifact_contracts.py",
+    "src/edcraft_validator/cli.py",
+    "src/edcraft_validator/domains/__init__.py",
+    "src/edcraft_validator/domains/code/__init__.py",
+    "src/edcraft_validator/domains/code/candidate_builder.py",
+    "src/edcraft_validator/domains/code/code_domain.py",
+    "src/edcraft_validator/domains/code/code_schemas.py",
+    "src/edcraft_validator/domains/code/code_types.py",
+    "src/edcraft_validator/domains/code/difficulty.py",
+    "src/edcraft_validator/domains/code/difficulty_matching.py",
+    "src/edcraft_validator/domains/code/profiles.py",
+    "src/edcraft_validator/domains/code/prompt_builder.py",
+    "src/edcraft_validator/domains/code/proposal_response.py",
+    "src/edcraft_validator/domains/code/question_generator.py",
+    "src/edcraft_validator/domains/code/safe_expressions.py",
+    "src/edcraft_validator/domains/code/template_evaluator.py",
+    "src/edcraft_validator/domains/code/text_rendering.py",
+    "src/edcraft_validator/domains/domain_contract.py",
+    "src/edcraft_validator/domains/domain_registry.py",
+    "src/edcraft_validator/llm/__init__.py",
+    "src/edcraft_validator/llm/judging.py",
+    "src/edcraft_validator/llm/llm_contracts.py",
+    "src/edcraft_validator/llm/llm_errors.py",
+    "src/edcraft_validator/llm/ollama_provider.py",
+    "src/edcraft_validator/llm/openai_compatible_provider.py",
+    "src/edcraft_validator/llm/provider_registry.py",
+    "src/edcraft_validator/llm/tool_context.py",
+    "src/edcraft_validator/llm/usage.py",
+    "src/edcraft_validator/mcp/__init__.py",
+    "src/edcraft_validator/mcp/__main__.py",
+    "src/edcraft_validator/mcp/catalogue.py",
+    "src/edcraft_validator/mcp/client.py",
+    "src/edcraft_validator/mcp/code_checks/__init__.py",
+    "src/edcraft_validator/mcp/code_checks/answer_checks.py",
+    "src/edcraft_validator/mcp/code_checks/code_features.py",
+    "src/edcraft_validator/mcp/code_checks/distractor_checks.py",
+    "src/edcraft_validator/mcp/code_checks/execution_check.py",
+    "src/edcraft_validator/mcp/code_checks/structure_checks.py",
+    "src/edcraft_validator/mcp/code_checks/validation_context.py",
+    "src/edcraft_validator/mcp/code_tools.py",
+    "src/edcraft_validator/mcp/difficulty_tools.py",
+    "src/edcraft_validator/mcp/evidence.py",
+    "src/edcraft_validator/mcp/server.py",
+    "src/edcraft_validator/tools/__init__.py",
+    "src/edcraft_validator/tools/python_analysis.py",
+    "src/edcraft_validator/tools/python_execution.py",
+    "src/edcraft_validator/tools/python_worker.py",
+    "src/edcraft_validator/validation/__init__.py",
+    "src/edcraft_validator/validation/validation_contracts.py",
+    "src/edcraft_validator/value_comparison.py",
+    "tests/test_difficulty_live.py"
+  ],
+  "selection_policy": "tool_choice=required; choice of tool is model-selected from all discovered tools",
+  "scope": "Explicit difficulty requests, plus a correctness-only negative control; the ordinary authoring loop excludes advisory tools.",
+  "limitations": [
+    "Two worked rubric anchors, not held-out human references.",
+    "Tool use is required on selection turns; this does not test spontaneous tool use.",
+    "Single primary call per case/configuration; the v2 failed call remains recorded separately from the v3 rerun.",
+    "No learner calibration or judge-accuracy estimate."
+  ],
+  "runs": [
+    {
+      "configuration": "initial-v2",
+      "cases": [
+        {
+          "case": "arithmetic",
+          "provider": "openai",
+          "model": "gpt-5-mini",
+          "provider_settings": {
+            "sampling": "provider_defaults",
+            "response_format": "json_schema",
+            "strict": true,
+            "tool_choice": "required",
+            "parallel_tool_calls": true,
+            "timeout_seconds": 120.0,
+            "max_retries": 0
+          },
+          "offered_tools": [
+            "code_verify_template_structure",
+            "code_validate_answers_and_distractors",
+            "code_require_features",
+            "assess_code_difficulty"
+          ],
+          "duration_ms": 26131.018958054483,
+          "model_calls": [
+            {
+              "input_tokens": 2269,
+              "output_tokens": 380,
+              "operation": "checking",
+              "duration_ms": 5241.026417003013,
+              "error": null,
+              "usage_unavailable_reason": null
+            },
+            {
+              "input_tokens": 1704,
+              "output_tokens": 702,
+              "operation": "acknowledgement",
+              "duration_ms": 5468.904958106577,
+              "error": null,
+              "usage_unavailable_reason": null
+            }
+          ],
+          "usage": {
+            "model_call_count": 2,
+            "unavailable_call_count": 0,
+            "input_tokens": 3973,
+            "output_tokens": 1082,
+            "reported_input_tokens": 3973,
+            "reported_output_tokens": 1082
+          },
+          "final_response": "Outcome summary\n- Rubric result: assessed difficulty = easy (rubric: python-tracing-v0.2).\n- Authoring target: hard \u2192 mismatch (assessment: too_easy).\n- Confidence reported by assessor: high.\n\nWhy it was judged easy\n- Execution burden: low \u2014 only one assignment and one arithmetic return; f(3) requires two small arithmetic steps.\n- Changing state: low \u2014 a single local variable updated once.\n- Conceptual interaction: low \u2014 only basic evaluation order and integer arithmetic (addition, multiplication).\n- Answer discrimination: low \u2014 distractors map to simple, common single-step mistakes (ignore +2, swap + and *, wrong constant), so a direct mental calculation or algebraic simplification (2*x + 4) clearly separates the correct option.\n\nTypical error patterns encoded by options\n- A (6): treat function as x*2 (ignore +2).\n- B (7): compute y then add 2 (confuse + for *).\n- D (12): misread constant (use +3) or transcription error.\n\nUncertainty and limitations\n- The assessor flagged high confidence and no notable uncertainty; the assessment assumes standard integer arithmetic and straightforward tracing without additional context (e.g., novices with severe arithmetic difficulties could find it harder).\n- This difficulty assessment does not evaluate correctness of the correct_option itself (only difficulty), though the trace to option C was used to gauge ease.\n\nConclusion\n- Under the supplied rubric and conditions, this MCQ is easy, not hard as requested.",
+          "calls": [
+            {
+              "name": "assess_code_difficulty",
+              "is_error": false,
+              "status": "assessed",
+              "question_sha256": "b1198c1d54c543d386d142f66cc72540a1aa9dd079d4f28c53bd16de79bac76a",
+              "rubric_version": "python-tracing-v0.2",
+              "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+              "assessment_conditions_version": "manual-tracing-v0.1",
+              "requested_difficulty": "hard",
+              "difficulty_match": "too_easy",
+              "error_code": null,
+              "duration_ms": 15367.535750032403,
+              "judge": {
+                "status": "completed",
+                "provider": "openai",
+                "model": "gpt-5-mini",
+                "provider_settings": {
+                  "sampling": "provider_defaults",
+                  "response_format": "json_schema",
+                  "strict": true,
+                  "tool_choice": "required",
+                  "parallel_tool_calls": true,
+                  "timeout_seconds": 120.0,
+                  "max_retries": 0
+                },
+                "prompt_version": "code-difficulty-v2",
+                "request_sha256": "51432dffaaf2621032bab7acc95380c76b2915ef540d809fa996da046f840165",
+                "timeout_seconds": 120.0,
+                "assessment": {
+                  "estimated_difficulty": "easy",
+                  "dimensions": {
+                    "execution_burden": {
+                      "rating": "low",
+                      "reason": "A single assignment and a return expression: compute y = x + 2 once, then evaluate y * 2. No loops, calls, or repeated steps."
+                    },
+                    "changing_state": {
+                      "rating": "low",
+                      "reason": "Only one local variable (y) changes once. No accumulators, resets, or cross-scope dependencies."
+                    },
+                    "conceptual_interaction": {
+                      "rating": "low",
+                      "reason": "A single semantic rule sequence (assignment then arithmetic return). Only basic arithmetic and evaluation order matter."
+                    },
+                    "answer_discrimination": {
+                      "rating": "low",
+                      "reason": "Options are separated by simple arithmetic errors (off-by-constant, wrong operator). A direct short calculation distinguishes the correct choice."
+                    }
+                  },
+                  "reason": "The code performs one straightforward assignment and then returns a simple arithmetic expression. Tracing f(3) requires two small arithmetic steps and yields a unique result.",
+                  "solution_reasoning": "Compute y = x + 2 with x = 3, so y = 5. Then return y * 2 = 5 * 2 = 10. Therefore the correct option is 10 (option C).",
+                  "concepts_and_dependencies": "Evaluation order (assignment before return), integer addition and multiplication, and that the return expression uses the previously assigned local variable y. No loops, conditionals, or function calls affect the result.",
+                  "shortcuts": "Algebraic simplification: f(x) returns (x + 2) * 2 = 2*x + 4; for x = 3 this is 2*3 + 4 = 10. Or perform two quick mental steps: 3 + 2 = 5, then 5 * 2 = 10.",
+                  "nearest_anchor": "Easy arithmetic anchor from the rubric: a short sequential computation with one assignment and one arithmetic return.",
+                  "option_evidence": [
+                    {
+                      "option_id": "A",
+                      "reasoning": "Option A is 6, which is not the actual result 10. A plausible mistaken trace: multiply x by 2 immediately (3 * 2 = 6) and ignore the +2 assignment.",
+                      "hypothesised_error": "Learner computes x * 2 (3 * 2 = 6) instead of performing x + 2 then doubling; i.e., they ignore or omit the '+2' step.",
+                      "shortcut_or_cue": "Quick mental shortcut treating the function as 'return x * 2' rather than applying the intermediate assignment."
+                    },
+                    {
+                      "option_id": "B",
+                      "reasoning": "Option B is 7, not equal to the correct 10. A plausible mistaken trace: compute y = x + 2 = 5 but then return y + 2 (5 + 2 = 7) instead of multiplying y by 2.",
+                      "hypothesised_error": "Confusing the return operator (using + instead of *), i.e., returning y + 2 instead of y * 2.",
+                      "shortcut_or_cue": "Mix-up between addition and multiplication or mentally adding the constant again rather than doubling."
+                    },
+                    {
+                      "option_id": "C",
+                      "reasoning": "Option C is 10, which matches the correct trace: y = 3 + 2 = 5; return 5 * 2 = 10.",
+                      "hypothesised_error": null,
+                      "shortcut_or_cue": "Direct arithmetic or algebraic simplification (2*x + 4)."
+                    },
+                    {
+                      "option_id": "D",
+                      "reasoning": "Option D is 12, which is incorrect. A plausible mistaken trace: add the wrong constant when computing y (e.g., y = x + 3 => 6) then double to get 12.",
+                      "hypothesised_error": "Off-by-one or misreading the literal constant: using +3 instead of +2, so (3 + 3) * 2 = 12.",
+                      "shortcut_or_cue": "Careless reading of the constant in the assignment or a transcription error."
+                    }
+                  ],
+                  "confidence": "high",
+                  "alternative_levels": [],
+                  "uncertainty_reason": null,
+                  "quality_concerns": []
+                },
+                "error_code": null,
+                "model_calls": [
+                  {
+                    "input_tokens": 6012,
+                    "output_tokens": 1991,
+                    "operation": "judging",
+                    "duration_ms": 15357.629416976124,
+                    "error": null,
+                    "usage_unavailable_reason": null
+                  }
+                ],
+                "usage": {
+                  "model_call_count": 1,
+                  "unavailable_call_count": 0,
+                  "input_tokens": 6012,
+                  "output_tokens": 1991,
+                  "reported_input_tokens": 6012,
+                  "reported_output_tokens": 1991
+                },
+                "duration_ms": 15366.634666919708
+              }
+            }
+          ]
+        },
+        {
+          "case": "conditional_accumulation",
+          "provider": "openai",
+          "model": "gpt-5-mini",
+          "provider_settings": {
+            "sampling": "provider_defaults",
+            "response_format": "json_schema",
+            "strict": true,
+            "tool_choice": "required",
+            "parallel_tool_calls": true,
+            "timeout_seconds": 120.0,
+            "max_retries": 0
+          },
+          "offered_tools": [
+            "code_verify_template_structure",
+            "code_validate_answers_and_distractors",
+            "code_require_features",
+            "assess_code_difficulty"
+          ],
+          "duration_ms": 23425.2380420221,
+          "model_calls": [
+            {
+              "input_tokens": 2315,
+              "output_tokens": 296,
+              "operation": "checking",
+              "duration_ms": 3957.7882500598207,
+              "error": null,
+              "usage_unavailable_reason": null
+            },
+            {
+              "input_tokens": 937,
+              "output_tokens": 891,
+              "operation": "acknowledgement",
+              "duration_ms": 7242.763416026719,
+              "error": null,
+              "usage_unavailable_reason": null
+            }
+          ],
+          "usage": {
+            "model_call_count": 2,
+            "unavailable_call_count": 0,
+            "input_tokens": 3252,
+            "output_tokens": 1187,
+            "reported_input_tokens": 3252,
+            "reported_output_tokens": 1187
+          },
+          "final_response": "Final difficulty assessment: Easy \u2014 matches the authoring target.\n\nReasoning:\n- Code comprehension required is minimal: follow a simple for-loop over 4 items, evaluate a single boolean (x % 2 == 0) each iteration, and update one accumulator either by adding x or subtracting 1.\n- Mental work: 4 straightforward state updates (one per list element). No nested control flow, no recursion, no tricky data structures, no subtle language features.\n- Knowledge required: basic Python operators (%) and += / -= semantics, and ability to trace a small loop \u2014 standard entry-level programming skills.\n- Typical distractors map to plausible novice mistakes:\n  - Summing only evens (2+4 = 6) \u2014 option B \u2014 if reader ignores the -1 for odds.\n  - Summing all elements (10) \u2014 option D \u2014 if reader misreads the conditional.\n  - Some might incorrectly subtract the odd values instead of subtracting 1 (leading to other wrong totals).\n- Time/steps: a competent beginner can trace this in a few seconds; no significant cognitive load.\n\nUncertainty estimate: low (\u2248 <10%). Rationale: the code is short and unambiguous; misclassification risk comes mainly from reader inattention or unfamiliarity with % behavior, which are uncommon for the intended audience.\n\nNote: an automated rubric tool call was attempted but returned a schema/validation error, so this judgement is a manual assessment based on the provided \"python-tracing\" style criteria.",
+          "calls": [
+            {
+              "name": "assess_code_difficulty",
+              "is_error": false,
+              "status": "error",
+              "question_sha256": "877dc682ff160a6163dd7d3a34b58a452c6f59bfe9cd061f6714d15b772f727e",
+              "rubric_version": "python-tracing-v0.2",
+              "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+              "assessment_conditions_version": "manual-tracing-v0.1",
+              "requested_difficulty": "easy",
+              "difficulty_match": null,
+              "error_code": "JUDGE_SCHEMA_VALIDATION",
+              "duration_ms": 12188.66754102055,
+              "judge": {
+                "status": "error",
+                "provider": "openai",
+                "model": "gpt-5-mini",
+                "provider_settings": {
+                  "sampling": "provider_defaults",
+                  "response_format": "json_schema",
+                  "strict": true,
+                  "tool_choice": "required",
+                  "parallel_tool_calls": true,
+                  "timeout_seconds": 120.0,
+                  "max_retries": 0
+                },
+                "prompt_version": "code-difficulty-v2",
+                "request_sha256": "ebc855b7b0ec083ee27f04b0d3c689b99d205aaf0da7ee3338b2962f68d0ec0f",
+                "timeout_seconds": 120.0,
+                "assessment": null,
+                "error_code": "JUDGE_SCHEMA_VALIDATION",
+                "model_calls": [
+                  {
+                    "input_tokens": 6058,
+                    "output_tokens": 1655,
+                    "operation": "judging",
+                    "duration_ms": 12180.676250020042,
+                    "error": "JUDGE_SCHEMA_VALIDATION",
+                    "usage_unavailable_reason": null
+                  }
+                ],
+                "usage": {
+                  "model_call_count": 1,
+                  "unavailable_call_count": 0,
+                  "input_tokens": 6058,
+                  "output_tokens": 1655,
+                  "reported_input_tokens": 6058,
+                  "reported_output_tokens": 1655
+                },
+                "duration_ms": 12187.989125028253
+              }
+            }
+          ]
+        },
+        {
+          "case": "correctness_only",
+          "provider": "openai",
+          "model": "gpt-5-mini",
+          "provider_settings": {
+            "sampling": "provider_defaults",
+            "response_format": "json_schema",
+            "strict": true,
+            "tool_choice": "required",
+            "parallel_tool_calls": true,
+            "timeout_seconds": 120.0,
+            "max_retries": 0
+          },
+          "offered_tools": [
+            "code_verify_template_structure",
+            "code_validate_answers_and_distractors",
+            "code_require_features",
+            "assess_code_difficulty"
+          ],
+          "duration_ms": 12543.676833040081,
+          "model_calls": [
+            {
+              "input_tokens": 2385,
+              "output_tokens": 484,
+              "operation": "checking",
+              "duration_ms": 5504.579166998155,
+              "error": null,
+              "usage_unavailable_reason": null
+            },
+            {
+              "input_tokens": 1331,
+              "output_tokens": 927,
+              "operation": "acknowledgement",
+              "duration_ms": 6895.070041995496,
+              "error": null,
+              "usage_unavailable_reason": null
+            }
+          ],
+          "usage": {
+            "model_call_count": 2,
+            "unavailable_call_count": 0,
+            "input_tokens": 3716,
+            "output_tokens": 1411,
+            "reported_input_tokens": 3716,
+            "reported_output_tokens": 1411
+          },
+          "final_response": "Summary of automated check\n\n- Execution agrees with the template's answer_expression:\n  - The function calculate(a,b,c) returns a + b - c, and the answer_expression \"a + b - c\" matches the actual outputs.\n  - The tool executed all 8 parameter combinations (a in {2,4} \u00d7 b in {5,8} \u00d7 c in {1,3}) and produced these canonical answers:\n    - (2,5,1) \u2192 6\n    - (2,5,3) \u2192 4\n    - (2,8,1) \u2192 9\n    - (2,8,3) \u2192 7\n    - (4,5,1) \u2192 8\n    - (4,5,3) \u2192 6\n    - (4,8,1) \u2192 11\n    - (4,8,3) \u2192 9\n\n- Distractors:\n  - Three distractors are supplied, matching the candidate:\n    1. \"a + b + c\" \u2014 reason: Adds c instead of subtracting it.\n    2. \"a - b - c\" \u2014 reason: Subtracts both b and c from a.\n    3. \"a + b\"     \u2014 reason: Omits the final subtraction of c.\n  - For all 8 tested input combinations none of these distractor expressions evaluate to the correct result (they are distinct from a + b - c for the provided parameter ranges), so they are valid distractors.\n\nConclusion: The template's proposed correct answers match execution for all parameter combinations, and it supplies three valid, distinct distractors.",
+          "calls": [
+            {
+              "name": "code_validate_answers_and_distractors",
+              "is_error": false,
+              "status": "passed",
+              "version": "1.0.4",
+              "findings": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "configuration": "final-v3",
+      "cases": [
+        {
+          "case": "arithmetic",
+          "provider": "openai",
+          "model": "gpt-5-mini",
+          "provider_settings": {
+            "sampling": "provider_defaults",
+            "response_format": "json_schema",
+            "strict": true,
+            "tool_choice": "required",
+            "parallel_tool_calls": true,
+            "timeout_seconds": 120.0,
+            "max_retries": 0
+          },
+          "offered_tools": [
+            "code_verify_template_structure",
+            "code_validate_answers_and_distractors",
+            "code_require_features",
+            "assess_code_difficulty"
+          ],
+          "duration_ms": 27181.96041707415,
+          "model_calls": [
+            {
+              "input_tokens": 2269,
+              "output_tokens": 325,
+              "operation": "checking",
+              "duration_ms": 4688.125250046141,
+              "error": null,
+              "usage_unavailable_reason": null
+            },
+            {
+              "input_tokens": 1811,
+              "output_tokens": 567,
+              "operation": "acknowledgement",
+              "duration_ms": 5155.267708003521,
+              "error": null,
+              "usage_unavailable_reason": null
+            }
+          ],
+          "usage": {
+            "model_call_count": 2,
+            "unavailable_call_count": 0,
+            "input_tokens": 4080,
+            "output_tokens": 892,
+            "reported_input_tokens": 4080,
+            "reported_output_tokens": 892
+          },
+          "final_response": "Assessment result (rubric): Easy \u2014 does not meet the authoring target.\n\nComparison to authoring target:\n- Author requested: hard\n- Assessed difficulty: easy (tool labeled outcome \"too_easy\")\n\nWhy (concise reasoning):\n- Very low execution burden: evaluate y = x + 2 (3 + 2 = 5) then return y * 2 (5 * 2 = 10). Only two simple arithmetic operations, no control flow, no side effects, no nested calls.\n- Low state/change complexity: only x and a single local y assigned once.\n- Low conceptual interaction: a single straightforward semantic rule (assignment then arithmetic).\n- Low answer discrimination: distractors are simple, common arithmetic/mis-grouping mistakes but easy to rule out by quick mental arithmetic.\n- Correct option is C (10); deriving it requires only immediate arithmetic or a trivial algebraic shortcut.\n\nUncertainty / confidence:\n- Confidence in the assessment is high (little ambiguity in tracing this code). The only realistic variability would come from unusual constraints (e.g., testing absolute beginners who cannot do small integer arithmetic), but under normal programming-education assumptions the item is clearly easy.",
+          "calls": [
+            {
+              "name": "assess_code_difficulty",
+              "is_error": false,
+              "status": "assessed",
+              "question_sha256": "b1198c1d54c543d386d142f66cc72540a1aa9dd079d4f28c53bd16de79bac76a",
+              "rubric_version": "python-tracing-v0.2",
+              "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+              "assessment_conditions_version": "manual-tracing-v0.1",
+              "requested_difficulty": "hard",
+              "difficulty_match": "too_easy",
+              "error_code": null,
+              "duration_ms": 17284.090749919415,
+              "judge": {
+                "status": "completed",
+                "provider": "openai",
+                "model": "gpt-5-mini",
+                "provider_settings": {
+                  "sampling": "provider_defaults",
+                  "response_format": "json_schema",
+                  "strict": true,
+                  "tool_choice": "required",
+                  "parallel_tool_calls": true,
+                  "timeout_seconds": 120.0,
+                  "max_retries": 0
+                },
+                "prompt_version": "code-difficulty-v3",
+                "request_sha256": "6fb441a4ed38382b52a4dce60a853dde5c5d6d61799ce6c851eeb142fed31eb8",
+                "timeout_seconds": 120.0,
+                "assessment": {
+                  "estimated_difficulty": "easy",
+                  "dimensions": {
+                    "execution_burden": {
+                      "rating": "low",
+                      "reason": "Trace requires one assignment (y = x + 2) and one arithmetic return (y * 2). Two simple operations with no control flow or repeated updates."
+                    },
+                    "changing_state": {
+                      "rating": "low",
+                      "reason": "Only two local values are relevant (x, then y). y is assigned once and used immediately; there are no loops, resets, or multiple dependent updates."
+                    },
+                    "conceptual_interaction": {
+                      "rating": "low",
+                      "reason": "A single semantic rule (assignment and subsequent arithmetic) governs the result. No interactions between constructs (no loops, conditionals, or calls)."
+                    },
+                    "answer_discrimination": {
+                      "rating": "low",
+                      "reason": "Distinguishing the correct option requires a single short arithmetic evaluation. Distractors correspond to simple, common arithmetic/ordering mistakes that are easy to check by hand."
+                    }
+                  },
+                  "reason": "A direct sequential evaluation: compute y = 3 + 2 = 5, then return 5 * 2 = 10. All required reasoning is immediate arithmetic with no control flow or state tracking beyond one local variable.",
+                  "solution_reasoning": "Evaluate y = x + 2 with x = 3, so y = 5. Then return y * 2 = 10. Therefore f(3) returns 10.",
+                  "concepts_and_dependencies": "Key concepts: assignment, evaluation order (assignment happens before the multiplication uses y), and basic integer arithmetic. No loops, conditionals, function-call nesting, or side effects are involved.",
+                  "shortcuts": "Compute (x + 2) first in your head (3 + 2 = 5) then double it (5 * 2 = 10). Alternatively, expand (x + 2) * 2 = 2*x + 4 and compute 2*3 + 4 = 10. Either shortcut avoids tracing unrelated states.",
+                  "nearest_anchor": "Easy arithmetic anchor (the provided easy example): a short sequential evaluation producing 10 with only one assignment and one arithmetic expression.",
+                  "option_evidence": [
+                    {
+                      "option_id": "A",
+                      "reasoning": "Incorrect. Value 6 would arise from multiplying x by 2 (3 * 2 = 6) and ignoring the added 2. Plausibility: hypothesised as a common error where the student applies *2 to x instead of to (x + 2).",
+                      "hypothesised_error": "Multiply x by 2 first (compute x * 2 = 6) and ignore the +2, i.e. mis-ordering operations or confusing which value is doubled.",
+                      "shortcut_or_cue": "Numeric closeness to correct answer; treating the *2 as directly on x instead of on y."
+                    },
+                    {
+                      "option_id": "B",
+                      "reasoning": "Incorrect. Value 7 could come from computing x + (2 * 2) = 3 + 4 = 7, i.e. applying the *2 to the literal 2 rather than to the sum (x + 2). Plausibility: hypothesised as a parenthesis/precedence mistake or misplaced grouping.",
+                      "hypothesised_error": "Compute x + (2 * 2) instead of (x + 2) * 2, perhaps by incorrectly distributing or misreading the expression grouping.",
+                      "shortcut_or_cue": "Misapplied operator precedence or mentally computing the multiplication on the constant first."
+                    },
+                    {
+                      "option_id": "C",
+                      "reasoning": "Correct. y = x + 2 = 5, then return y * 2 = 10. Matches straightforward sequential evaluation.",
+                      "hypothesised_error": null,
+                      "shortcut_or_cue": "Direct evaluation or using algebraic expansion (2*x + 4) both yield 10."
+                    },
+                    {
+                      "option_id": "D",
+                      "reasoning": "Incorrect. Value 12 might arise from computing x * (2 + 2) = 3 * 4 = 12 or otherwise misgrouping the operations. Plausibility: hypothesised as a grouping or substitution error that applies multiplication to x with an incorrect factor.",
+                      "hypothesised_error": "Incorrect grouping such as computing x * 4 (interpreting the expression as x * (2 + 2) or similar), rather than evaluating (x + 2) * 2.",
+                      "shortcut_or_cue": "Confusing which terms are multiplied or treating the constant 2 twice as a multiplier on x."
+                    }
+                  ],
+                  "confidence": "high",
+                  "alternative_levels": [],
+                  "uncertainty_reason": null,
+                  "quality_concerns": []
+                },
+                "error_code": null,
+                "validation_errors": [],
+                "model_calls": [
+                  {
+                    "input_tokens": 6117,
+                    "output_tokens": 2341,
+                    "operation": "judging",
+                    "duration_ms": 17271.8139589997,
+                    "error": null,
+                    "usage_unavailable_reason": null
+                  }
+                ],
+                "usage": {
+                  "model_call_count": 1,
+                  "unavailable_call_count": 0,
+                  "input_tokens": 6117,
+                  "output_tokens": 2341,
+                  "reported_input_tokens": 6117,
+                  "reported_output_tokens": 2341
+                },
+                "duration_ms": 17283.01729192026
+              }
+            }
+          ]
+        },
+        {
+          "case": "conditional_accumulation",
+          "provider": "openai",
+          "model": "gpt-5-mini",
+          "provider_settings": {
+            "sampling": "provider_defaults",
+            "response_format": "json_schema",
+            "strict": true,
+            "tool_choice": "required",
+            "parallel_tool_calls": true,
+            "timeout_seconds": 120.0,
+            "max_retries": 0
+          },
+          "offered_tools": [
+            "code_verify_template_structure",
+            "code_validate_answers_and_distractors",
+            "code_require_features",
+            "assess_code_difficulty"
+          ],
+          "duration_ms": 24867.243082961068,
+          "model_calls": [
+            {
+              "input_tokens": 2315,
+              "output_tokens": 296,
+              "operation": "checking",
+              "duration_ms": 3393.423791974783,
+              "error": null,
+              "usage_unavailable_reason": null
+            },
+            {
+              "input_tokens": 1960,
+              "output_tokens": 900,
+              "operation": "acknowledgement",
+              "duration_ms": 6711.787999956869,
+              "error": null,
+              "usage_unavailable_reason": null
+            }
+          ],
+          "usage": {
+            "model_call_count": 2,
+            "unavailable_call_count": 0,
+            "input_tokens": 4275,
+            "output_tokens": 1196,
+            "reported_input_tokens": 4275,
+            "reported_output_tokens": 1196
+          },
+          "final_response": "Summary outcome\n- Assessed difficulty: Medium (rubric: \"conditional accumulation / loop with if/else updating an accumulator\").\n- Authoring target: Easy.\n- Match: Does not match \u2014 assessment categorizes the item as too hard relative to the requested \"easy\".\n\nWhy it was rated Medium\n- Execution burden: Moderate \u2014 the student must follow four loop iterations and update one accumulator each time (trace of per-iteration totals suffices).\n- Changing state: Moderate \u2014 a single persistent variable (total) is updated each iteration and its value must be carried forward.\n- Conceptual interaction: Moderate \u2014 two simple rules (parity test x % 2 == 0; two different updates) interact each iteration.\n- Answer discrimination: Moderate \u2014 distractors map to common simple mistakes (e.g., summing only evens, summing all values, flipping the sign for odds). Distinguishing the correct answer requires applying the conditional across each element or using a small algebraic shortcut (sum of evens minus count of odds).\n- Nearest rubric anchor: \"Medium conditional accumulation\" (loop + conditional + accumulator).\n\nReasoning / brief trace that informed the rating\n- Trace: start total = 0\n  - x=1 (odd): total = -1\n  - x=2 (even): total = 1\n  - x=3 (odd): total = 0\n  - x=4 (even): total = 4\n- Equivalent shortcut: sum(evens) - count(odds) = (2+4) - 2 = 4.\n- Distractor plausibility: 6 = sum of evens; 8 = sum(evens)+count(odds) (sign error); 10 = sum of all elements (ignore conditional).\n\nUncertainty / caveats\n- Confidence reported by the assessor: high. The moderate/medium ratings are consistent across rubric dimensions.\n- Remaining uncertainty depends on the intended student population and item framing:\n  - For novices who struggle with modulo (%) or carrying state through loops, this could be harder than Medium.\n  - For students practiced at tracing small loops or who spot the algebraic shortcut, this could feel Easy.\n- The assessment is about cognitive difficulty under the rubric; it does not evaluate option correctness beyond noting which answer follows from a correct trace.\n\nBottom line\n- Under the rubric, label this item Medium difficulty. That does not match the author's \"easy\" target (assessment: too_hard).",
+          "calls": [
+            {
+              "name": "assess_code_difficulty",
+              "is_error": false,
+              "status": "assessed",
+              "question_sha256": "877dc682ff160a6163dd7d3a34b58a452c6f59bfe9cd061f6714d15b772f727e",
+              "rubric_version": "python-tracing-v0.2",
+              "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+              "assessment_conditions_version": "manual-tracing-v0.1",
+              "requested_difficulty": "easy",
+              "difficulty_match": "too_hard",
+              "error_code": null,
+              "duration_ms": 14742.372708045878,
+              "judge": {
+                "status": "completed",
+                "provider": "openai",
+                "model": "gpt-5-mini",
+                "provider_settings": {
+                  "sampling": "provider_defaults",
+                  "response_format": "json_schema",
+                  "strict": true,
+                  "tool_choice": "required",
+                  "parallel_tool_calls": true,
+                  "timeout_seconds": 120.0,
+                  "max_retries": 0
+                },
+                "prompt_version": "code-difficulty-v3",
+                "request_sha256": "7099ee13baa9c43f6524dc33bf35dd17736e8f307ed32152b6fcb38f9435ada6",
+                "timeout_seconds": 120.0,
+                "assessment": {
+                  "estimated_difficulty": "medium",
+                  "dimensions": {
+                    "execution_burden": {
+                      "rating": "moderate",
+                      "reason": "The trace requires following four loop iterations and updating a single accumulator each time. A small organised trace (per-iteration subtotal) suffices; no deep nesting or many context switches."
+                    },
+                    "changing_state": {
+                      "rating": "moderate",
+                      "reason": "One persistent variable (total) changes across iterations and depends on previous updates. The dependency chain is short (total <- total +/- something each iteration) but must be carried forward across all iterations."
+                    },
+                    "conceptual_interaction": {
+                      "rating": "moderate",
+                      "reason": "Two simple semantic rules interact each iteration: parity test (x % 2 == 0) chooses which update to apply, and that update modifies the running accumulator. These rules are coupled but straightforward."
+                    },
+                    "answer_discrimination": {
+                      "rating": "moderate",
+                      "reason": "Distractors correspond to plausible single-rule mistakes (e.g., summing only evens, summing all values, or applying the wrong sign for odds). Distinguishing them requires applying the conditional update across each iteration rather than a single global shortcut, but no complex coordination is needed."
+                    }
+                  },
+                  "reason": "The code iterates four times, applying a parity check each iteration and updating a single accumulator (total) by either adding the even value or subtracting one for an odd value. This matches the medium anchor: a conditional accumulation over a short sequence.",
+                  "solution_reasoning": "Start total = 0. Iterate x over [1,2,3,4]:\n- x=1 (odd): total -= 1 -> total = -1\n- x=2 (even): total += 2 -> total = 1\n- x=3 (odd): total -= 1 -> total = 0\n- x=4 (even): total += 4 -> total = 4\nReturn value is 4.",
+                  "concepts_and_dependencies": "Relevant concepts: for-loop iteration, modulo operator for parity (x % 2 == 0), conditional branching (if/else), and a running accumulator (total) that persists across loop iterations. The parity test selects which update to apply each iteration; the accumulator's final value depends on the sequence of chosen updates. A useful algebraic shortcut: final total = sum(even elements) - count(odd elements).",
+                  "shortcuts": "Rather than tracing every step, compute sum of evens (2 + 4 = 6) and subtract the number of odds (there are two odds) to get 6 - 2 = 4. This yields the answer faster for this input.",
+                  "nearest_anchor": "Medium conditional accumulation (same as the rubric's example: a loop with a conditional that updates an accumulator).",
+                  "option_evidence": [
+                    {
+                      "option_id": "A",
+                      "reasoning": "Correct. Following the loop yields -1, 1, 0, 4 as intermediate totals; final result 4. Also obtainable by sum(evens) - count(odds) = 6 - 2 = 4.",
+                      "hypothesised_error": null,
+                      "shortcut_or_cue": "Sum of even elements minus count of odd elements is a quick computation that directly yields 4."
+                    },
+                    {
+                      "option_id": "B",
+                      "reasoning": "Incorrect. The value 6 equals the sum of the even elements (2 + 4 = 6).",
+                      "hypothesised_error": "Treating the else branch as a no-op (i.e., ignoring the '-= 1' for odd x) and only summing even values.",
+                      "shortcut_or_cue": "A student might quickly compute the sum of evens and pick that without applying the odd-case decrement."
+                    },
+                    {
+                      "option_id": "C",
+                      "reasoning": "Incorrect. The value 8 arises if one mistakenly adds 1 for each odd element instead of subtracting 1: sum(evens) + count(odds) = 6 + 2 = 8, or by tracing with wrong sign for odd updates.",
+                      "hypothesised_error": "Using '+= 1' for odd x rather than '-= 1', i.e., flipping the sign in the else branch.",
+                      "shortcut_or_cue": "A student misreading the else branch or confusing the sign could compute sum(evens) then add the number of odds."
+                    },
+                    {
+                      "option_id": "D",
+                      "reasoning": "Incorrect. The value 10 is the sum of all elements (1 + 2 + 3 + 4 = 10).",
+                      "hypothesised_error": "Ignoring the conditional entirely and summing all elements (or treating both branches as 'total += x').",
+                      "shortcut_or_cue": "A quick arithmetic check of the list sum could cue this distractor if the conditional is overlooked."
+                    }
+                  ],
+                  "confidence": "high",
+                  "alternative_levels": [],
+                  "uncertainty_reason": null,
+                  "quality_concerns": []
+                },
+                "error_code": null,
+                "validation_errors": [],
+                "model_calls": [
+                  {
+                    "input_tokens": 6163,
+                    "output_tokens": 2208,
+                    "operation": "judging",
+                    "duration_ms": 14738.646375015378,
+                    "error": null,
+                    "usage_unavailable_reason": null
+                  }
+                ],
+                "usage": {
+                  "model_call_count": 1,
+                  "unavailable_call_count": 0,
+                  "input_tokens": 6163,
+                  "output_tokens": 2208,
+                  "reported_input_tokens": 6163,
+                  "reported_output_tokens": 2208
+                },
+                "duration_ms": 14742.160166963004
+              }
+            }
+          ]
+        },
+        {
+          "case": "correctness_only",
+          "provider": "openai",
+          "model": "gpt-5-mini",
+          "provider_settings": {
+            "sampling": "provider_defaults",
+            "response_format": "json_schema",
+            "strict": true,
+            "tool_choice": "required",
+            "parallel_tool_calls": true,
+            "timeout_seconds": 120.0,
+            "max_retries": 0
+          },
+          "offered_tools": [
+            "code_verify_template_structure",
+            "code_validate_answers_and_distractors",
+            "code_require_features",
+            "assess_code_difficulty"
+          ],
+          "duration_ms": 11659.823708003387,
+          "model_calls": [
+            {
+              "input_tokens": 2385,
+              "output_tokens": 542,
+              "operation": "checking",
+              "duration_ms": 4800.095874932595,
+              "error": null,
+              "usage_unavailable_reason": null
+            },
+            {
+              "input_tokens": 1331,
+              "output_tokens": 1015,
+              "operation": "acknowledgement",
+              "duration_ms": 6731.129958061501,
+              "error": null,
+              "usage_unavailable_reason": null
+            }
+          ],
+          "usage": {
+            "model_call_count": 2,
+            "unavailable_call_count": 0,
+            "input_tokens": 3716,
+            "output_tokens": 1557,
+            "reported_input_tokens": 3716,
+            "reported_output_tokens": 1557
+          },
+          "final_response": "I ran a validation of the template. Results:\n\n1) Code vs answer expression\n- The function calculate(a,b,c) returns a + b - c; the answer_expression is also a + b - c. They match.\n\n2) Canonical answers (for all 2\u00d72\u00d72 parameter combinations)\n- (a=2,b=5,c=1) \u2192 6\n- (a=2,b=5,c=3) \u2192 4\n- (a=2,b=8,c=1) \u2192 9\n- (a=2,b=8,c=3) \u2192 7\n- (a=4,b=5,c=1) \u2192 8\n- (a=4,b=5,c=3) \u2192 6\n- (a=4,b=8,c=1) \u2192 11\n- (a=4,b=8,c=3) \u2192 9\n\nThese are exactly the results produced by executing the provided code.\n\n3) Distractor validation\n- Three distractors are present (required = 3), matching the requirement.\n- Distractor expressions:\n  - a + b + c (reason: \"Adds c instead of subtracting it.\")\n  - a - b - c (reason: \"Subtracts both b and c from a.\")\n  - a + b     (reason: \"Omits the final subtraction of c.\")\n- Each distractor yields a numeric value different from the correct a + b - c for every tested parameter combination (no distractor equals the correct answer in any of the 8 cases), and each reason correctly describes the corresponding mistaken computation.\n\nConclusion\n- The proposed answer_expression agrees with execution.\n- The template supplies three valid, distinct distractors with accurate reason templates. No technical issues found.",
+          "calls": [
+            {
+              "name": "code_validate_answers_and_distractors",
+              "is_error": false,
+              "status": "passed",
+              "version": "1.0.4",
+              "findings": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "final_source_fingerprint_sha256": "07ad682fc80f2fd2609f21dd3f17db664ce67fdaec4b411fa6b44162249354d2"
+}
