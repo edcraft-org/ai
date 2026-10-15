@@ -1,0 +1,72 @@
+{
+  "protocol_version": "single-label-difficulty-dataset-evaluation-v2",
+  "generated_at": "2026-10-15T15:54:25.392753+00:00",
+  "dataset_id": "python-tracing-evaluation-2026-10-15",
+  "dataset_sha256": "fe1a31cf08c6c1ec8457336332b0e4fa79f1c1e6422fdab5b0a771a9d7bddd2a",
+  "dataset_revision": "7df7e77",
+  "followup_of": "strict-difficulty-2026-10-15",
+  "judge_revision": "701ddea5d93f19ebc4f19eebdf01339c1dd7f582",
+  "source_sha256": "d3f2dfd261249ad0c96fc8f9831605d37908f1547540a0122be471127fedc771",
+  "rubric_version": "python-tracing-v0.2",
+  "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+  "prompt_version": "code-difficulty-v5-single-label",
+  "response_schema_sha256": "8662c389dc673db9874153fc740cc4602932ad96fd730ad467ccda9bea17f24f",
+  "providers": [
+    {
+      "provider": "openai",
+      "model": "gpt-5-mini",
+      "settings": {
+        "sampling": "provider_defaults",
+        "response_format": "json_schema",
+        "strict": true,
+        "tool_choice": "required",
+        "parallel_tool_calls": true,
+        "timeout_seconds": 240.0,
+        "max_retries": 0
+      }
+    },
+    {
+      "provider": "soclaas",
+      "model": "default",
+      "settings": {
+        "sampling": "provider_defaults",
+        "response_format": "json_schema",
+        "strict": true,
+        "tool_choice": "required",
+        "parallel_tool_calls": true,
+        "timeout_seconds": 240.0,
+        "max_retries": 0,
+        "tool_max_tokens": 4096,
+        "generation_max_tokens": 16384,
+        "reasoning_effort": "provider_default"
+      }
+    }
+  ],
+  "judge_timeout_seconds": 250.0,
+  "policy": {
+    "initial_assessments_per_item_per_provider": 1,
+    "max_correction_attempts": 3,
+    "repair_policy": "Diagnostic repairs/retries only after invalid outputs or operational failures. Stop at the first valid assessment; no reference label is supplied or used for retries.",
+    "question_corrections": 0,
+    "remote_concurrency": 3,
+    "local_concurrency": 1,
+    "hidden_fields": [
+      "difficulty",
+      "dimensions",
+      "difficulty_reason",
+      "solution",
+      "topic",
+      "split",
+      "provenance",
+      "question_id"
+    ],
+    "scoring": "Primary estimate exact agreement; errors and unknowns count as nonmatches over all items. Also retain single-label comparison against the reference. First-pass and post-repair results are reported separately.",
+    "family_grouping": "Explicit family_id if present, otherwise question_id; final 30-item set contains distinct underlying code families.",
+    "original_authoring_target_metrics": "Unavailable: final dataset omits original requested levels and reference match decisions. Do not fabricate false-acceptance/rejection or 4x4 decision confusion.",
+    "eligibility": "All approved questions included; no additional correctness checks or execution.",
+    "human_agreement": "AI-assisted single-human reference; independent human-human agreement unavailable.",
+    "held_out": "Configuration frozen before all calls. Prior v2 seed questions and AI recommendations exist in branch history; this is not an untouched external benchmark. No within-run replacements or prompt tuning. A followup_of value identifies a requested repeat of an inspected collection, not fresh confirmatory validation.",
+    "alpha": "Two-rater ordinal Krippendorff alpha with pooled marginal midrank distances, implementation in this runner v1; unknowns omitted from pairs.",
+    "intervals": "2000 whole-family percentile bootstrap replicates; random.Random seed 43."
+  }
+}

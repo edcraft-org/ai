@@ -7,6 +7,137 @@ not be treated as its current pass rates.
 Historical records may use `beginner`, `intermediate`, and `advanced`. The current
 labels are `easy`, `medium`, and `hard`.
 
+## Single-label judgments and three corrections, 15–16 October 2026
+
+Runtime revision `701ddea` selects the closest single easy/medium/hard level for
+a complete question. It removes alternative levels and the comparison outcome
+`uncertain`; `unable_to_assess` remains available when essential information is
+missing. It permits one initial judge call plus up to three corrective calls
+after invalid output or operational failure. Repairs receive sanitized error
+diagnostics and the unchanged MCQ. A valid label ends the repair loop, including
+a valid disagreement with the reference. The separate authoring operation can
+make up to three question/generation corrections, preserving its brief and target.
+
+The prompts are `code-difficulty-v5-single-label` and
+`concrete-question-difficulty-authoring-v3`. Both providers used the shared strict
+JSON-schema path, 240-second provider timeouts, 250-second per-call application
+deadlines and zero SDK retries. OpenAI used `gpt-5-mini`; SocLaas used alias
+`default` and its existing generation budget. These identities and provider-specific
+settings are recorded before calls. The original rubric and dataset bytes are
+unchanged. No correctness checks or code execution were added.
+
+### Fixed dataset: accuracy versus response recovery
+
+Each provider assessed all 30 approved MCQs through MCP, with reference labels,
+dimensions, explanations, solutions, topic, split and IDs hidden. This repeat is
+registered as a follow-up to `strict-difficulty-2026-10-15` on the same inspected
+collection, with the original 18/12 split. It is regression evidence, not fresh
+confirmatory validation. Errors and null estimates count as nonmatches in the
+all-item accuracy denominator.
+
+| Provider | Previous primary agreement | New first-pass agreement | After repairs | Held-out agreement, before → after | First-pass invalid reports → final failures |
+| --- | --- | --- | --- | --- | --- |
+| OpenAI | 16/30 (53.3%) | 20/30 (66.7%) | 20/30 (66.7%) | 8/12 → 8/12 | 0 → 0 |
+| SocLaas | 12/30 (40.0%) | 15/30 (50.0%) | 19/30 (63.3%) | 6/12 → 9/12 | 6 → 0 |
+
+SocLaas made nine corrective judge calls across six MCQs, all for option-evidence
+coverage mismatches. Four recovered on the first correction, one on the second,
+and `cruxeval-752` needed all three corrections. Four recovered labels agreed with
+the reference; two disagreed. OpenAI needed no repairs. Both providers ultimately
+labelled all 30 questions, with no abstentions or severe easy/hard disagreements.
+OpenAI still disagreed on ten items and SocLaas on eleven. The full three-correction
+budget therefore recovered a real response failure without guaranteeing a correct
+difficulty judgment.
+
+Accuracy remains uneven across levels. OpenAI matched 12/13 easy, 6/11 medium
+and 2/6 hard references. SocLaas matched 13/13 easy, 2/11 medium and 4/6 hard
+references. The overall rates therefore conceal substantial medium/hard errors;
+response validity and full decision coverage do not make the labels reliable.
+
+The paired comparison has six newly correct and two newly incorrect OpenAI items,
+and seven newly correct and zero newly incorrect SocLaas items. Coverage explains
+part of the improvement: among the same 28 items OpenAI labelled in the previous
+run, agreement rose from 16 to 19; among SocLaas's previous 19 labelled items, it
+rose from 12 to 13. The remaining gains came from previously failed or null items.
+The prompt, response schema and repair policy changed together, and service
+conditions and sampling can vary, so this single repeat cannot isolate causality.
+
+Removing alternatives also changes the meaning of a confirmed match. Rescoring
+the previous saved primary labels under the single-label rule, without model
+calls or label changes, raises confirmed matches from 9 to 16 for OpenAI and 8 to
+12 for SocLaas while leaving classification accuracy unchanged. That policy-only
+effect is archived separately from the new judgments and repair gains.
+
+Final ordinal alpha is 0.671 for OpenAI and 0.636 for SocLaas, based on all 30
+paired labels each. Family bootstrap 95% intervals for overall exact agreement
+are 50.0–83.3% and 46.7–80.0% respectively. The small AI-assisted, single-human
+reference is not learner-calibrated and does not establish general reliability.
+The dataset experiment made 69 application calls, all with reported usage:
+418,210 input and 141,360 output tokens. This is nine more calls than a one-pass
+60-call evaluation; it does not measure request cost at a fixed historical rate.
+
+### Generate, assess and correct
+
+The separate authoring experiment uses the same three easy, medium and hard briefs
+as the preceding strict-schema run, with fresh questions and up to three corrections
+per job. It does not use reference-set questions. Author and judge use the same
+configured provider/model in separate calls, so target agreement is distinct from
+accuracy against human labels.
+
+| Provider | Initial target matches | Correction stages | Changed accepted MCQs | Corrected jobs reaching a target match | Final outcomes |
+| --- | --- | ---: | ---: | --- | --- |
+| OpenAI | 2/3 | 1 | 1 | 1/1 | 3 matches |
+| SocLaas | 1/3 | 6 | 2 | 0/2 | 1 match, 1 unable to assess, 1 mismatch |
+
+OpenAI's easy and medium questions matched immediately. Its initial hard question
+was judged medium; the first correction added interacting history/buffer state
+and changed the input, and reassessment selected hard. No judge output repairs
+were needed for OpenAI's four accepted question versions.
+
+SocLaas's easy question matched immediately. Its medium case used all four author
+stages: transport failure, invalid response, transport failure, then an accepted
+JSON question containing a 1,227-character function signature without a body.
+The judge returned `unable_to_assess` because the implementation was missing. This
+is an explicit missing-information outcome, not a target match or a completed
+question. The earlier failed author responses remain in the history.
+
+SocLaas's hard case was easy, followed by a failed generation, then easy and medium
+on its two subsequent accepted versions. It never reached hard. Its first code
+string had malformed newline/separator text and inconsistent supplied input versus
+stem data. Later code strings were 19,999 and 4,483 characters of incomplete
+function signatures. The judge rated the algorithms described in the stems and
+recorded quality concerns, despite those incomplete code fields. Those labels do
+not establish complete or correct generated questions. Pure difficulty assessment
+continues to provide no correctness guarantee, and strict JSON shape does not
+ensure the generation brief was fulfilled.
+
+The hard case also needed one repair for its initial assessment and all three
+repairs for its final assessment (transport failure, two option-evidence failures,
+then a valid medium label). Thus the larger budget recovered assessment failures
+but did not resolve the authoring-target mismatch. Three failed SocLaas author
+calls ended as transport errors after approximately 120 seconds despite the
+240-second configured provider timeout. Stored records retain categories rather
+than HTTP response bodies, so the upstream reason remains unestablished.
+
+The workflow made 26 application calls across six jobs and 13 author stages:
+eight OpenAI calls and eighteen SocLaas calls. OpenAI reported 32,673 input and
+23,403 output tokens. SocLaas reported known partial totals of 70,925 input and
+42,425 output tokens; four failed calls have unavailable usage, so its complete
+totals remain null. Across both experiments there were 95 application calls,
+including thirteen corrective judge calls and seven author correction stages.
+The bounded retries increase latency and usage; they do not guarantee resolution.
+
+Full questions, every correction and tool report, failure histories, frozen
+settings, paired old/new records, the policy-only rescore and checksums are in
+[the evidence archive](evidence/single-label-difficulty-2026-10-15/).
+An offline audit reconstructed all 82 judge and 13 author request hashes,
+including cumulative diagnostic and preceding-question feedback, verified attempt
+bounds and target/reference blinding, checked unchanged dataset/rubric/source
+hashes and provider settings, regenerated both summaries and scanned JSON evidence
+for configured credentials. Aggregate usage includes every history entry without
+counting the final `judge` alias twice. Validation: **486 tests passed**, five
+opt-in live tests skipped; lint, formatting and diff checks passed.
+
 ## Shared strict schema: complete workflow and dataset follow-up, 15 October 2026
 
 OpenAI and SocLaas now both default to the shared strict JSON-schema response
