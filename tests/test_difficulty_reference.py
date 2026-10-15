@@ -679,3 +679,34 @@ def test_committed_partial_review_and_transfer_audit_replay_exactly():
         saved_audit["source_review_file_sha256"]
         == reference.hashlib.sha256(original_path.read_bytes()).hexdigest()
     )
+
+
+def test_completed_human_reference_and_comparison_are_bound_to_original_export():
+    directory = reference.DEFAULT_SET
+    questions, manifest = reference.load_set(directory)
+    metadata = manifest["completed_review"]
+    path = directory / metadata["path"]
+    original = reference.read_json(path)
+    review, _, _, _ = reference.validate_review(directory, original)
+    assert manifest["review_status"] == "completed_assisted_single_human_review"
+    assert len(questions) == metadata["reviewed_count"] == 30
+    assert metadata["pending_count"] == 0
+    assert all(r.status == "reviewed" for r in review.ratings)
+    assert Counter(r.human_decision for r in review.ratings) == {
+        "approved": 27,
+        "corrected": 3,
+    }
+    assert reference.digest(original) == metadata["review_sha256"]
+    assert (
+        reference.hashlib.sha256(path.read_bytes()).hexdigest()
+        == metadata["source_file_sha256"]
+    )
+    report = reference.compare_review(directory, original)
+    assert report == reference.read_json(directory / metadata["comparison_path"])
+    assert report["independent_reference"] is False
+    assert report["observed_learner_performance"] is None
+    assert Counter(item["difficulty_match"] for item in report["comparisons"]) == {
+        "matches": 13,
+        "too_easy": 3,
+        "uncertain": 14,
+    }

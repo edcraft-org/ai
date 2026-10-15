@@ -746,7 +746,8 @@ def main() -> None:
                     "families": len({e["family_id"] for e in manifest["items"]}),
                     "splits": dict(Counter(e["split"] for e in manifest["items"])),
                     "topics": dict(Counter(e["topic"] for e in manifest["items"])),
-                    "human_ratings": "pending; not supplied by technical checks",
+                    "human_ratings": "not assessed by technical checks; "
+                    "validate the separate human review",
                 },
                 indent=2,
             )

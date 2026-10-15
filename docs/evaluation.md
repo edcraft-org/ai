@@ -112,9 +112,11 @@ independently, then compare it with the requested level to report `matches`,
 estimates and learner performance. Difficulty evidence is advisory and cannot
 override failed technical checks. The [provisional reference collection](../reference_sets/python_tracing_v2/README.md)
 for issue 42 contains 30 distinct, execution-verified Python tracing MCQs and an
-AI-assisted human review form. Fifteen unchanged human decisions carry forward;
-the 15 new CRUXEval adaptations await confirmation. Technical verification is not
-a human difficulty label. The automated judge and held-out scoring are
+AI-assisted human review form. Keith completed all 30 ratings on 2026-10-15:
+27 approvals and three corrections; the original export and comparison are
+versioned with the collection. Fourteen requested-level comparisons retain
+uncertainty; none is an unfinished review. Technical verification is not a human
+difficulty label. The automated judge and held-out scoring are
 [issue 43](https://github.com/edcraft-org/ai/issues/43) work.
 
 ## What to report

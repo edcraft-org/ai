@@ -25,7 +25,10 @@ select on the human difficulty label. The 15 excluded siblings are also listed i
 `robustness-variants.json` for optional within-family checks. They are excluded
 from the primary set and its independent-item counts.
 
-**15 ratings carry forward; 15 new items still need Keith's confirmation.** Only
+**Keith completed all 30 ratings on 2026-10-15: 27 approvals and three corrections.**
+The [final original export](reviews/keith-2026-10-15-final.json) is preserved
+byte-for-byte, alongside the [requested-level comparison](reviews/comparison-2026-10-15.json).
+Fifteen earlier ratings carried forward; all 15 new items have now been reviewed. Only
 unchanged complete questions with exact unchanged AI proposals are eligible for
 carry-forward. Original human notes, confidence, alternatives and both corrections
 are preserved; opaque question numbers may change. The initial partial review and
@@ -79,8 +82,12 @@ collection remains separate from the 15 frozen authoring requests in `profiles.p
 - `ai-recommendations.json`: separate Codex proposals, reasons, concepts, solutions,
   option explanations, shortcuts and uncertainty for all 30 questions.
 - `reviews/keith-2026-10-15-carried.json`: initial partial v2 review, 15 confirmed and
-  15 pending. It does not replace Keith's eventual exported review.
+  15 pending. Retained as history, not the current completed reference.
 - `reviews/carry-forward.json`: source-review hash and per-item transfer audit.
+- `reviews/keith-2026-10-15-final.json`: original completed human export; all 30
+  items reviewed, with no recorded question-quality concerns.
+- `reviews/comparison-2026-10-15.json`: reproducible comparison with the original
+  authoring requests, bound to the exact final review hash.
 
 The 15 new proposals are provisional. In particular, growing-string indexing can
 be answered from the first two updates with these options, pair-counting admits
@@ -90,21 +97,44 @@ The recursive string question has a proposed `hard` level with `medium` retained
 as an alternative. Retained human corrections can differ from the AI proposals.
 No category balance is imposed. Difficulty is not a sum of dimension ratings.
 
-## Verify and continue reviewing
+## Completed review and uncertainty
+
+The primary human estimates are **16 easy, 11 medium and three hard**. Development
+contains 11 easy, six medium and one hard; the reserved subset contains five easy,
+five medium and two hard. These are primary estimates, not unambiguous labels:
+the reviewer retained adjacent alternatives on several items.
+
+Against the original authoring requests, 13 comparisons are `matches`, three
+`too_easy` and 14 `uncertain`. An alternative produces `uncertain` when it would
+change the comparison decision. None of these 14 items is pending. These counts
+compare curator intentions with human-checked judgments; they are **not runtime
+judge accuracy, held-out judge performance or learner calibration**. Q14 records
+`hard` both as its primary estimate and alternative. That redundant entry is
+preserved exactly and does not change the comparison.
+
+The three corrections include both transferred v1 decisions and Keith's new Q14
+correction to `hard`. Human reasons remain separate from AI explanations; neither
+is silently rewritten to make the two agree. All question, option and proposal
+contents remain unchanged by recording the completed review.
+
+## Verify or reproduce the review workflow
 
 From the repository root:
 
 ```bash
 uv run python scripts/difficulty_reference.py verify
 uv run python scripts/difficulty_reference.py validate-review \
-  reference_sets/python_tracing_v2/reviews/keith-2026-10-15-carried.json
+  reference_sets/python_tracing_v2/reviews/keith-2026-10-15-final.json
 ```
 
 The CLI defaults to v2. Use `--set reference_sets/python_tracing_v1` before the
 command to validate historical v1 records. Evidence and all review hashes are
 version-specific; do not copy old opaque question numbers into a new packet.
 
-Reproduce the initial partial review in a **new** output directory:
+To inspect the completed record in a **new** output directory, copy the original
+final export to `review.json` there and run `prepare-review --assisted`. Do not
+overwrite existing saved reviews. The historical initial partial review can also
+be reproduced in a **new** output directory:
 
 ```bash
 uv run python scripts/difficulty_reference.py carry-review \
@@ -117,7 +147,7 @@ uv run python scripts/difficulty_reference.py prepare-review \
 
 `carry-review` refuses to overwrite an existing review. `prepare-review` preserves
 a saved review of the same format. Open the generated `review.html` and use
-**Next unreviewed** to visit the 15 new questions. The form starts at the first
+**Next unreviewed** to visit pending questions. The form starts at the first
 pending item and shows that earlier decisions were retained. Approve, correct or
 mark uncertain; only corrections/abstentions need a short human note. Requested
 levels remain hidden. Save using **Download ratings** or **Show ratings JSON**.
@@ -129,12 +159,12 @@ review formats are still accepted. AI-assisted records cannot be relabelled as
 independent blind human judgments. Carry-forward requires the same rubric,
 conditions, assistance disclosure and exact per-item proposals.
 
-After all new decisions are completed, preserve the exported original JSON as a
-new dated review record, validate it, and only then create a comparison:
+To reproduce the frozen comparison without changing the archived report:
 
 ```bash
 uv run python scripts/difficulty_reference.py compare-review \
-  /path/to/exported-review.json --output .artifacts/reference-comparison-v2.json
+  reference_sets/python_tracing_v2/reviews/keith-2026-10-15-final.json \
+  --output .artifacts/reference-comparison-v2.json
 ```
 
 The comparison rejects pending or stale reviews and keeps requested difficulty
@@ -145,7 +175,7 @@ performance. Human–human agreement and learner correctness/timing/option-selec
 data remain unavailable. A reviewer unexposed to the proposals is needed for an
 independent human benchmark.
 
-Issue 42 stays open until the 15 new human decisions and any question repairs are
-recorded. Runtime judging and held-out scoring remain issue 43 work: tune only on
+Issue 42's collection and human-review evidence are complete; PR #83 is ready for
+review. Runtime judging and held-out scoring remain issue 43 work: tune only on
 development families and freeze the judge before reserved scoring. If reserved
 results inform tuning, disclose that inspection and use fresh reserved families.

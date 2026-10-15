@@ -6,7 +6,7 @@
   "assessment_conditions_version": "manual-tracing-v0.1",
   "source_revision": "82e06b5491cec8ab013fe4086c84b4170658824c",
   "created_date": "2026-10-15",
-  "review_status": "partial_assisted_human_review",
+  "review_status": "completed_assisted_single_human_review",
   "observed_learner_performance": null,
   "split_policy": "Retained families keep their v1 split. New source families were assigned before their AI recommendations: nine development and six reserved. This revision follows the v1 human review; no judge tuning has occurred. Family variants are excluded from the primary set.",
   "items": [
@@ -834,5 +834,18 @@
   "one_question_per_family": true,
   "selection_policy": "Retain both human-corrected questions. Otherwise prefer the sibling without a repetition concern, then the -01 sibling. Selection does not use the human difficulty level. External seeds were screened for supported constructs and distinct reasoning patterns, not source difficulty labels.",
   "duplication_policy": "One primary MCQ per family. Reject AST clones after removing formatting, bound identifier names and literal values; preserve operators, built-ins and statement structure. A separate curator review checks reasoning patterns. Neither screen proves semantic uniqueness.",
-  "previous_set_version": "python-tracing-reference-v1"
+  "previous_set_version": "python-tracing-reference-v1",
+  "completed_review": {
+    "path": "reviews/keith-2026-10-15-final.json",
+    "reviewer_id": "keith",
+    "review_date": "2026-10-15",
+    "review_sha256": "a2c6dd75f8cdf0e4b25c76d5cc69661c03fc1160c6cd2dd84abba8b8dee8203d",
+    "source_file_sha256": "ad2ce99b43e3fd7bccc248336a71200d5c7d3e237cb9a9dc49c761bd87773e27",
+    "comparison_path": "reviews/comparison-2026-10-15.json",
+    "reviewed_count": 30,
+    "pending_count": 0,
+    "reference_type": "ai_assisted_single_human_reviewer",
+    "independent_reference": false,
+    "notes": "Original export retained verbatim, including Q14 repeating its primary hard level as an alternative. This redundant alternative does not change the comparison."
+  }
 }
