@@ -90,6 +90,7 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
         == "code_validate_answers_and_distractors"
     )
     assert [tool["name"] for tool in report.attempts[1].tool_catalogue] == [
+        "code_assess_template_difficulty",
         "code_require_features",
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",
@@ -206,6 +207,7 @@ def test_evaluation_retains_catalogue_when_model_generation_fails() -> None:
     attempt = report.attempts[0]
     assert attempt.failure_stage == "generation"
     assert [tool["name"] for tool in attempt.tool_catalogue] == [
+        "code_assess_template_difficulty",
         "code_require_features",
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",
@@ -284,7 +286,7 @@ def test_evaluation_attributes_failure_to_the_final_attempt():
     assert attempt.failure_code == "DISTRACTOR_SELECTION_FAILED"
     assert report.summary.failure_counts == {"DISTRACTOR_SELECTION_FAILED": 1}
     history = attempt.authoring_result.attempts
-    assert len(history) == 3
+    assert len(history) == 4
     assert (
         history[0].executions[0].evidence.findings[0].code == "PROPOSED_ANSWER_MISMATCH"
     )

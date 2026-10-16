@@ -39,6 +39,13 @@ jobs:
       OPENAI_MODEL: gpt-5-mini
       OPENAI_TIMEOUT_SECONDS: "120"
       OPENAI_MAX_RETRIES: "0"
+      SOCLAAS_API_KEY: ${{ secrets.SOCLAAS_API_KEY }}
+      SOCLAAS_BASE_URL: https://soclaas-api.comp.nus.edu.sg/v1
+      SOCLAAS_MODEL: default
+      SOCLAAS_TIMEOUT_SECONDS: "55"
+      SOCLAAS_MAX_RETRIES: "0"
+      SOCLAAS_RESPONSE_FORMAT: json_schema
+      EDCRAFT_DIFFICULTY_PROVIDER: soclaas
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -49,10 +56,14 @@ jobs:
           enable-cache: true
       - run: uv lock --check
       - run: uv sync --locked
-      - name: Require OpenAI API secret
+      - name: Require live workflow API secrets
         run: |
           if [ -z "$OPENAI_API_KEY" ]; then
             echo "::error::OPENAI_API_KEY repository secret is not configured"
+            exit 1
+          fi
+          if [ -z "$SOCLAAS_API_KEY" ]; then
+            echo "::error::SOCLAAS_API_KEY repository secret is not configured"
             exit 1
           fi
       - name: Evaluate live OpenAI template checking

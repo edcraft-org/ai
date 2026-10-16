@@ -7,13 +7,13 @@ import json
 
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
-    CodeTemplateProposal,
+    CodeTemplateContent,
     CodeTemplateRequest,
 )
 
 
 def build_code_candidate(
-    request: CodeTemplateRequest, proposal: CodeTemplateProposal
+    request: CodeTemplateRequest, proposal: CodeTemplateContent
 ) -> CodeTemplateCandidate:
     """Build the canonical code template from a model proposal."""
     identity_payload = json.dumps(
@@ -33,7 +33,7 @@ def build_code_candidate(
         parameters=proposal.parameters,
         question_template=proposal.question_template,
         answer_target=proposal.answer_target,
-        answer_expression=proposal.answer_expression,
+        answer_expression=getattr(proposal, "answer_expression", None),
         distractors=proposal.distractors,
         question_type="mcq",
     )

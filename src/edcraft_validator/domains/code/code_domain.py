@@ -9,7 +9,7 @@ from edcraft_validator.domains.code.candidate_builder import build_code_candidat
 from edcraft_validator.domains.code.code_schemas import (
     CodeQuestionInstance,
     CodeTemplateCandidate,
-    CodeTemplateProposal,
+    CodeTemplateContent,
     CodeTemplateRequest,
     DistractorRecipe,
     TemplateValidationSummary,
@@ -22,6 +22,10 @@ from edcraft_validator.domains.code.prompt_builder import (
 )
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
 from edcraft_validator.domains.code.question_generator import generate_code_question
+from edcraft_validator.domains.code.template_difficulty import (
+    TEMPLATE_DIFFICULTY_TOOL,
+    template_sha256,
+)
 from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     StructuredGenerationRequest,
@@ -37,6 +41,18 @@ class CodeDomain:
     request_model = CodeTemplateRequest
     candidate_model = CodeTemplateCandidate
     validated_model = ValidatedCodeTemplate
+
+    @staticmethod
+    def revision_contract(proposal, attempt):
+        from edcraft_validator.domains.code.template_revision import revision_contract
+
+        return revision_contract(proposal, attempt)
+
+    @staticmethod
+    def merge_revision(proposal, revised):
+        from edcraft_validator.domains.code.template_revision import merge_revision
+
+        return merge_revision(proposal, revised)
 
     def generation_request(
         self, request: BaseModel
@@ -54,7 +70,7 @@ class CodeDomain:
     ) -> CodeTemplateCandidate:
         return build_code_candidate(
             _require_type(request, CodeTemplateRequest),
-            _require_type(proposal, CodeTemplateProposal),
+            _require_type(proposal, CodeTemplateContent),
         )
 
     def tool_bindings(self, request, candidate, tool_name):
@@ -121,14 +137,24 @@ class CodeDomain:
             recipe not in template.distractors for recipe in selected
         ):
             raise ValueError("Selected distractors are not checked proposal recipes")
+        reusable = template.model_copy(
+            update={
+                "answer_expression": None,
+                "distractors": selected,
+                "eligible_inputs": semantic.details.get("eligible_inputs"),
+            },
+            deep=True,
+        )
+        reusable = CodeTemplateCandidate.model_validate_json(reusable.model_dump_json())
+        difficulty = next(
+            (item for item in evidence if item.tool == TEMPLATE_DIFFICULTY_TOOL), None
+        )
+        if difficulty is not None and difficulty.details.get(
+            "template_sha256"
+        ) != template_sha256(reusable):
+            raise ValueError("Difficulty evidence belongs to a different template")
         return ValidatedCodeTemplate(
-            template=template.model_copy(
-                update={
-                    "answer_expression": None,
-                    "distractors": selected,
-                },
-                deep=True,
-            ),
+            template=reusable,
             validation=TemplateValidationSummary(
                 validator_version="mcp-code-template-v1",
                 cases_validated=len(cases),
@@ -138,12 +164,33 @@ class CodeDomain:
                         check=item.tool,
                         status="passed",
                         duration_ms=item.duration_ms,
-                        details={"tool_version": item.version},
+                        issues=[finding.model_dump() for finding in item.findings],
+                        details={
+                            "tool_version": item.version,
+                            **(
+                                item.details
+                                if item.tool == TEMPLATE_DIFFICULTY_TOOL
+                                else {
+                                    key: item.details[key]
+                                    for key in (
+                                        "eligible_case_count",
+                                        "excluded_case_count",
+                                        "sampling_policy",
+                                    )
+                                    if key in item.details
+                                }
+                            ),
+                        },
                     )
                     for item in evidence
                 ],
             ),
         )
+
+    def checked_tool_bindings(self, request, candidate, tool_name, evidence):
+        """Assess exactly the reusable template produced by correctness checks."""
+        checked = self.finalize_checked_template(candidate, evidence)
+        return {"candidate": checked.template.model_dump(mode="json")}
 
     def generate_question(
         self, validated: BaseModel, *, seed: int

@@ -29,6 +29,7 @@ class CodeValidationContext:
     proposed_answers: list[Any] = field(default_factory=list)
     executions: list[ExecutionResult] = field(default_factory=list)
     canonical_answers: list[Any] = field(default_factory=list)
+    eligible_indices: list[int] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         # Checks may replace recipes; caller-owned candidates remain untouched.
@@ -40,6 +41,7 @@ class CodeValidationContext:
                 *(parameter.values for parameter in self.template.parameters)
             )
         ]
+        self.eligible_indices = list(range(len(self.inputs_cases)))
 
     @property
     def case_details(self) -> dict[str, int]:

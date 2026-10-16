@@ -8,8 +8,18 @@ The same saved template and seed produce the same question without another AI ca
 
 You can request a template using a free-form prompt and an `easy`, `medium`, or
 `hard` difficulty. The model chooses checks, receives their results, and revises
-failed templates. It gets three total attempts: the first proposal and up to two
+failed templates. It gets four total attempts: the first proposal and up to three
 revisions.
+
+Code proposals use an array of indented Python lines in model responses, then
+normalize to ordinary source text for checking and reuse. Authors receive the
+checker's level definitions without extra worked examples. When only distractors
+fail, revisions contain recipes and parameter values; the application preserves
+the program, question wording and function interface. Difficulty mismatches allow
+a coherent full revision. Author generation/revision calls allow one additional
+attempt for connection failures or transient HTTP errors; invalid content and
+timeouts are not retried. Difficulty checks remain single-pass. OpenAI/SocLaas check plans constrain names
+to the available catalogue instead of allowing invented names.
 
 You can also edit a template candidate, check it again, and generate questions from
 the saved result. This works through the library and command line. The new AI
@@ -41,18 +51,25 @@ Enabled thinking may require a larger `OLLAMA_NUM_PREDICT` budget.
 Always select a provider with `--provider`. Use `--model` to override its configured
 model. OpenAI, Ollama, and SocLaas are available providers. SocLaas uses the
 OpenAI-compatible interface with `SOCLAAS_API_KEY`, `SOCLAAS_BASE_URL`, and
-`SOCLAAS_MODEL`. SocLaas defaults to JSON mode with the response schema included
-in the prompt; local schema validation and all template checks still apply.
-Set `SOCLAAS_RESPONSE_FORMAT=json_schema` to use strict structured output.
+`SOCLAAS_MODEL`. OpenAI and SocLaas both default to strict JSON-schema output.
+Local schema validation and all template checks still apply.
+`SOCLAAS_RESPONSE_FORMAT=json_object` explicitly opts into the weaker JSON mode
+for endpoints without strict-schema support; its schema is supplied in the prompt.
 `SOCLAAS_REASONING_EFFORT=default` leaves reasoning to the model; an explicit value
 such as `none` or `medium` is sent when configured. The default request timeout is
 300 seconds. Generation and tool/acknowledgement output budgets are 16384 and 4096
 tokens; adjust `SOCLAAS_GENERATION_MAX_TOKENS` and `SOCLAAS_TOOL_MAX_TOKENS` as needed.
 These budgets must cover reasoning and the final response.
-Every provider is asked to batch all pending checks in one native-tool response.
+Every provider is asked to batch the current stage's checks in one native-tool response.
 The application executes each returned call, collects its evidence, and requests
 only checks still pending if the batch is incomplete. Corrections start after the
-whole selected plan finishes. Owned arguments and every returned call are validated.
+stage finishes. Owned arguments and every returned call are validated.
+The template difficulty check runs after correctness passes, using the selected
+distractors and the effective collision-free parameter combinations. SocLaas
+estimates the typical instance. A mismatch at confidence 0.80 or higher feeds
+back to the authoring model for up to three template revisions; a lower-confidence
+mismatch returns a warning with both labels. Confidence is a provisional self-estimate. A failed judge response ends the job without
+retrying the check. Configure SocLaas even when OpenAI authors the template.
 
 ## Create a template
 
@@ -65,7 +82,7 @@ uv run python -m edcraft_validator.cli author \
   --template-output /tmp/reusable-template.json
 ```
 
-One job produces one report, even when it takes three attempts. Each attempt stores
+One job produces one report, even when it takes four attempts. Each attempt stores
 its candidate once, followed by its tool arguments and results. The report also
 contains the request, model settings, selected checks, timings, per-call token usage,
 model-call count, and a reusable
@@ -82,7 +99,11 @@ existing file at that path is left unchanged.
 | `needs_review` | Checking failed or required answer data is missing. |
 | `error` | The workflow could not finish. |
 
-`checked` means the technical checks passed. Human approval is a later workflow step.
+`checked` means all selected checks passed their policy. Inspect `warnings` and
+`difficulty_match`: a low-confidence mismatch can pass with an advisory warning.
+A difficulty match is an advisory rubric
+estimate, independent of correctness and learner calibration. Inspect `fixed_plan`
+to see which checks the model selected. Human approval is a later workflow step.
 The command exits with 0 for success, 2 for an unsuccessful recorded result, or 1
 for an input or provider-creation failure. Initial generation and MCP setup failures
 produce recorded `error` results with available usage and timing.
@@ -142,7 +163,8 @@ uv run python -m edcraft_validator.cli validate \
 ```
 
 `validate` checks the supplied candidate once. It does not rewrite it. If you change
-code or parameter values, update the answer and distractor expressions as needed.
+code or parameter values, update distractor expressions as needed. New proposals
+use execution-derived answers; a supplied legacy answer expression is still checked.
 Generate questions from the new artifact after checking succeeds.
 
 ## Supported questions
@@ -154,11 +176,19 @@ Generate questions from the new artifact after checking succeeds.
   or integer lists. Each parameter has two to four values, with at most 64 total
   combinations.
 - Two or three wrong-answer options, distinct from the correct answer and each other
-  across every allowed input combination.
+  across every eligible input combination. Collision filtering must retain at least
+  two combinations and half the original domain.
 
 Imports, file access, networking, and other unsupported Python features
-are rejected. Difficulty is currently the requested label; technical checking does
-not measure educational difficulty or question quality.
+are rejected. The template retains its requested difficulty label. When selected,
+the SocLaas difficulty check compares that label with an advisory estimate for a
+typical instance; it does not establish measured learner difficulty.
+
+The explicitly invoked [`assess_code_difficulty` MCP tool](docs/difficulty-judging.md)
+adds a separate provisional LLM assessment of a complete concrete MCQ. It records
+one closest difficulty label, reasons, model usage and comparison in a single
+assessment call. Failed checks return errors without correction or reassessment.
+Difficulty checks use SocLaas only, with no provider fallback.
 
 ## Tests
 

@@ -50,6 +50,12 @@ def generate_code_question(
         )
         for parameter in template.parameters
     }
+    if template.eligible_inputs is not None:
+        inputs = copy.deepcopy(
+            _seeded_choice(
+                template.eligible_inputs, template.template_id, seed, "eligible"
+            )
+        )
     names = tuple(inputs)
     answer = copy.deepcopy(answers_by_inputs[_case_key(inputs)])
     distractors = [
@@ -84,9 +90,9 @@ def _case_key(inputs: dict[str, ParameterValue]) -> str:
     return json.dumps(inputs, sort_keys=True, separators=(",", ":"))
 
 
-def _seeded_choice(
-    values: list[ParameterValue], digest: str, seed: int, name: str
-) -> ParameterValue:
+def _seeded_choice[ValueT](
+    values: list[ValueT], digest: str, seed: int, name: str
+) -> ValueT:
     payload = f"{digest}:{seed}:{name}".encode()
     index = int.from_bytes(hashlib.sha256(payload).digest()[:8], "big") % len(values)
     return values[index]

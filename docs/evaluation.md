@@ -119,17 +119,14 @@ six hard. Each question has one fixed `difficulty` label, four dimension ratings
 a topic and a development/reserved split (18/12). These assignments are frozen;
 judge outputs and later model disagreements must never rewrite them.
 
-The dataset is prepared for future model evaluation. Evaluation helpers, scoring
-and dataset-specific tests are deferred. The human-approved `difficulty` categories and
-dimension ratings are the authoritative reference. The dataset retains the
-questions, answers, difficulty reasons and solution explanations; review notes,
-alternative ratings and execution logs are omitted. Earlier datasets and review
-history remain in Git. This remains
-an AI-assisted, single-human reference, not independent human agreement or
-learner calibration.
-Technical verification is not a human
-difficulty label. The automated judge and held-out scoring are
-[issue 43](https://github.com/edcraft-org/ai/issues/43) work.
+The human-approved `difficulty` categories and dimension ratings are the
+authoritative reference. When evaluating the advisory judge, send only the MCQ
+content; keep reference labels, dimensions, reasons and solutions hidden. Count
+failed assessments as nonmatches and report valid-only agreement separately.
+The dataset remains an AI-assisted, single-human reference, not independent
+human agreement or learner calibration. Technical verification is not a human
+difficulty label. See [difficulty judging](difficulty-judging.md) for the tool
+contract; record evaluation results in the pull request.
 
 ## What to report
 
