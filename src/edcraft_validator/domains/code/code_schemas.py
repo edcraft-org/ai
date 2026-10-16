@@ -183,14 +183,14 @@ class CodeTemplateContent(BaseModel):
 
 
 class CodeTemplateProposal(CodeTemplateContent):
-    """Legacy proposals may supply an answer expression, which is still checked."""
+    """Compatibility proposal: an explicit answer expression is still checked."""
 
-    answer_expression: str = Field(min_length=1)
+    answer_expression: str | None = Field(default=None, min_length=1)
 
     @field_validator("answer_expression")
     @classmethod
-    def reject_blank_answer(cls, value: str) -> str:
-        if not value.strip():
+    def reject_blank_answer(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
             raise ValueError("must not be blank")
         return value
 

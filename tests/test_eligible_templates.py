@@ -13,6 +13,7 @@ from edcraft_validator.domains.code.code_schemas import (
     DistractorRecipe,
     TemplateValidationError,
     ValidatedCodeTemplate,
+    parse_code_template_proposal,
 )
 from edcraft_validator.domains.code.difficulty import load_code_difficulty_rubric
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
@@ -58,6 +59,9 @@ def test_author_schema_has_no_answer_or_application_owned_domain():
     )
     proposal = CodeProposalResponse.model_validate(value)
     assert "answer_expression" not in proposal.model_dump()
+    canonical = parse_code_template_proposal(json.dumps(proposal.model_dump()))
+    assert canonical.answer_expression is None
+    assert canonical.code == proposal.code
     with pytest.raises(ValidationError, match="Extra inputs"):
         CodeProposalResponse.model_validate(value | {"answer_expression": "a + b"})
 
