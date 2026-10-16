@@ -39,7 +39,7 @@ from edcraft_validator.tools.python_execution import PythonExecutionTool
 from edcraft_validator.validation.validation_contracts import ValidationFailure
 from edcraft_validator.value_comparison import equivalent
 
-CODE_TOOL_VERSION = "1.0.5"
+CODE_TOOL_VERSION = "1.1.0"
 STATIC_TOOL_TIMEOUT_SECONDS = 5.0
 
 
@@ -115,10 +115,12 @@ def register_code_validation_tools(
             "Select this tool when canonical answers and usable MCQ distractors must "
             "be established. It checks the template, executes every finite parameter "
             f"case in an isolated worker with a {timeout_seconds:g}-second per-case "
-            "timeout, compares the proposed answer with traced execution, then checks "
-            "that enough model-proposed distractors are distinct, type-compatible, "
-            "and never equal the answer. A wrong proposed answer or insufficient "
-            "valid distractors fails the call; no correction or fallback is inserted. "
+            "timeout and derives answers from execution. Legacy supplied answer "
+            "expressions are compared with execution. It selects model-proposed "
+            "distractors maximizing collision-free input coverage, requiring at "
+            "least two combinations and half the domain. Collisions are excluded "
+            "from the eligible sampling set; invalid code, expressions and answer "
+            "types still fail. No correction or fallback distractor is inserted. "
             "Evidence is exhaustive only over the declared finite parameter domain. "
             "Recursion is supported when every finite input case completes within "
             "the execution limits. Execution uses the supported Python subset and "
@@ -298,22 +300,24 @@ def validate_answers_and_distractors(
     ExecutionCheck(execution_tool, timeout_seconds).run(context)
     check_canonical_answers(context)
 
-    mismatches = [
-        {
-            "inputs": copy.deepcopy(inputs),
-            "proposed": copy.deepcopy(proposed),
-            "actual": copy.deepcopy(actual),
-            "trace_summary": copy.deepcopy(execution.trace_summary),
-        }
-        for inputs, proposed, actual, execution in zip(
-            context.inputs_cases,
-            context.proposed_answers,
-            context.canonical_answers,
-            context.executions,
-            strict=True,
-        )
-        if not equivalent(proposed, actual)
-    ]
+    mismatches = []
+    if context.proposed_answer is not None:
+        mismatches = [
+            {
+                "inputs": copy.deepcopy(inputs),
+                "proposed": copy.deepcopy(proposed),
+                "actual": copy.deepcopy(actual),
+                "trace_summary": copy.deepcopy(execution.trace_summary),
+            }
+            for inputs, proposed, actual, execution in zip(
+                context.inputs_cases,
+                context.proposed_answers,
+                context.canonical_answers,
+                context.executions,
+                strict=True,
+            )
+            if not equivalent(proposed, actual)
+        ]
     if mismatches:
         raise ValidationFailure(
             "The proposed answer disagrees with traced execution for "
@@ -330,6 +334,15 @@ def validate_answers_and_distractors(
     check_distractors(context)
     return {
         **context.case_details,
+        "eligible_inputs": (
+            [copy.deepcopy(context.inputs_cases[i]) for i in context.eligible_indices]
+            if len(context.eligible_indices) != len(context.inputs_cases)
+            else None
+        ),
+        "eligible_case_count": len(context.eligible_indices),
+        "excluded_case_count": len(context.inputs_cases)
+        - len(context.eligible_indices),
+        "sampling_policy": "uniform_eligible_combinations-v1",
         "canonical_answers": [
             {
                 "inputs": copy.deepcopy(inputs),

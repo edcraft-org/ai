@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, SerializeAsAny
 
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.llm.usage import ModelCallRecord, ModelUsageSummary
-from edcraft_validator.mcp.evidence import ToolEvidence
+from edcraft_validator.mcp.evidence import ToolEvidence, ToolFinding
 
 FailureStage = Literal[
     "configuration",
@@ -43,7 +43,7 @@ class CheckExecution(BaseModel):
             evidence = self.evidence.model_dump(
                 mode="json", include={"status", "findings", "details"}
             )
-            if self.evidence.status == "passed":
+            if self.evidence.status == "passed" and not self.evidence.findings:
                 evidence.pop("details")
         return {"tool": self.tool, "error": self.error, "evidence": evidence}
 
@@ -85,6 +85,7 @@ class AuthoringResult(BaseModel):
     attempts: list[GenerationAttempt] = Field(default_factory=list)
     artifact: SerializeAsAny[ValidatedTemplateArtifact] | None = None
     reason: str | None = None
+    warnings: list[ToolFinding] = Field(default_factory=list)
 
 
 class AuthoringFailure(ValueError):

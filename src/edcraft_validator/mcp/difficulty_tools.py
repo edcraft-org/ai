@@ -79,7 +79,7 @@ def register_difficulty_tools(
 
     @server.tool(
         name="code_assess_template_difficulty",
-        version="1.0.0",
+        version="1.1.0",
         tags={"domain:code", "quality:code", "stage:after-validation"},
         annotations={
             "readOnlyHint": True,
@@ -90,12 +90,16 @@ def register_difficulty_tools(
         description=(
             "Assess the difficulty of a reusable Python tracing MCQ template. "
             "Select this check when authoring or validating a template with a target "
-            "difficulty. SocLaas estimates the typical instance across the entire "
-            "finite parameter domain, with independent uniform parameter values, "
+            "difficulty. SocLaas estimates the typical instance across the "
+            "effective domain: uniform eligible combinations when supplied, "
+            "otherwise independent uniform parameter values, "
             "using code, question pattern, answer target and distractor recipes. "
             "The declared level is hidden from the judge and compared afterwards. "
-            "Passed means the advisory estimate matches the target; failed means "
-            "a mismatch or missing information. Reports parameter-dependent variation. "
+            "Passed means a match or a low-confidence advisory mismatch; inspect "
+            "difficulty_match and decision. A mismatch at self-reported confidence "
+            "0.80 or higher fails and requests author revision; this confidence "
+            "threshold is provisional, not calibrated accuracy. Missing essential "
+            "information also fails. Reports parameter-dependent variation. "
             "One judge call, no check corrections or retries. Does not execute code "
             "or verify correctness; use separate correctness tools. May incur cost."
         ),

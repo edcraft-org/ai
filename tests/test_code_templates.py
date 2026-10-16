@@ -902,7 +902,9 @@ def test_rejects_a_distractor_that_is_correct_for_any_case() -> None:
     value = template().model_dump()
     value["distractors"][0]["expression"] = "a + b - c"
 
-    with pytest.raises(TemplateValidationError, match="equals the answer") as error:
+    with pytest.raises(
+        TemplateValidationError, match="enough collision-free cases"
+    ) as error:
         validate_code(
             CodeTemplateCandidate.model_validate(value),
             execution_tool=ArithmeticExecutor(),
@@ -910,7 +912,6 @@ def test_rejects_a_distractor_that_is_correct_for_any_case() -> None:
 
     assert error.value.code == "DISTRACTOR_SELECTION_FAILED"
     assert error.value.field == "distractors"
-    assert "candidate 0" in str(error.value)
 
 
 def test_distractor_selection_is_not_dependent_on_greedy_candidate_order() -> None:
@@ -981,7 +982,7 @@ def test_authoring_plan_evaluates_each_candidate_once_per_case(monkeypatch) -> N
     assert set(evaluation_counts.values()) == {1}
 
 
-def test_candidate_selection_rejects_pairwise_collisions_without_fallbacks() -> None:
+def test_selection_filters_partial_collisions_without_fallbacks() -> None:
     value = template().model_dump(mode="json")
     value["distractors"] = [
         {"expression": "0", "reason_template": "Uses zero."},
@@ -994,10 +995,15 @@ def test_candidate_selection_rejects_pairwise_collisions_without_fallbacks() -> 
     item = CodeTemplateCandidate.model_validate(value)
 
     original = item.model_copy(deep=True)
-    with pytest.raises(TemplateValidationError) as error:
-        validate_code(item, execution_tool=ArithmeticExecutor(), num_distractors=2)
-    assert error.value.code == "DISTRACTOR_SELECTION_FAILED"
+    validated = validate_code(
+        item, execution_tool=ArithmeticExecutor(), num_distractors=2
+    )
     assert item == original
+    assert len(validated.template.eligible_inputs) == 6
+    for seed in range(100):
+        question = generate_code_question(validated, seed).question
+        assert len(set(question.distractors)) == 2
+        assert question.proposed_answer not in question.distractors
 
 
 def test_selection_rejects_invalid_model_distractors_without_fallbacks() -> None:

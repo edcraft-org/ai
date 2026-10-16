@@ -65,9 +65,10 @@ The application executes each returned call, collects its evidence, and requests
 only checks still pending if the batch is incomplete. Corrections start after the
 stage finishes. Owned arguments and every returned call are validated.
 The template difficulty check runs after correctness passes, using the selected
-distractors and the complete finite parameter domains. SocLaas estimates the
-typical instance with independent, uniformly sampled parameter values. A mismatch
-feeds back into template revision. A failed judge response ends the job without
+distractors and the effective collision-free parameter combinations. SocLaas
+estimates the typical instance. A mismatch at confidence 0.80 or higher feeds
+back to the authoring model for up to three template revisions; a lower-confidence
+mismatch returns a warning with both labels. Confidence is a provisional self-estimate. A failed judge response ends the job without
 retrying the check. Configure SocLaas even when OpenAI authors the template.
 
 ## Create a template
@@ -98,7 +99,9 @@ existing file at that path is left unchanged.
 | `needs_review` | Checking failed or required answer data is missing. |
 | `error` | The workflow could not finish. |
 
-`checked` means all selected checks passed. A difficulty match is an advisory rubric
+`checked` means all selected checks passed their policy. Inspect `warnings` and
+`difficulty_match`: a low-confidence mismatch can pass with an advisory warning.
+A difficulty match is an advisory rubric
 estimate, independent of correctness and learner calibration. Inspect `fixed_plan`
 to see which checks the model selected. Human approval is a later workflow step.
 The command exits with 0 for success, 2 for an unsuccessful recorded result, or 1
@@ -160,7 +163,8 @@ uv run python -m edcraft_validator.cli validate \
 ```
 
 `validate` checks the supplied candidate once. It does not rewrite it. If you change
-code or parameter values, update the answer and distractor expressions as needed.
+code or parameter values, update distractor expressions as needed. New proposals
+use execution-derived answers; a supplied legacy answer expression is still checked.
 Generate questions from the new artifact after checking succeeds.
 
 ## Supported questions
@@ -172,7 +176,8 @@ Generate questions from the new artifact after checking succeeds.
   or integer lists. Each parameter has two to four values, with at most 64 total
   combinations.
 - Two or three wrong-answer options, distinct from the correct answer and each other
-  across every allowed input combination.
+  across every eligible input combination. Collision filtering must retain at least
+  two combinations and half the original domain.
 
 Imports, file access, networking, and other unsupported Python features
 are rejected. The template retains its requested difficulty label. When selected,

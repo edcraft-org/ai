@@ -45,7 +45,6 @@ def code_response() -> dict[str, object]:
                 {"name": "b", "kind": "integer", "values": [3, 4]},
             ],
             "answer_target": "return_value",
-            "answer_expression": "a + b",
             "distractors": [
                 {"expression": "a - b", "reason_template": "Subtracts b."},
                 {"expression": "a * b", "reason_template": "Multiplies."},

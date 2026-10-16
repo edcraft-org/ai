@@ -50,7 +50,7 @@ def revision_contract(proposal, attempt):
             "Fix the smallest failed part; preserve previously valid fields where "
             "possible. Use only one to three parameters. If a full revision changes "
             "parameter names or order, update the entry function signature, body, "
-            "question placeholders, answer and distractor expressions together. "
+            "question placeholders, distractor expressions together. "
             "Define called helper functions at module level. For a difficulty "
             "mismatch, address the judge's deciding reasoning demands and shortcuts; "
             "increasing repetition alone may not address the mismatch."
@@ -61,8 +61,9 @@ def revision_contract(proposal, attempt):
             "Return only parameters and distractors. Keep parameter names, kinds "
             "and order unchanged; only their listed values may change, consistent "
             "with the original request. Fix every reported collision across the "
-            "entire Cartesian product. Code, entry function, question wording, "
-            "answer target and answer expression are preserved by the application. "
+            "effective domain; retain at least two combinations and half the original "
+            "domain. Code, entry function, question wording, "
+            "answer target are preserved by the application. "
             "Do not invent fallback distractors."
         )
     return CodeDistractorRevision if distractors_only else type(proposal), guidance

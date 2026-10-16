@@ -472,6 +472,12 @@ class TemplateApplication:
             update={"artifact_id": uuid.uuid4().hex, "authoring": provenance}
         )
         result.status = "checked"
+        result.warnings = [
+            finding
+            for item in evidence
+            for finding in item.findings
+            if item.status == "passed"
+        ]
         return result
 
     @classmethod

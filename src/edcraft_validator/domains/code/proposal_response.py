@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 from edcraft_validator.domains.code.code_schemas import (
-    CodeTemplateProposal,
+    CodeTemplateContent,
     DistractorRecipe,
     FiniteParameter,
 )
@@ -47,7 +47,7 @@ CodeParameterResponse = (
 )
 
 
-class CodeProposalResponse(CodeTemplateProposal):
+class CodeProposalResponse(CodeTemplateContent):
     """Provider-independent typed response schema for a code proposal."""
 
     parameters: list[CodeParameterResponse] = Field(min_length=1, max_length=3)

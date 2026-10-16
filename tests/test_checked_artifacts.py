@@ -76,7 +76,8 @@ def test_saved_report_records_one_candidate_per_attempt_without_schema_copies():
     semantic = result.attempts[-1].executions[0].evidence
     assert semantic.details["canonical_answers"]
     assert all(
-        set(e.details) == {"tool_version"} for e in result.artifact.validation.evidence
+        "canonical_answers" not in e.details
+        for e in result.artifact.validation.evidence
     )
 
 

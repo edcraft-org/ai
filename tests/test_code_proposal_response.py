@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from edcraft_validator.domains.code.code_schemas import (
-    CodeTemplateProposal,
+    CodeTemplateContent,
     CodeTemplateRequest,
 )
 from edcraft_validator.domains.code.prompt_builder import build_code_generation_request
@@ -19,7 +19,6 @@ def response_with_parameter(kind: str, values: list[object]) -> dict[str, object
         "entry_function": "inspect",
         "parameters": [{"name": "value", "kind": kind, "values": values}],
         "answer_target": "return_value",
-        "answer_expression": "value",
         "distractors": [
             {"expression": "value + 1", "reason_template": "Adds one."},
             {"expression": "value - 1", "reason_template": "Subtracts one."},
@@ -35,7 +34,7 @@ def test_generation_request_uses_one_typed_response_contract() -> None:
     )
 
     assert request.response_model == PlannedGenerationResponse[CodeProposalResponse]
-    assert request.prompt_version == "code-template-v19-reliable-catalogue+response-v4"
+    assert request.prompt_version == "code-template-v20-execution-eligible+response-v5"
     assert "Create a question about arithmetic" in request.messages[1]["content"]
     assert "Use native JSON values" in request.messages[1]["content"]
     assert (
@@ -75,7 +74,7 @@ def test_response_schema_accepts_native_values(kind: str, values: list[object]) 
         json.dumps(response_with_parameter(kind, values))
     )
 
-    assert isinstance(proposal, CodeTemplateProposal)
+    assert isinstance(proposal, CodeTemplateContent)
     assert proposal.parameters[0].values == values
 
 

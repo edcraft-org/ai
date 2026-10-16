@@ -9,7 +9,7 @@ from edcraft_validator.domains.code.candidate_builder import build_code_candidat
 from edcraft_validator.domains.code.code_schemas import (
     CodeQuestionInstance,
     CodeTemplateCandidate,
-    CodeTemplateProposal,
+    CodeTemplateContent,
     CodeTemplateRequest,
     DistractorRecipe,
     TemplateValidationSummary,
@@ -70,7 +70,7 @@ class CodeDomain:
     ) -> CodeTemplateCandidate:
         return build_code_candidate(
             _require_type(request, CodeTemplateRequest),
-            _require_type(proposal, CodeTemplateProposal),
+            _require_type(proposal, CodeTemplateContent),
         )
 
     def tool_bindings(self, request, candidate, tool_name):
@@ -138,8 +138,14 @@ class CodeDomain:
         ):
             raise ValueError("Selected distractors are not checked proposal recipes")
         reusable = template.model_copy(
-            update={"answer_expression": None, "distractors": selected}, deep=True
+            update={
+                "answer_expression": None,
+                "distractors": selected,
+                "eligible_inputs": semantic.details.get("eligible_inputs"),
+            },
+            deep=True,
         )
+        reusable = CodeTemplateCandidate.model_validate_json(reusable.model_dump_json())
         difficulty = next(
             (item for item in evidence if item.tool == TEMPLATE_DIFFICULTY_TOOL), None
         )
@@ -158,7 +164,23 @@ class CodeDomain:
                         check=item.tool,
                         status="passed",
                         duration_ms=item.duration_ms,
-                        details={"tool_version": item.version},
+                        issues=[finding.model_dump() for finding in item.findings],
+                        details={
+                            "tool_version": item.version,
+                            **(
+                                item.details
+                                if item.tool == TEMPLATE_DIFFICULTY_TOOL
+                                else {
+                                    key: item.details[key]
+                                    for key in (
+                                        "eligible_case_count",
+                                        "excluded_case_count",
+                                        "sampling_policy",
+                                    )
+                                    if key in item.details
+                                }
+                            ),
+                        },
                     )
                     for item in evidence
                 ],

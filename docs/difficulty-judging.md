@@ -14,24 +14,38 @@ just as in the saved artifact. The model requests the native tool call; it canno
 replace the application-owned candidate. If correctness fails, difficulty stays
 pending and no judge call is spent on that attempt.
 
-SocLaas assesses the **typical instance**, treating listed parameter values as
-independent and uniformly distributed. It considers common tracing demands and
-reports substantial variation in `domain_variation` and `quality_concerns`. This
-is one holistic estimate, not an exhaustive difficulty measurement of every case.
-The original dimensions, level descriptions and three worked anchors are reused;
-no evaluation examples are added. Required closed keys D1, D2, ... cover every
-checked distractor recipe. Template ID, topic and declared level are hidden from
-the judge. The declared level is compared with its estimate afterwards.
+SocLaas assesses the **typical instance** under the effective sampling policy.
+When `eligible_inputs` is supplied, only those collision-free combinations are
+possible, each equally likely; parameters can be correlated. Otherwise the full
+Cartesian product uses independent uniform parameter values. The checker reports
+variation in `domain_variation` and `quality_concerns`. One estimate does not
+establish uniform difficulty. The original dimensions, level descriptions and
+three worked anchors are reused; no evaluation examples are added. Closed keys
+D1, D2, ... cover every selected distractor. Template ID, topic and requested level
+are hidden from the judge and the level is compared afterwards.
 
-The tool returns ordinary `ToolEvidence`: `passed` means the advisory estimate
-matches the declared level, `failed` means a mismatch or missing essential
-information, and `error` means the assessment failed. Full judge reasoning, usage,
-request/rubric hashes and the exact template hash are retained in `details`.
-The finalizer checks that difficulty evidence belongs to the saved template.
+Template tool version 1.1.0 returns a bounded numeric `confidence` self-estimate.
+Policy `confidence-gated-v1` uses a provisional threshold of 0.80:
+
+| Result | Evidence and workflow |
+| --- | --- |
+| Estimate matches target | `passed`, decision `matches`. |
+| Mismatch, confidence >= 0.80 | `failed`, decision `revise`; feedback goes to the authoring model. |
+| Mismatch, confidence < 0.80 | `passed` with `DIFFICULTY_MISMATCH_LOW_CONFIDENCE`, decision `advisory_mismatch`. |
+| Missing essential information | `failed`; no difficulty assessment is established. |
+| Judge failure | `error`; no automatic check retry. |
+
+A passing policy decision does **not** necessarily mean a difficulty match. Inspect
+`difficulty_match`, `decision` and `AuthoringResult.warnings`. Low-confidence
+mismatches preserve the requested label and expose the estimate, confidence and
+warning in both the report and saved artifact; clients should show both labels.
+Confidence is not calibrated accuracy (`confidence_calibrated: false`). Judge
+reasoning, usage, request/rubric hashes and the exact template hash remain in
+`details`. The finalizer binds the assessment to the exact saved eligible domain.
 This tool does not execute code or check correctness, even when called independently.
 
 Authoring permits the initial proposal plus up to three **template** revisions.
-The original request, target and selected check names stay fixed. Mismatch feedback
+The original request, target and selected check names stay fixed. High-confidence mismatch feedback
 can change code, parameter domains, wording and distractor recipes coherently; the
 new template must pass correctness again before another difficulty assessment.
 A judge error ends the job without a check retry or template revision. `validate`
@@ -44,7 +58,7 @@ four dimensions, without added worked examples. Its wire format uses individual
 indented Python lines. Full revisions must keep the function signature, parameter
 domains, placeholders and expressions consistent. When the only failure is
 distractor selection, a partial response can change recipes and parameter values;
-the application preserves code, wording, answer expression and ordered parameter
+the application preserves code, wording, answer target and ordered parameter
 names/kinds. Correctness still checks the entire domain again. Collision evidence
 includes up to 16 counterexamples, covering bad recipes and duplicate recipe pairs.
 
@@ -53,7 +67,7 @@ or transient HTTP status errors. Timeout, schema and content failures are not
 retried. Both attempts remain in author call accounting, without consuming another
 template revision. Set SDK retries to zero when using this application policy to
 avoid multiplying transport attempts. The checker has no application retry and
-its prompt, response schema and assessment policy are unchanged.
+each invocation assesses its supplied template exactly once.
 
 ## Standalone concrete-question API
 

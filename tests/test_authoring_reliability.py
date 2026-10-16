@@ -32,7 +32,7 @@ from edcraft_validator.mcp.evidence import ToolEvidence, ToolFinding
 
 
 def test_wire_lines_preserve_indentation_and_canonical_python_round_trip():
-    value = proposal().model_dump() | {
+    value = proposal().model_dump(exclude={"answer_expression"}) | {
         "code": ["def add(a, b):", "    total = a + b", "    return total", ""]
     }
     result = CodeProposalResponse.model_validate(value)
@@ -55,7 +55,9 @@ def test_wire_lines_preserve_indentation_and_canonical_python_round_trip():
 )
 def test_wire_rejects_embedded_newlines_or_excessive_lines(lines):
     with pytest.raises(ValidationError):
-        CodeProposalResponse.model_validate(proposal().model_dump() | {"code": lines})
+        CodeProposalResponse.model_validate(
+            proposal().model_dump(exclude={"answer_expression"}) | {"code": lines}
+        )
 
 
 def test_author_uses_original_level_definitions_without_more_examples():
@@ -79,7 +81,7 @@ def test_real_wire_workflow_uses_partial_revision_and_preserves_valid_program():
 
         def generate(self, request):
             self.requests.append(request)
-            payload = proposal().model_dump()
+            payload = proposal().model_dump(exclude={"answer_expression"})
             if request.schema_name == "template_revision":
                 assert request.response_model is CodeDistractorRevision
                 return request.response_model.model_validate(
@@ -123,7 +125,9 @@ def attempt_for(code):
 
 
 def test_distractor_patch_cannot_modify_code_interface_or_wording():
-    current = CodeProposalResponse.model_validate(proposal().model_dump())
+    current = CodeProposalResponse.model_validate(
+        proposal().model_dump(exclude={"answer_expression"})
+    )
     model, guidance = revision_contract(
         current, attempt_for("DISTRACTOR_SELECTION_FAILED")
     )
@@ -146,7 +150,9 @@ def test_distractor_patch_cannot_modify_code_interface_or_wording():
 
 
 def test_difficulty_revision_retains_full_proposal_schema():
-    current = CodeProposalResponse.model_validate(proposal().model_dump())
+    current = CodeProposalResponse.model_validate(
+        proposal().model_dump(exclude={"answer_expression"})
+    )
     model, guidance = revision_contract(current, attempt_for("DIFFICULTY_MISMATCH"))
     assert model is CodeProposalResponse and guidance["scope"] == "proposal"
     assert "increasing repetition alone" in guidance["instructions"]

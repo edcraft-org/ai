@@ -146,7 +146,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring.model == "stub-model"
     assert (
         validated.authoring.base_prompt_version
-        == "code-template-v19-reliable-catalogue+response-v4"
+        == "code-template-v20-execution-eligible+response-v5"
     )
     assert validated.authoring.domain == "code"
     assert provider_calls[0].tool_catalogue.names == (

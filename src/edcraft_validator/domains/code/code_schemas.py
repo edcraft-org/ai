@@ -150,7 +150,7 @@ class DistractorRecipe(BaseModel):
     reason_template: str = Field(min_length=1)
 
 
-class CodeTemplateProposal(BaseModel):
+class CodeTemplateContent(BaseModel):
     """Model-authored fields that require generative judgment."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -160,13 +160,9 @@ class CodeTemplateProposal(BaseModel):
     entry_function: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     parameters: list[FiniteParameter] = Field(min_length=1, max_length=3)
     answer_target: AnswerTarget
-    answer_expression: str = Field(
-        min_length=1,
-        description="Python expression using bare parameter names, for example a + b.",
-    )
     distractors: list[DistractorRecipe] = Field(min_length=2, max_length=5)
 
-    @field_validator("question_template", "code", "answer_expression")
+    @field_validator("question_template", "code")
     @classmethod
     def reject_blank_text(cls, value: str) -> str:
         if not value.strip():
@@ -174,7 +170,7 @@ class CodeTemplateProposal(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def validate_parameter_domain(self) -> CodeTemplateProposal:
+    def validate_parameter_domain(self) -> CodeTemplateContent:
         names = [parameter.name for parameter in self.parameters]
         if len(names) != len(set(names)):
             raise ValueError("parameter names must be unique")
@@ -184,6 +180,19 @@ class CodeTemplateProposal(BaseModel):
                 f"template has {combinations} cases; maximum is {MAX_TEMPLATE_CASES}"
             )
         return self
+
+
+class CodeTemplateProposal(CodeTemplateContent):
+    """Legacy proposals may supply an answer expression, which is still checked."""
+
+    answer_expression: str = Field(min_length=1)
+
+    @field_validator("answer_expression")
+    @classmethod
+    def reject_blank_answer(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
 
 
 class CodeTemplateCandidate(BaseModel):
@@ -202,6 +211,12 @@ class CodeTemplateCandidate(BaseModel):
     answer_expression: str | None = Field(default=None, min_length=1)
     distractors: list[DistractorRecipe] = Field(min_length=2, max_length=8)
     question_type: Literal["mcq"]
+    eligible_inputs: list[dict[str, ParameterValue]] | None = Field(
+        default=None,
+        min_length=2,
+        max_length=MAX_TEMPLATE_CASES,
+        description="Application-derived collision-free combinations; null means all.",
+    )
 
     @field_validator("code", "question_template")
     @classmethod
@@ -227,6 +242,25 @@ class CodeTemplateCandidate(BaseModel):
             raise ValueError(
                 f"template has {combinations} cases; maximum is {MAX_TEMPLATE_CASES}"
             )
+        if self.eligible_inputs is not None:
+            keys = set()
+            for inputs in self.eligible_inputs:
+                if set(inputs) != set(names) or any(
+                    not any(
+                        type(inputs[p.name]) is type(value) and inputs[p.name] == value
+                        for value in p.values
+                    )
+                    for p in self.parameters
+                ):
+                    raise ValueError(
+                        "eligible inputs must belong to the declared domain"
+                    )
+                key = json.dumps(inputs, sort_keys=True)
+                if key in keys:
+                    raise ValueError("eligible inputs must be unique")
+                keys.add(key)
+            if len(keys) * 2 < combinations:
+                raise ValueError("eligible inputs must cover at least half the domain")
         return self
 
 

@@ -49,7 +49,8 @@ The code finalizer stores execution-derived answers, clears the proposed answer
 expression, and retains selected supplied distractors. It leaves code and wording
 unchanged and does not execute the template again.
 
-`CodeProposalResponse` advertises `code` as an array of individual indented lines
+`CodeProposalResponse` omits the correct answer and answer expression, and advertises
+`code` as an array of individual indented lines
 and normalizes it to canonical source text. JSON serialization uses lines again;
 saved templates keep source strings. `domains/code/template_revision.py` supplies
 the author's original rubric level definitions and revision scope. The code domain
@@ -61,7 +62,7 @@ domain hooks. Check membership and the original author request remain fixed.
 
 Failed distractor selection adds one counterexample per bad recipe or colliding
 pair, capped at 16 rows. It uses local expressions and existing canonical answers,
-without another execution or model call. Code tools use evidence version 1.0.5.
+without another execution or model call. Code tools use evidence version 1.1.0.
 The author generation helper permits one additional transport attempt for a
 connection error or HTTP 408/409/429/5xx. It does not retry timeouts, response/schema
 errors, other HTTP failures, native tool turns or judge calls. Measured author
@@ -199,7 +200,12 @@ revisions; a failed assessment ends the job immediately. See the
 correctness checks pass. `application/template_difficulty.py` owns its single
 SocLaas call; `domains/code/template_difficulty.py` owns the template prompt and
 required per-recipe evidence schema. It judges the typical instance across the
-uniform finite parameter domain. The existing concrete-question API remains
+uniform eligible combination set. Collision filtering is calculated once by the
+correctness check, requires at least two cases and half the original domain, and
+is persisted in `eligible_inputs`; full-domain execution coverage is retained.
+The single-call judge reports numeric self-confidence. At confidence >= 0.80 a
+mismatch fails; below it, a mismatch passes policy with explicit warnings in the
+report and artifact. This threshold is provisional and confidence uncalibrated. The existing concrete-question API remains
 available separately and is not used for template authoring.
 
 OpenAI and SocLaas project offered check names into a finite literal choice in

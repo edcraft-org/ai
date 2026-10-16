@@ -21,14 +21,22 @@ For commands, see the [README](../../README.md).
 
 There are at most four attempts: the initial proposal plus three template revisions.
 Selected template difficulty checks run after correctness passes and use SocLaas
-to estimate the typical instance across the finite parameter domain. A mismatch
-feeds back into revision; a judge failure ends the job without retrying the check.
+to estimate the typical instance across the eligible parameter combinations. A
+high-confidence mismatch feeds back to the authoring model for revision; a judge failure ends the job without retrying the check.
 Each attempt runs the whole selected plan, even if one check fails. Checks must all
 pass on the same candidate in the same attempt.
 
-For example, the model might propose an addition question with a subtraction answer
-by mistake. The execution check reports the actual answers. The model can then
-correct the proposal and rerun its selected checks.
+New code proposals contain no suggested answer expression. Execution supplies the
+canonical answer for every input. Legacy candidates with an explicit answer
+expression still have it checked; an incorrect supplied expression is never ignored.
+The distractor check selects a fixed recipe subset that maximizes collision-free
+coverage. At least two combinations and half the original domain must remain.
+Only collisions are filtered; code failures and invalid expression/value types
+remain errors. The saved `eligible_inputs` set drives deterministic sampling with
+no repeated reseeding, model calls or execution during question expansion.
+A low-confidence difficulty mismatch returns a checked template with visible
+warnings and both requested and estimated labels, without silently relabelling it.
+The threshold of 0.80 is provisional; confidence is not measured accuracy.
 
 ## Who does what?
 
@@ -77,7 +85,7 @@ so the model can distinguish its own requirements from the author's request.
 | Tool | What it checks |
 | --- | --- |
 | `code_verify_template_structure` | Supported Python, parameters, expressions, and question rendering. |
-| `code_validate_answers_and_distractors` | Executes every allowed input combination, compares answers, and selects valid proposed distractors. |
+| `code_validate_answers_and_distractors` | Executes all declared combinations, derives answers, and selects distractors plus eligible collision-free combinations. |
 | `code_require_features` | Requested features such as loops or helper functions occur in reachable code. |
 
 The answer check must supply execution-derived answers and checked distractors before
@@ -127,7 +135,7 @@ application arguments, and full evidence; the tools still receive the complete
 candidate when running. Failed attempts remain available for evaluation.
 
 Every successful checking job gets a new artifact ID. The reusable artifact stores
-the template, checked answers, and short passing-check summaries. Its small origin
+the template, checked answers, the eligible combination set, and check summaries including difficulty warnings. Its small origin
 record (called provenance in the code) contains the provider/model settings, domain,
 prompt version and generation time. Detailed history belongs in the report, which
 includes the artifact once. Use `--template-output` to save the artifact directly

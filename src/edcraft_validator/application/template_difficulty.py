@@ -13,6 +13,9 @@ from edcraft_validator.domains.code.template_difficulty import (
 from edcraft_validator.llm.judging import JudgeProviderFactory, run_judge
 from edcraft_validator.mcp.evidence import ToolEvidence, ToolFinding
 
+HIGH_CONFIDENCE_THRESHOLD = 0.8
+DIFFICULTY_POLICY_VERSION = "confidence-gated-v1"
+
 
 async def assess_template_difficulty(
     candidate: CodeTemplateCandidate,
@@ -25,7 +28,10 @@ async def assess_template_difficulty(
     details = {
         "advisory": True,
         "retryable": False,
-        "assessment_scope": "typical_instance_uniform_parameter_domain",
+        "assessment_scope": "typical_instance_uniform_eligible_combinations",
+        "policy_version": DIFFICULTY_POLICY_VERSION,
+        "high_confidence_threshold": HIGH_CONFIDENCE_THRESHOLD,
+        "confidence_calibrated": False,
         "template_sha256": template_sha256(candidate),
         "requested_difficulty": candidate.difficulty,
     }
@@ -73,15 +79,27 @@ async def assess_template_difficulty(
                 judge.assessment.estimated_difficulty, candidate.difficulty
             )
             details["difficulty_match"] = match
-            status = "passed" if match == "matches" else "failed"
-            if status == "failed":
+            high_confidence = judge.assessment.confidence >= HIGH_CONFIDENCE_THRESHOLD
+            details["decision"] = (
+                "matches"
+                if match == "matches"
+                else "revise"
+                if high_confidence
+                else "advisory_mismatch"
+            )
+            status = "failed" if match != "matches" and high_confidence else "passed"
+            if match != "matches":
                 findings.append(
                     ToolFinding(
-                        code="DIFFICULTY_MISMATCH",
+                        code="DIFFICULTY_MISMATCH"
+                        if high_confidence
+                        else "DIFFICULTY_MISMATCH_LOW_CONFIDENCE",
                         message=(
                             "Typical instance estimated "
                             f"{judge.assessment.estimated_difficulty}; "
                             f"requested {candidate.difficulty}. "
+                            "Self-reported confidence "
+                            f"{judge.assessment.confidence:.2f}. "
                             + judge.assessment.reason
                         ),
                         field="difficulty",
@@ -89,7 +107,7 @@ async def assess_template_difficulty(
                 )
     return ToolEvidence(
         tool=TEMPLATE_DIFFICULTY_TOOL,
-        version="1.0.0",
+        version="1.1.0",
         status=status,
         findings=findings,
         details=details,

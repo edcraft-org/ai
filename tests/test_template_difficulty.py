@@ -40,8 +40,9 @@ def candidate():
 class TemplateJudge:
     provider, model = "scripted", "template-judge"
 
-    def __init__(self, estimate="easy", failure=None):
+    def __init__(self, estimate="easy", failure=None, confidence=0.95):
         self.estimate, self.failure = estimate, failure
+        self.confidence = confidence
         self.requests = []
 
     def generation_settings(self):
@@ -56,6 +57,7 @@ class TemplateJudge:
         options = value.pop("option_evidence")
         value.update(
             estimated_difficulty=self.estimate,
+            confidence=self.confidence if self.estimate else 0,
             domain_variation="All listed inputs need the same short reasoning.",
             unable_to_assess_reason="Essential code missing."
             if self.estimate is None
@@ -120,12 +122,12 @@ def test_each_distractor_recipe_has_a_required_closed_evidence_key(count):
         template_assessment_model(count).model_validate({})
 
 
-def run(estimates, failure=None, *, validation=False, proposals=None):
+def run(estimates, failure=None, *, validation=False, proposals=None, confidence=0.95):
     judges = []
     pending = iter(estimates)
 
     def factory():
-        judge = TemplateJudge(next(pending), failure=failure)
+        judge = TemplateJudge(next(pending), failure=failure, confidence=confidence)
         judges.append(judge)
         return judge
 
