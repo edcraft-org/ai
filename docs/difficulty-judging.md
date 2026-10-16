@@ -39,6 +39,22 @@ checks once without revision. `generate` remains deterministic local expansion
 and makes no model calls. The selected author provider performs generation and
 revision; every difficulty assessment uses SocLaas.
 
+The author receives the original level definitions and a short description of the
+four dimensions, without added worked examples. Its wire format uses individual
+indented Python lines. Full revisions must keep the function signature, parameter
+domains, placeholders and expressions consistent. When the only failure is
+distractor selection, a partial response can change recipes and parameter values;
+the application preserves code, wording, answer expression and ordered parameter
+names/kinds. Correctness still checks the entire domain again. Collision evidence
+includes up to 16 counterexamples, covering bad recipes and duplicate recipe pairs.
+
+Author generation/revision calls have one bounded retry for connection failures
+or transient HTTP status errors. Timeout, schema and content failures are not
+retried. Both attempts remain in author call accounting, without consuming another
+template revision. Set SDK retries to zero when using this application policy to
+avoid multiplying transport attempts. The checker has no application retry and
+its prompt, response schema and assessment policy are unchanged.
+
 ## Standalone concrete-question API
 
 `assess_code_difficulty` v2 assesses one concrete Python tracing MCQ using SocLaas.

@@ -11,6 +11,16 @@ You can request a template using a free-form prompt and an `easy`, `medium`, or
 failed templates. It gets four total attempts: the first proposal and up to three
 revisions.
 
+Code proposals use an array of indented Python lines in model responses, then
+normalize to ordinary source text for checking and reuse. Authors receive the
+checker's level definitions without extra worked examples. When only distractors
+fail, revisions contain recipes and parameter values; the application preserves
+the program, question wording and function interface. Difficulty mismatches allow
+a coherent full revision. Author generation/revision calls allow one additional
+attempt for connection failures or transient HTTP errors; invalid content and
+timeouts are not retried. Difficulty checks remain single-pass. OpenAI/SocLaas check plans constrain names
+to the available catalogue instead of allowing invented names.
+
 You can also edit a template candidate, check it again, and generate questions from
 the saved result. This works through the library and command line. The new AI
 workflow is not yet connected to the product's editing and approval screens.

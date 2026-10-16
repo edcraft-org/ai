@@ -7,13 +7,14 @@ from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateRequest,
 )
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
+from edcraft_validator.domains.code.template_revision import author_difficulty_guidance
 from edcraft_validator.llm.llm_contracts import (
     CheckPlanResponse,
     PlannedGenerationResponse,
     StructuredGenerationRequest,
 )
 
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v17-typical-difficulty"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v19-reliable-catalogue"
 
 
 def build_template_prompt(
@@ -78,7 +79,8 @@ Rules:
   distractor candidates as separate schema fields.
 - Define one module-level entry function whose positional arguments exactly match the
   parameter names and order. Use every parameter in executed learner-facing behavior.
-  Helper functions and recursion are allowed. Recursive code must have a base case
+  Define called helper functions at module level, not inside another function.
+  Recursion is allowed. Recursive code must have a base case
   and terminate within the execution limits for every parameter combination.
 - Use only expressions, assignments, if statements, and for loops. Do not use imports,
   attributes, classes, decorators, comprehensions, while loops, lambdas,
@@ -110,6 +112,10 @@ Rules:
   placeholder such as `{n}`. Do not place arithmetic or any other expression inside
   braces.
 - During initial generation, return the combined proposal-and-check-plan schema.
+  Return `code` as a JSON array of individual Python lines, including indentation
+  spaces at the beginning of each indented line. Keep each statement on its own
+  line; do not put newline characters inside an array entry. Use at most 160 lines
+  and one to three parameters, with no extra/default entry-function arguments.
   During revision, return only proposal fields matching the supplied schema; the
   application keeps the original check plan. Do not include locally derived fields.
   During checking turns, use native tool
@@ -133,7 +139,10 @@ def build_code_generation_request(
     request: CodeTemplateRequest,
 ) -> StructuredGenerationRequest[PlannedGenerationResponse[CodeProposalResponse]]:
     """Return the provider-independent code proposal contract."""
-    system_message = {"role": "system", "content": CODE_TEMPLATE_SYSTEM_PROMPT}
+    system_message = {
+        "role": "system",
+        "content": CODE_TEMPLATE_SYSTEM_PROMPT + "\n" + author_difficulty_guidance(),
+    }
     user_prompt = build_template_prompt(request)
 
     return StructuredGenerationRequest(
@@ -145,7 +154,7 @@ def build_code_generation_request(
             },
         ],
         response_model=PlannedGenerationResponse[CodeProposalResponse],
-        prompt_version=f"{CODE_TEMPLATE_PROMPT_VERSION}+response-v3",
+        prompt_version=f"{CODE_TEMPLATE_PROMPT_VERSION}+response-v4",
         schema_name="template_proposal_and_check_plan",
     )
 

@@ -30,8 +30,15 @@ from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     ToolCatalogueSnapshot,
 )
-from edcraft_validator.llm.llm_errors import GenerationError, GenerationSchemaError
-from edcraft_validator.llm.tool_context import callable_tool, generation_messages
+from edcraft_validator.llm.llm_errors import (
+    GenerationError,
+    GenerationSchemaError,
+    GenerationTransportError,
+)
+from edcraft_validator.llm.tool_context import (
+    callable_tool,
+    generation_messages,
+)
 from edcraft_validator.llm.usage import MeasuredProvider, summarize_usage
 from edcraft_validator.mcp.catalogue import (
     ToolCatalogue,
@@ -40,6 +47,17 @@ from edcraft_validator.mcp.catalogue import (
 )
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.evidence import ToolEvidence
+
+
+def _generate_author(provider, request):
+    """One bounded transport retry for author calls, never for judge assessments."""
+    try:
+        return provider.generate(request)
+    except GenerationTransportError as exc:
+        status = getattr(exc.__cause__, "status_code", None)
+        if status is not None and status not in {408, 409, 429} and status < 500:
+            raise
+        return provider.generate(request)
 
 
 class TemplateApplication:
@@ -169,7 +187,7 @@ class TemplateApplication:
                 stage = "generation"
                 generation_started = time.perf_counter()
                 try:
-                    response = provider.generate(generation_request)
+                    response = _generate_author(provider, generation_request)
                 finally:
                     generation_duration_ms += (
                         time.perf_counter() - generation_started
@@ -246,7 +264,12 @@ class TemplateApplication:
                         revision_started = time.perf_counter()
                         try:
                             response, messages = self._revise_proposal(
-                                generation_request, response, attempt, plan, provider
+                                generation_request,
+                                response,
+                                attempt,
+                                plan,
+                                provider,
+                                domain=domain,
                             )
                         finally:
                             generation_duration_ms += (
@@ -301,10 +324,18 @@ class TemplateApplication:
         )
 
     @staticmethod
-    def _revise_proposal(generation_request, response, attempt, plan, provider):
+    def _revise_proposal(
+        generation_request, response, attempt, plan, provider, *, domain=None
+    ):
         """Request a corrected proposal while retaining the original check plan."""
         # Use the latest proposal and explicit feedback, rather than a growing
         # native-tool conversation.
+        response_model = type(response.proposal)
+        guidance = {}
+        if domain is not None and hasattr(domain, "revision_contract"):
+            response_model, guidance = domain.revision_contract(
+                response.proposal, attempt
+            )
         messages = generation_messages(generation_request) + [
             {"role": "assistant", "content": response.model_dump_json()},
             {
@@ -331,10 +362,14 @@ class TemplateApplication:
                             "An unchanged proposal is allowed when only your "
                             "tool calls were wrong. Return only the "
                             "proposal fields matching the supplied schema. "
+                            "Follow revision_guidance and return exactly the supplied "
+                            "response schema, including a partial revision "
+                            "when requested. "
                             "Do not return checks; the application keeps "
                             "the original check plan."
                         ),
                         "fixed_plan": list(plan),
+                        "revision_guidance": guidance,
                         "check_results": [
                             {
                                 **execution.model_feedback(),
@@ -346,16 +381,21 @@ class TemplateApplication:
                 ),
             },
         ]
-        revised_proposal = provider.generate(
+        revised_proposal = _generate_author(
+            provider,
             replace(
                 generation_request,
-                response_model=type(response.proposal),
+                response_model=response_model,
                 schema_name="template_revision",
                 messages=copy.deepcopy(messages),
                 tool_catalogue=None,
-            )
+            ),
         )
-        if not isinstance(revised_proposal, type(response.proposal)):
+        if domain is not None and hasattr(domain, "merge_revision"):
+            revised_proposal = domain.merge_revision(
+                response.proposal, revised_proposal
+            )
+        elif not isinstance(revised_proposal, type(response.proposal)):
             raise GenerationSchemaError("Revision must return only the proposal")
         response = response.model_copy(update={"proposal": revised_proposal})
         return response, messages

@@ -61,6 +61,11 @@ feedback. Earlier attempts remain in the saved history without accumulating in t
 revision prompt.
 Revisions contain only template fields. The application retains the original check
 plan, so the model does not select the checks again while fixing a template.
+For a distractor-only failure, typed code authors return only parameters and
+distractor recipes. The application preserves the valid program and wording and
+rejects parameter name/kind/order changes. Code responses use an array of indented
+lines; saved templates contain ordinary source text. Authors receive the same
+original level definitions as the checker, without more worked examples.
 The model can correct its own tool arguments. If they imposed requirements the
 author did not request, corrections should fix those arguments rather than add
 irrelevant code; the requested scope and difficulty must be preserved.
@@ -91,7 +96,7 @@ well or has the right difficulty.
 | Status | Meaning |
 | --- | --- |
 | `checked` | Selected checks passed and a reusable artifact was saved. |
-| `needs_review` | Three authoring attempts failed, an existing candidate failed, or required answer data is missing. |
+| `needs_review` | The revision limit was reached, a selected check failed, or required answer data is missing. |
 | `error` | The workflow was interrupted or could not complete the tool conversation. |
 
 MCP setup and initial generation failures return an `error` report with zero

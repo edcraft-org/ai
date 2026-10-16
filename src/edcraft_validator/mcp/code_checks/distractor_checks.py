@@ -24,13 +24,79 @@ def check_proposed_distractor_selection(
     count = context.num_distractors
     if count is None:
         raise ValueError("a required distractor count must be provided")
-    context.template, context.candidates = _select_distractors(
-        context.template,
-        context.inputs_cases,
-        context.canonical_answers,
-        context.candidates,
-        num_distractors=count,
-    )
+    try:
+        context.template, context.candidates = _select_distractors(
+            context.template,
+            context.inputs_cases,
+            context.canonical_answers,
+            context.candidates,
+            num_distractors=count,
+        )
+    except TemplateValidationError as exc:
+        if exc.code == "DISTRACTOR_SELECTION_FAILED":
+            rows = _failure_diagnostics(context)
+            exc.context.update(
+                cases=len(context.inputs_cases),
+                distractor_diagnostics=rows[:16],
+                diagnostics_truncated=len(rows) > 16,
+            )
+        raise
+
+
+def _failure_diagnostics(context: CodeValidationContext) -> list[dict[str, Any]]:
+    """One counterexample per bad recipe or colliding pair, without re-execution."""
+    rows = []
+    valid = []
+    for candidate in context.candidates:
+        recipe_id = f"D{candidate.index + 1}"
+        if candidate.expression is None:
+            rows.append({"recipe_id": recipe_id, "kind": "invalid_expression"})
+            continue
+        values = []
+        for inputs, answer in zip(
+            context.inputs_cases, context.canonical_answers, strict=True
+        ):
+            try:
+                value = candidate.expression.evaluate(inputs)
+                _validate_distractor_value(inputs, answer, value, candidate.index)
+                render_template(
+                    context.template.distractors[candidate.index].reason_template,
+                    inputs,
+                )
+            except (
+                TemplateValidationError,
+                ArithmeticError,
+                TypeError,
+                ValueError,
+            ) as exc:
+                rows.append(
+                    {
+                        "recipe_id": recipe_id,
+                        "kind": getattr(exc, "code", "EXPRESSION_EVALUATION_FAILED"),
+                        "inputs": inputs,
+                        "answer": answer,
+                    }
+                )
+                break
+            values.append(value)
+        else:
+            valid.append((recipe_id, values))
+    for (first_id, first), (second_id, second) in itertools.combinations(valid, 2):
+        for inputs, left, right in zip(
+            context.inputs_cases, first, second, strict=True
+        ):
+            if equivalent(left, right):
+                rows.append(
+                    {
+                        "recipe_id": second_id,
+                        "other_recipe_id": first_id,
+                        "kind": "DISTRACTOR_DUPLICATE",
+                        "inputs": inputs,
+                        "value": left,
+                    }
+                )
+                break
+    return rows
 
 
 def check_distractors(context: CodeValidationContext) -> None:

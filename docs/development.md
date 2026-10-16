@@ -49,6 +49,24 @@ The code finalizer stores execution-derived answers, clears the proposed answer
 expression, and retains selected supplied distractors. It leaves code and wording
 unchanged and does not execute the template again.
 
+`CodeProposalResponse` advertises `code` as an array of individual indented lines
+and normalizes it to canonical source text. JSON serialization uses lines again;
+saved templates keep source strings. `domains/code/template_revision.py` supplies
+the author's original rubric level definitions and revision scope. The code domain
+can return a partial `CodeDistractorRevision` after distractor-only failures; the
+application merges its recipes/values into the previous proposal and rejects any
+parameter name/kind/order change. Other domains retain full proposal revisions.
+The generic application supports optional `revision_contract` and `merge_revision`
+domain hooks. Check membership and the original author request remain fixed.
+
+Failed distractor selection adds one counterexample per bad recipe or colliding
+pair, capped at 16 rows. It uses local expressions and existing canonical answers,
+without another execution or model call. Code tools use evidence version 1.0.5.
+The author generation helper permits one additional transport attempt for a
+connection error or HTTP 408/409/429/5xx. It does not retry timeouts, response/schema
+errors, other HTTP failures, native tool turns or judge calls. Measured author
+usage retains both attempts; disable SDK retries to avoid stacking retry policies.
+
 ## Saved output
 
 `AuthoringResult` is one report per job. It stores the request, provider settings,
@@ -183,3 +201,9 @@ SocLaas call; `domains/code/template_difficulty.py` owns the template prompt and
 required per-recipe evidence schema. It judges the typical instance across the
 uniform finite parameter domain. The existing concrete-question API remains
 available separately and is not used for template authoring.
+
+OpenAI and SocLaas project offered check names into a finite literal choice in
+the planning wire schema. The adapter validates that schema locally and returns
+the original response type; the application still validates selected names before
+dispatch. No guessed name is remapped to a different tool. This projection applies
+only to check plans, leaving difficulty assessment requests unchanged.

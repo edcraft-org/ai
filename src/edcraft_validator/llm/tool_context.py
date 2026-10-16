@@ -2,9 +2,35 @@
 
 import copy
 import json
-from typing import Any
+from functools import lru_cache
+from typing import Any, Literal
 
-from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
+from pydantic import Field, create_model
+
+from edcraft_validator.llm.llm_contracts import (
+    CheckPlanResponse,
+    RecommendedCheck,
+    StructuredGenerationRequest,
+)
+
+
+@lru_cache(maxsize=32)
+def constrained_check_plan(response_model, offered_names: tuple[str, ...]):
+    """Make the finite catalogue choices explicit in the model's response schema."""
+    if not issubclass(response_model, CheckPlanResponse):
+        return response_model
+    if not offered_names:
+        raise ValueError("a check plan requires offered tools")
+    check = create_model(
+        "CatalogueCheck",
+        __base__=RecommendedCheck,
+        name=(Literal[offered_names], ...),
+    )
+    return create_model(
+        f"Catalogue{response_model.__name__}",
+        __base__=response_model,
+        checks=(list[check], Field(min_length=1)),
+    )
 
 
 def generation_messages(request: StructuredGenerationRequest) -> list[dict[str, Any]]:

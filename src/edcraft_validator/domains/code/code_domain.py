@@ -42,6 +42,18 @@ class CodeDomain:
     candidate_model = CodeTemplateCandidate
     validated_model = ValidatedCodeTemplate
 
+    @staticmethod
+    def revision_contract(proposal, attempt):
+        from edcraft_validator.domains.code.template_revision import revision_contract
+
+        return revision_contract(proposal, attempt)
+
+    @staticmethod
+    def merge_revision(proposal, revised):
+        from edcraft_validator.domains.code.template_revision import merge_revision
+
+        return merge_revision(proposal, revised)
+
     def generation_request(
         self, request: BaseModel
     ) -> StructuredGenerationRequest[PlannedGenerationResponse[CodeProposalResponse]]:
