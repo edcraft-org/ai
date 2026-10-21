@@ -1,0 +1,343 @@
+{
+  "version": "code-quality-controls-v1",
+  "notes": "Engineering control expectations authored before the first judge run; not human quality reference labels. Original frozen dataset remains unchanged.",
+  "cases": [
+    {
+      "case_id": "quality-control-relevant",
+      "group": "control",
+      "question": {
+        "code": "def f(x):\n    y = x + 2\n    return y * 2\n",
+        "entry_function": "f",
+        "inputs": {
+          "x": 3
+        },
+        "question": "What does f(3) return?",
+        "answer_target": "return_value",
+        "options": [
+          {
+            "id": "A",
+            "value": 6
+          },
+          {
+            "id": "B",
+            "value": 7
+          },
+          {
+            "id": "C",
+            "value": 10
+          },
+          {
+            "id": "D",
+            "value": 12
+          }
+        ],
+        "correct_option": "C"
+      },
+      "request": {
+        "prompt": "Create a Python tracing MCQ about adding two and then multiplying by two.",
+        "required_features": [
+          "arithmetic"
+        ],
+        "answer_target": "return_value",
+        "num_distractors": 3,
+        "learner_prerequisites": [
+          "Understands assignment, addition and multiplication."
+        ]
+      },
+      "expected": {
+        "technical": "passed",
+        "requirements": "satisfied",
+        "relevance": "good",
+        "clarity": "good",
+        "answerability": "good"
+      }
+    },
+    {
+      "case_id": "quality-control-off-topic",
+      "group": "control",
+      "question": {
+        "code": "def f(x):\n    y = x + 2\n    return y * 2\n",
+        "entry_function": "f",
+        "inputs": {
+          "x": 3
+        },
+        "question": "What does f(3) return?",
+        "answer_target": "return_value",
+        "options": [
+          {
+            "id": "A",
+            "value": 6
+          },
+          {
+            "id": "B",
+            "value": 7
+          },
+          {
+            "id": "C",
+            "value": 10
+          },
+          {
+            "id": "D",
+            "value": 12
+          }
+        ],
+        "correct_option": "C"
+      },
+      "request": {
+        "prompt": "Create a Python tracing MCQ about sorting a list and selecting its middle element.",
+        "required_features": [
+          "list_sort"
+        ],
+        "answer_target": "return_value",
+        "num_distractors": 3,
+        "learner_prerequisites": [
+          "Understands assignment, addition and multiplication."
+        ]
+      },
+      "expected": {
+        "technical": "passed",
+        "requirements": "missing",
+        "relevance": "concern"
+      }
+    },
+    {
+      "case_id": "quality-control-omitted-requirement",
+      "group": "control",
+      "question": {
+        "code": "def f(x):\n    y = x + 2\n    return y * 2\n",
+        "entry_function": "f",
+        "inputs": {
+          "x": 3
+        },
+        "question": "What does f(3) return?",
+        "answer_target": "return_value",
+        "options": [
+          {
+            "id": "A",
+            "value": 6
+          },
+          {
+            "id": "B",
+            "value": 7
+          },
+          {
+            "id": "C",
+            "value": 10
+          },
+          {
+            "id": "D",
+            "value": 12
+          }
+        ],
+        "correct_option": "C"
+      },
+      "request": {
+        "prompt": "Create a Python tracing MCQ about adding two and then multiplying by two.",
+        "required_features": [
+          "arithmetic"
+        ],
+        "answer_target": "return_value",
+        "num_distractors": 2,
+        "learner_prerequisites": [
+          "Understands assignment, addition and multiplication."
+        ]
+      },
+      "expected": {
+        "technical": "passed",
+        "requirements": "missing",
+        "relevance": "concern"
+      }
+    },
+    {
+      "case_id": "quality-control-topic-words-missing-concept",
+      "group": "control",
+      "question": {
+        "code": "def f(x):\n    y = x + 2\n    return y * 2\n# Nested loops and interacting accumulator updates are the topic.\n",
+        "entry_function": "f",
+        "inputs": {
+          "x": 3
+        },
+        "question": "What does f(3) return?",
+        "answer_target": "return_value",
+        "options": [
+          {
+            "id": "A",
+            "value": 6
+          },
+          {
+            "id": "B",
+            "value": 7
+          },
+          {
+            "id": "C",
+            "value": 10
+          },
+          {
+            "id": "D",
+            "value": 12
+          }
+        ],
+        "correct_option": "C"
+      },
+      "request": {
+        "prompt": "Create a Python tracing MCQ where nested loops and their interacting accumulator updates are necessary to determine the return value.",
+        "required_features": [
+          "nested_loop"
+        ],
+        "answer_target": "return_value",
+        "num_distractors": 3,
+        "learner_prerequisites": [
+          "Understands assignment, addition and multiplication."
+        ]
+      },
+      "expected": {
+        "technical": "passed",
+        "requirements": "missing",
+        "relevance": "concern"
+      }
+    },
+    {
+      "case_id": "quality-control-ambiguous",
+      "group": "control",
+      "question": {
+        "code": "def f(x):\n    y = x + 2\n    return y * 2\n",
+        "entry_function": "f",
+        "inputs": {
+          "x": 3
+        },
+        "question": "How many times is it used?",
+        "answer_target": "return_value",
+        "options": [
+          {
+            "id": "A",
+            "value": 6
+          },
+          {
+            "id": "B",
+            "value": 7
+          },
+          {
+            "id": "C",
+            "value": 10
+          },
+          {
+            "id": "D",
+            "value": 12
+          }
+        ],
+        "correct_option": "C"
+      },
+      "request": {
+        "prompt": "Create a Python tracing MCQ about adding two and then multiplying by two.",
+        "required_features": [
+          "arithmetic"
+        ],
+        "answer_target": "return_value",
+        "num_distractors": 3,
+        "learner_prerequisites": [
+          "Understands assignment, addition and multiplication."
+        ]
+      },
+      "expected": {
+        "technical": "passed",
+        "requirements": "satisfied",
+        "clarity": "concern",
+        "answerability": "concern"
+      }
+    },
+    {
+      "case_id": "quality-control-wrong-answer",
+      "group": "control",
+      "question": {
+        "code": "def f(x):\n    y = x + 2\n    return y * 2\n",
+        "entry_function": "f",
+        "inputs": {
+          "x": 3
+        },
+        "question": "What does f(3) return?",
+        "answer_target": "return_value",
+        "options": [
+          {
+            "id": "A",
+            "value": 6
+          },
+          {
+            "id": "B",
+            "value": 7
+          },
+          {
+            "id": "C",
+            "value": 10
+          },
+          {
+            "id": "D",
+            "value": 12
+          }
+        ],
+        "correct_option": "A"
+      },
+      "request": {
+        "prompt": "Create a Python tracing MCQ about adding two and then multiplying by two.",
+        "required_features": [
+          "arithmetic"
+        ],
+        "answer_target": "return_value",
+        "num_distractors": 3,
+        "learner_prerequisites": [
+          "Understands assignment, addition and multiplication."
+        ]
+      },
+      "expected": {
+        "technical": "failed",
+        "requirements": "satisfied"
+      }
+    },
+    {
+      "case_id": "quality-control-duplicate-distractor",
+      "group": "control",
+      "question": {
+        "code": "def f(x):\n    y = x + 2\n    return y * 2\n",
+        "entry_function": "f",
+        "inputs": {
+          "x": 3
+        },
+        "question": "What does f(3) return?",
+        "answer_target": "return_value",
+        "options": [
+          {
+            "id": "A",
+            "value": 6
+          },
+          {
+            "id": "B",
+            "value": 6
+          },
+          {
+            "id": "C",
+            "value": 10
+          },
+          {
+            "id": "D",
+            "value": 12
+          }
+        ],
+        "correct_option": "C"
+      },
+      "request": {
+        "prompt": "Create a Python tracing MCQ about adding two and then multiplying by two.",
+        "required_features": [
+          "arithmetic"
+        ],
+        "answer_target": "return_value",
+        "num_distractors": 3,
+        "learner_prerequisites": [
+          "Understands assignment, addition and multiplication."
+        ]
+      },
+      "expected": {
+        "technical": "failed",
+        "requirements": "satisfied"
+      }
+    }
+  ]
+}

@@ -130,6 +130,13 @@ contract; record evaluation results in the pull request.
 
 ## What to report
 
+For issue 44, use the [quality assessment protocol](quality-assessment.md#fixed-held-out-review).
+It freezes all 12 reserved MCQs and seven versioned controls before the first call,
+keeps reference labels out of the judge input, and stores separate technical,
+requirement, similarity and rubric results. There are no human quality labels for
+the reserved set; report descriptive ratings and control disagreements rather than
+claiming quality accuracy. All model calls remain opt-in.
+
 Use the fixed supported requests for the initial live baseline. Scripted regression
 tests cover repairable and repeated failures, unsuitable check plans, invalid
 arguments, and incomplete conversations. Unsupported author requests are deferred

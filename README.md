@@ -190,6 +190,13 @@ one closest difficulty label, reasons, model usage and comparison in a single
 assessment call. Failed checks return errors without correction or reassessment.
 Difficulty checks use SocLaas only, with no provider fallback.
 
+The explicitly invoked [`assess_code_quality` MCP tool](docs/quality-assessment.md)
+separately records correctness, explicit requirements, embedding relevance and
+advisory rubric judgments of a complete rendered MCQ. Similarity has no universal
+pass threshold; quality judgments cannot override correctness failures or missing
+explicit requirements. A frozen review runner covers the 12 reserved questions
+and seven engineering controls, retaining usage, latency, uncertainty and errors.
+
 ## Tests
 
 ```bash
@@ -210,6 +217,7 @@ For live model calls and workflow evaluation, see the [evaluation guide](docs/ev
 - [Goals and milestones](GOALS.md)
 - [Evaluation guide](docs/evaluation.md)
 - [Provisional Python difficulty rubric](docs/difficulty-rubric.md)
+- [Relevance and question-quality assessment](docs/quality-assessment.md)
 - [Frozen Python tracing evaluation dataset](reference_sets/python_tracing/README.md)
 - [Developer reference](docs/development.md)
 - [Earlier evaluation results](docs/evaluation-history.md)
