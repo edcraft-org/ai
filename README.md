@@ -191,11 +191,13 @@ assessment call. Failed checks return errors without correction or reassessment.
 Difficulty checks use SocLaas only, with no provider fallback.
 
 The explicitly invoked [`assess_code_quality` MCP tool](docs/quality-assessment.md)
-separately records correctness, explicit requirements, embedding relevance and
-advisory rubric judgments of a complete rendered MCQ. Similarity has no universal
-pass threshold; quality judgments cannot override correctness failures or missing
-explicit requirements. A frozen review runner covers the 12 reserved questions
-and seven engineering controls, retaining usage, latency, uncertainty and errors.
+separately records correctness, explicit requirements and embedding relevance of
+a complete rendered MCQ. It can reuse an existing difficulty report's quality
+concerns and option evidence for the exact same question, with no extra judge
+call. Similarity has no universal pass threshold. A frozen review runner covers
+the 12 reserved questions and seven engineering controls. The provisional embedding
+default is `text-embedding-3-large`; see the
+[published model comparison](docs/embedding-model-selection.md).
 
 ## Tests
 

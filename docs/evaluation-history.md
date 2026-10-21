@@ -7,7 +7,39 @@ not be treated as its current pass rates.
 Historical records may use `beginner`, `intermediate`, and `advanced`. The current
 labels are `easy`, `medium`, and `hard`.
 
+## Issue 44 simplification and model selection: 21 October 2026
+
+At the user's request, v2 removes the separate SocLaas quality assessment and
+reuses an already available concrete difficulty report for the exact question.
+Missing evidence stays explicit; the tool never generates a replacement.
+Correctness and explicit requirement checks remain independent of cosine
+similarity and reused opinions. Existing difficulty prompts are unchanged.
+
+The [online model comparison](embedding-model-selection.md) evaluates the
+vendor-published MTEB results for small, large and ada-002, with current documented
+prices. Large is the provisional default; small remains configurable. This is
+published general benchmark evidence, not a new EdCraft accuracy measurement.
+The original frozen dataset, controls and v1 live records remain unchanged.
+
+Verification passed 582 tests, with two existing opt-in live workflow tests
+skipped, plus lint, formatting, dependency-lock, diff-whitespace and package checks.
+The 19-case evaluator regression used scripted embeddings and actual bounded
+execution, reusing one existing scripted difficulty report across three matching
+cases with zero additional judge calls. It retained an injected embedding error,
+rejected both invalid-answer controls, and reported all three missing explicit
+requirements. Tests also cover stale evidence, incomplete option coverage, strict
+JSON timestamp round-tripping, malformed reports, provider failures and unknown
+usage. Manual review found and fixed the wire timestamp parsing issue and added
+validation of all reused reports before any evaluation requests. No live API calls
+were made for this refactor or online model selection.
+
 ## Issue 44 relevance and quality review: 21 October 2026
+
+This section records the original v1 implementation. After this review, v2 removed
+the separate quality judge call, added optional reuse of exact-question difficulty
+evidence, and changed the provisional embedding default to large using
+[published model evidence](embedding-model-selection.md). The records and results
+below remain unchanged; they do not evaluate v2 or the new default.
 
 The [quality assessment protocol](quality-assessment.md) was evaluated at commit
 `f7cbc0ac6533005d2075ca5317e1087c7f3195b9`. The source fingerprint, covering

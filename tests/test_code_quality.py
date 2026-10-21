@@ -9,6 +9,9 @@ import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
+from edcraft_validator.application.code_difficulty import (
+    assess_code_question_difficulty,
+)
 from edcraft_validator.application.code_quality import (
     assess_code_question_quality,
     check_concrete_correctness,
@@ -16,7 +19,6 @@ from edcraft_validator.application.code_quality import (
 )
 from edcraft_validator.domains.code.quality import (
     QualityRequest,
-    build_quality_request,
     rendered_question,
 )
 from edcraft_validator.llm.embeddings import (
@@ -27,45 +29,7 @@ from edcraft_validator.llm.embeddings import (
 from edcraft_validator.llm.usage import TokenUsage
 from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.tools.python_execution import ExecutionResult
-from tests.test_difficulty_tool import question
-
-
-def assessment():
-    return {
-        **{
-            name: {"rating": "good", "reason": "Specific evidence."}
-            for name in ("relevance", "clarity", "answerability")
-        },
-        "concerns": [],
-        "uncertainty": ["Single-judge evidence only."],
-        "option_evidence": {
-            key: {
-                "rating": "good",
-                "reason": "Concrete option evidence.",
-                "hypothesised_error": None if key == "C" else "Skipped an update.",
-            }
-            for key in "ABCD"
-        },
-    }
-
-
-class Judge:
-    provider, model = "fake", "quality-judge-v1"
-
-    def __init__(self, response=None):
-        self.response = assessment() if response is None else response
-        self.last_usage = TokenUsage()
-        self.requests = []
-
-    def generation_settings(self):
-        return {"sampling": "scripted", "max_retries": 0}
-
-    def generate(self, request):
-        self.requests.append(request)
-        self.last_usage = TokenUsage(input_tokens=100, output_tokens=50)
-        if isinstance(self.response, Exception):
-            raise self.response
-        return request.response_model.model_validate(self.response)
+from tests.test_difficulty_tool import Provider, assessment, question
 
 
 class Embeddings:
@@ -91,44 +55,77 @@ class Executor:
         return [self.result]
 
 
-async def assess(*, item=None, request=None, judge=None, embeddings=None, **kwargs):
+async def assess(*, item=None, request=None, embeddings=None, **kwargs):
     return await assess_code_question_quality(
         item or question(),
         request or QualityRequest(prompt="Trace arithmetic."),
-        provider_factory=lambda: judge or Judge(),
         embedding_provider_factory=lambda: embeddings or Embeddings(),
         execution_tool=Executor(),
         **kwargs,
     )
 
 
-async def test_full_content_blinded_independent_evidence_and_serialization():
-    judge, embeddings = Judge(), Embeddings()
-    report = await assess(judge=judge, embeddings=embeddings)
+async def test_full_content_and_absent_quality_are_explicit():
+    embeddings = Embeddings()
+    report = await assess(embeddings=embeddings)
     data = json.loads(report.model_dump_json())
-    assert data["judge"]["assessment"]["option_evidence"]["D"]["reason"]
-    assert data["judge"]["assessment"]["uncertainty"]
     assert report.status == "assessed" and report.advisory
     assert report.technical.status == "passed"
     assert report.similarity.similarity == 1
     assert report.similarity.usage.input_tokens == 40
-    assert report.judge.usage.input_tokens == 100
-    assert report.judge.duration_ms > 0 and report.similarity.duration_ms > 0
-    assert report.judge.provider_settings == judge.generation_settings()
-    assert "passed" not in data and "quality_score" not in data
-    payload = json.loads(judge.requests[0].messages[1]["content"])
-    assert payload["question"] == question().model_dump(mode="json")
-    assert set(payload) == {"question", "request"}
+    assert report.similarity.duration_ms > 0
+    assert report.difficulty_quality.status == "not_supplied"
+    assert report.difficulty_quality.quality_concerns is None
+    assert "judge" not in data and "relevance" not in data
+    assert "quality_score" not in data
     embedded = json.loads(embeddings.texts[1])
     assert embedded == question().model_dump(mode="json", exclude={"correct_option"})
-    assert "correct_option" not in embedded
     assert embeddings.texts == [
         report.similarity.request_text,
         report.similarity.question_text,
     ]
 
 
-async def test_perfect_similarity_and_good_judge_do_not_override_failures():
+async def test_reuses_existing_difficulty_once_and_snapshots_its_evidence():
+    provider = Provider()
+    previous = await assess_code_question_difficulty(
+        question(), provider_factory=lambda: provider
+    )
+    report = await assess(difficulty_report=previous)
+    assert len(provider.requests) == 1
+    assert report.difficulty_quality.status == "reused"
+    assert (
+        report.difficulty_quality.quality_concerns
+        == previous.judge.assessment.quality_concerns
+    )
+    assert report.difficulty_quality.report == previous
+    saved = report.model_dump_json()
+    previous.judge.assessment.quality_concerns.append("Caller changed its copy")
+    assert report.model_dump_json() == saved
+    assert report.difficulty_quality.report.usage.input_tokens == 123
+
+
+async def test_stale_difficulty_evidence_is_rejected_before_embedding():
+    previous = await assess_code_question_difficulty(
+        question(), provider_factory=Provider
+    )
+    embeddings = Embeddings()
+    changed = question().model_copy(update={"question": "Changed wording"})
+    with pytest.raises(ValueError, match="exact supplied question"):
+        await assess(item=changed, embeddings=embeddings, difficulty_report=previous)
+    assert embeddings.texts is None
+
+
+async def test_incomplete_option_evidence_is_not_reused():
+    previous = await assess_code_question_difficulty(
+        question(), provider_factory=Provider
+    )
+    previous.judge.assessment.option_evidence.pop()
+    with pytest.raises(ValueError, match="cover the supplied options"):
+        await assess(difficulty_report=previous)
+
+
+async def test_perfect_similarity_and_reused_opinions_do_not_override_failures():
     item = question().model_copy(update={"correct_option": "A"})
     request = QualityRequest(
         prompt="Trace nested loops.",
@@ -136,7 +133,14 @@ async def test_perfect_similarity_and_good_judge_do_not_override_failures():
         answer_target="loop_iterations",
         num_distractors=2,
     )
-    report = await assess(item=item, request=request)
+    provider = Provider()
+    previous = await assess_code_question_difficulty(
+        item, provider_factory=lambda: provider
+    )
+    previous.judge.assessment.quality_concerns = []
+    report = await assess(item=item, request=request, difficulty_report=previous)
+    assert report.difficulty_quality.status == "reused"
+    assert len(provider.requests) == 1
     assert report.status == "assessed"
     assert report.technical.status == "failed"
     assert report.technical.findings == [
@@ -229,10 +233,11 @@ def test_counts_use_trace_summary_instead_of_return_value(target):
 )
 async def test_bad_embeddings_keep_quality_and_technical_results(vectors):
     report = await assess(embeddings=Embeddings(vectors))
-    assert report.status == "partial"
+    assert report.status == "error"
     assert report.similarity.error_code == "EMBEDDING_FAILED"
     assert report.similarity.similarity is None
-    assert report.judge.status == "completed" and report.technical.status == "passed"
+    assert report.difficulty_quality.status == "not_supplied"
+    assert report.technical.status == "passed"
 
 
 @pytest.mark.parametrize(
@@ -247,15 +252,19 @@ def test_cosine_range_and_numerical_stability(vectors, expected):
     assert cosine_similarity(vectors) == pytest.approx(expected)
 
 
-async def test_malformed_judge_is_not_retried_and_does_not_erase_similarity():
-    proposed = assessment()
-    proposed["option_evidence"].pop("D")
-    judge = Judge(proposed)
-    report = await assess(judge=judge)
-    assert report.status == "partial" and report.judge.status == "error"
-    assert report.judge.usage.input_tokens == 100
-    assert report.similarity.status == "measured" and len(judge.requests) == 1
-    assert report.judge.assessment is None
+async def test_failed_difficulty_evidence_is_retained_without_reassessment():
+    provider = Provider(RuntimeError("PRIVATE REMOTE ERROR"))
+    previous = await assess_code_question_difficulty(
+        question(), provider_factory=lambda: provider
+    )
+    report = await assess(difficulty_report=previous)
+    assert len(provider.requests) == 1
+    assert report.status == "assessed"
+    assert report.difficulty_quality.status == "unavailable"
+    assert report.difficulty_quality.quality_concerns is None
+    assert report.difficulty_quality.report.error_code == "JUDGE_INTERNAL_ERROR"
+    assert report.difficulty_quality.report.usage.input_tokens == 123
+    assert "PRIVATE REMOTE ERROR" not in report.model_dump_json()
 
 
 async def test_configuration_errors_are_explicit_and_do_not_leak_secrets():
@@ -265,14 +274,12 @@ async def test_configuration_errors_are_explicit_and_do_not_leak_secrets():
     report = await assess_code_question_quality(
         question(),
         QualityRequest(prompt="Arithmetic"),
-        provider_factory=broken,
         embedding_provider_factory=broken,
         execution_tool=Executor(),
     )
     assert report.status == "error"
     assert report.technical.status == "passed"
     assert report.similarity.error_code == "EMBEDDING_CONFIGURATION_ERROR"
-    assert report.judge.error_code == "JUDGE_CONFIGURATION_ERROR"
     assert "PRIVATE TOKEN" not in report.model_dump_json()
 
 
@@ -315,24 +322,26 @@ async def test_missing_embedding_usage_stays_unknown_without_losing_similarity()
     assert result.usage.input_tokens is None
 
 
-async def test_three_options_produce_only_three_option_judgments():
+async def test_three_options_reuse_only_the_three_existing_judgments():
     item = question()
     item.options.pop()
     response = assessment()
-    response["option_evidence"].pop("D")
-    result = await assess(item=item, judge=Judge(response))
-    assert result.status == "assessed"
-    assert set(
-        json.loads(result.model_dump_json())["judge"]["assessment"]["option_evidence"]
-    ) == set("ABC")
+    response["option_evidence"].pop()
+    provider = Provider(response)
+    previous = await assess_code_question_difficulty(
+        item, provider_factory=lambda: provider
+    )
+    result = await assess(item=item, difficulty_report=previous)
+    assert len(provider.requests) == 1 and result.status == "assessed"
+    assert len(result.difficulty_quality.report.judge.assessment.option_evidence) == 3
 
 
 @pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf")])
 async def test_invalid_deadlines_fail_before_provider_calls(timeout):
-    judge = Judge()
+    embeddings = Embeddings()
     with pytest.raises(ValueError, match="finite and positive"):
-        await assess(judge=judge, judge_timeout_seconds=timeout)
-    assert not judge.requests
+        await assess(embeddings=embeddings, embedding_timeout_seconds=timeout)
+    assert embeddings.texts is None
     with pytest.raises(ValueError, match="finite and positive"):
         create_validation_server(embedding_timeout_seconds=timeout)
 
@@ -366,8 +375,14 @@ def test_embedding_adapter_orders_indices_and_preserves_usage_on_bad_response():
 
 
 async def test_mcp_tool_has_full_evidence_and_is_not_an_authoring_check():
+    def forbidden():
+        pytest.fail("Quality assessment must not construct a difficulty judge")
+
+    previous = await assess_code_question_difficulty(
+        question(), provider_factory=Provider
+    )
     server = create_validation_server(
-        quality_provider_factory=Judge,
+        difficulty_provider_factory=forbidden,
         embedding_provider_factory=Embeddings,
         code_execution_tool=Executor(),
     )
@@ -386,10 +401,32 @@ async def test_mcp_tool_has_full_evidence_and_is_not_an_authoring_check():
             },
         )
         assert result.structured_content["technical"]["status"] == "passed"
+        assert result.structured_content["version"] == "2.0.0"
         assert (
-            result.structured_content["judge"]["assessment"]["relevance"]["rating"]
-            == "good"
+            result.structured_content["difficulty_quality"]["status"] == "not_supplied"
         )
+        assert "judge" not in result.structured_content
+        reused = await client.call_tool(
+            "assess_code_quality",
+            {
+                "question": question().model_dump(mode="json"),
+                "request": {"prompt": "Arithmetic"},
+                "difficulty_report": previous.model_dump(mode="json"),
+            },
+        )
+        assert reused.structured_content["difficulty_quality"]["status"] == "reused"
+        assert reused.structured_content["difficulty_quality"]["quality_concerns"]
+        malformed = previous.model_dump(mode="json")
+        malformed["usage"]["model_call_count"] = "1"
+        with pytest.raises(ToolError, match="int_type"):
+            await client.call_tool(
+                "assess_code_quality",
+                {
+                    "question": question().model_dump(mode="json"),
+                    "request": {"prompt": "Arithmetic"},
+                    "difficulty_report": malformed,
+                },
+            )
         with pytest.raises(ToolError):
             await client.call_tool(
                 "assess_code_quality",
@@ -400,15 +437,17 @@ async def test_mcp_tool_has_full_evidence_and_is_not_an_authoring_check():
             )
 
 
-def test_strict_schema_exact_options_and_rendering_preserve_content():
+def test_rendering_preserves_all_learner_content_and_omits_the_designation():
     item = question()
     item.options.pop()
-    request = build_quality_request(item, QualityRequest(prompt="Arithmetic"))
-    schema = request.response_model.model_json_schema()
-    options = schema["$defs"]["ThreeQualityOptions"]["properties"]
-    assert list(options) == list("ABC")
-    for node in [schema, *schema["$defs"].values()]:
-        if node.get("type") == "object":
-            assert node["additionalProperties"] is False
-            assert set(node["required"]) == set(node["properties"])
-    assert json.loads(rendered_question(item))["code"] == item.code
+    content = json.loads(rendered_question(item))
+    assert content["code"] == item.code
+    assert len(content["options"]) == 3
+    assert "correct_option" not in content
+
+
+def test_default_and_override_embedding_models(monkeypatch):
+    monkeypatch.delenv("EDCRAFT_EMBEDDING_MODEL", raising=False)
+    assert OpenAIEmbeddingProvider(client=object()).model == "text-embedding-3-large"
+    monkeypatch.setenv("EDCRAFT_EMBEDDING_MODEL", "text-embedding-3-small")
+    assert OpenAIEmbeddingProvider(client=object()).model == "text-embedding-3-small"

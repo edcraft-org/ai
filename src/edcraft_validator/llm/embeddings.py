@@ -23,6 +23,7 @@ class EmbeddingProvider(Protocol):
 
 
 EmbeddingProviderFactory = Callable[[], EmbeddingProvider]
+DEFAULT_EMBEDDING_MODEL = "text-embedding-3-large"
 
 
 class OpenAIEmbeddingProvider:
@@ -30,7 +31,7 @@ class OpenAIEmbeddingProvider:
 
     def __init__(self, *, client=None, model: str | None = None):
         self.model = model or os.getenv(
-            "EDCRAFT_EMBEDDING_MODEL", "text-embedding-3-small"
+            "EDCRAFT_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL
         )
         # The endpoint exposes a model ID, not an immutable weight revision.
         self.model_version = "provider model ID; immutable revision unavailable"

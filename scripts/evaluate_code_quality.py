@@ -1,10 +1,9 @@
-"""Freeze a quality review plan before judging the reserved MCQs and controls."""
+"""Freeze an embedding relevance review; never start a generative judge call."""
 
 import argparse
 import asyncio
 import hashlib
 import json
-import os
 import statistics
 import subprocess
 from collections import Counter
@@ -13,11 +12,14 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from edcraft_validator.application.code_quality import assess_code_question_quality
+from edcraft_validator.application.code_difficulty import CodeDifficultyReport
+from edcraft_validator.application.code_quality import (
+    assess_code_question_quality,
+    reuse_difficulty_quality,
+)
 from edcraft_validator.domains.code.difficulty import CodeDifficultyQuestion
 from edcraft_validator.domains.code.quality import QualityRequest
 from edcraft_validator.llm.embeddings import OpenAIEmbeddingProvider
-from edcraft_validator.mcp.quality_tools import configured_quality_provider
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = ROOT / "reference_sets/python_tracing/dataset.json"
@@ -50,7 +52,19 @@ def evaluation_cases(dataset: dict, controls: dict) -> list[dict]:
                 "expected": None,
             }
         )
-    cases.extend(controls["cases"])
+    # Preserve the frozen control content. Only deterministic expectations are
+    # scored by v2; historical rubric expectations remain in the control source.
+    cases.extend(
+        {
+            **case,
+            "expected": {
+                key: value
+                for key, value in case["expected"].items()
+                if key in {"technical", "requirements"}
+            },
+        }
+        for case in controls["cases"]
+    )
     ids = [case["case_id"] for case in cases]
     if len(ids) != len(set(ids)):
         raise ValueError("evaluation case IDs must be unique")
@@ -61,46 +75,32 @@ def evaluation_cases(dataset: dict, controls: dict) -> list[dict]:
     return cases
 
 
+def load_difficulty_reports(path: Path) -> dict[str, CodeDifficultyReport]:
+    """Load existing standalone concrete-MCQ reports, without any inference."""
+    reports = {}
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        report = CodeDifficultyReport.model_validate_json(line, strict=True)
+        if report.question_sha256 in reports:
+            raise ValueError("duplicate question hash in difficulty reports")
+        reports[report.question_sha256] = report
+    return reports
+
+
 def summary(records: list[dict], requested: int) -> dict:
     groups = {}
     for group in ("held_out", "control"):
         selected = [r for r in records if r["group"] == group]
-        ratings = {
-            name: Counter() for name in ("relevance", "clarity", "answerability")
-        }
         disagreements = []
-        distractor_ratings = Counter()
-        uncertainty_cases = []
         for record in selected:
-            report = record["report"]
-            assessment = report["judge"]["assessment"]
-            if assessment:
-                # The designation is recorded in the frozen manifest, not inferred
-                # from the judge's opinions about the options.
-                correct = record["correct_option"]
-                distractor_ratings.update(
-                    item["rating"]
-                    for key, item in assessment["option_evidence"].items()
-                    if key != correct
-                )
-                if assessment["uncertainty"]:
-                    uncertainty_cases.append(record["case_id"])
-            for name in ratings:
-                ratings[name][
-                    assessment[name]["rating"] if assessment else "error"
-                ] += 1
-            expected = record["expected"] or {}
             observed = {
-                "technical": report["technical"]["status"],
-                "requirements": report["requirements"]["status"],
-                **{
-                    name: assessment[name]["rating"] if assessment else "error"
-                    for name in ratings
-                },
+                name: record["report"][name]["status"]
+                for name in ("technical", "requirements")
             }
             mismatches = {
                 name: {"expected": value, "observed": observed[name]}
-                for name, value in expected.items()
+                for name, value in (record["expected"] or {}).items()
                 if observed[name] != value
             }
             if mismatches:
@@ -114,90 +114,87 @@ def summary(records: list[dict], requested: int) -> dict:
         ]
         groups[group] = {
             "recorded": len(selected),
-            "ratings": ratings,
             "technical": Counter(r["report"]["technical"]["status"] for r in selected),
             "requirements": Counter(
                 r["report"]["requirements"]["status"] for r in selected
+            ),
+            "difficulty_quality": Counter(
+                r["report"]["difficulty_quality"]["status"] for r in selected
             ),
             "similarity_range": [min(similarities), max(similarities)]
             if similarities
             else None,
             "control_disagreements": disagreements,
-            "distractor_plausibility": distractor_ratings,
-            "uncertainty_cases": uncertainty_cases,
         }
     times = [r["report"]["duration_ms"] for r in records]
-    judge_inputs = [r["report"]["judge"]["usage"]["input_tokens"] for r in records]
-    judge_outputs = [r["report"]["judge"]["usage"]["output_tokens"] for r in records]
-    embedding_inputs = [
-        r["report"]["similarity"]["usage"]["input_tokens"] for r in records
-    ]
-
-    def complete_total(counts):
-        return sum(counts) if all(v is not None for v in counts) else None
-
+    tokens = [r["report"]["similarity"]["usage"]["input_tokens"] for r in records]
     return {
         "requested": requested,
         "recorded": len(records),
         "unresolved": requested - len(records),
         "groups": groups,
+        "deterministic_control_disagreement_count": len(
+            groups["control"]["control_disagreements"]
+        ),
         "statuses": Counter(r["report"]["status"] for r in records),
         "protocol_failure_count": sum(
             bool(r.get("protocol_findings")) for r in records
         ),
-        "judge_input_tokens": complete_total(judge_inputs),
-        "judge_output_tokens": complete_total(judge_outputs),
-        "embedding_input_tokens": complete_total(embedding_inputs),
+        "new_judge_calls": 0,
+        "embedding_input_tokens": sum(tokens)
+        if all(v is not None for v in tokens)
+        else None,
         "median_duration_ms": statistics.median(times) if times else None,
         "limitations": [
-            "No human relevance or quality labels exist for the held-out set; "
-            "these are descriptive reviews, not quality accuracy.",
-            "Control expectations are authored engineering hypotheses, "
-            "not independent human calibration.",
-            "Single judge, one call per case; uncertainty and all option "
-            "evidence remain in JSONL.",
-            "No similarity cutoff, no aggregate pass score and no learner calibration.",
-            "Provider model IDs do not establish immutable model weights "
-            "or reproducible sampling.",
+            "Embedding similarity is advisory, with no pass cutoff "
+            "or verified semantic alignment.",
+            "No relevance rubric is judged. Ambiguity and missing concepts "
+            "can escape these checks.",
+            "Existing difficulty evidence is optional, question-specific "
+            "and not a request-alignment judgment.",
+            "Reused judge usage describes prior calls, "
+            "excluded from this run's new usage.",
+            "The held-out set has no human relevance labels; "
+            "no relevance accuracy is claimed.",
+            "Provider model IDs do not establish immutable model weights.",
         ],
     }
 
 
-async def evaluate(output: Path) -> dict:
+async def evaluate(
+    output: Path, *, difficulty_reports: dict[str, CodeDifficultyReport] | None = None
+) -> dict:
     cases = evaluation_cases(
         json.loads(DATASET.read_text()), json.loads(CONTROLS.read_text())
     )
-    # Construct once for settings only, never reuse mutable per-call providers.
-    judge = configured_quality_provider()
+    difficulty_reports = difficulty_reports or {}
+    questions = [CodeDifficultyQuestion.model_validate(c["question"]) for c in cases]
+    planned_questions = {question.sha256: question for question in questions}
+    if not difficulty_reports.keys() <= planned_questions.keys():
+        raise ValueError("difficulty reports contain questions outside this plan")
+    # Validate every reused report before creating a client or starting a case.
+    for question_hash, report in difficulty_reports.items():
+        reuse_difficulty_quality(planned_questions[question_hash], report)
+    manifest_path = output.with_suffix(".manifest.json")
+    summary_path = output.with_suffix(".summary.json")
+    if any(p.exists() for p in (output, manifest_path, summary_path)):
+        raise FileExistsError("choose a fresh evaluation output path")
     embedding = OpenAIEmbeddingProvider()
-    settings = judge.generation_settings()
-    if settings["max_retries"] != 0:
-        raise ValueError("Set SOCLAAS_MAX_RETRIES=0 for this single-call review")
-    if settings["response_format"] != "json_schema":
-        raise ValueError(
-            "Set SOCLAAS_RESPONSE_FORMAT=json_schema for the frozen review"
-        )
     source_files = sorted((ROOT / "src").rglob("*.py")) + [Path(__file__)]
-    source_hash = sha256(
-        b"".join(
-            str(p.relative_to(ROOT)).encode() + b"\0" + p.read_bytes()
-            for p in source_files
-        )
-    )
     manifest = {
-        "protocol": "code-quality-evaluation-v1",
+        "protocol": "code-quality-evaluation-v2-no-extra-judge",
         "created_at": datetime.now(UTC).isoformat(),
         "source_revision": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
         ).strip(),
-        "source_sha256": source_hash,
+        "source_sha256": sha256(
+            b"".join(
+                str(p.relative_to(ROOT)).encode() + b"\0" + p.read_bytes()
+                for p in source_files
+            )
+        ),
         "dataset_sha256": sha256(DATASET.read_bytes()),
         "controls_sha256": sha256(CONTROLS.read_bytes()),
-        "judge": {
-            "provider": judge.provider,
-            "model": judge.model,
-            "settings": settings,
-        },
         "embedding": {
             "provider": embedding.provider,
             "model": embedding.model,
@@ -205,18 +202,17 @@ async def evaluate(output: Path) -> dict:
             "max_retries": 0,
             "transport_timeout_seconds": 30,
         },
-        "judge_deadline_seconds": 120,
+        "new_judge_calls": 0,
+        "difficulty_report_sha256": {
+            key: sha256(report.model_dump_json().encode())
+            for key, report in difficulty_reports.items()
+        },
         "embedding_deadline_seconds": 35,
         "execution_timeout_seconds": 2,
         "concurrency": 2,
         "cases": cases,
     }
     output.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path = output.with_suffix(".manifest.json")
-    summary_path = output.with_suffix(".summary.json")
-    # Refuse to overwrite an earlier review, even a partial one.
-    if any(p.exists() for p in (output, manifest_path, summary_path)):
-        raise FileExistsError("choose a fresh evaluation output path")
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
     records = []
     semaphore = asyncio.Semaphore(2)
@@ -224,29 +220,25 @@ async def evaluate(output: Path) -> dict:
 
         async def run(case):
             async with semaphore:
+                question = CodeDifficultyQuestion.model_validate(case["question"])
                 report = await assess_code_question_quality(
-                    CodeDifficultyQuestion.model_validate(case["question"]),
+                    question,
                     QualityRequest.model_validate(case["request"]),
-                    provider_factory=configured_quality_provider,
                     embedding_provider_factory=OpenAIEmbeddingProvider,
-                    judge_timeout_seconds=120,
+                    difficulty_report=difficulty_reports.get(question.sha256),
                 )
-                protocol_findings = []
-                if report.judge.model is not None and (
-                    report.judge.provider_settings != settings
-                    or report.judge.model != judge.model
+                findings = []
+                if (
+                    report.similarity.model is not None
+                    and report.similarity.model != embedding.model
                 ):
-                    protocol_findings.append("JUDGE_SETTINGS_DRIFT")
-                if report.similarity.model is not None and (
-                    report.similarity.model != embedding.model
-                ):
-                    protocol_findings.append("EMBEDDING_MODEL_DRIFT")
+                    findings.append("EMBEDDING_MODEL_DRIFT")
                 record = {
                     "case_id": case["case_id"],
                     "group": case["group"],
                     "expected": case["expected"],
                     "correct_option": case["question"]["correct_option"],
-                    "protocol_findings": protocol_findings,
+                    "protocol_findings": findings,
                     "report": report.model_dump(mode="json"),
                 }
                 stream.write(json.dumps(record, allow_nan=False) + "\n")
@@ -272,16 +264,25 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--difficulty-reports",
+        type=Path,
+        help="Existing concrete difficulty reports in JSONL; never assessed here",
+    )
     args = parser.parse_args()
     if args.env_file:
         load_dotenv(args.env_file, override=False)
-    # Environment values are captured in the manifest; no adaptive tuning.
-    os.environ.setdefault("SOCLAAS_MAX_RETRIES", "0")
-    result = asyncio.run(evaluate(args.output))
+    reports = (
+        load_difficulty_reports(args.difficulty_reports)
+        if args.difficulty_reports
+        else None
+    )
+    result = asyncio.run(evaluate(args.output, difficulty_reports=reports))
     return (
         0
         if result["statuses"].get("assessed", 0) == result["requested"]
         and not result["protocol_failure_count"]
+        and not result["deterministic_control_disagreement_count"]
         else 2
     )
 

@@ -1,112 +1,106 @@
 # Relevance and question quality
 
-`assess_code_quality` reviews a complete concrete Python tracing MCQ against an
-author request. It is an explicitly invoked MCP tool tagged `quality:code`; it is
-not selected by template authoring and does not change saved-template validation.
-The Python entry point is
-`application.code_quality.assess_code_question_quality`.
+`assess_code_quality` v2 reviews a complete concrete Python tracing MCQ against an
+explicit author request. It performs local correctness and requirement checks,
+makes one batched embedding request, and can reuse an existing difficulty report.
+It never starts a difficulty or quality judge call. The tool remains explicitly
+invoked and tagged `quality:code`, outside template authoring's check catalogue.
 
-## Input and evidence
+## Inputs and evidence
 
-Supply the same complete question shape as `assess_code_difficulty`: code,
-entry function, exact inputs, rendered question, answer target, ordered A–C or A–D
-options, and designated correct option. Supply a `QualityRequest` containing:
+Supply code, entry function, exact inputs, rendered question, answer target,
+ordered A–C or A–D options and designated correct option. `QualityRequest` holds
+`prompt`, optional `required_features`, `answer_target`, `num_distractors`, and
+`learner_prerequisites`. Prerequisites provide embedding context; they do not
+change an existing difficulty assessment's assumptions.
 
-| Field | Meaning |
+| Report section | Meaning |
 | --- | --- |
-| `prompt` | Original learning objective or author request; required. |
-| `required_features` | Optional explicit supported syntax requirements. |
-| `answer_target` | Optional requested execution target. |
-| `num_distractors` | Optional requested count, two or three. |
-| `learner_prerequisites` | Semantic knowledge assumed during rubric judging. |
+| `technical` | Supported-subset and bounded execution checks, canonical answer, and distinct wrong options; passed, failed or error. |
+| `requirements` | Requested reachable syntax, answer target and distractor count; satisfied, missing or unknown. |
+| `similarity` | Cosine similarity between the full serialized request and learner-facing question; no pass threshold. |
+| `difficulty_quality` | Optional existing difficulty report, including its quality concerns, option evidence, rubric, settings and prior usage. |
 
-The report preserves four independent evidence sections:
+`status: assessed` means similarity was measured; `error` means that measurement
+failed. Neither establishes correctness, requirement satisfaction, semantic
+alignment or quality approval. Those sections must be read independently.
+Syntax presence alone does not prove the requested concept affects the answer.
 
-| Section | Interpretation |
-| --- | --- |
-| `technical` | Supported-subset, bounded execution, canonical answer, and distinct wrong-option checks. `passed`, `failed`, or `error`. |
-| `requirements` | Reachable syntax features, target and option count. `satisfied`, `missing`, or `unknown`. Syntax alone cannot prove the concept matters to the answer. |
-| `similarity` | Embedding cosine similarity between the serialized request and full learner-facing question. No pass threshold. |
-| `judge` | Advisory relevance, clarity, answerability and evidence for every option, with concerns and uncertainty. |
+## Reusing difficulty evidence without another call
 
-`status: assessed` means both semantic measurements completed; it is not approval
-or a correctness pass. `partial` retains one successful semantic measurement and
-the other one's error; `error` means neither completed. Always inspect the technical
-and requirement sections independently. Failed or unavailable correctness evidence
-and missing explicit requirements cannot be repaired by similarity or good rubric
-ratings. There is no aggregate quality score or automatic acceptance decision.
+Pass an optional `difficulty_report` returned by `assess_code_difficulty` for the
+exact same concrete question. The question SHA256 must match, including inputs,
+stem, options and answer designation. A mismatch is rejected before execution or
+embedding. Successful evidence must cover every supplied option and is copied so
+later caller mutations cannot change the quality report.
 
-Unsupported code is rejected before execution. Execution uses the existing local
-worker and its process limits. Missing count-target trace data returns error
-evidence. Production deployment still supplies outer isolation as described in the
-[developer reference](development.md).
+`difficulty_quality.status` is `reused`, `not_supplied` or `unavailable`.
+Missing, failed or unable-to-assess difficulty evidence is never regenerated.
+Without usable evidence, `quality_concerns` is null; an empty list means an existing
+successful judge reported no concerns. Failures and prior usage remain in the
+nested original report. Reused usage is not new usage incurred by this call.
 
-## Similarity and rubric protocol
+The difficulty judge already considers concepts, dependencies, shortcuts,
+misconception hypotheses and other quality concerns. Its prompt and schema are
+unchanged. It does not see the original author request, so reuse does not produce
+a rubric relevance rating or establish request alignment. Template difficulty
+concerns remain available in their existing template check evidence; a judgment
+of a typical template instance cannot substitute for an exact concrete report.
 
-The default embedding model ID is `text-embedding-3-small`; configure
-`EDCRAFT_EMBEDDING_MODEL`, `OPENAI_API_KEY` and optionally `OPENAI_BASE_URL`.
-The report records the model ID, revision availability, vector dimension, metric,
-exact compared text, usage and latency. The provider exposes a model ID rather
-than an immutable weight revision; the report states that limitation explicitly.
-`lf-strip-v1` replaces CRLF and CR with LF and strips outer whitespace. No content
-is truncated, lowercased or removed from code, inputs, stem, target or options.
-The correct-option designation is excluded from embeddings because it is not
-learner-facing. Long requests rejected by the embedding endpoint remain errors.
+This replaces v1's separate SocLaas quality call and `judge` output. The v2 report
+has no relevance/clarity/answerability rating fields and no separate quality
+rubric. `EDCRAFT_QUALITY_MODEL`, the quality provider factory and its judge deadline
+have been removed. The existing difficulty provider and configuration remain.
 
-The rubric and prompt are versioned in `domains/code/quality.py`, and the report
-hashes the exact rubric text. The SocLaas model uses `EDCRAFT_QUALITY_MODEL` or
-`SOCLAAS_MODEL`, plus the existing SocLaas transport/output settings. The judge sees
-the request, prerequisites and full MCQ, including the answer designation as
-unverified context. It does not see similarity, execution results, source identity,
-human difficulty labels, dimension ratings or reference solutions.
+## Embedding protocol
 
-Each dimension uses `good`, `concern` or `unknown`, with evidence. Exact-option
-schemas require evidence for every supplied choice. Distractor misconceptions are
-hypotheses, not learner observations. The rubric asks whether the requested concept
-is necessary to derive the answer, rather than merely mentioned in comments or
-unused code. Uncertainty and quality concerns remain separate lists.
+The provisional default is `text-embedding-3-large`, selected using the
+[published model comparison](embedding-model-selection.md). Override it with
+`EDCRAFT_EMBEDDING_MODEL`; configure `OPENAI_API_KEY` and optionally
+`OPENAI_BASE_URL`. This selection is based on online benchmark evidence, not a
+new local comparison of model accuracy.
 
-There is one application judge call and one batched embedding call per assessment.
-The embedding transport has a 30-second timeout and zero retries. Application
-defaults are 60 seconds for judging, 35 for embeddings and two for execution.
-Failures retain available token usage without raw exception text. An application
-deadline ignores late results; it cannot terminate a synchronous provider thread.
-Unknown usage remains null. Judge adapter retries are recorded separately in its
-settings; the frozen evaluation requires zero retries.
+The embedding request contains full code, inputs, stem, target and options,
+excluding the answer designation. `lf-strip-v1` standardizes CRLF/CR to LF and
+strips outer whitespace. There is no truncation, lowercasing or comment removal.
+The report records exact compared text, model ID, revision availability, vector
+dimension, cosine metric, token usage and latency. No universal cutoff is used.
+An immutable weight revision is unavailable from this provider model ID.
+
+The transport timeout is 30 seconds with zero retries. Application defaults are
+35 seconds for embeddings and two for bounded execution. Errors retain available
+usage without raw exception text; unknown usage stays null. Late thread results
+are ignored after an application deadline. Deployment still supplies outer
+isolation as described in the [developer reference](development.md).
 
 ## Fixed held-out review
 
-Run from the repository root after configuring the two services:
-
 ```bash
-SOCLAAS_MAX_RETRIES=0 SOCLAAS_RESPONSE_FORMAT=json_schema \
-SOCLAAS_TIMEOUT_SECONDS=110 \
 uv run python scripts/evaluate_code_quality.py --env-file .env \
-  --output .artifacts/quality-review.jsonl
+  --output .artifacts/relevance-v2.jsonl
 ```
 
-The script freezes its manifest before calls. It reviews all 12 reserved questions
-from the unchanged `reference_sets/python_tracing/dataset.json`, plus seven
-versioned engineering controls in `quality-controls.json`: relevant, off-topic,
-omitted explicit requirement, topic words without the requested concept, ambiguous
-wording, wrong answer and duplicate distractor. The control expectations are fixed
-before judging and hidden from the judge. No control changes a frozen MCQ.
+To reuse already saved concrete difficulty reports, add
+`--difficulty-reports .artifacts/difficulty.jsonl`. That file contains one
+`CodeDifficultyReport` JSON object per line. Duplicate question hashes or reports
+outside the frozen plan are rejected. Reports are loaded locally with no judge
+requests, and the manifest records their hashes.
 
-The manifest contains exact cases, dataset/control/source hashes, Git revision,
-provider IDs, settings and deadlines. Sampling remains at provider defaults, with
-no seed or temperature claim. Each completed record is flushed immediately to
-JSONL; a summary retains unresolved cases, errors, control disagreements, separate
-rating counts, similarity ranges, token totals and median latency. Settings drift
-is recorded as a protocol failure, never discarded or silently accepted. Output
-paths cannot overwrite an earlier or partial review.
+Protocol `code-quality-evaluation-v2-no-extra-judge` freezes the same 12 reserved
+questions and seven control contents before calls. Only deterministic technical
+and requirement expectations are scored. Historical rubric expectations in the
+unchanged control source are not treated as measured outcomes. Ambiguity and
+concept alignment receive no new rubric assessment. Existing evidence is reused
+only when its exact question hash matches.
 
-The held-out dataset has human difficulty labels but no human relevance or quality
-labels. This run is a descriptive review, not a quality-accuracy estimate. Controls
-are engineering hypotheses rather than independent human reference judgments. A
-single judge and a small fixed set cannot establish educational validity. Preserve
-unexpected ratings, uncertainty and weak distractor evidence for human review;
-do not tune a cutoff or rewrite reference labels from these results. Deeper
-educational calibration remains later work.
+The manifest records source/dataset/control hashes, exact cases and model
+settings. Each completed record is flushed to JSONL and summarized with errors,
+unresolved cases, deterministic control disagreements, similarity ranges, reused
+evidence availability, new embedding usage and latency. It records zero new judge
+calls. Outputs cannot overwrite earlier reviews. Reference labels remain fixed.
 
-The first fixed review and its observed disagreements are recorded in the
-[21 October 2026 evaluation results](evaluation-history.md#issue-44-relevance-and-quality-review-21-october-2026).
+The [original v1 review](evaluation-history.md#issue-44-relevance-and-quality-review-21-october-2026)
+is historical evidence using the separate judge and small embedding model. It is
+not a performance result for v2 or the new default. The held-out set has no human
+relevance labels; embeddings and existing difficulty concerns cannot establish
+educational validity or learner-calibrated relevance.

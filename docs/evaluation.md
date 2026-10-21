@@ -131,11 +131,14 @@ contract; record evaluation results in the pull request.
 ## What to report
 
 For issue 44, use the [quality assessment protocol](quality-assessment.md#fixed-held-out-review).
-It freezes all 12 reserved MCQs and seven versioned controls before the first call,
-keeps reference labels out of the judge input, and stores separate technical,
-requirement, similarity and rubric results. There are no human quality labels for
-the reserved set; report descriptive ratings and control disagreements rather than
-claiming quality accuracy. All model calls remain opt-in.
+The v2 runner freezes all 12 reserved MCQs and seven versioned control contents,
+records technical checks, explicit requirements and embedding similarity, and
+optionally loads existing difficulty reports. It makes no generative judge calls;
+missing quality evidence remains explicit. The original v1 live review is retained
+as historical evidence. There are no human relevance labels for the reserved set;
+neither similarity nor reused difficulty concerns establish relevance accuracy.
+The [embedding selection](embedding-model-selection.md) compares published online
+benchmarks rather than claiming a new domain evaluation. Model calls remain opt-in.
 
 Use the fixed supported requests for the initial live baseline. Scripted regression
 tests cover repairable and repeated failures, unsuitable check plans, invalid
