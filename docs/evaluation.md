@@ -130,15 +130,24 @@ contract; record evaluation results in the pull request.
 
 ## What to report
 
-For issue 44, use the [quality assessment protocol](quality-assessment.md#fixed-held-out-review).
+For issue 44, see the [project log](Edcraft%20Logs%2015%20Oct%20updated.docx),
+pages 19–21, for relevance checks, model selection and evaluation findings.
 The v2 runner freezes all 12 reserved MCQs and seven versioned control contents,
 records technical checks, explicit requirements and embedding similarity, and
 optionally loads existing difficulty reports. It makes no generative judge calls;
 missing quality evidence remains explicit. The original v1 live review is retained
 as historical evidence. There are no human relevance labels for the reserved set;
 neither similarity nor reused difficulty concerns establish relevance accuracy.
-The [embedding selection](embedding-model-selection.md) compares published online
+The embedding selection in the log compares published online
 benchmarks rather than claiming a new domain evaluation. Model calls remain opt-in.
+
+Run the frozen review with `uv run python scripts/evaluate_code_quality.py
+--env-file .env --output .artifacts/relevance-v2.jsonl`. Optionally add
+`--difficulty-reports .artifacts/difficulty.jsonl` to reuse saved concrete
+`CodeDifficultyReport` objects, one JSON object per line. Stale reports, duplicate
+question hashes and reports outside the frozen plan are rejected before requests.
+The runner retains errors and usage, flushes completed records and refuses to
+overwrite earlier reviews. It never requests a replacement difficulty judgment.
 
 Use the fixed supported requests for the initial live baseline. Scripted regression
 tests cover repairable and repeated failures, unsuitable check plans, invalid
