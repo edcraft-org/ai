@@ -148,6 +148,17 @@ Run the frozen review with `uv run python scripts/evaluate_code_quality.py
 question hashes and reports outside the frozen plan are rejected before requests.
 The runner retains errors and usage, flushes completed records and refuses to
 overwrite earlier reviews. It never requests a replacement difficulty judgment.
+It exclusively reserves the JSONL, manifest and summary files before writing any
+of them. A reservation conflict removes only empty files created by that attempt;
+existing evaluation evidence remains untouched.
+
+The command exits with code 2 for incomplete measurements, protocol failures or
+unexpected mandatory-check results. Held-out cases require technical checks to
+pass and explicit requirements to be satisfied. Controls use their frozen
+expectations, so an expected wrong-answer rejection or missing requirement is not
+a run failure. `mandatory_check_failure_count` counts cases that disagree with
+those expectations, including execution errors and unknown requirement results.
+This run-success check does not turn similarity into a relevance pass threshold.
 
 Use the fixed supported requests for the initial live baseline. Scripted regression
 tests cover repairable and repeated failures, unsuitable check plans, invalid

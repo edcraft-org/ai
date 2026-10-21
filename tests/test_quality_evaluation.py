@@ -1,6 +1,10 @@
 """Frozen split, failure denominators and durable review records, without APIs."""
 
+import asyncio
 import json
+import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -73,6 +77,7 @@ async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreem
     assert result["statuses"] == {"error": 1, "assessed": 18}
     assert result["new_judge_calls"] == 0 and len(provider.requests) == 1
     assert result["protocol_failure_count"] == 0
+    assert result["mandatory_check_failure_count"] == 0
     records = [json.loads(line) for line in output.read_text().splitlines()]
     assert len(records) == 19
     assert "PRIVATE REMOTE ERROR" not in output.read_text()
@@ -95,6 +100,7 @@ async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreem
     assert (
         evaluation.summary(records, 19)["deterministic_control_disagreement_count"] == 1
     )
+    assert evaluation.summary(records, 19)["mandatory_check_failure_count"] == 1
     with pytest.raises(FileExistsError):
         await evaluation.evaluate(output)
 
@@ -136,6 +142,106 @@ def test_empty_summary_counts_all_requested_cases_as_unresolved():
     assert result["unresolved"] == 19 and result["recorded"] == 0
     assert result["groups"]["held_out"]["similarity_range"] is None
     assert result["median_duration_ms"] is None
+
+
+def test_concurrent_run_cannot_replace_the_winning_manifest(monkeypatch, tmp_path):
+    checked = threading.Barrier(2)
+    reserved = threading.Event()
+    local = threading.local()
+    output = tmp_path / "review.jsonl"
+    original_open = Path.open
+
+    class RacingEmbeddings(Embeddings):
+        def __init__(self):
+            super().__init__()
+            self.model = local.name
+            if not getattr(local, "client_created", False):
+                local.client_created = True
+                checked.wait(timeout=10)
+                if self.model == "second-run":
+                    assert reserved.wait(timeout=10)
+
+    def observed_open(path, mode="r", *args, **kwargs):
+        stream = original_open(path, mode, *args, **kwargs)
+        if path == output and mode == "x":
+            reserved.set()
+        return stream
+
+    def invoke(name):
+        local.name = name
+        return asyncio.run(evaluation.evaluate(output))
+
+    monkeypatch.setattr(evaluation, "OpenAIEmbeddingProvider", RacingEmbeddings)
+    monkeypatch.setattr(Path, "open", observed_open)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(invoke, "first-run")
+        second = pool.submit(invoke, "second-run")
+        with pytest.raises(FileExistsError):
+            second.result(timeout=20)
+        assert first.result(timeout=20)["recorded"] == 19
+    manifest = json.loads(output.with_suffix(".manifest.json").read_text())
+    records = [json.loads(line) for line in output.read_text().splitlines()]
+    assert manifest["embedding"]["model"] == "first-run"
+    assert {r["report"]["similarity"]["model"] for r in records} == {"first-run"}
+    assert json.loads(output.with_suffix(".summary.json").read_text())["recorded"] == 19
+
+
+@pytest.mark.parametrize(
+    "occupied_suffix", [".jsonl", ".manifest.json", ".summary.json"]
+)
+async def test_output_collision_preserves_existing_files_and_rolls_back_reservations(
+    monkeypatch, tmp_path, occupied_suffix
+):
+    output = tmp_path / "review.jsonl"
+    existing = output.with_suffix(occupied_suffix)
+    existing.write_bytes(b"prior evaluation evidence\n")
+    monkeypatch.setattr(evaluation, "OpenAIEmbeddingProvider", Embeddings)
+    with pytest.raises(FileExistsError):
+        await evaluation.evaluate(output)
+    assert list(tmp_path.iterdir()) == [existing]
+    assert existing.read_bytes() == b"prior evaluation evidence\n"
+
+
+@pytest.mark.parametrize(
+    "section,status",
+    [
+        (None, None),
+        ("technical", "error"),
+        ("technical", "failed"),
+        ("requirements", "unknown"),
+        ("requirements", "missing"),
+    ],
+)
+def test_cli_checks_held_out_measurements_and_preserves_expected_control_failures(
+    monkeypatch, tmp_path, section, status
+):
+    original_assess = evaluation.assess_code_question_quality
+    cases = evaluation.evaluation_cases(
+        json.loads(evaluation.DATASET.read_text()),
+        json.loads(evaluation.CONTROLS.read_text()),
+    )
+    selected = evaluation.CodeDifficultyQuestion.model_validate(cases[0]["question"])
+
+    async def assess(question, request, **kwargs):
+        report = await original_assess(question, request, **kwargs)
+        if section is not None and question.sha256 == selected.sha256:
+            getattr(report, section).status = status
+        return report
+
+    output = tmp_path / "review.jsonl"
+    monkeypatch.setattr(evaluation, "OpenAIEmbeddingProvider", Embeddings)
+    monkeypatch.setattr(evaluation, "assess_code_question_quality", assess)
+    monkeypatch.setattr(sys, "argv", ["review", "--output", str(output)])
+    assert evaluation.main() == (0 if section is None else 2)
+    result = json.loads(output.with_suffix(".summary.json").read_text())
+    assert result["recorded"] == 19 and result["statuses"] == {"assessed": 19}
+    assert result["groups"]["control"]["technical"] == {"passed": 5, "failed": 2}
+    assert result["mandatory_check_failure_count"] == (0 if section is None else 1)
+    assert result["deterministic_control_disagreement_count"] == 0
+    records = [json.loads(line) for line in output.read_text().splitlines()]
+    selected_record = next(r for r in records if r["case_id"] == cases[0]["case_id"])
+    if section is not None:
+        assert selected_record["report"][section]["status"] == status
 
 
 def test_controls_are_versioned_separately_from_frozen_dataset():

@@ -7,8 +7,11 @@ import json
 import statistics
 import subprocess
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import ExitStack, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TextIO
 
 from dotenv import load_dotenv
 
@@ -28,6 +31,29 @@ CONTROLS = ROOT / "reference_sets/python_tracing/quality-controls.json"
 
 def sha256(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
+
+
+@contextmanager
+def reserve_outputs(paths: tuple[Path, ...]) -> Iterator[list[TextIO]]:
+    """Own every output before writing; roll back only an incomplete reservation."""
+    with ExitStack() as stack:
+        streams = []
+        try:
+            for path in paths:
+                streams.append(stack.enter_context(path.open("x", encoding="utf-8")))
+        except OSError:
+            stack.close()
+            for path in paths[: len(streams)]:
+                path.unlink()
+            raise
+        yield streams
+
+
+def write_summary(stream: TextIO, result: dict) -> None:
+    stream.seek(0)
+    stream.write(json.dumps(result, indent=2) + "\n")
+    stream.truncate()
+    stream.flush()
 
 
 def evaluation_cases(dataset: dict, controls: dict) -> list[dict]:
@@ -136,6 +162,17 @@ def summary(records: list[dict], requested: int) -> dict:
         "deterministic_control_disagreement_count": len(
             groups["control"]["control_disagreements"]
         ),
+        "mandatory_check_failure_count": sum(
+            any(
+                record["report"][name]["status"]
+                != (record["expected"] or {}).get(name, expected_status)
+                for name, expected_status in (
+                    ("technical", "passed"),
+                    ("requirements", "satisfied"),
+                )
+            )
+            for record in records
+        ),
         "statuses": Counter(r["report"]["status"] for r in records),
         "protocol_failure_count": sum(
             bool(r.get("protocol_findings")) for r in records
@@ -177,8 +214,6 @@ async def evaluate(
         reuse_difficulty_quality(planned_questions[question_hash], report)
     manifest_path = output.with_suffix(".manifest.json")
     summary_path = output.with_suffix(".summary.json")
-    if any(p.exists() for p in (output, manifest_path, summary_path)):
-        raise FileExistsError("choose a fresh evaluation output path")
     embedding = OpenAIEmbeddingProvider()
     source_files = sorted((ROOT / "src").rglob("*.py")) + [Path(__file__)]
     manifest = {
@@ -213,10 +248,15 @@ async def evaluate(
         "cases": cases,
     }
     output.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
     records = []
     semaphore = asyncio.Semaphore(2)
-    with output.open("x") as stream:
+    with reserve_outputs((output, manifest_path, summary_path)) as (
+        stream,
+        manifest_stream,
+        summary_stream,
+    ):
+        manifest_stream.write(json.dumps(manifest, indent=2) + "\n")
+        manifest_stream.flush()
 
         async def run(case):
             async with semaphore:
@@ -244,9 +284,7 @@ async def evaluate(
                 stream.write(json.dumps(record, allow_nan=False) + "\n")
                 stream.flush()
                 records.append(record)
-                summary_path.write_text(
-                    json.dumps(summary(records, len(cases)), indent=2) + "\n"
-                )
+                write_summary(summary_stream, summary(records, len(cases)))
                 print(
                     f"{len(records)}/{len(cases)} {case['case_id']}: {report.status}",
                     flush=True,
@@ -256,7 +294,7 @@ async def evaluate(
             await asyncio.gather(*(run(case) for case in cases))
         finally:
             result = summary(records, len(cases))
-            summary_path.write_text(json.dumps(result, indent=2) + "\n")
+            write_summary(summary_stream, result)
     return result
 
 
@@ -282,7 +320,7 @@ def main():
         0
         if result["statuses"].get("assessed", 0) == result["requested"]
         and not result["protocol_failure_count"]
-        and not result["deterministic_control_disagreement_count"]
+        and not result["mandatory_check_failure_count"]
         else 2
     )
 
