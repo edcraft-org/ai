@@ -107,3 +107,6 @@ single judge and a small fixed set cannot establish educational validity. Preser
 unexpected ratings, uncertainty and weak distractor evidence for human review;
 do not tune a cutoff or rewrite reference labels from these results. Deeper
 educational calibration remains later work.
+
+The first fixed review and its observed disagreements are recorded in the
+[21 October 2026 evaluation results](evaluation-history.md#issue-44-relevance-and-quality-review-21-october-2026).
