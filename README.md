@@ -197,7 +197,7 @@ concerns and option evidence for the exact same question, with no extra judge
 call. Similarity has no universal pass threshold. A frozen review runner covers
 the 12 reserved questions and seven engineering controls. The provisional embedding
 default is `text-embedding-3-large`; see the
-[project log](docs/Edcraft%20Logs%2015%20Oct%20updated.docx), pages 19–21.
+[project log](docs/edcraft%20logs.docx), pages 19–21.
 
 ## Tests
 
@@ -219,7 +219,7 @@ For live model calls and workflow evaluation, see the [evaluation guide](docs/ev
 - [Goals and milestones](GOALS.md)
 - [Evaluation guide](docs/evaluation.md)
 - [Provisional Python difficulty rubric](docs/difficulty-rubric.md)
-- [Project log, including relevance and embedding model comparison](docs/Edcraft%20Logs%2015%20Oct%20updated.docx)
+- [Project log, including relevance and embedding model comparison](docs/edcraft%20logs.docx)
 - [Frozen Python tracing evaluation dataset](reference_sets/python_tracing/README.md)
 - [Developer reference](docs/development.md)
 - [Earlier evaluation results](docs/evaluation-history.md)

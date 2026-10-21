@@ -15,7 +15,7 @@ Missing evidence stays explicit; the tool never generates a replacement.
 Correctness and explicit requirement checks remain independent of cosine
 similarity and reused opinions. Existing difficulty prompts are unchanged.
 
-The [project log](Edcraft%20Logs%2015%20Oct%20updated.docx), pages 19–21, evaluates the
+The [project log](edcraft%20logs.docx), pages 19–21, evaluates the
 vendor-published MTEB results for small, large and ada-002, with current documented
 prices. Large is the provisional default; small remains configurable. This is
 published general benchmark evidence, not a new EdCraft accuracy measurement.

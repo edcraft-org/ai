@@ -130,7 +130,7 @@ contract; record evaluation results in the pull request.
 
 ## What to report
 
-For issue 44, see the [project log](Edcraft%20Logs%2015%20Oct%20updated.docx),
+For issue 44, see the [project log](edcraft%20logs.docx),
 pages 19–21, for relevance checks, model selection and evaluation findings.
 The v2 runner freezes all 12 reserved MCQs and seven versioned control contents,
 records technical checks, explicit requirements and embedding similarity, and
