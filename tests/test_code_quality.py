@@ -9,10 +9,8 @@ import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
-from edcraft_validator.application.code_difficulty import (
-    assess_code_question_difficulty,
-)
 from edcraft_validator.application.code_quality import (
+    CodeQualityReport,
     assess_code_question_quality,
     check_concrete_correctness,
     check_requirements,
@@ -29,7 +27,7 @@ from edcraft_validator.llm.embeddings import (
 from edcraft_validator.llm.usage import TokenUsage
 from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.tools.python_execution import ExecutionResult
-from tests.test_difficulty_tool import Provider, assessment, question
+from tests.test_difficulty_tool import Provider, question
 
 
 class Embeddings:
@@ -50,8 +48,10 @@ class Embeddings:
 class Executor:
     def __init__(self, result=None):
         self.result = result or ExecutionResult(ok=True, answer=10)
+        self.calls = 0
 
     def execute_batch(self, *args, **kwargs):
+        self.calls += 1
         return [self.result]
 
 
@@ -65,7 +65,7 @@ async def assess(*, item=None, request=None, embeddings=None, **kwargs):
     )
 
 
-async def test_full_content_and_absent_quality_are_explicit():
+async def test_full_content_and_independent_evidence_are_explicit():
     embeddings = Embeddings()
     report = await assess(embeddings=embeddings)
     data = json.loads(report.model_dump_json())
@@ -74,8 +74,8 @@ async def test_full_content_and_absent_quality_are_explicit():
     assert report.similarity.similarity == 1
     assert report.similarity.usage.input_tokens == 40
     assert report.similarity.duration_ms > 0
-    assert report.difficulty_quality.status == "not_supplied"
-    assert report.difficulty_quality.quality_concerns is None
+    assert data["version"] == "3.0.0"
+    assert "difficulty_quality" not in data and "quality_concerns" not in data
     assert "judge" not in data and "relevance" not in data
     assert "quality_score" not in data
     embedded = json.loads(embeddings.texts[1])
@@ -86,46 +86,22 @@ async def test_full_content_and_absent_quality_are_explicit():
     ]
 
 
-async def test_reuses_existing_difficulty_once_and_snapshots_its_evidence():
-    provider = Provider()
-    previous = await assess_code_question_difficulty(
-        question(), provider_factory=lambda: provider
-    )
-    report = await assess(difficulty_report=previous)
-    assert len(provider.requests) == 1
-    assert report.difficulty_quality.status == "reused"
-    assert (
-        report.difficulty_quality.quality_concerns
-        == previous.judge.assessment.quality_concerns
-    )
-    assert report.difficulty_quality.report == previous
-    saved = report.model_dump_json()
-    previous.judge.assessment.quality_concerns.append("Caller changed its copy")
-    assert report.model_dump_json() == saved
-    assert report.difficulty_quality.report.usage.input_tokens == 123
-
-
-async def test_stale_difficulty_evidence_is_rejected_before_embedding():
-    previous = await assess_code_question_difficulty(
-        question(), provider_factory=Provider
-    )
+async def test_application_rejects_difficulty_report_input_without_embedding():
     embeddings = Embeddings()
-    changed = question().model_copy(update={"question": "Changed wording"})
-    with pytest.raises(ValueError, match="exact supplied question"):
-        await assess(item=changed, embeddings=embeddings, difficulty_report=previous)
+    with pytest.raises(TypeError, match="difficulty_report"):
+        await assess(embeddings=embeddings, difficulty_report={"status": "error"})
     assert embeddings.texts is None
 
 
-async def test_incomplete_option_evidence_is_not_reused():
-    previous = await assess_code_question_difficulty(
-        question(), provider_factory=Provider
-    )
-    previous.judge.assessment.option_evidence.pop()
-    with pytest.raises(ValueError, match="cover the supplied options"):
-        await assess(difficulty_report=previous)
+async def test_report_rejects_attached_difficulty_evidence():
+    report = await assess()
+    data = report.model_dump(mode="json")
+    data["difficulty_quality"] = {"status": "reused", "quality_concerns": []}
+    with pytest.raises(ValueError, match="extra_forbidden"):
+        CodeQualityReport.model_validate_json(json.dumps(data))
 
 
-async def test_perfect_similarity_and_reused_opinions_do_not_override_failures():
+async def test_perfect_similarity_does_not_override_failures():
     item = question().model_copy(update={"correct_option": "A"})
     request = QualityRequest(
         prompt="Trace nested loops.",
@@ -133,14 +109,7 @@ async def test_perfect_similarity_and_reused_opinions_do_not_override_failures()
         answer_target="loop_iterations",
         num_distractors=2,
     )
-    provider = Provider()
-    previous = await assess_code_question_difficulty(
-        item, provider_factory=lambda: provider
-    )
-    previous.judge.assessment.quality_concerns = []
-    report = await assess(item=item, request=request, difficulty_report=previous)
-    assert report.difficulty_quality.status == "reused"
-    assert len(provider.requests) == 1
+    report = await assess(item=item, request=request)
     assert report.status == "assessed"
     assert report.technical.status == "failed"
     assert report.technical.findings == [
@@ -231,12 +200,11 @@ def test_counts_use_trace_summary_instead_of_return_value(target):
         [[True], [1]],
     ],
 )
-async def test_bad_embeddings_keep_quality_and_technical_results(vectors):
+async def test_bad_embeddings_keep_technical_results(vectors):
     report = await assess(embeddings=Embeddings(vectors))
     assert report.status == "error"
     assert report.similarity.error_code == "EMBEDDING_FAILED"
     assert report.similarity.similarity is None
-    assert report.difficulty_quality.status == "not_supplied"
     assert report.technical.status == "passed"
 
 
@@ -252,19 +220,40 @@ def test_cosine_range_and_numerical_stability(vectors, expected):
     assert cosine_similarity(vectors) == pytest.approx(expected)
 
 
-async def test_failed_difficulty_evidence_is_retained_without_reassessment():
-    provider = Provider(RuntimeError("PRIVATE REMOTE ERROR"))
-    previous = await assess_code_question_difficulty(
-        question(), provider_factory=lambda: provider
+@pytest.mark.parametrize("difficulty_error", [False, True])
+async def test_mcp_difficulty_success_or_failure_cannot_affect_relevance(
+    difficulty_error,
+):
+    provider = Provider(
+        RuntimeError("PRIVATE REMOTE ERROR") if difficulty_error else None
     )
-    report = await assess(difficulty_report=previous)
+    server = create_validation_server(
+        difficulty_provider_factory=lambda: provider,
+        embedding_provider_factory=Embeddings,
+        code_execution_tool=Executor(),
+    )
+    async with Client(server) as client:
+        difficulty = await client.call_tool(
+            "assess_code_difficulty", {"question": question().model_dump(mode="json")}
+        )
+        relevance = await client.call_tool(
+            "assess_code_quality",
+            {
+                "question": question().model_dump(mode="json"),
+                "request": {"prompt": "Arithmetic"},
+            },
+        )
     assert len(provider.requests) == 1
-    assert report.status == "assessed"
-    assert report.difficulty_quality.status == "unavailable"
-    assert report.difficulty_quality.quality_concerns is None
-    assert report.difficulty_quality.report.error_code == "JUDGE_INTERNAL_ERROR"
-    assert report.difficulty_quality.report.usage.input_tokens == 123
-    assert "PRIVATE REMOTE ERROR" not in report.model_dump_json()
+    assert difficulty.structured_content["status"] == (
+        "error" if difficulty_error else "assessed"
+    )
+    if not difficulty_error:
+        assert difficulty.structured_content["judge"]["assessment"]["quality_concerns"]
+    data = relevance.structured_content
+    assert data["status"] == "assessed" and data["technical"]["status"] == "passed"
+    assert data["similarity"]["usage"]["input_tokens"] == 40
+    assert "difficulty_quality" not in data and "judge" not in data
+    assert "PRIVATE REMOTE ERROR" not in json.dumps(data)
 
 
 async def test_configuration_errors_are_explicit_and_do_not_leak_secrets():
@@ -322,18 +311,12 @@ async def test_missing_embedding_usage_stays_unknown_without_losing_similarity()
     assert result.usage.input_tokens is None
 
 
-async def test_three_options_reuse_only_the_three_existing_judgments():
+async def test_three_options_are_assessed_without_difficulty_evidence():
     item = question()
     item.options.pop()
-    response = assessment()
-    response["option_evidence"].pop()
-    provider = Provider(response)
-    previous = await assess_code_question_difficulty(
-        item, provider_factory=lambda: provider
-    )
-    result = await assess(item=item, difficulty_report=previous)
-    assert len(provider.requests) == 1 and result.status == "assessed"
-    assert len(result.difficulty_quality.report.judge.assessment.option_evidence) == 3
+    result = await assess(item=item)
+    assert result.status == "assessed" and result.technical.status == "passed"
+    assert len(json.loads(result.similarity.question_text)["options"]) == 3
 
 
 @pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf")])
@@ -378,13 +361,11 @@ async def test_mcp_tool_has_full_evidence_and_is_not_an_authoring_check():
     def forbidden():
         pytest.fail("Quality assessment must not construct a difficulty judge")
 
-    previous = await assess_code_question_difficulty(
-        question(), provider_factory=Provider
-    )
+    embeddings, executor = Embeddings(), Executor()
     server = create_validation_server(
         difficulty_provider_factory=forbidden,
-        embedding_provider_factory=Embeddings,
-        code_execution_tool=Executor(),
+        embedding_provider_factory=lambda: embeddings,
+        code_execution_tool=executor,
     )
     async with Client(server) as client:
         tool = next(
@@ -393,6 +374,8 @@ async def test_mcp_tool_has_full_evidence_and_is_not_an_authoring_check():
         assert tool.model_dump(by_alias=True)["_meta"]["fastmcp"]["tags"] == [
             "quality:code"
         ]
+        assert set(tool.input_schema["properties"]) == {"question", "request"}
+        assert "difficulty_quality" not in tool.output_schema["properties"]
         result = await client.call_tool(
             "assess_code_quality",
             {
@@ -401,32 +384,21 @@ async def test_mcp_tool_has_full_evidence_and_is_not_an_authoring_check():
             },
         )
         assert result.structured_content["technical"]["status"] == "passed"
-        assert result.structured_content["version"] == "2.0.0"
-        assert (
-            result.structured_content["difficulty_quality"]["status"] == "not_supplied"
-        )
+        assert result.structured_content["version"] == "3.0.0"
+        assert "difficulty_quality" not in result.structured_content
         assert "judge" not in result.structured_content
-        reused = await client.call_tool(
-            "assess_code_quality",
-            {
-                "question": question().model_dump(mode="json"),
-                "request": {"prompt": "Arithmetic"},
-                "difficulty_report": previous.model_dump(mode="json"),
-            },
-        )
-        assert reused.structured_content["difficulty_quality"]["status"] == "reused"
-        assert reused.structured_content["difficulty_quality"]["quality_concerns"]
-        malformed = previous.model_dump(mode="json")
-        malformed["usage"]["model_call_count"] = "1"
-        with pytest.raises(ToolError, match="int_type"):
+        embeddings.texts = None
+        executions = executor.calls
+        with pytest.raises(ToolError):
             await client.call_tool(
                 "assess_code_quality",
                 {
                     "question": question().model_dump(mode="json"),
                     "request": {"prompt": "Arithmetic"},
-                    "difficulty_report": malformed,
+                    "difficulty_report": {"status": "error"},
                 },
             )
+        assert embeddings.texts is None and executor.calls == executions
         with pytest.raises(ToolError):
             await client.call_tool(
                 "assess_code_quality",

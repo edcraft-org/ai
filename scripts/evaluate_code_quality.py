@@ -15,10 +15,8 @@ from typing import TextIO
 
 from dotenv import load_dotenv
 
-from edcraft_validator.application.code_difficulty import CodeDifficultyReport
 from edcraft_validator.application.code_quality import (
     assess_code_question_quality,
-    reuse_difficulty_quality,
 )
 from edcraft_validator.domains.code.difficulty import CodeDifficultyQuestion
 from edcraft_validator.domains.code.quality import QualityRequest
@@ -79,7 +77,7 @@ def evaluation_cases(dataset: dict, controls: dict) -> list[dict]:
             }
         )
     # Preserve the frozen control content. Only deterministic expectations are
-    # scored by v2; historical rubric expectations remain in the control source.
+    # scored; historical rubric expectations remain in the control source.
     cases.extend(
         {
             **case,
@@ -99,19 +97,6 @@ def evaluation_cases(dataset: dict, controls: dict) -> list[dict]:
         CodeDifficultyQuestion.model_validate(case["question"])
         QualityRequest.model_validate(case["request"])
     return cases
-
-
-def load_difficulty_reports(path: Path) -> dict[str, CodeDifficultyReport]:
-    """Load existing standalone concrete-MCQ reports, without any inference."""
-    reports = {}
-    for line in path.read_text().splitlines():
-        if not line.strip():
-            continue
-        report = CodeDifficultyReport.model_validate_json(line, strict=True)
-        if report.question_sha256 in reports:
-            raise ValueError("duplicate question hash in difficulty reports")
-        reports[report.question_sha256] = report
-    return reports
 
 
 def summary(records: list[dict], requested: int) -> dict:
@@ -143,9 +128,6 @@ def summary(records: list[dict], requested: int) -> dict:
             "technical": Counter(r["report"]["technical"]["status"] for r in selected),
             "requirements": Counter(
                 r["report"]["requirements"]["status"] for r in selected
-            ),
-            "difficulty_quality": Counter(
-                r["report"]["difficulty_quality"]["status"] for r in selected
             ),
             "similarity_range": [min(similarities), max(similarities)]
             if similarities
@@ -187,10 +169,8 @@ def summary(records: list[dict], requested: int) -> dict:
             "or verified semantic alignment.",
             "No relevance rubric is judged. Ambiguity and missing concepts "
             "can escape these checks.",
-            "Existing difficulty evidence is optional, question-specific "
-            "and not a request-alignment judgment.",
-            "Reused judge usage describes prior calls, "
-            "excluded from this run's new usage.",
+            "Difficulty judgments and their quality concerns are separate; "
+            "this review never consumes another check's report.",
             "The held-out set has no human relevance labels; "
             "no relevance accuracy is claimed.",
             "Provider model IDs do not establish immutable model weights.",
@@ -198,26 +178,16 @@ def summary(records: list[dict], requested: int) -> dict:
     }
 
 
-async def evaluate(
-    output: Path, *, difficulty_reports: dict[str, CodeDifficultyReport] | None = None
-) -> dict:
+async def evaluate(output: Path) -> dict:
     cases = evaluation_cases(
         json.loads(DATASET.read_text()), json.loads(CONTROLS.read_text())
     )
-    difficulty_reports = difficulty_reports or {}
-    questions = [CodeDifficultyQuestion.model_validate(c["question"]) for c in cases]
-    planned_questions = {question.sha256: question for question in questions}
-    if not difficulty_reports.keys() <= planned_questions.keys():
-        raise ValueError("difficulty reports contain questions outside this plan")
-    # Validate every reused report before creating a client or starting a case.
-    for question_hash, report in difficulty_reports.items():
-        reuse_difficulty_quality(planned_questions[question_hash], report)
     manifest_path = output.with_suffix(".manifest.json")
     summary_path = output.with_suffix(".summary.json")
     embedding = OpenAIEmbeddingProvider()
     source_files = sorted((ROOT / "src").rglob("*.py")) + [Path(__file__)]
     manifest = {
-        "protocol": "code-quality-evaluation-v2-no-extra-judge",
+        "protocol": "code-quality-evaluation-v3-independent",
         "created_at": datetime.now(UTC).isoformat(),
         "source_revision": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
@@ -238,10 +208,6 @@ async def evaluate(
             "transport_timeout_seconds": 30,
         },
         "new_judge_calls": 0,
-        "difficulty_report_sha256": {
-            key: sha256(report.model_dump_json().encode())
-            for key, report in difficulty_reports.items()
-        },
         "embedding_deadline_seconds": 35,
         "execution_timeout_seconds": 2,
         "concurrency": 2,
@@ -265,7 +231,6 @@ async def evaluate(
                     question,
                     QualityRequest.model_validate(case["request"]),
                     embedding_provider_factory=OpenAIEmbeddingProvider,
-                    difficulty_report=difficulty_reports.get(question.sha256),
                 )
                 findings = []
                 if (
@@ -302,20 +267,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", type=Path)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument(
-        "--difficulty-reports",
-        type=Path,
-        help="Existing concrete difficulty reports in JSONL; never assessed here",
-    )
     args = parser.parse_args()
     if args.env_file:
         load_dotenv(args.env_file, override=False)
-    reports = (
-        load_difficulty_reports(args.difficulty_reports)
-        if args.difficulty_reports
-        else None
-    )
-    result = asyncio.run(evaluate(args.output, difficulty_reports=reports))
+    result = asyncio.run(evaluate(args.output))
     return (
         0
         if result["statuses"].get("assessed", 0) == result["requested"]

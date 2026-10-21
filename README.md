@@ -192,12 +192,13 @@ Difficulty checks use SocLaas only, with no provider fallback.
 
 The explicitly invoked `assess_code_quality` MCP tool
 separately records correctness, explicit requirements and embedding relevance of
-a complete rendered MCQ. It can reuse an existing difficulty report's quality
-concerns and option evidence for the exact same question, with no extra judge
-call. Similarity has no universal pass threshold. A frozen review runner covers
+a complete rendered MCQ. It accepts only the question and author request, never
+consumes another check's report, and makes no generative judge call. Difficulty
+judgments and their quality concerns remain in their own report. Similarity has
+no universal pass threshold. A frozen review runner covers
 the 12 reserved questions and seven engineering controls. The provisional embedding
 default is `text-embedding-3-large`; see the
-[project log](docs/edcraft%20logs.docx), pages 19–21.
+[project log](docs/edcraft%20logs.docx), pages 19–22.
 
 ## Tests
 

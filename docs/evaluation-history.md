@@ -9,6 +9,10 @@ labels are `easy`, `medium`, and `hard`.
 
 ## Issue 44 simplification and model selection: 21 October 2026
 
+This section records the historical v2 design. The later v3 design removes its
+difficulty-report reuse to keep assessments independent; see the
+[project log](edcraft%20logs.docx), page 22. The measurements below remain historical.
+
 At the user's request, v2 removes the separate SocLaas quality assessment and
 reuses an already available concrete difficulty report for the exact question.
 Missing evidence stays explicit; the tool never generates a replacement.

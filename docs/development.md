@@ -22,7 +22,7 @@ All paths below are under `src/edcraft_validator/`.
 | Question generation | `domains/code/question_generator.py`, expressions and rendering | Local expansion from saved answers and recipes. |
 | Python tools | `tools/python_analysis.py`, `tools/python_execution.py`, `tools/python_worker.py` | Supported syntax and batched tracing. |
 | Advisory difficulty | `mcp/difficulty_tools.py`, `application/code_difficulty.py`, `domains/code/difficulty.py`, `llm/judging.py` | Template difficulty and standalone concrete-MCQ judging, independent of correctness. |
-| Relevance and quality | `mcp/quality_tools.py`, `application/code_quality.py`, `domains/code/quality.py`, `llm/embeddings.py` | Explicit complete-MCQ checks, embedding similarity and reuse of exact-question difficulty evidence; no extra judge call. |
+| Relevance and quality | `mcp/quality_tools.py`, `application/code_quality.py`, `domains/code/quality.py`, `llm/embeddings.py` | Independent complete-MCQ checks and embedding similarity; consumes no other check's report and makes no generative judge call. |
 
 ## Model and tool calls
 

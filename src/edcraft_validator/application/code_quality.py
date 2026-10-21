@@ -1,4 +1,4 @@
-"""Relevance checks with optional reuse of existing difficulty quality evidence."""
+"""Independent relevance and correctness checks for a complete concrete MCQ."""
 
 import asyncio
 import json
@@ -9,7 +9,6 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from edcraft_validator.application.code_difficulty import CodeDifficultyReport
 from edcraft_validator.domains.code.difficulty import CodeDifficultyQuestion, Record
 from edcraft_validator.domains.code.quality import (
     QualityRequest,
@@ -46,45 +45,9 @@ class RequirementCheck(Record):
     )
 
 
-class ReusedDifficultyQuality(Record):
-    status: Literal["reused", "not_supplied", "unavailable"] = "not_supplied"
-    quality_concerns: list[str] | None = None
-    # Retain the original rubric, settings, option evidence, usage and failures.
-    # Usage belongs to that prior assessment, not this quality invocation.
-    report: CodeDifficultyReport | None = None
-
-
-def reuse_difficulty_quality(
-    question: CodeDifficultyQuestion, report: CodeDifficultyReport | None
-) -> ReusedDifficultyQuality:
-    if report is None:
-        return ReusedDifficultyQuality()
-    report = CodeDifficultyReport.model_validate_json(
-        report.model_dump_json(), strict=True
-    )
-    if report.question_sha256 != question.sha256:
-        raise ValueError("difficulty report must match the exact supplied question")
-    if (
-        report.status != "assessed"
-        or report.judge is None
-        or report.judge.status != "completed"
-        or report.judge.assessment is None
-        or report.judge.assessment.estimated_difficulty is None
-    ):
-        return ReusedDifficultyQuality(status="unavailable", report=report)
-    ids = [item.option_id for item in report.judge.assessment.option_evidence]
-    if set(ids) != {item.id for item in question.options}:
-        raise ValueError("difficulty evidence must cover the supplied options")
-    return ReusedDifficultyQuality(
-        status="reused",
-        quality_concerns=list(report.judge.assessment.quality_concerns),
-        report=report,
-    )
-
-
 class CodeQualityReport(Record):
     tool: Literal["assess_code_quality"] = "assess_code_quality"
-    version: Literal["2.0.0"] = "2.0.0"
+    version: Literal["3.0.0"] = "3.0.0"
     advisory: Literal[True] = True
     status: Literal["assessed", "error"] = "error"
     generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -93,7 +56,6 @@ class CodeQualityReport(Record):
     technical: TechnicalCheck
     requirements: RequirementCheck
     similarity: SimilarityReport
-    difficulty_quality: ReusedDifficultyQuality
     duration_ms: float = 0
 
 
@@ -175,7 +137,6 @@ async def assess_code_question_quality(
     request: QualityRequest,
     *,
     embedding_provider_factory: EmbeddingProviderFactory,
-    difficulty_report: CodeDifficultyReport | None = None,
     execution_tool: PythonExecutionTool | None = None,
     embedding_timeout_seconds: float = 35,
     execution_timeout_seconds: float = 2,
@@ -188,9 +149,6 @@ async def assess_code_question_quality(
             raise ValueError("quality timeouts must be finite and positive")
     question = CodeDifficultyQuestion.model_validate_json(question.model_dump_json())
     request = QualityRequest.model_validate_json(request.model_dump_json())
-    # Validate identity before execution or any paid request. Never reassess stale
-    # or absent difficulty evidence and never infer an author-request match from it.
-    difficulty_quality = reuse_difficulty_quality(question, difficulty_report)
     started = time.perf_counter()
     try:
         async with asyncio.timeout(execution_timeout_seconds + 2):
@@ -218,6 +176,5 @@ async def assess_code_question_quality(
         technical=technical,
         requirements=requirements,
         similarity=similarity,
-        difficulty_quality=difficulty_quality,
         duration_ms=(time.perf_counter() - started) * 1000,
     )

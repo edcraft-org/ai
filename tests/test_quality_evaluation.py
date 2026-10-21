@@ -12,7 +12,6 @@ import pytest
 from edcraft_validator.application import code_difficulty
 from scripts import evaluate_code_quality as evaluation
 from tests.test_code_quality import Embeddings
-from tests.test_difficulty_tool import Provider, question
 
 
 def test_plan_keeps_held_out_content_fixed_and_reference_labels_hidden():
@@ -58,11 +57,6 @@ async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreem
                 raise RuntimeError("PRIVATE REMOTE ERROR")
             return super().embed(texts)
 
-    provider = Provider()
-    previous = await code_difficulty.assess_code_question_difficulty(
-        question(), provider_factory=lambda: provider
-    )
-
     def forbidden(*args, **kwargs):
         pytest.fail("Relevance evaluation must not start another judge call")
 
@@ -70,12 +64,10 @@ async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreem
     monkeypatch.setattr(evaluation, "OpenAIEmbeddingProvider", PartialEmbeddings)
     before = evaluation.DATASET.read_bytes()
     output = tmp_path / "review.jsonl"
-    result = await evaluation.evaluate(
-        output, difficulty_reports={previous.question_sha256: previous}
-    )
+    result = await evaluation.evaluate(output)
     assert result["recorded"] == 19 and result["unresolved"] == 0
     assert result["statuses"] == {"error": 1, "assessed": 18}
-    assert result["new_judge_calls"] == 0 and len(provider.requests) == 1
+    assert result["new_judge_calls"] == 0
     assert result["protocol_failure_count"] == 0
     assert result["mandatory_check_failure_count"] == 0
     records = [json.loads(line) for line in output.read_text().splitlines()]
@@ -84,16 +76,14 @@ async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreem
     manifest = json.loads(output.with_suffix(".manifest.json").read_text())
     assert len(manifest["cases"]) == 19 and manifest["dataset_sha256"]
     assert "judge" not in manifest and manifest["new_judge_calls"] == 0
-    assert manifest["difficulty_report_sha256"][previous.question_sha256]
+    assert manifest["protocol"] == "code-quality-evaluation-v3-independent"
+    assert "difficulty_report_sha256" not in manifest
     assert result == json.loads(output.with_suffix(".summary.json").read_text())
     assert evaluation.DATASET.read_bytes() == before
     assert result["groups"]["held_out"]["technical"] == {"passed": 12}
     assert result["groups"]["control"]["technical"] == {"passed": 5, "failed": 2}
     assert not result["groups"]["control"]["control_disagreements"]
-    assert result["groups"]["control"]["difficulty_quality"] == {
-        "reused": 3,
-        "not_supplied": 4,
-    }
+    assert all("difficulty_quality" not in r["report"] for r in records)
     assert all("judge" not in r["report"] for r in records)
     wrong = next(r for r in records if r["case_id"] == "quality-control-wrong-answer")
     wrong["report"]["technical"]["status"] = "passed"
@@ -105,36 +95,28 @@ async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreem
         await evaluation.evaluate(output)
 
 
-async def test_invalid_reused_report_fails_before_creating_embedding_client(
+def test_removed_difficulty_report_cli_option_fails_before_evaluation(
     monkeypatch, tmp_path
 ):
-    report = await code_difficulty.assess_code_question_difficulty(
-        question(), provider_factory=Provider
+    def forbidden(*args, **kwargs):
+        pytest.fail("Obsolete options must be rejected before evaluation starts")
+
+    monkeypatch.setattr(evaluation, "evaluate", forbidden)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "review",
+            "--output",
+            str(tmp_path / "review.jsonl"),
+            "--difficulty-reports",
+            str(tmp_path / "old-difficulty.jsonl"),
+        ],
     )
-    report.judge.assessment.option_evidence.pop()
-
-    def forbidden():
-        pytest.fail("Invalid existing evidence must fail before creating a client")
-
-    monkeypatch.setattr(evaluation, "OpenAIEmbeddingProvider", forbidden)
-    with pytest.raises(ValueError, match="cover the supplied options"):
-        await evaluation.evaluate(
-            tmp_path / "invalid.jsonl",
-            difficulty_reports={report.question_sha256: report},
-        )
+    with pytest.raises(SystemExit) as exc:
+        evaluation.main()
+    assert exc.value.code == 2
     assert not list(tmp_path.iterdir())
-
-
-async def test_existing_difficulty_report_loader_rejects_duplicates(tmp_path):
-    report = await code_difficulty.assess_code_question_difficulty(
-        question(), provider_factory=Provider
-    )
-    path = tmp_path / "difficulty.jsonl"
-    path.write_text(report.model_dump_json() + "\n")
-    assert evaluation.load_difficulty_reports(path) == {report.question_sha256: report}
-    path.write_text((report.model_dump_json() + "\n") * 2)
-    with pytest.raises(ValueError, match="duplicate question hash"):
-        evaluation.load_difficulty_reports(path)
 
 
 def test_empty_summary_counts_all_requested_cases_as_unresolved():
