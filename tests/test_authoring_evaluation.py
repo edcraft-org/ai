@@ -43,9 +43,9 @@ def test_summary_separates_jobs_attempts_corrections_and_missing_usage():
     assert summary["correction_eligible_jobs"] == 2
     assert summary["corrected_jobs"] == 1
     assert summary["correction_success_rate"] == 0.5
-    assert summary["attempts_per_job"] == [1, 2, 3]
+    assert summary["attempts_per_job"] == [1, 2, 4]
     assert summary["failure_counts"] == {"PROPOSED_ANSWER_MISMATCH": 1}
-    assert summary["check_finding_counts"] == {"PROPOSED_ANSWER_MISMATCH": 4}
+    assert summary["check_finding_counts"] == {"PROPOSED_ANSWER_MISMATCH": 5}
     assert summary["usage"]["input_tokens"] is None
     assert summary["mean_input_tokens_per_recorded_job"] is None
     assert evaluation.summarize_records([], 5)["correction_success_rate"] is None
@@ -145,7 +145,7 @@ def test_terminal_argument_errors_are_categorized_once_per_job(arguments):
     summary = evaluation.summarize_records([record(result)], 1)
     assert result.status == "needs_review"
     assert summary["failure_counts"] == {"TOOL_CALL_ERROR": 1}
-    assert summary["check_finding_counts"] == {"TOOL_CALL_ERROR": 3}
+    assert summary["check_finding_counts"] == {"TOOL_CALL_ERROR": 4}
 
 
 def test_terminal_tool_error_preserves_other_check_failure_categories():

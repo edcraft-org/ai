@@ -6,12 +6,16 @@ from typing import Any
 from fastmcp import Client
 
 from edcraft_validator.mcp.catalogue import ToolCatalogueError
-from edcraft_validator.mcp.server import mcp
 
 
 class FastMcpToolClient:
     def __init__(self, server=None, *, timeout_seconds: float = 135):
-        self.server = server if server is not None else mcp
+        if server is None:
+            # Resolve the default lazily: server tools also use application services.
+            from edcraft_validator.mcp.server import mcp
+
+            server = mcp
+        self.server = server
         self.timeout_seconds = timeout_seconds
 
     def __enter__(self):

@@ -19,7 +19,10 @@ from edcraft_validator.llm.llm_errors import (
     GenerationTimeoutError,
     GenerationTransportError,
 )
-from edcraft_validator.llm.tool_context import generation_messages
+from edcraft_validator.llm.tool_context import (
+    constrained_check_plan,
+    generation_messages,
+)
 from edcraft_validator.llm.usage import TokenUsage
 
 DEFAULT_OPENAI_MODEL = "gpt-5-mini"
@@ -95,7 +98,14 @@ class OpenAICompatibleProvider:
         """Generate any domain proposal described by the supplied request."""
         self.last_usage = TokenUsage()
         try:
-            schema = request.response_model.model_json_schema()
+            wire_model = (
+                constrained_check_plan(
+                    request.response_model, request.offered_tool_names
+                )
+                if request.offered_tool_names
+                else request.response_model
+            )
+            schema = wire_model.model_json_schema()
             messages = generation_messages(request)
             response_format = {"type": self._response_format}
             if self._response_format == "json_schema":
@@ -138,7 +148,12 @@ class OpenAICompatibleProvider:
                 raise GenerationResponseError(
                     f"{self.provider} returned an empty response"
                 )
-            return request.response_model.model_validate_json(content)
+            result = wire_model.model_validate_json(content)
+            if wire_model is not request.response_model:
+                result = request.response_model.model_validate_json(
+                    result.model_dump_json()
+                )
+            return result
         except GenerationError:
             raise
         except APITimeoutError as exc:
@@ -308,7 +323,7 @@ def _positive_int_setting(variable: str, default: int) -> int:
 
 
 def _soclaas_response_format() -> str:
-    value = os.getenv("SOCLAAS_RESPONSE_FORMAT", "json_object").strip()
+    value = os.getenv("SOCLAAS_RESPONSE_FORMAT", "json_schema").strip()
     if value not in {"json_object", "json_schema"}:
         raise OpenAIGenerationError(
             "SOCLAAS_RESPONSE_FORMAT must be json_object or json_schema"

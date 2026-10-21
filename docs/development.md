@@ -21,6 +21,7 @@ All paths below are under `src/edcraft_validator/`.
 | Checking algorithms | `mcp/code_tools.py`, `mcp/code_checks/` | Structure, execution, answers, distractors, and feature detection. |
 | Question generation | `domains/code/question_generator.py`, expressions and rendering | Local expansion from saved answers and recipes. |
 | Python tools | `tools/python_analysis.py`, `tools/python_execution.py`, `tools/python_worker.py` | Supported syntax and batched tracing. |
+| Advisory difficulty | `mcp/difficulty_tools.py`, `application/code_difficulty.py`, `domains/code/difficulty.py`, `llm/judging.py` | Template difficulty and standalone concrete-MCQ judging, independent of correctness. |
 
 ## Model and tool calls
 
@@ -34,7 +35,11 @@ features to require. The application supplies the candidate and distractor count
 Only selected checks run. The model can change proposal fields and tool arguments
 between attempts, but check membership stays fixed. Invalid arguments fail that
 check's slot; they can be corrected on the next attempt. Each selected check runs at
-most once per attempt. All selected names must finish before correction starts.
+most once per attempt. Checks tagged `stage:after-validation` wait for the other selected checks to pass.
+The domain supplies `checked_tool_bindings` for the exact reusable content. If a
+prerequisite fails, deferred checks stay pending without a fabricated tool result.
+Authoring permits up to three template revisions. An assessment error with
+`retryable: false` ends the job without another check call or revision.
 
 The tool conversation is limited to `2 * plan_size + 2` turns per attempt. Unfinished
 plans return `error` with the available history. Tool replies are checked against
@@ -43,6 +48,25 @@ the saved schemas and versions. Final acknowledgement failures are recorded sepa
 The code finalizer stores execution-derived answers, clears the proposed answer
 expression, and retains selected supplied distractors. It leaves code and wording
 unchanged and does not execute the template again.
+
+`CodeProposalResponse` omits the correct answer and answer expression, and advertises
+`code` as an array of individual indented lines
+and normalizes it to canonical source text. JSON serialization uses lines again;
+saved templates keep source strings. `domains/code/template_revision.py` supplies
+the author's original rubric level definitions and revision scope. The code domain
+can return a partial `CodeDistractorRevision` after distractor-only failures; the
+application merges its recipes/values into the previous proposal and rejects any
+parameter name/kind/order change. Other domains retain full proposal revisions.
+The generic application supports optional `revision_contract` and `merge_revision`
+domain hooks. Check membership and the original author request remain fixed.
+
+Failed distractor selection adds one counterexample per bad recipe or colliding
+pair, capped at 16 rows. It uses local expressions and existing canonical answers,
+without another execution or model call. Code tools use evidence version 1.1.0.
+The author generation helper permits one additional transport attempt for a
+connection error or HTTP 408/409/429/5xx. It does not retry timeouts, response/schema
+errors, other HTTP failures, native tool turns or judge calls. Measured author
+usage retains both attempts; disable SDK retries to avoid stacking retry policies.
 
 ## Saved output
 
@@ -152,6 +176,15 @@ construct another plan.
 The 15 historical topic/difficulty fixtures remain regression tests and evaluation
 examples. They do not restrict free-form authoring or select its checks.
 
+`assess_code_difficulty` uses the separate `quality:code` tag and returns an
+advisory `CodeDifficultyReport`. It uses SocLaas once per check and never calls
+the executor or correctness tools. The compact prompt and exact-option wire
+schema are in `domains/code/difficulty_request.py`; the public report keeps an
+ordered option-evidence list. The wheel bundles `docs/difficulty-rubric.md`.
+`application/difficulty_authoring.py` owns generation and up to three question
+revisions; a failed assessment ends the job immediately. See the
+[configuration and reporting guide](difficulty-judging.md).
+
 ## Supported answer targets
 
 | Target | Meaning |
@@ -161,3 +194,22 @@ examples. They do not restrict free-form authoring or select its checks.
 | `loop_iterations` | Total loop-body iterations. |
 | `loop_executions` | Number of loop statements encountered. |
 | `function_calls` | Traced calls, including the entry call and safe built-ins. |
+
+`code_assess_template_difficulty` has `domain:code`, `quality:code` and
+`stage:after-validation` tags. The normal author selects and calls it after
+correctness checks pass. `application/template_difficulty.py` owns its single
+SocLaas call; `domains/code/template_difficulty.py` owns the template prompt and
+required per-recipe evidence schema. It judges the typical instance across the
+uniform eligible combination set. Collision filtering is calculated once by the
+correctness check, requires at least two cases and half the original domain, and
+is persisted in `eligible_inputs`; full-domain execution coverage is retained.
+The single-call judge reports numeric self-confidence. At confidence >= 0.80 a
+mismatch fails; below it, a mismatch passes policy with explicit warnings in the
+report and artifact. This threshold is provisional and confidence uncalibrated. The existing concrete-question API remains
+available separately and is not used for template authoring.
+
+OpenAI and SocLaas project offered check names into a finite literal choice in
+the planning wire schema. The adapter validates that schema locally and returns
+the original response type; the application still validates selected names before
+dispatch. No guessed name is remapped to a different tool. This projection applies
+only to check plans, leaving difficulty assessment requests unchanged.

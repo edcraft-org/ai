@@ -45,7 +45,6 @@ def code_response() -> dict[str, object]:
                 {"name": "b", "kind": "integer", "values": [3, 4]},
             ],
             "answer_target": "return_value",
-            "answer_expression": "a + b",
             "distractors": [
                 {"expression": "a - b", "reason_template": "Subtracts b."},
                 {"expression": "a * b", "reason_template": "Multiplies."},
@@ -88,10 +87,34 @@ def client_with_content(content: str) -> SimpleNamespace:
 
 
 @pytest.mark.parametrize("provider_name", ["openai", "soclaas"])
+def test_catalogue_names_are_wire_schema_choices_and_checked_locally(provider_name):
+    response = code_response()
+    client = client_with(response)
+    provider = OpenAICompatibleProvider(provider_name, client, model="test")
+    request = replace(
+        generation_request(), offered_tool_names=("code_execution", "code_structure")
+    )
+    result = provider.generate(request)
+    assert type(result) is request.response_model
+    schema = client.chat.completions.arguments["response_format"]["json_schema"][
+        "schema"
+    ]
+    assert schema["$defs"]["CatalogueCheck"]["properties"]["name"]["enum"] == [
+        "code_execution",
+        "code_structure",
+    ]
+    assert "CatalogueCheck" not in request.response_model.model_json_schema()["$defs"]
+    response["checks"][0]["name"] = "invented_tool"
+    client.chat.completions.content = json.dumps(response)
+    with pytest.raises(GenerationSchemaError):
+        provider.generate(request)
+
+
+@pytest.mark.parametrize("provider_name", ["openai", "soclaas"])
 def test_generates_template_using_strict_structured_outputs(
     monkeypatch, provider_name
 ) -> None:
-    monkeypatch.setenv("SOCLAAS_RESPONSE_FORMAT", "json_schema")
+    monkeypatch.delenv("SOCLAAS_RESPONSE_FORMAT", raising=False)
     client = client_with(code_response())
     provider = OpenAICompatibleProvider(provider_name, client, model="test-model")
 
@@ -530,7 +553,7 @@ def test_soclaas_json_mode_shows_current_schema_and_preserves_code(
 ):
     from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
 
-    monkeypatch.delenv("SOCLAAS_RESPONSE_FORMAT", raising=False)
+    monkeypatch.setenv("SOCLAAS_RESPONSE_FORMAT", "json_object")
     request = generation_request()
     payload = code_response()
     if revision:

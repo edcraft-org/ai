@@ -82,6 +82,7 @@ def test_model_selects_checks_for_exact_candidate_and_finalizes(candidate):
     assert len(provider.requests) == 1
     assert candidate.model_dump_json() in provider.requests[0].messages[-1]["content"]
     assert provider.requests[0].tool_catalogue.names == (
+        "code_assess_template_difficulty",
         "code_require_features",
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",

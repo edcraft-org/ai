@@ -48,8 +48,10 @@ async def test_catalogue_exposes_authoritative_names_descriptions_and_schemas():
         "code_verify_template_structure",
         "code_validate_answers_and_distractors",
         "code_require_features",
+        "assess_code_difficulty",
+        "code_assess_template_difficulty",
     ]
-    for tool in tools:
+    for tool in tools[:3]:
         assert tool.description
         assert tool.model_dump(by_alias=True)["_meta"]["fastmcp"]["tags"] == [
             "domain:code"
@@ -62,6 +64,17 @@ async def test_catalogue_exposes_authoritative_names_descriptions_and_schemas():
         ]
         assert "assurance" not in tool.output_schema["properties"]
         assert tool.output_schema["properties"]["version"]["minLength"] == 1
+    advisory = tools[3]
+    assert advisory.model_dump(by_alias=True)["_meta"]["fastmcp"]["tags"] == [
+        "quality:code"
+    ]
+    assert advisory.annotations.open_world_hint is True
+    assert advisory.annotations.idempotent_hint is False
+    assert advisory.output_schema["properties"]["status"]["enum"] == [
+        "assessed",
+        "unable_to_assess",
+        "error",
+    ]
     executable = next(
         tool for tool in tools if tool.name == "code_validate_answers_and_distractors"
     )

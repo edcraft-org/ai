@@ -7,13 +7,14 @@ from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateRequest,
 )
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
+from edcraft_validator.domains.code.template_revision import author_difficulty_guidance
 from edcraft_validator.llm.llm_contracts import (
     CheckPlanResponse,
     PlannedGenerationResponse,
     StructuredGenerationRequest,
 )
 
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v16"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v20-execution-eligible"
 
 
 def build_template_prompt(
@@ -38,7 +39,8 @@ description of the arithmetic expression.
 
 Return at least {request.num_distractors} distractor candidates that model real
 misconceptions and remain type-compatible, distinct from the answer, and mutually
-distinct for the complete Cartesian product. In reason_template, use only plain
+distinct for as much of the Cartesian product as possible. In reason_template,
+use only plain
 parameter placeholders such as `{{n}}`; never put expressions inside braces.
 Choose parameter values that keep the proposed misconceptions distinct. Values
 such as zero, one, or equal operands can make a wrong operation yield the right
@@ -51,6 +53,10 @@ Return an empty `arguments` object for every check in this first response. Tool
 arguments and execution are handled in later model turns. The application supplies
 the current candidate and required distractor count. Select tools that obtain
 execution-derived answers and checked distractors necessary for a reusable template.
+Also select the available template difficulty check to assess the requested level
+for the typical instance across the application-derived collision-free combinations.
+Difficulty feedback concerns the reusable template: revise its code, finite domains,
+question pattern and distractor rules coherently while preserving the request.
 Only selected checks will run. Later calls must supply any remaining required
 arguments from each tool schema; the empty arguments rule applies only to planning.
 """
@@ -60,8 +66,9 @@ CODE_TEMPLATE_SYSTEM_PROMPT = """\
 Generate one complete reusable Python execution-trace MCQ proposal and recommend its
 fixed validation checks in the same structured response. Do not generate one concrete
 question. The local application derives identity, difficulty, version, and question
-type; you author the question template, code, entry function, answer target, answer
-expression, finite parameters, and distractors.
+type; you author the question template, code, entry function, answer target,
+finite parameters, and distractors. Do not supply a correct answer or answer expression;
+the application derives canonical answers by executing the program.
 
 The proposal must use a finite Cartesian product of typed finite parameter values so
 the local application can exhaustively validate every possible question once.
@@ -70,11 +77,12 @@ Rules:
 - `code` is the learner-facing Python program that the question asks about. It must
   directly perform the selected topic's computation or control flow. Never write a
   question generator, template generator, metadata dictionary, schema, or code that
-  stores answer/distractor expressions as strings. Keep code, answer_expression, and
-  distractor candidates as separate schema fields.
+  stores answer/distractor expressions as strings. Keep code and distractor
+  candidates as separate schema fields.
 - Define one module-level entry function whose positional arguments exactly match the
   parameter names and order. Use every parameter in executed learner-facing behavior.
-  Helper functions and recursion are allowed. Recursive code must have a base case
+  Define called helper functions at module level, not inside another function.
+  Recursion is allowed. Recursive code must have a base case
   and terminate within the execution limits for every parameter combination.
 - Use only expressions, assignments, if statements, and for loops. Do not use imports,
   attributes, classes, decorators, comprehensions, while loops, lambdas,
@@ -85,8 +93,8 @@ Rules:
   integer_list (at most eight integers from -100 through 100). Encode parameter
   values according to the response schema and the user prompt's format guidance.
 - Select exactly one supported answer_target: return_value, loop_iterations,
-  loop_executions, branch_executions, or function_calls. answer_expression must
-  calculate that target using parameter names,
+  loop_executions, branch_executions, or function_calls. Distractor expressions use
+  parameter names,
   numeric constants, arithmetic, comparisons, boolean operators, or a conditional
   expression. String constants, list literals, indexing, and the one-argument functions
   len, sum, min, max, sorted, all, and any are also supported. Do not use methods or
@@ -96,8 +104,11 @@ Rules:
   declared parameter. Its wording must match answer_target.
 - Each distractor candidate must represent a specific misconception. The local
   MCP tool selects candidates that are unique, type-compatible, and different from
-  the answer for every parameter combination. Supply enough usable candidates.
-  No fallback distractors or answer corrections are inserted. Failed checks return
+  the answer for at least two combinations and at least half the declared domain.
+  It selects a fixed recipe subset maximizing eligible coverage and excludes only
+  combinations with answer/option collisions. Invalid expressions or value types
+  are still failures. Supply enough usable candidates.
+  No fallback distractors are inserted. Failed checks return
   evidence so you can revise the proposal; check membership stays fixed.
   A revision may change distractor recipes and finite parameter values while
   preserving the author request. Check the entire Cartesian product, not only the
@@ -106,6 +117,10 @@ Rules:
   placeholder such as `{n}`. Do not place arithmetic or any other expression inside
   braces.
 - During initial generation, return the combined proposal-and-check-plan schema.
+  Return `code` as a JSON array of individual Python lines, including indentation
+  spaces at the beginning of each indented line. Keep each statement on its own
+  line; do not put newline characters inside an array entry. Use at most 160 lines
+  and one to three parameters, with no extra/default entry-function arguments.
   During revision, return only proposal fields matching the supplied schema; the
   application keeps the original check plan. Do not include locally derived fields.
   During checking turns, use native tool
@@ -118,8 +133,8 @@ Use native JSON values matching each parameter's `kind`: integers use JSON numbe
 booleans use JSON booleans; strings use JSON strings; integer_list values use nested
 JSON arrays of numbers. Do not encode numbers, booleans, or arrays as strings.
 
-Expression field examples: "answer_expression": "a + b" and a distractor's
-"expression": "a - b". Only text templates use placeholders, for example
+A distractor expression example is "expression": "a - b". Only text templates use
+placeholders, for example
 "question_template": "What does add({a}, {b}) return?". Expressions are evaluated
 as Python using the parameter values, while text templates are formatted as text.
 """
@@ -129,7 +144,10 @@ def build_code_generation_request(
     request: CodeTemplateRequest,
 ) -> StructuredGenerationRequest[PlannedGenerationResponse[CodeProposalResponse]]:
     """Return the provider-independent code proposal contract."""
-    system_message = {"role": "system", "content": CODE_TEMPLATE_SYSTEM_PROMPT}
+    system_message = {
+        "role": "system",
+        "content": CODE_TEMPLATE_SYSTEM_PROMPT + "\n" + author_difficulty_guidance(),
+    }
     user_prompt = build_template_prompt(request)
 
     return StructuredGenerationRequest(
@@ -141,7 +159,7 @@ def build_code_generation_request(
             },
         ],
         response_model=PlannedGenerationResponse[CodeProposalResponse],
-        prompt_version=f"{CODE_TEMPLATE_PROMPT_VERSION}+response-v3",
+        prompt_version=f"{CODE_TEMPLATE_PROMPT_VERSION}+response-v5",
         schema_name="template_proposal_and_check_plan",
     )
 
@@ -161,6 +179,10 @@ def build_code_validation_request(
                     "and empty planning arguments. Select tools that establish "
                     "execution-derived answers and checked distractors needed "
                     "for a reusable template. "
+                    "Also select the template difficulty check to assess its "
+                    "declared level for the typical instance across the finite "
+                    "parameter domain. Difficulty is advisory and independent "
+                    "of correctness. "
                     "Only selected checks run. Later, use native tool calls with "
                     "required arguments from their schemas. The application binds "
                     "the exact candidate and distractor count. Use feature checks "
@@ -177,6 +199,6 @@ def build_code_validation_request(
             },
         ],
         response_model=CheckPlanResponse,
-        prompt_version="code-validation-v2",
+        prompt_version="code-validation-v3-typical-difficulty",
         schema_name="template_check_plan",
     )

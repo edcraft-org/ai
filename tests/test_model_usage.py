@@ -157,7 +157,7 @@ def test_initial_generation_failure_retains_usage_settings_and_zero_attempts():
     assert result.attempts == []
     assert client.dispatches == []
     assert result.provider_settings == {"mode": "scripted"}
-    assert len(result.tool_catalogue) == 3
+    assert len(result.tool_catalogue) == 4
     assert result.failure.stage == "generation"
     assert result.failure.code == "invalid_response"
     assert result.usage.input_tokens == 60

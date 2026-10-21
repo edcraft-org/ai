@@ -29,7 +29,8 @@ def check_expressions(context: CodeValidationContext) -> None:
 
 def check_proposed_answers(context: CodeValidationContext) -> None:
     """Evaluate the proposed answer over the complete finite input domain."""
-    assert context.proposed_answer is not None
+    if context.proposed_answer is None:
+        return
     answers = []
     for inputs in context.inputs_cases:
         answer = context.proposed_answer.evaluate(inputs)
@@ -94,14 +95,12 @@ def _parse_expressions(
     names: tuple[str, ...],
     *,
     allow_candidate_rejections: bool,
-) -> tuple[SafeExpression, list[DistractorCandidate]]:
-    if template.answer_expression is None:
-        raise TemplateValidationError(
-            "template candidates require an answer_expression",
-            code="ANSWER_EXPRESSION_MISSING",
-            field="answer_expression",
-        )
-    answer = _parse_expression(template.answer_expression, names, "answer_expression")
+) -> tuple[SafeExpression | None, list[DistractorCandidate]]:
+    answer = (
+        _parse_expression(template.answer_expression, names, "answer_expression")
+        if template.answer_expression is not None
+        else None
+    )
     candidates: list[DistractorCandidate] = []
     for index, recipe in enumerate(template.distractors):
         try:

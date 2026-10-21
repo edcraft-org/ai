@@ -1,6 +1,7 @@
 """Checks and selection helpers for template distractors."""
 
 import itertools
+import math
 from typing import Any
 
 from edcraft_validator.domains.code.code_schemas import (
@@ -16,6 +17,22 @@ from edcraft_validator.mcp.code_checks.validation_context import (
 )
 from edcraft_validator.value_comparison import equivalent, same_value_shape
 
+MIN_ELIGIBLE_CASES = 2
+MIN_ELIGIBLE_FRACTION = 0.5
+
+
+def eligible_case_indices(candidates, answers):
+    """Filter collisions only; malformed expressions and values remain failures."""
+    result = []
+    for index, answer in enumerate(answers):
+        values = [candidate.values[index] for candidate in candidates]
+        if any(equivalent(value, answer) for value in values):
+            continue
+        if any(equivalent(a, b) for a, b in itertools.combinations(values, 2)):
+            continue
+        result.append(index)
+    return result
+
 
 def check_proposed_distractor_selection(
     context: CodeValidationContext,
@@ -24,13 +41,81 @@ def check_proposed_distractor_selection(
     count = context.num_distractors
     if count is None:
         raise ValueError("a required distractor count must be provided")
-    context.template, context.candidates = _select_distractors(
-        context.template,
-        context.inputs_cases,
-        context.canonical_answers,
-        context.candidates,
-        num_distractors=count,
-    )
+    try:
+        context.template, context.candidates, context.eligible_indices = (
+            _select_distractors(
+                context.template,
+                context.inputs_cases,
+                context.canonical_answers,
+                context.candidates,
+                num_distractors=count,
+            )
+        )
+    except TemplateValidationError as exc:
+        if exc.code == "DISTRACTOR_SELECTION_FAILED":
+            rows = _failure_diagnostics(context)
+            exc.context.update(
+                cases=len(context.inputs_cases),
+                distractor_diagnostics=rows[:16],
+                diagnostics_truncated=len(rows) > 16,
+            )
+        raise
+
+
+def _failure_diagnostics(context: CodeValidationContext) -> list[dict[str, Any]]:
+    """One counterexample per bad recipe or colliding pair, without re-execution."""
+    rows = []
+    valid = []
+    for candidate in context.candidates:
+        recipe_id = f"D{candidate.index + 1}"
+        if candidate.expression is None:
+            rows.append({"recipe_id": recipe_id, "kind": "invalid_expression"})
+            continue
+        values = []
+        for inputs, answer in zip(
+            context.inputs_cases, context.canonical_answers, strict=True
+        ):
+            try:
+                value = candidate.expression.evaluate(inputs)
+                _validate_distractor_value(inputs, answer, value, candidate.index)
+                render_template(
+                    context.template.distractors[candidate.index].reason_template,
+                    inputs,
+                )
+            except (
+                TemplateValidationError,
+                ArithmeticError,
+                TypeError,
+                ValueError,
+            ) as exc:
+                rows.append(
+                    {
+                        "recipe_id": recipe_id,
+                        "kind": getattr(exc, "code", "EXPRESSION_EVALUATION_FAILED"),
+                        "inputs": inputs,
+                        "answer": answer,
+                    }
+                )
+                break
+            values.append(value)
+        else:
+            valid.append((recipe_id, values))
+    for (first_id, first), (second_id, second) in itertools.combinations(valid, 2):
+        for inputs, left, right in zip(
+            context.inputs_cases, first, second, strict=True
+        ):
+            if equivalent(left, right):
+                rows.append(
+                    {
+                        "recipe_id": second_id,
+                        "other_recipe_id": first_id,
+                        "kind": "DISTRACTOR_DUPLICATE",
+                        "inputs": inputs,
+                        "value": left,
+                    }
+                )
+                break
+    return rows
 
 
 def check_distractors(context: CodeValidationContext) -> None:
@@ -43,9 +128,9 @@ def check_distractors(context: CodeValidationContext) -> None:
         candidate.values = [
             candidate.expression.evaluate(inputs) for inputs in context.inputs_cases
         ]
-    for case_index, (inputs, expected_answer) in enumerate(
-        zip(context.inputs_cases, context.canonical_answers, strict=True)
-    ):
+    for case_index in context.eligible_indices:
+        inputs = context.inputs_cases[case_index]
+        expected_answer = context.canonical_answers[case_index]
         generated = [
             candidate.values[case_index]
             for candidate in context.candidates
@@ -63,9 +148,13 @@ def _select_distractors(
     candidates: list[DistractorCandidate],
     *,
     num_distractors: int,
-) -> tuple[CodeTemplateCandidate, list[DistractorCandidate]]:
+) -> tuple[CodeTemplateCandidate, list[DistractorCandidate], list[int]]:
     _precompute_candidate_vectors(template, inputs_cases, expected_answers, candidates)
     failures: list[str] = []
+    best = None
+    minimum = max(
+        MIN_ELIGIBLE_CASES, math.ceil(len(inputs_cases) * MIN_ELIGIBLE_FRACTION)
+    )
 
     for candidate_indexes in itertools.combinations(
         range(len(template.distractors)), num_distractors
@@ -75,21 +164,29 @@ def _select_distractors(
             (candidate.rejection for candidate in selected if candidate.rejection),
             None,
         )
-        if rejection is None:
-            rejection = _find_candidate_collision(selected, inputs_cases)
         if rejection is not None:
             rendered_indexes = ",".join(str(index) for index in candidate_indexes)
             failures.append(f"candidates {rendered_indexes}: {rejection}")
             continue
-        recipes = [template.distractors[index] for index in candidate_indexes]
+        eligible = eligible_case_indices(selected, expected_answers)
+        if best is None or len(eligible) > len(best[2]):
+            best = (candidate_indexes, selected, eligible)
+        if len(eligible) == len(inputs_cases):
+            break
+
+    if best is not None and len(best[2]) >= minimum:
+        indexes, selected, eligible = best
         selected_template = template.model_copy(
-            update={"distractors": recipes}, deep=True
+            update={"distractors": [template.distractors[i] for i in indexes]},
+            deep=True,
         )
-        return selected_template, selected
+        return selected_template, selected, eligible
 
     detail = "; ".join(failures[:3]) or "not enough candidates"
     raise TemplateValidationError(
-        f"no set of {num_distractors} distractors is globally valid: {detail}",
+        f"no set of {num_distractors} distractors has enough collision-free cases "
+        f"(need {minimum}/{len(inputs_cases)}, best "
+        f"{len(best[2]) if best else 0}): {detail}",
         code="DISTRACTOR_SELECTION_FAILED",
         field="distractors",
     )
@@ -118,7 +215,7 @@ def _precompute_candidate_vectors(
             for inputs, expected_answer, value in zip(
                 inputs_cases, expected_answers, values, strict=True
             ):
-                _validate_distractor_value(
+                _validate_distractor_type(
                     inputs, expected_answer, value, candidate.index
                 )
                 render_template(
@@ -128,24 +225,6 @@ def _precompute_candidate_vectors(
             candidate.rejection = f"candidate {candidate.index}: {exc}"
         else:
             candidate.values = values
-
-
-def _find_candidate_collision(
-    candidates: list[DistractorCandidate],
-    inputs_cases: list[dict[str, ParameterValue]],
-) -> str | None:
-    for first, second in itertools.combinations(candidates, 2):
-        if first.values is None or second.values is None:
-            raise AssertionError("valid distractor candidate is missing its values")
-        for inputs, first_value, second_value in zip(
-            inputs_cases, first.values, second.values, strict=True
-        ):
-            if equivalent(first_value, second_value):
-                return (
-                    f"candidate {second.index} duplicates candidate {first.index} "
-                    f"for inputs {inputs}"
-                )
-    return None
 
 
 def _validate_distractors(
@@ -168,18 +247,22 @@ def _validate_distractor_value(
     distractor: Any,
     index: int,
 ) -> None:
+    _validate_distractor_type(inputs, answer, distractor, index)
+    if equivalent(distractor, answer):
+        raise TemplateValidationError(
+            f"distractor {index} equals the answer for inputs {inputs}",
+            code="DISTRACTOR_EQUALS_ANSWER",
+            field=f"distractors.{index}",
+            inputs=inputs,
+        )
+
+
+def _validate_distractor_type(inputs, answer, distractor, index):
     require_json_value(distractor, f"distractor {index}")
     if not same_value_shape(distractor, answer):
         raise TemplateValidationError(
             f"distractor {index} has the wrong type for inputs {inputs}",
             code="DISTRACTOR_TYPE_MISMATCH",
-            field=f"distractors.{index}",
-            inputs=inputs,
-        )
-    if equivalent(distractor, answer):
-        raise TemplateValidationError(
-            f"distractor {index} equals the answer for inputs {inputs}",
-            code="DISTRACTOR_EQUALS_ANSWER",
             field=f"distractors.{index}",
             inputs=inputs,
         )
