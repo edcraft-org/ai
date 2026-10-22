@@ -41,7 +41,7 @@ jobs:
       OPENAI_MAX_RETRIES: "0"
       SOCLAAS_API_KEY: ${{ secrets.SOCLAAS_API_KEY }}
       SOCLAAS_BASE_URL: https://soclaas-api.comp.nus.edu.sg/v1
-      SOCLAAS_MODEL: default
+      SOCLAAS_MODEL: x-test-1
       SOCLAAS_TIMEOUT_SECONDS: "55"
       SOCLAAS_MAX_RETRIES: "0"
       SOCLAAS_RESPONSE_FORMAT: json_schema

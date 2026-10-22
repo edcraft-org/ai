@@ -51,7 +51,10 @@ Enabled thinking may require a larger `OLLAMA_NUM_PREDICT` budget.
 Always select a provider with `--provider`. Use `--model` to override its configured
 model. OpenAI, Ollama, and SocLaas are available providers. SocLaas uses the
 OpenAI-compatible interface with `SOCLAAS_API_KEY`, `SOCLAAS_BASE_URL`, and
-`SOCLAAS_MODEL`. OpenAI and SocLaas both default to strict JSON-schema output.
+`SOCLAAS_MODEL`. SocLaas defaults to GLM5.3 Flash (`x-test-1`); set
+`SOCLAAS_MODEL` or pass `--model` to choose another model. The serving alias is
+labelled Testing GLM 5.3 Flash in the SoCLaaS catalogue. OpenAI and SocLaas both
+default to strict JSON-schema output.
 Local schema validation and all template checks still apply.
 `SOCLAAS_RESPONSE_FORMAT=json_object` explicitly opts into the weaker JSON mode
 for endpoints without strict-schema support; its schema is supplied in the prompt.
@@ -233,3 +236,8 @@ For live model calls and workflow evaluation, see the [evaluation guide](docs/ev
 - [Frozen Python tracing evaluation dataset](reference_sets/python_tracing/README.md)
 - [Developer reference](docs/development.md)
 - [Earlier evaluation results](docs/evaluation-history.md)
+
+The current offline difficulty reference is [v0.3](docs/difficulty-rubric-v0.3.md).
+See the [GLM/Qwen comparison](docs/difficulty-glm-comparison-v0.3.md) and
+[versioned evidence](evidence/issue-86/README.md). Production difficulty tools
+retain their v0.2 contract; the offline rubric is a separate evaluation.

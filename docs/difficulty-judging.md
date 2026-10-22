@@ -78,7 +78,8 @@ verify the answer or distractors, repair the question, or establish learner diff
 
 ## Configuration
 
-Set `SOCLAAS_API_KEY`, `SOCLAAS_BASE_URL` and `SOCLAAS_MODEL` in the environment.
+Set `SOCLAAS_API_KEY` and `SOCLAAS_BASE_URL` in the environment. The default
+model is GLM5.3 Flash (`x-test-1`); `SOCLAAS_MODEL` overrides it.
 SocLaas is the default difficulty provider. A different
 `EDCRAFT_DIFFICULTY_PROVIDER` is rejected; there is no provider fallback.
 `EDCRAFT_DIFFICULTY_MODEL` optionally overrides the SocLaas model.

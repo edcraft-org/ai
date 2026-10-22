@@ -1,0 +1,8 @@
+{
+  "v0.3-glm-qwen.zip": "faf59bc08a2a1c6ef875ea4824df8a4a889238ba69b7031a4a6d3d82e9f1ee42",
+  "v0.4-stopped.zip": "9149ff546fc8646dd22f598c24745369927c2a7fc4cce14099047e8e9f5544cd",
+  "comparison.json": "f5bdc7c20fd5b1035a0918fdfc1ece75107e55396e14ef5f92166cd11c0de5fb",
+  "glm-predictions.csv": "949037d29e51998332eb2a23f4b05898b4dbb2c449c033f22770556b1b5c2ace",
+  "qwen-predictions.csv": "b28a05f338717bce7d61150a5e011e157015d257b23937e7ed934dbaf30d35bc",
+  "reference-changes.csv": "ec43e720cdd62e76fe09cc589f10d06d3aca66ebc64fbdf7580db2b91df5b5cd"
+}

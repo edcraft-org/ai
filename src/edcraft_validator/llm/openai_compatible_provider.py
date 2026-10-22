@@ -26,6 +26,7 @@ from edcraft_validator.llm.tool_context import (
 from edcraft_validator.llm.usage import TokenUsage
 
 DEFAULT_OPENAI_MODEL = "gpt-5-mini"
+DEFAULT_SOCLAAS_MODEL = "x-test-1"
 OpenAIGenerationError = GenerationError
 
 
@@ -278,7 +279,7 @@ def _model(provider: str) -> str:
         return configured
     if provider == "openai":
         return DEFAULT_OPENAI_MODEL
-    raise OpenAIGenerationError(f"{variable} is not configured")
+    return DEFAULT_SOCLAAS_MODEL
 
 
 def _timeout_seconds(provider: str) -> float:

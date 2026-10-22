@@ -1,0 +1,240 @@
+{
+  "candidate": {
+    "correct": 51,
+    "scored": 54,
+    "accuracy": 0.9444444444444444,
+    "transport_excluded": 6,
+    "attempts": 117,
+    "transport_failed_attempts": 63,
+    "operator_interrupted_attempts": 4,
+    "inherited_attempts": 112,
+    "dimensions": {
+      "execution_burden": {
+        "correct": 53,
+        "denominator": 54,
+        "accuracy": 0.9814814814814815
+      },
+      "changing_state": {
+        "correct": 48,
+        "denominator": 54,
+        "accuracy": 0.8888888888888888
+      },
+      "conceptual_interaction": {
+        "correct": 51,
+        "denominator": 54,
+        "accuracy": 0.9444444444444444
+      }
+    },
+    "macro_f1": 0.9619047619047619,
+    "exact_event_count_correct": 48,
+    "all_dimensions_correct": 48,
+    "overall_and_all_dimensions_correct": 48,
+    "repeat_stability": {
+      "complete_cases": 30,
+      "same_valid_prediction": 22
+    },
+    "response_rule_inconsistencies": 4,
+    "transport_http_status_counts": {
+      "502": 4,
+      "503": 56,
+      "None": 3
+    },
+    "missing_overall_labels": 2,
+    "valid_question_coverage": {
+      "covered": 29,
+      "planned": 30
+    },
+    "repeat_stability_valid_pairs": {
+      "stable": 22,
+      "valid_pairs": 22,
+      "planned_questions": 30
+    }
+  },
+  "qwen": {
+    "correct": 47,
+    "scored": 60,
+    "accuracy": 0.7833333333333333,
+    "dimensions": {
+      "execution_burden": 0.6833333333333333,
+      "changing_state": 0.7333333333333333,
+      "conceptual_interaction": 0.7
+    },
+    "macro_f1": 0.7402930402930403,
+    "exact_event_count_correct": 12,
+    "all_dimensions_correct": 37,
+    "overall_and_all_dimensions_correct": 36,
+    "reported_input_tokens": 99438,
+    "reported_output_tokens": 49746,
+    "reported_token_metering_equivalent_usd": 0.113408143746
+  },
+  "paired": {
+    "paired_slots": 54,
+    "both_correct": 41,
+    "qwen_only_correct": 2,
+    "candidate_only_correct": 10,
+    "both_wrong": 1,
+    "changes": [
+      {
+        "question_id": "cruxeval-506",
+        "repetition": 1,
+        "reference": "medium",
+        "qwen": "easy",
+        "candidate": "medium",
+        "candidate_improved": true
+      },
+      {
+        "question_id": "conditionals-conditional-feedback-01",
+        "repetition": 1,
+        "reference": "hard",
+        "qwen": "medium",
+        "candidate": "hard",
+        "candidate_improved": true
+      },
+      {
+        "question_id": "cruxeval-783",
+        "repetition": 1,
+        "reference": "medium",
+        "qwen": "easy",
+        "candidate": "medium",
+        "candidate_improved": true
+      },
+      {
+        "question_id": "functions-composition-01",
+        "repetition": 1,
+        "reference": "medium",
+        "qwen": "easy",
+        "candidate": "medium",
+        "candidate_improved": true
+      },
+      {
+        "question_id": "lists-mutating-selection-score-01",
+        "repetition": 1,
+        "reference": "hard",
+        "qwen": "medium",
+        "candidate": "hard",
+        "candidate_improved": true
+      },
+      {
+        "question_id": "cruxeval-197",
+        "repetition": 1,
+        "reference": "easy",
+        "qwen": "medium",
+        "candidate": "easy",
+        "candidate_improved": true
+      },
+      {
+        "question_id": "conditionals-conditional-feedback-01",
+        "repetition": 2,
+        "reference": "hard",
+        "qwen": "medium",
+        "candidate": "hard",
+        "candidate_improved": true
+      },
+      {
+        "question_id": "functions-branching-recursion-01",
+        "repetition": 2,
+        "reference": "hard",
+        "qwen": "medium",
+        "candidate": "hard",
+        "candidate_improved": true
+      },
+      {
+        "question_id": "cruxeval-783",
+        "repetition": 2,
+        "reference": "medium",
+        "qwen": "easy",
+        "candidate": "medium",
+        "candidate_improved": true
+      },
+      {
+        "question_id": "loops-conditional-reset-02",
+        "repetition": 2,
+        "reference": "medium",
+        "qwen": "medium",
+        "candidate": null,
+        "candidate_improved": false
+      },
+      {
+        "question_id": "cruxeval-223",
+        "repetition": 2,
+        "reference": "medium",
+        "qwen": "hard",
+        "candidate": "medium",
+        "candidate_improved": true
+      },
+      {
+        "question_id": "loops-guarded-sweep-01",
+        "repetition": 2,
+        "reference": "hard",
+        "qwen": "hard",
+        "candidate": null,
+        "candidate_improved": false
+      }
+    ],
+    "qwen_accuracy": 0.7962962962962963,
+    "candidate_accuracy": 0.9444444444444444,
+    "accuracy_difference": 0.14814814814814814
+  },
+  "paired_accuracy_difference_95_descriptive_cluster_interval": [
+    0.018867924528301886,
+    0.2777777777777778
+  ],
+  "bootstrap": {
+    "replicates": 2000,
+    "seed": 86,
+    "exact_code_family_clusters": 30,
+    "repetitions_retained_together": true
+  },
+  "latency_successful_responses": {
+    "qwen": {
+      "median_seconds": 9.450604562502122,
+      "p95_seconds": 30.870464625011664,
+      "successful_responses": 60
+    },
+    "glm": {
+      "median_seconds": 31.966457708040252,
+      "p95_seconds": 177.596012916998,
+      "successful_responses": 53
+    }
+  },
+  "verification": "Independent overall/dimension recomputation; 60 unique slots/CSV rows; exact Qwen request hashes and fixed reference; source snapshots; no client/judge deadlines; retries limited to transport failures.",
+  "glm": {
+    "correct": 51,
+    "scored": 54,
+    "accuracy": 0.9444444444444444,
+    "transport_excluded": 6,
+    "attempts": 117,
+    "transport_failed_attempts": 63,
+    "operator_interrupted_attempts": 4,
+    "inherited_attempts": 112,
+    "dimensions": {
+      "execution_burden": {
+        "correct": 53,
+        "denominator": 54,
+        "accuracy": 0.9814814814814815
+      },
+      "changing_state": {
+        "correct": 48,
+        "denominator": 54,
+        "accuracy": 0.8888888888888888
+      },
+      "conceptual_interaction": {
+        "correct": 51,
+        "denominator": 54,
+        "accuracy": 0.9444444444444444
+      }
+    },
+    "macro_f1": 0.9619047619047619,
+    "exact_event_count_correct": 48,
+    "all_dimensions_correct": 48,
+    "overall_and_all_dimensions_correct": 48,
+    "repeat_stability": {
+      "complete_cases": 30,
+      "same_valid_prediction": 22
+    },
+    "response_rule_inconsistencies": 4,
+    "reported_input_tokens": 86227,
+    "reported_output_tokens": 264530,
+    "reported_token_metering_equivalent_usd": 0.14662034304399998
+  }
+}

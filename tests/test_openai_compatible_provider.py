@@ -291,11 +291,19 @@ def test_provider_configuration_rejects_internal_whitespace(monkeypatch) -> None
         _api_key("openai")
 
 
-def test_soclaas_requires_its_own_model(monkeypatch) -> None:
+def test_soclaas_defaults_to_glm_and_preserves_explicit_overrides(monkeypatch) -> None:
     monkeypatch.delenv("SOCLAAS_MODEL", raising=False)
-
-    with pytest.raises(OpenAIGenerationError, match="SOCLAAS_MODEL is not configured"):
-        _model("soclaas")
+    assert _model("soclaas") == "x-test-1"
+    monkeypatch.setenv("SOCLAAS_MODEL", "  ")
+    assert _model("soclaas") == "x-test-1"
+    monkeypatch.setenv("SOCLAAS_MODEL", " qwen3.6:35b ")
+    assert _model("soclaas") == "qwen3.6:35b"
+    assert (
+        OpenAICompatibleProvider(
+            "soclaas", client=object(), model="explicit-model"
+        ).model
+        == "explicit-model"
+    )
 
 
 def test_openai_client_uses_bounded_timeout_and_retries(monkeypatch) -> None:

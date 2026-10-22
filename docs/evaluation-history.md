@@ -1,11 +1,37 @@
 # Evaluation results
 
-The issue 40 baseline below uses the current model-selected checking workflow.
-Earlier milestones and provider experiments are historical context and should
-not be treated as its current pass rates.
+## v0.3 restored: GLM5.3 Flash comparison, 22 October 2026
 
-Historical records may use `beginner`, `intermediate`, and `advanced`. The current
-labels are `easy`, `medium`, and `hard`.
+The active reference was restored exactly to v0.3 (15 easy, 9 medium, 6 hard).
+With the exact frozen Qwen messages/schema, GLM5.3 Flash (`x-test-1`) obtained
+**51/54 (94.4%)**, versus Qwen3.6:35b's
+**47/60 (78.3%)**. Transport failures are excluded, with
+63 transport-failed attempts and
+6 final excluded slots. Content failures remain nonmatches.
+
+See [the full comparison](difficulty-glm-comparison-v0.3.md) for dimension scores,
+paired changes, uncertainty, latency, tokens, costs, limitations and evidence.
+The v0.4 run was stopped when superseded; its 41/58 result remains provisional.
+This is agreement on an inspected reference, not independent held-out accuracy.
+
+## Difficulty matrix v0.4: SoCLaaS, 22 October 2026
+
+The refined matrix retained 15 easy, 9 medium and 6 hard reference labels.
+A fresh two-pass `qwen3.6:35b` run obtained **41/58
+(70.7%)** overall reference agreement, with
+1 final transport exclusion and 59
+recorded attempts. This run was subsequently stopped when the user selected v0.3;
+one unreturned request remains unscored.
+Transport failures were excluded; content failures remained
+nonmatches. Software derived burden and overall level from model-supplied evidence.
+The previous v0.3 result was 47/60 (78.3%); changed prompting, schema and derivation
+prevent attributing any difference to rubric wording alone.
+
+The [portable evidence](../evidence/issue-86/README.md) retains the stopped run's
+raw outcomes and summary. Its historical matrix is
+[archived](archive/difficulty-rubric-v0.4.md); v0.3 is the current recommendation.
+These inspected questions measure descriptive reference agreement, not independent
+held-out or learner accuracy. Production MCP v0.2 judging remains unchanged.
 
 ## Shared relevance service and independent Python checks: 22 October 2026
 
@@ -186,6 +212,203 @@ difficulty labels but no human quality labels, and control expectations are
 engineering hypotheses rather than independent reference judgments. Neither
 these rating counts nor technical correctness establish educational validity or
 learner-calibrated quality. Deeper educational calibration remains later work.
+
+## Issue 86 transport retries and revised accuracy policy: 22 October 2026
+
+The user requested that transport failures be reported separately from
+classification accuracy and that the three failed assessments be retried with
+client and judge deadlines disabled. This supersedes the initial run's primary
+all-attempt denominator for current accuracy reporting. The initial evidence and
+statistics below remain historical records.
+
+Exactly three first-pass transport-failed slots were retried once each. The
+model (`qwen3.6:35b`), reference, rubric, messages, response schema, output budget
+and reasoning/sampling settings were unchanged. Each retry's request hash was
+identical to its original request. SDK retries remained zero. Both the HTTP
+client timeout and outer judge deadline were explicitly null (disabled); existing
+production call defaults remain finite unless a caller opts into no deadline.
+
+| Retried question | Reference | New prediction | Match | Latency |
+| --- | --- | --- | --- | ---: |
+| `cruxeval-793`, pass 1 | medium | medium | yes | 9.22 s |
+| `cruxeval-223`, pass 1 | medium | medium | yes | 11.80 s |
+| `loops-guarded-sweep-01`, pass 1 | hard | medium | no | 26.71 s |
+
+All three returned valid responses. Retry wall time was 35.96 seconds with two
+concurrent calls. Their quick completion does not establish the cause of the
+original approximately 120-second failures. A service-side timeout cannot be
+disabled by the client. New diagnostic capture preserves a safe HTTP status,
+request ID and redacted underlying message if another transport failure occurs.
+
+Scoring replaces each targeted failed slot with its one new attempt regardless
+of correctness; the 57 original non-transport responses are unchanged. Transport
+failures are excluded from classification denominators and counted separately.
+Malformed responses and non-transport assessment failures remain classification
+nonmatches. Before retries, this policy gives 45/57 (78.9%). After merging the
+three retries, all 60 slots have predictions and none is transport-excluded:
+
+| Current measurement | Result |
+| --- | ---: |
+| Overall classification accuracy | 47/60 (78.3%) |
+| Execution-burden agreement | 41/60 (68.3%) |
+| Changing-state agreement | 44/60 (73.3%) |
+| Conceptual-interaction agreement | 42/60 (70.0%) |
+| All three dimensions correct | 37/60 (61.7%) |
+| Overall and all three dimensions correct | 36/60 (60.0%) |
+| Exact event-count agreement | 12/60 (20.0%) |
+| Macro-F1 | 0.7403 |
+| Pass 1 / pass 2 overall accuracy | 23/30 (76.7%) / 24/30 (80.0%) |
+| Current classification coverage | 60/60 (100%) |
+
+Rows are reference levels and columns are predictions:
+
+| Reference | Easy | Medium | Hard | Recall |
+| --- | ---: | ---: | ---: | ---: |
+| Easy | 29 | 1 | 0 | 96.7% |
+| Medium | 6 | 11 | 1 | 61.1% |
+| Hard | 0 | 5 | 7 | 58.3% |
+
+The original three transport failures remain in attempt history: 63 total
+assessment attempts were made across the initial run and follow-up, with three
+transport-failed attempts. They are not added as extra classification samples.
+Known usage across the 60 returned responses totals 99,438 input and 49,746 output
+tokens; usage/cost for the three original failed attempts remains unavailable.
+The initial run's bootstrap interval and latency statistics are not recomputed
+or presented as statistics for this merged retry configuration.
+
+Historical workspace evidence was under
+`outputs/issue86/2026-10-22/soclaas-v0.3-transport-retries-r1/`.
+The final Qwen records and original/retry attempts are now included in the
+[portable evidence bundle](../evidence/issue-86/README.md):
+`manifest.json`, `retry-records.jsonl`, `merged-records.jsonl`, `summary.json`,
+`predictions.csv` and checksums. The manifest links hashes of the original run and
+states the changed protocol and scoring policy. The original 60 records are
+unchanged. The evidence ZIP includes both generations of results and relevant
+source snapshots.
+
+This remains descriptive agreement on the same inspected, AI-assisted reference;
+reference labels were not revised after seeing model outputs. The limitations
+about independent human review, fresh families and production v0.2 versus offline
+v0.3 judging still apply. Verification: 625 tests passed, three opt-in live tests
+skipped, and repository lint/format/whitespace checks passed. Tests explicitly
+verify unlimited opt-in deadlines, HTTP timeout removal, transport exclusion,
+non-transport error scoring and diagnostic credential redaction.
+
+## Issue 86 ordinary-trace rubric evaluation: 22 October 2026
+
+The user approved two boundary rulings before the reference was frozen: direct
+straight-line substitution/mutation is low interaction/state, and flat periodic
+reset accumulation stays medium overall. The v0.3 reference contains 15 easy,
+nine medium and six hard questions. The two overall changes are
+`arithmetic-reassignment-01` and `lists-endpoint-swap-02`, both medium to easy.
+Seven burden, four state and nine interaction cells changed; answer discrimination
+was retired as a difficulty dimension. Exact question content and answers were
+preserved. The original dataset is archived at
+`reference_sets/python_tracing/archive/dataset-v0.2.json`.
+
+The revised reference was frozen before any model prediction. No label or prompt
+was tuned after viewing this run. SoCLaaS's configured `default` alias resolved to
+`qwen3.6:35b`; that explicit ID was used for all 60 assessments, and every valid
+response reported the same ID. Two passes covered each of the 30 questions.
+The model received only question content and the v0.3 rules, with no reference
+labels, dimension ratings, counts, reasons, IDs or split fields. This was the
+explicit offline v0.3 request, not the existing production v0.2 MCP tool.
+
+Settings: strict JSON schema, model-default sampling/reasoning, 16,384 output
+tokens, zero SDK/application retries, two concurrent calls, 180-second transport
+and 185-second judge deadlines. Baseline commit:
+`5e205633972aecf51d46ec8a3c11295c0535693e`. The manifest records the exact
+uncommitted source hashes, complete requests, schema, dataset/rubric hashes,
+model catalogue and settings.
+
+| Measurement | Result |
+| --- | ---: |
+| Overall exact agreement, all planned assessments | 45/60 (75.0%) |
+| Overall agreement, valid responses only | 45/57 (78.9%) |
+| Execution-burden agreement | 40/60 (66.7%) |
+| Changing-state agreement | 43/60 (71.7%) |
+| Conceptual-interaction agreement | 42/60 (70.0%) |
+| All three dimensions correct together | 37/60 (61.7%) |
+| Overall and all three dimensions correct together | 36/60 (60.0%) |
+| Exact event-count agreement | 12/60 (20.0%) |
+| First / second pass overall agreement | 21/30 (70.0%) / 24/30 (80.0%) |
+| Same valid level in both passes | 22/30 questions (73.3%) |
+| Macro-F1 | 0.7183 |
+| Transport errors | 3/60 (5.0%) |
+| Unresolved planned assessments | 0 |
+
+Rows below are reference levels; columns are returned levels. Failed calls remain
+in the denominator and appear separately.
+
+| Reference | Predicted easy | Predicted medium | Predicted hard | Error | Recall |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Easy | 29 | 1 | 0 | 0 | 96.7% |
+| Medium | 6 | 9 | 1 | 2 | 50.0% |
+| Hard | 0 | 4 | 7 | 1 | 58.3% |
+
+There were no direct easy/hard confusions. The easy majority baseline is 30/60
+(50%). Topic agreement was arithmetic 11/12, conditionals 10/12, functions 6/12,
+lists 9/12 and loops 9/12. These small group counts are descriptive.
+
+Thirty responses had at least one mechanical inconsistency: 19 count-to-burden
+inconsistencies, 18 breakdown-sum inconsistencies and five overall/dimension-rule
+inconsistencies (categories overlap). Nine correct overall labels still had at
+least one incorrect dimension. Scores use returned structured fields; explanatory
+prose does not replace or repair a prediction.
+
+Representative disagreements:
+
+- `functions-composition-01` and `cruxeval-783` were medium in the reference but
+  easy in both passes. Helper returns/assignments or repeated index comparisons
+  were undercounted or assigned low interaction.
+- `conditionals-conditional-feedback-01` was hard but medium in both passes. In
+  pass one, high conceptual interaction was returned alongside medium overall,
+  directly violating the deterministic level rule.
+- `cruxeval-506` pass one returned easy with all-low dimensions even though its
+  explanation eventually reconstructed 20 events and concluded medium.
+- `cruxeval-223` pass two returned hard for an input-driven flat loop with one-way
+  state dependence; the reference is medium.
+- `cruxeval-793`, `cruxeval-223` and `loops-guarded-sweep-01` had transport errors
+  in pass one. Pass two produced valid responses; the failed calls were retained.
+
+Median assessment latency was 9.47 seconds, p95 (nearest rank) 71.28 seconds and
+maximum 120.44 seconds. Wall time was 546.28 seconds (9.10 minutes). The API
+reported 94,305 input and 43,604 output tokens for 57 calls. Usage for three failed
+calls is unknown, so complete token and cost totals are unavailable. Known usage
+corresponds to about USD 0.10235 in the catalogue's metering units, a lower bound
+rather than a complete cost or a claim of out-of-pocket billing.
+
+The descriptive 95% percentile cluster-bootstrap interval for overall agreement
+was 61.7–86.7%, using 2,000 resamples, seed 86, with all repetitions for each exact
+code family kept together. There are 30 distinct code families in that definition;
+related nonidentical programs can remain correlated. The dataset is small,
+purposive, AI-assisted and all items informed rubric development. Historical
+held-out assignments are provenance, not an independent test. These figures do
+not establish unseen-question accuracy, human agreement or learner calibration.
+Fresh question families and independent review are needed for those claims.
+
+The observed 75% level agreement and 60% complete-rating agreement do not support
+using the model as a strict automatic marker yet. A useful next experiment would
+compute trace counts and overall mapping deterministically, reserving model
+judgment for the state/interaction evidence. That change was not applied or scored
+in this run.
+
+Historical evidence was saved under the workspace path
+`outputs/issue86/2026-10-22/soclaas-v0.3-qwen36-2passes/`:
+`manifest.json`, `records.jsonl`, `summary.json`, `predictions.csv` and
+`evidence-checksums.json`. The adjacent `reference-v0.3-changes.csv` lists all
+22 rating-cell changes. A ZIP bundle includes the raw evidence, revised and
+archived references, rubric, evaluation source and this report. Reproduce using
+[the evaluation guide](evaluation.md#v03-ordinary-trace-reference-agreement)
+with a fresh output directory; preserve each run separately.
+The [portable evidence bundle](../evidence/issue-86/README.md) now preserves the
+original Qwen manifest, all original/retry attempts and merged final records.
+
+Verification: 620 offline tests passed and three opt-in live tests were skipped;
+repository lint, formatting and whitespace checks passed. The live evaluation
+above is separately recorded. Independent reconciliation checked all 60 unique
+case/repetition records, confusion totals, CSV rows, raw token metadata, frozen
+source hashes and the unchanged archived baseline.
 
 ## Issue 41 rubric verification: 14 October 2026
 
