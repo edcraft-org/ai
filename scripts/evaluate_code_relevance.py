@@ -2,7 +2,6 @@
 
 import argparse
 import asyncio
-import hashlib
 import json
 import statistics
 import subprocess
@@ -20,7 +19,6 @@ from edcraft_validator.application.code_relevance import (
 )
 from edcraft_validator.domains.code.difficulty import CodeDifficultyQuestion
 from edcraft_validator.domains.code.relevance import (
-    CODE_RELEVANCE_RENDERING_VERSION,
     CodeQuestionRequest,
 )
 from edcraft_validator.llm.embeddings import OpenAIEmbeddingProvider
@@ -28,10 +26,6 @@ from edcraft_validator.llm.embeddings import OpenAIEmbeddingProvider
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = ROOT / "reference_sets/python_tracing/dataset.json"
 CONTROLS = ROOT / "reference_sets/python_tracing/quality-controls.json"
-
-
-def sha256(content: bytes) -> str:
-    return hashlib.sha256(content).hexdigest()
 
 
 @contextmanager
@@ -190,24 +184,14 @@ async def evaluate(output: Path) -> dict:
     manifest_path = output.with_suffix(".manifest.json")
     summary_path = output.with_suffix(".summary.json")
     embedding = OpenAIEmbeddingProvider()
-    source_files = sorted((ROOT / "src").rglob("*.py")) + [Path(__file__)]
     manifest = {
         "protocol": "code-relevance-evaluation-v4-shared",
-        "rendering_version": CODE_RELEVANCE_RENDERING_VERSION,
         "relevance_tool_version": "1.0.0",
         "review_report_version": "4.0.0",
         "created_at": datetime.now(UTC).isoformat(),
         "source_revision": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
         ).strip(),
-        "source_sha256": sha256(
-            b"".join(
-                str(p.relative_to(ROOT)).encode() + b"\0" + p.read_bytes()
-                for p in source_files
-            )
-        ),
-        "dataset_sha256": sha256(DATASET.read_bytes()),
-        "controls_sha256": sha256(CONTROLS.read_bytes()),
         "embedding": {
             "provider": embedding.provider,
             "model": embedding.model,

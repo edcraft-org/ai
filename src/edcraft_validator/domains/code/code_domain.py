@@ -145,7 +145,7 @@ class CodeDomain:
             },
             deep=True,
         )
-        reusable = CodeTemplateCandidate.model_validate_json(reusable.model_dump_json())
+        reusable = CodeTemplateCandidate.model_validate(reusable.model_dump())
         difficulty = next(
             (item for item in evidence if item.tool == TEMPLATE_DIFFICULTY_TOOL), None
         )

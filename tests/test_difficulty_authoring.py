@@ -85,11 +85,20 @@ async def run(author_responses, estimates, requested="medium"):
     return result, author, judges
 
 
-async def test_initial_match_needs_no_correction():
+async def test_initial_match_needs_no_correction(monkeypatch):
+    timeouts = []
+    original = Client.call_tool
+
+    async def record_timeout(self, *args, **kwargs):
+        timeouts.append(kwargs["timeout"])
+        return await original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Client, "call_tool", record_timeout)
     report, author, judges = await run([question().model_dump()], ["medium"])
     assert report.status == "matches"
     assert len(report.attempts) == len(author.requests) == len(judges) == 1
     assert report.attempts[0].question == question()
+    assert timeouts == [330]
 
 
 def test_authoring_schema_is_closed_and_draft_inputs_preserve_values():

@@ -74,7 +74,10 @@ async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreem
     assert len(records) == 19
     assert "PRIVATE REMOTE ERROR" not in output.read_text()
     manifest = json.loads(output.with_suffix(".manifest.json").read_text())
-    assert len(manifest["cases"]) == 19 and manifest["dataset_sha256"]
+    assert len(manifest["cases"]) == 19 and manifest["source_revision"]
+    assert manifest["cases"] == evaluation.evaluation_cases(
+        json.loads(before), json.loads(evaluation.CONTROLS.read_text())
+    )
     assert "judge" not in manifest and manifest["new_judge_calls"] == 0
     assert manifest["protocol"] == "code-relevance-evaluation-v4-shared"
     assert "difficulty_report_sha256" not in manifest

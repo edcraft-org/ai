@@ -12,8 +12,6 @@ from edcraft_validator.domains.code.difficulty import (
 )
 from edcraft_validator.relevance_contracts import RelevanceInput
 
-CODE_RELEVANCE_RENDERING_VERSION = "code-question-json-v1"
-
 
 class CodeQuestionRequest(Record):
     prompt: Text = Field(max_length=4000)
@@ -37,12 +35,9 @@ def rendered_question(question: CodeDifficultyQuestion) -> str:
 def relevance_input(
     question: CodeDifficultyQuestion, request: CodeQuestionRequest
 ) -> RelevanceInput:
-    question = CodeDifficultyQuestion.model_validate_json(question.model_dump_json())
-    request = CodeQuestionRequest.model_validate_json(request.model_dump_json())
     return RelevanceInput(
         author_request=json.dumps(
             request.model_dump(mode="json"), sort_keys=True, indent=2
         ),
         question_text=rendered_question(question),
-        rendering_version=CODE_RELEVANCE_RENDERING_VERSION,
     )

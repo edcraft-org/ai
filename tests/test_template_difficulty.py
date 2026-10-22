@@ -91,6 +91,7 @@ async def test_template_tool_gets_full_domain_without_correctness_execution():
         )
     evidence = result.structured_content
     assert evidence["status"] == "passed"
+    assert evidence["details"]["judge"]["timeout_seconds"] == 310
     assert evidence["details"]["advisory"] is True
     assert evidence["details"]["template_sha256"] == template_sha256(original)
     assert evidence["details"]["usage"]["model_call_count"] == 1
@@ -255,3 +256,30 @@ def test_unresolved_mismatch_retains_all_four_template_attempts():
 def test_template_revision_limit_is_bounded(limit):
     with pytest.raises(ValueError):
         TemplateApplication(max_correction_attempts=limit)
+
+
+def test_mcp_client_allows_the_glm_judge_deadline_plus_overhead(monkeypatch):
+    from types import SimpleNamespace
+
+    from edcraft_validator.mcp import client as client_module
+
+    timeouts = []
+
+    class Client:
+        def __init__(self, server, *, timeout):
+            timeouts.append(timeout)
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def call_tool(self, name, arguments, **kwargs):
+            timeouts.append(kwargs["timeout"])
+            return SimpleNamespace(structured_content={"status": "passed"})
+
+    monkeypatch.setattr(client_module, "Client", Client)
+    with FastMcpToolClient(server=object()) as client:
+        assert client.call_tool(TEMPLATE_DIFFICULTY_TOOL, {}) == {"status": "passed"}
+    assert timeouts == [330, 330]

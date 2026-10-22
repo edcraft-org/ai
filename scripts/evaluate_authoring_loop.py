@@ -1,7 +1,6 @@
 """Fixed real-provider authoring cases, usage summaries, and saved offline replay."""
 
 import argparse
-import hashlib
 import json
 import statistics
 import subprocess
@@ -209,14 +208,9 @@ def source_revision():
             check=True,
         ).stdout
     )
-    digest = hashlib.sha256()
-    for path in sorted([*root.glob("src/**/*.py"), Path(__file__).resolve()]):
-        digest.update(str(path.relative_to(root)).encode())
-        digest.update(path.read_bytes())
     return {
         "git_revision": revision,
         "working_tree_dirty": dirty,
-        "source_sha256": digest.hexdigest(),
     }
 
 

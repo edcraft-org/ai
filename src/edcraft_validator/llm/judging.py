@@ -22,6 +22,8 @@ from edcraft_validator.llm.usage import (
     summarize_usage,
 )
 
+DEFAULT_JUDGE_TIMEOUT_SECONDS = 310.0
+
 JudgeProviderFactory = Callable[[], ModelProvider]
 
 
@@ -53,7 +55,7 @@ async def run_judge[AssessmentT: BaseModel](
     request: StructuredGenerationRequest[AssessmentT],
     *,
     provider_factory: JudgeProviderFactory,
-    timeout_seconds: float = 60,
+    timeout_seconds: float = DEFAULT_JUDGE_TIMEOUT_SECONDS,
 ) -> JudgeRun[AssessmentT]:
     """One application call; no repair retries or replacement judgments.
 

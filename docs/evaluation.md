@@ -68,7 +68,7 @@ SDK retries to zero (for example `OPENAI_MAX_RETRIES=0`) for an interpretable ru
 
 The script writes one `authoring_result` per job to JSONL and flushes after every
 job. Alongside it, `.manifest.json` records the fixed cases, source revision,
-uncommitted-source hash, and preview seeds; `.summary.json` records outcomes, first
+working-tree status, and preview seeds; `.summary.json` records outcomes, first
 attempt and correction rates, attempts per job, failure categories, median/range
 latency, model calls, and token usage. Until all requested jobs are recorded, the
 remaining jobs are counted as unresolved. `--jobs` controls total jobs; additional
@@ -112,21 +112,17 @@ independently, then compare it with the requested level to report `matches`,
 estimates and learner performance. Difficulty evidence is advisory and cannot
 override failed technical checks.
 
-For issue 42, use the single [frozen evaluation dataset](../reference_sets/python_tracing/README.md)
-in `reference_sets/python_tracing/dataset.json`. It contains 30 complete,
-execution-verified MCQs with human-reviewed categories: 13 easy, 11 medium and
-six hard. Each question has one fixed `difficulty` label, four dimension ratings,
-a topic and a development/reserved split (18/12). These assignments are frozen;
-judge outputs and later model disagreements must never rewrite them.
+The current [reference dataset](../reference_sets/python_tracing/README.md) uses
+[v0.3](difficulty-rubric-v0.3.md), with 15 easy, 9 medium and 6 hard questions.
+This is separate from the production v0.2 judge contract above. Hide reference
+labels, dimensions, counts and solutions during assessment. Transport failures
+are excluded from classification accuracy; content failures and missing labels
+remain nonmatches. Report coverage and attempt failures separately.
 
-The human-approved `difficulty` categories and dimension ratings are the
-authoritative reference. When evaluating the advisory judge, send only the MCQ
-content; keep reference labels, dimensions, reasons and solutions hidden. Count
-failed assessments as nonmatches and report valid-only agreement separately.
-The dataset remains an AI-assisted, single-human reference, not independent
-human agreement or learner calibration. Technical verification is not a human
-difficulty label. See [difficulty judging](difficulty-judging.md) for the tool
-contract; record evaluation results in the pull request.
+See the [concise statistics](difficulty-glm-comparison-v0.3.md) and
+[project log](edcraft%20logs.docx) for the results.
+All 30 items informed rubric development; results are descriptive agreement, not
+unseen accuracy, independent human agreement or learner calibration.
 
 ## What to report
 

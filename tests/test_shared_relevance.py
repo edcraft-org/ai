@@ -17,7 +17,6 @@ from edcraft_validator.application.code_checks import (
 )
 from edcraft_validator.application.relevance import assess_relevance
 from edcraft_validator.domains.code.relevance import (
-    CODE_RELEVANCE_RENDERING_VERSION,
     CodeQuestionRequest,
     relevance_input,
 )
@@ -27,21 +26,17 @@ from tests.test_code_relevance import Embeddings, Executor
 from tests.test_difficulty_tool import question
 
 
-async def test_shared_service_preserves_non_python_text_and_representation_limits():
+async def test_shared_service_preserves_non_python_text():
     embeddings = Embeddings()
     request = RelevanceInput(
         author_request="Create a question about triangle angles.",
         question_text="Two angles are 50 and 60 degrees. Find the third angle.",
-        rendering_version="geometry-text-v1",
-        representation_limitations=["The original diagram is not included."],
     )
     report = await assess_relevance(
         request, embedding_provider_factory=lambda: embeddings
     )
     assert report.status == "assessed" and report.advisory
     assert report.input_sha256 == request.sha256
-    assert report.rendering_version == "geometry-text-v1"
-    assert report.representation_limitations == request.representation_limitations
     assert embeddings.texts == [request.author_request, request.question_text]
     assert report.similarity.dimensions == 2
     assert not {"technical", "requirements", "judge", "difficulty"} & set(
@@ -55,7 +50,6 @@ def test_python_adapter_preserves_content_and_excludes_only_answer_designation()
         prompt="Trace arithmetic.", num_distractors=3, required_features=["arithmetic"]
     )
     representation = relevance_input(item, request)
-    assert representation.rendering_version == CODE_RELEVANCE_RENDERING_VERSION
     assert json.loads(representation.author_request) == request.model_dump(mode="json")
     assert json.loads(representation.question_text) == item.model_dump(
         mode="json", exclude={"correct_option"}
@@ -68,23 +62,13 @@ def test_python_adapter_preserves_content_and_excludes_only_answer_designation()
     assert relevance_input(item, request).sha256 != representation.sha256
 
 
-def test_normalization_and_rendering_provenance_define_input_identity():
+def test_whitespace_normalization_preserves_input_identity():
     first = RelevanceInput(
         author_request=" \r\nrequest\r", question_text="question\r\n"
     )
     second = RelevanceInput(author_request="request", question_text="question")
     assert first.sha256 == second.sha256
     assert first.author_request == "request" and first.question_text == "question"
-    assert (
-        first.model_copy(update={"rendering_version": "other-v1"}).sha256
-        != first.sha256
-    )
-    assert (
-        first.model_copy(
-            update={"representation_limitations": ["Image omitted"]}
-        ).sha256
-        != first.sha256
-    )
 
 
 @pytest.mark.parametrize(
@@ -94,10 +78,8 @@ def test_normalization_and_rendering_provenance_define_input_identity():
         {"question_text": "\t "},
         {"question_text": 1},
         {"author_request": "x" * 200_001},
-        {"rendering_version": " "},
         {"difficulty_report": {}},
         {"correctness_report": {}},
-        {"representation_limitations": [" "]},
     ],
 )
 async def test_invalid_shared_input_fails_before_provider_creation(change):
@@ -161,7 +143,6 @@ async def test_caller_mutation_cannot_change_in_flight_identity_or_representatio
     request = RelevanceInput(
         author_request="request",
         question_text="original",
-        representation_limitations=[],
     )
     identity = request.sha256
     task = asyncio.create_task(
@@ -170,7 +151,6 @@ async def test_caller_mutation_cannot_change_in_flight_identity_or_representatio
     try:
         assert await asyncio.to_thread(started.wait, 2)
         request.question_text = "changed"
-        request.representation_limitations.append("changed")
         release.set()
         report = await task
     finally:
@@ -179,7 +159,6 @@ async def test_caller_mutation_cannot_change_in_flight_identity_or_representatio
         await task
     assert report.input_sha256 == identity
     assert report.similarity.question_text == "original"
-    assert report.representation_limitations == []
 
 
 async def test_each_mcp_check_runs_without_calling_the_other_services():

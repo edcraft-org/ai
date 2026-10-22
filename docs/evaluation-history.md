@@ -7,6 +7,14 @@ not be treated as its current pass rates.
 Historical records may use `beginner`, `intermediate`, and `advanced`. The current
 labels are `easy`, `medium`, and `hard`.
 
+## Difficulty reference and GLM selection: 22 October 2026
+
+The v0.3 reference has 15 easy, 9 medium and 6 hard questions. On identical scored
+slots, GLM5.3 Flash matched 51/54 labels (94.4%) versus Qwen3.6:35b's 43/54 (79.6%).
+GLM is the new SoCLaaS default. See the [concise results](difficulty-glm-comparison-v0.3.md)
+for coverage, latency and limitations. The live
+production author/edit/check/replay smoke passed after increasing the deadlines.
+
 ## Shared relevance service and independent Python checks: 22 October 2026
 
 The shared `assess_relevance` MCP tool replaces the former combined

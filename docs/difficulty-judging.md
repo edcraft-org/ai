@@ -78,7 +78,8 @@ verify the answer or distractors, repair the question, or establish learner diff
 
 ## Configuration
 
-Set `SOCLAAS_API_KEY`, `SOCLAAS_BASE_URL` and `SOCLAAS_MODEL` in the environment.
+Set `SOCLAAS_API_KEY` and `SOCLAAS_BASE_URL` in the environment. The default
+model is GLM5.3 Flash (`x-test-1`); `SOCLAAS_MODEL` overrides it.
 SocLaas is the default difficulty provider. A different
 `EDCRAFT_DIFFICULTY_PROVIDER` is rejected; there is no provider fallback.
 `EDCRAFT_DIFFICULTY_MODEL` optionally overrides the SocLaas model.
@@ -91,10 +92,12 @@ uv run python -m edcraft_validator.mcp
 ```
 
 The host can inject a provider factory and set
-`difficulty_judge_timeout_seconds` (default 60 seconds). Allow that timeout plus
-overhead on the MCP client. An application deadline stops waiting and discards
-late results; it cannot terminate a synchronous provider thread. Align the
-SocLaas transport timeout with the application deadline.
+`difficulty_judge_timeout_seconds` (default 310 seconds). The SoCLaaS transport
+timeout defaults to 300 seconds, and the built-in MCP client allows 330 seconds
+per tool call. These limits accommodate GLM's measured 178-second p95 with room
+for slower responses and tool overhead. Keep custom client timeouts longer than
+the judge deadline. An application deadline stops waiting and discards late
+results; it cannot terminate a synchronous provider thread. The separate research evaluation uses disabled deadlines.
 
 ## Input and output
 
