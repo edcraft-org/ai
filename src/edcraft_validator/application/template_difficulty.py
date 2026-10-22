@@ -10,7 +10,11 @@ from edcraft_validator.domains.code.template_difficulty import (
     build_template_difficulty_request,
     template_sha256,
 )
-from edcraft_validator.llm.judging import JudgeProviderFactory, run_judge
+from edcraft_validator.llm.judging import (
+    DEFAULT_JUDGE_TIMEOUT_SECONDS,
+    JudgeProviderFactory,
+    run_judge,
+)
 from edcraft_validator.mcp.evidence import ToolEvidence, ToolFinding
 
 HIGH_CONFIDENCE_THRESHOLD = 0.8
@@ -21,7 +25,7 @@ async def assess_template_difficulty(
     candidate: CodeTemplateCandidate,
     *,
     provider_factory: JudgeProviderFactory,
-    judge_timeout_seconds: float = 60,
+    judge_timeout_seconds: float = DEFAULT_JUDGE_TIMEOUT_SECONDS,
 ) -> ToolEvidence:
     started = time.perf_counter()
     candidate = CodeTemplateCandidate.model_validate(candidate.model_dump())

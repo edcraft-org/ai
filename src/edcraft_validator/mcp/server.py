@@ -8,7 +8,10 @@ from edcraft_validator.llm.embeddings import (
     EmbeddingProviderFactory,
     OpenAIEmbeddingProvider,
 )
-from edcraft_validator.llm.judging import JudgeProviderFactory
+from edcraft_validator.llm.judging import (
+    DEFAULT_JUDGE_TIMEOUT_SECONDS,
+    JudgeProviderFactory,
+)
 from edcraft_validator.mcp.code_question_tools import register_code_question_tools
 from edcraft_validator.mcp.code_tools import register_code_validation_tools
 from edcraft_validator.mcp.difficulty_tools import (
@@ -27,7 +30,7 @@ def create_validation_server(
     code_execution_tool: PythonExecutionTool | None = None,
     code_execution_timeout_seconds: float = 2.0,
     difficulty_provider_factory: JudgeProviderFactory | None = None,
-    difficulty_judge_timeout_seconds: float = 60.0,
+    difficulty_judge_timeout_seconds: float = DEFAULT_JUDGE_TIMEOUT_SECONDS,
     embedding_provider_factory: EmbeddingProviderFactory | None = None,
     embedding_timeout_seconds: float = 35.0,
 ) -> FastMCP:

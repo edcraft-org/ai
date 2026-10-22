@@ -9,7 +9,7 @@ from edcraft_validator.mcp.catalogue import ToolCatalogueError
 
 
 class FastMcpToolClient:
-    def __init__(self, server=None, *, timeout_seconds: float = 135):
+    def __init__(self, server=None, *, timeout_seconds: float = 330):
         if server is None:
             # Resolve the default lazily: server tools also use application services.
             from edcraft_validator.mcp.server import mcp

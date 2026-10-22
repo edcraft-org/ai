@@ -20,6 +20,7 @@ from edcraft_validator.domains.code.difficulty_matching import (
 )
 from edcraft_validator.domains.code.difficulty_request import KeyedDifficultyAssessment
 from edcraft_validator.llm.judging import (
+    DEFAULT_JUDGE_TIMEOUT_SECONDS,
     JudgeProviderFactory,
     JudgeRun,
     run_judge,
@@ -52,7 +53,7 @@ async def assess_code_question_difficulty(
     *,
     requested_difficulty: Difficulty | None = None,
     provider_factory: JudgeProviderFactory,
-    judge_timeout_seconds: float = 60,
+    judge_timeout_seconds: float = DEFAULT_JUDGE_TIMEOUT_SECONDS,
 ) -> CodeDifficultyReport:
     if not math.isfinite(judge_timeout_seconds) or judge_timeout_seconds <= 0:
         raise ValueError("judge timeout must be finite and positive")

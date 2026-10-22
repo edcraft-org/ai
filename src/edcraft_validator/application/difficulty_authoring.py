@@ -199,7 +199,7 @@ async def author_question_with_difficulty(
     provider_factory: JudgeProviderFactory,
     tool_client: Client,
     author_timeout_seconds: float = 300,
-    tool_timeout_seconds: float = 310,
+    tool_timeout_seconds: float = 330,
     max_correction_attempts: int = 3,
 ) -> DifficultyAuthoringResult:
     """Generate and assess; allow up to three question/generation corrections.

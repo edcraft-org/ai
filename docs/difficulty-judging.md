@@ -92,10 +92,13 @@ uv run python -m edcraft_validator.mcp
 ```
 
 The host can inject a provider factory and set
-`difficulty_judge_timeout_seconds` (default 60 seconds). Allow that timeout plus
-overhead on the MCP client. An application deadline stops waiting and discards
-late results; it cannot terminate a synchronous provider thread. Align the
-SocLaas transport timeout with the application deadline.
+`difficulty_judge_timeout_seconds` (default 310 seconds). The SoCLaaS transport
+timeout defaults to 300 seconds, and the built-in MCP client allows 330 seconds
+per tool call. These limits accommodate GLM's measured 178-second p95 with room
+for slower responses and tool overhead. Keep custom client timeouts longer than
+the judge deadline. An application deadline stops waiting and discards late
+results; it cannot terminate a synchronous provider thread. Offline evaluation
+continues to use explicitly disabled deadlines.
 
 ## Input and output
 

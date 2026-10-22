@@ -155,6 +155,7 @@ async def test_mcp_assessment_does_not_execute_or_report_correctness():
     assert report["question_sha256"] == question().sha256
     assert report["requested_difficulty"] == "hard"
     judge = report["judge"]
+    assert judge["timeout_seconds"] == 310
     assert judge["assessment"]["estimated_difficulty"] == "easy"
     assert judge["provider"] == "fake" and judge["model"] == "judge-test"
     assert judge["provider_settings"] == {"sampling": "scripted", "max_retries": 0}
