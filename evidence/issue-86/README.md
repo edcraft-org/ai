@@ -16,7 +16,8 @@ and two missing labels remain nonmatches. See the
 | `reference-changes.csv` | All 22 rating changes from v0.2 to v0.3. |
 | `v0.3-glm-qwen.zip` | Frozen requests/schema/settings/catalogue, references, raw responses, all returned attempts, Qwen original/retry records, GLM recovery phases and operator audits, source snapshots. |
 | `v0.4-stopped.zip` | Superseded experiment: 41/58 matches, 59 recorded attempts, one excluded transport slot and one unreturned slot; retained to avoid selecting only favorable experiments. |
-| `checksums.json` | SHA-256 of the six data files above. |
+| `workflow-smoke.json` | Separate pre-PR live workflow failure: GLM exceeded the existing 60-second production judge deadline. |
+| `checksums.json` | SHA-256 of the seven data files above. |
 
 The archives are portable exports of the completed research evidence. Only local
 home/workspace paths were replaced with `<user-home>` / `<workspace>`; duplicate
@@ -79,3 +80,9 @@ All questions informed rubric development; historical held-out labels are not
 an unseen test. Independent human/learner calibration, fresh families,
 production migration from v0.2 and authoring mismatch-policy evaluation remain
 open under issue 86. Changing the model default does not validate those workflows.
+
+The pre-PR live workflow smoke did not produce a finalized template: generation
+and correctness checks passed, but the production difficulty judge timed out
+after 60 seconds. This is a merge blocker for validating the new default in the
+authoring workflow, separate from the frozen offline classification results.
+The draft PR retains existing deadlines pending a production-policy decision.

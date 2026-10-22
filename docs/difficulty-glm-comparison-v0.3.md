@@ -198,3 +198,12 @@ passed, 3 opt-in live tests skipped**; repository lint, formatting and whitespac
 checks passed. The live benchmark above was run separately against SoCLaaS.
 The current production MCP v0.2 contract was not migrated; this report evaluates
 the explicit v0.3 reference-assessment workflow.
+
+## Pre-PR workflow check
+
+The separate live authoring smoke failed after template generation and correctness
+checks passed: GLM exceeded the existing production judge deadline of 60 seconds
+(`JUDGE_TIMEOUT`), leaving the template at `needs_review`. No finalized artifact
+was produced. See [the smoke record](../evidence/issue-86/workflow-smoke.json).
+This availability failure does not alter the frozen offline agreement scores.
+Review production deadline/retry policy and pass the live workflow before merge.
