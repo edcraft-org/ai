@@ -50,6 +50,9 @@ async def test_catalogue_exposes_authoritative_names_descriptions_and_schemas():
         "code_require_features",
         "assess_code_difficulty",
         "code_assess_template_difficulty",
+        "check_code_question_correctness",
+        "check_code_question_requirements",
+        "assess_relevance",
     ]
     for tool in tools[:3]:
         assert tool.description

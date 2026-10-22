@@ -130,6 +130,51 @@ contract; record evaluation results in the pull request.
 
 ## What to report
 
+For issue 44, see the [project report](edcraft%20logs.docx),
+Section 6, for relevance checks, model selection and evaluation findings.
+The v4 runner freezes all 12 reserved MCQs and seven versioned control contents,
+and collects independent Python correctness, explicit requirements and shared
+relevance reports. The reference and control files are unchanged.
+It neither consumes difficulty reports nor makes generative judge calls.
+Difficulty judgments and quality concerns remain in their separate report.
+The original v1 live review is retained
+as historical evidence. There are no human relevance labels for the reserved set;
+similarity does not establish relevance accuracy.
+The embedding selection in the log compares published online
+benchmarks rather than claiming a new domain evaluation. Model calls remain opt-in.
+
+Run the frozen review with `uv run python scripts/evaluate_code_relevance.py
+--env-file .env --output .artifacts/relevance-v4.jsonl`.
+The new protocol is `code-relevance-evaluation-v4-shared`. Reports contain
+`technical`, `requirements` and `relevance`; embedding details are now under
+`relevance.similarity`. The manifest identifies the renderer, shared tool and
+review-report versions. Existing evaluation artifacts retain their original schemas.
+
+The former `assess_code_quality` MCP name and the old script name are removed.
+For a Python question, prepare shared-tool input with
+`domains.code.relevance.relevance_input(question, CodeQuestionRequest(...))` and
+call `assess_relevance` with that object as `request`. Call
+`check_code_question_correctness(question)` and
+`check_code_question_requirements(question, request)` separately when those checks
+are needed. For other domains, supply an original author request and complete
+textual question representation with rendering provenance and any omissions.
+The shared service does not infer or enforce domain requirements. All tools reject
+attached difficulty/correctness reports; no check reuses another check's judgment.
+The runner continues to reject `--difficulty-reports`.
+The runner retains errors and usage, flushes completed records and refuses to
+overwrite earlier reviews. It never requests a replacement difficulty judgment.
+It exclusively reserves the JSONL, manifest and summary files before writing any
+of them. A reservation conflict removes only empty files created by that attempt;
+existing evaluation evidence remains untouched.
+
+The command exits with code 2 for incomplete measurements, protocol failures or
+unexpected mandatory-check results. Held-out cases require technical checks to
+pass and explicit requirements to be satisfied. Controls use their frozen
+expectations, so an expected wrong-answer rejection or missing requirement is not
+a run failure. `mandatory_check_failure_count` counts cases that disagree with
+those expectations, including execution errors and unknown requirement results.
+This run-success check does not turn similarity into a relevance pass threshold.
+
 Use the fixed supported requests for the initial live baseline. Scripted regression
 tests cover repairable and repeated failures, unsuitable check plans, invalid
 arguments, and incomplete conversations. Unsupported author requests are deferred

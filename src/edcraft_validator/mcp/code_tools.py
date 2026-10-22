@@ -16,12 +16,12 @@ from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
 )
 from edcraft_validator.domains.code.code_types import CodeFeature
+from edcraft_validator.domains.code.features import extract_code_features
 from edcraft_validator.mcp.code_checks.answer_checks import (
     check_canonical_answers,
     check_expressions,
     check_proposed_answers,
 )
-from edcraft_validator.mcp.code_checks.code_features import extract_code_features
 from edcraft_validator.mcp.code_checks.distractor_checks import (
     check_distractors,
     check_proposed_distractor_selection,

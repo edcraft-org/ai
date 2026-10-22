@@ -18,10 +18,53 @@ All paths below are under `src/edcraft_validator/`.
 | MCP | `mcp/server.py`, `mcp/code_tools.py`, `mcp/client.py` | Tool registration, deadlines, evidence, and calls. |
 | Domain interface | `domains/domain_contract.py`, `domains/domain_registry.py` | Domain contract and lookup. |
 | Code domain | `domains/code/code_domain.py`, schemas, prompts, and candidate builder | Code-specific authoring and finalization. |
-| Checking algorithms | `mcp/code_tools.py`, `mcp/code_checks/` | Structure, execution, answers, distractors, and feature detection. |
+| Template checking algorithms | `mcp/code_tools.py`, `mcp/code_checks/` | Structure, execution, answers and distractors for reusable templates. |
+| Concrete Python checks | `domains/code/question_checks.py`, `domains/code/features.py`, `application/code_checks.py`, `mcp/code_question_tools.py` | Independent correctness and explicit requirements, without embedding or judge calls. |
 | Question generation | `domains/code/question_generator.py`, expressions and rendering | Local expansion from saved answers and recipes. |
 | Python tools | `tools/python_analysis.py`, `tools/python_execution.py`, `tools/python_worker.py` | Supported syntax and batched tracing. |
 | Advisory difficulty | `mcp/difficulty_tools.py`, `application/code_difficulty.py`, `domains/code/difficulty.py`, `llm/judging.py` | Template difficulty and standalone concrete-MCQ judging, independent of correctness. |
+| Shared relevance | `relevance_contracts.py`, `application/relevance.py`, `mcp/relevance_tools.py`, `llm/embeddings.py` | Domain-independent text measurement; no correctness, requirements or difficulty dependency. |
+| Python relevance adapter and review | `domains/code/relevance.py`, `application/code_relevance.py` | Complete learner-facing rendering and caller-side collection of independent reports. |
+
+## Shared relevance and domain responsibilities
+
+`assess_relevance` is registered once with `capability:relevance`, without a
+`domain:code` tag. It is explicitly callable and is not added to the template
+author's fixed check catalogue. Its `RelevanceInput` contains `author_request`,
+`question_text`, `rendering_version` (default `plain-text-v1`) and
+`representation_limitations`. Text is normalized with `lf-strip-v1`; empty text,
+extra fields, invalid rendering identifiers and texts exceeding 200,000 characters
+are rejected. Provider context limits can be smaller; no text is silently truncated.
+Record important omitted non-text content, such as diagrams, as a representation
+limitation. The service measures the supplied representation and cannot verify
+that a caller included the complete original question.
+
+The shared service and contracts import no domain or MCP modules. The MCP wrapper
+delegates to the application service; internal callers invoke the same service
+directly. `input_sha256` identifies the normalized texts, rendering version and
+representation limitations. The report preserves exact embedded strings, provider
+model information, dimensions, usage, duration and errors. A completed measurement
+is advisory and does not certify relevance, requirements, correctness or difficulty.
+
+`domains/code/relevance.py` owns `code-question-json-v1`. It retains every
+learner-facing question field and excludes `correct_option`; changing only that
+designation changes correctness identity but not the relevance input identity.
+It serializes the structured author request exactly as the former v3 assessment
+did. Other domains can supply their own renderers without changing the shared
+service or registering another relevance MCP tool. No second domain is implemented
+and no cross-domain relevance accuracy is claimed.
+
+`check_code_question_correctness` runs bounded Python execution and identifies
+its question with `question_sha256`. `check_code_question_requirements` independently
+checks reachable syntax, target and option count and records its own question and
+request. Both use `quality:code`, outside the template catalogue. Neither constructs
+an embedding provider or difficulty judge. `review_code_question_relevance` collects
+these results and `RelevanceReport` for evaluation; no check consumes another
+check's report. This refactor does not change authoring dispatch or difficulty policy.
+
+The former combined `assess_code_quality` tool is removed. Its replacement is the
+shared `assess_relevance` measurement plus the two Python checks above; see the
+[migration and review protocol](evaluation.md#what-to-report).
 
 ## Model and tool calls
 
