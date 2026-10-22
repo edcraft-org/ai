@@ -1,0 +1,1651 @@
+{
+  "summary": {
+    "created_at": "2026-10-22T13:30:30.053345+00:00",
+    "source_revision": "85610239a9536f32af45c79b25eecaee014e2219",
+    "purpose": "Live author/edit/check/replay validation of GLM production deadlines",
+    "author_model": "gpt-5-mini",
+    "judge_model": "x-test-1",
+    "transport_timeout_seconds": 300,
+    "judge_timeout_seconds": 310,
+    "tool_timeout_seconds": 330,
+    "sdk_retries": 0,
+    "finished_at": "2026-10-22T13:33:01.217698+00:00",
+    "pytest_exit_code": 0,
+    "operations": [
+      {
+        "operation": "author",
+        "status": "checked",
+        "duration_ms": 79683.97975002881,
+        "artifact_created": true
+      },
+      {
+        "operation": "validate",
+        "status": "checked",
+        "duration_ms": 70552.43654199876,
+        "artifact_created": true
+      }
+    ]
+  },
+  "reports": [
+    {
+      "operation": "author",
+      "report": {
+        "status": "checked",
+        "provider": "openai",
+        "model": "gpt-5-mini",
+        "domain": "code",
+        "provider_settings": {
+          "sampling": "provider_defaults",
+          "response_format": "json_schema",
+          "strict": true,
+          "tool_choice": "required",
+          "parallel_tool_calls": true,
+          "timeout_seconds": 120.0,
+          "max_retries": 0
+        },
+        "generated_at": "2026-10-22T13:30:30.512239Z",
+        "request": {
+          "prompt": "Create an arithmetic question about adding integers",
+          "difficulty": "easy",
+          "num_distractors": 3
+        },
+        "prompt_version": "code-template-v20-execution-eligible+response-v5",
+        "duration_ms": 79683.97975002881,
+        "generation_duration_ms": 24943.436333036516,
+        "model_calls": [
+          {
+            "input_tokens": 2982,
+            "output_tokens": 2910,
+            "operation": "generation",
+            "duration_ms": 24943.401042022742,
+            "error": null,
+            "usage_unavailable_reason": null
+          },
+          {
+            "input_tokens": 2982,
+            "output_tokens": 567,
+            "operation": "checking",
+            "duration_ms": 5484.649666992482,
+            "error": null,
+            "usage_unavailable_reason": null
+          },
+          {
+            "input_tokens": 3076,
+            "output_tokens": 17,
+            "operation": "checking",
+            "duration_ms": 898.8065839512274,
+            "error": null,
+            "usage_unavailable_reason": null
+          },
+          {
+            "input_tokens": 2896,
+            "output_tokens": 105,
+            "operation": "acknowledgement",
+            "duration_ms": 2772.276292031165,
+            "error": null,
+            "usage_unavailable_reason": null
+          }
+        ],
+        "usage": {
+          "model_call_count": 4,
+          "unavailable_call_count": 0,
+          "input_tokens": 11936,
+          "output_tokens": 3599,
+          "reported_input_tokens": 11936,
+          "reported_output_tokens": 3599
+        },
+        "feedback_error": null,
+        "failure": null,
+        "fixed_plan": [
+          "code_assess_template_difficulty",
+          "code_validate_answers_and_distractors",
+          "code_verify_template_structure"
+        ],
+        "tool_catalogue": [
+          {
+            "name": "code_assess_template_difficulty",
+            "version": "1.1.0",
+            "description": "Assess the difficulty of a reusable Python tracing MCQ template. Select this check when authoring or validating a template with a target difficulty. SocLaas estimates the typical instance across the effective domain: uniform eligible combinations when supplied, otherwise independent uniform parameter values, using code, question pattern, answer target and distractor recipes. The declared level is hidden from the judge and compared afterwards. Passed means a match or a low-confidence advisory mismatch; inspect difficulty_match and decision. A mismatch at self-reported confidence 0.80 or higher fails and requests author revision; this confidence threshold is provisional, not calibrated accuracy. Missing essential information also fails. Reports parameter-dependent variation. One judge call, no check corrections or retries. Does not execute code or verify correctness; use separate correctness tools. May incur cost."
+          },
+          {
+            "name": "code_require_features",
+            "version": "1.1.0",
+            "description": "Select this tool when the authoring request requires concrete Python features such as a loop, conditional, helper function, or list operation. Require only features explicitly requested by the author; arithmetic alone does not require a loop or conditional. Correct mistaken feature arguments instead of adding unrelated code to satisfy them. helper_function means a separate helper called from the entry function. list_aggregate means calls to sum, min, max, all, or any, not manual accumulation in a loop. It checks the supported program structure and reports features reachable from the entry function. It establishes syntactic presence, not that the feature is pedagogically central or that the requested difficulty matches."
+          },
+          {
+            "name": "code_validate_answers_and_distractors",
+            "version": "1.1.0",
+            "description": "Select this tool when canonical answers and usable MCQ distractors must be established. It checks the template, executes every finite parameter case in an isolated worker with a 2-second per-case timeout and derives answers from execution. Legacy supplied answer expressions are compared with execution. It selects model-proposed distractors maximizing collision-free input coverage, requiring at least two combinations and half the domain. Collisions are excluded from the eligible sampling set; invalid code, expressions and answer types still fail. No correction or fallback distractor is inserted. Evidence is exhaustive only over the declared finite parameter domain. Recursion is supported when every finite input case completes within the execution limits. Execution uses the supported Python subset and a bounded trace; timeout, trace-limit, or resource-limit termination produces error evidence rather than validation failure."
+          },
+          {
+            "name": "code_verify_template_structure",
+            "version": "1.1.0",
+            "description": "Select this tool to establish that a Python template uses the supported safe subset, declares a matching entry function and finite parameter domain, contains valid answer and distractor expressions, and renders for every input. It performs bounded static and expression checks only; it does not execute the program or establish that answers are correct."
+          }
+        ],
+        "attempts": [
+          {
+            "number": 1,
+            "candidate": {
+              "template_id": "code.easy.7aa8355ff166",
+              "topic": null,
+              "difficulty": "easy",
+              "code": "def add_integers(a, b):\n    # Return the integer sum of the two inputs\n    result = a + b\n    return result",
+              "entry_function": "add_integers",
+              "parameters": [
+                {
+                  "name": "a",
+                  "kind": "integer",
+                  "values": [
+                    2,
+                    3,
+                    5
+                  ]
+                },
+                {
+                  "name": "b",
+                  "kind": "integer",
+                  "values": [
+                    4,
+                    6,
+                    7
+                  ]
+                }
+              ],
+              "question_template": "What does add_integers({a}, {b}) return?",
+              "answer_target": "return_value",
+              "answer_expression": null,
+              "distractors": [
+                {
+                  "expression": "a - b",
+                  "reason_template": "Subtracts {b} from {a} instead of adding."
+                },
+                {
+                  "expression": "a * b",
+                  "reason_template": "Multiplies {a} and {b} instead of adding."
+                },
+                {
+                  "expression": "max([a, b])",
+                  "reason_template": "Takes the larger of {a} and {b} rather than their sum."
+                },
+                {
+                  "expression": "a + b - 1",
+                  "reason_template": "Computes the sum of {a} and {b} but misses one."
+                }
+              ],
+              "question_type": "mcq",
+              "eligible_inputs": null
+            },
+            "executions": [
+              {
+                "call_id": "call_8gQCKJof0aiSOTfdns9EX1Ie",
+                "tool": "code_validate_answers_and_distractors",
+                "requested_arguments": {},
+                "application_arguments": {
+                  "required_distractors": 3
+                },
+                "evidence": {
+                  "tool": "code_validate_answers_and_distractors",
+                  "version": "1.1.0",
+                  "status": "passed",
+                  "findings": [],
+                  "details": {
+                    "cases": 9,
+                    "eligible_inputs": null,
+                    "eligible_case_count": 9,
+                    "excluded_case_count": 0,
+                    "sampling_policy": "uniform_eligible_combinations-v1",
+                    "canonical_answers": [
+                      {
+                        "inputs": {
+                          "a": 2,
+                          "b": 4
+                        },
+                        "answer": 6,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      },
+                      {
+                        "inputs": {
+                          "a": 2,
+                          "b": 6
+                        },
+                        "answer": 8,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      },
+                      {
+                        "inputs": {
+                          "a": 2,
+                          "b": 7
+                        },
+                        "answer": 9,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      },
+                      {
+                        "inputs": {
+                          "a": 3,
+                          "b": 4
+                        },
+                        "answer": 7,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      },
+                      {
+                        "inputs": {
+                          "a": 3,
+                          "b": 6
+                        },
+                        "answer": 9,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      },
+                      {
+                        "inputs": {
+                          "a": 3,
+                          "b": 7
+                        },
+                        "answer": 10,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      },
+                      {
+                        "inputs": {
+                          "a": 5,
+                          "b": 4
+                        },
+                        "answer": 9,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      },
+                      {
+                        "inputs": {
+                          "a": 5,
+                          "b": 6
+                        },
+                        "answer": 11,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      },
+                      {
+                        "inputs": {
+                          "a": 5,
+                          "b": 7
+                        },
+                        "answer": 12,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      }
+                    ],
+                    "selected_distractors": [
+                      {
+                        "expression": "a - b",
+                        "reason_template": "Subtracts {b} from {a} instead of adding."
+                      },
+                      {
+                        "expression": "a * b",
+                        "reason_template": "Multiplies {a} and {b} instead of adding."
+                      },
+                      {
+                        "expression": "max([a, b])",
+                        "reason_template": "Takes the larger of {a} and {b} rather than their sum."
+                      }
+                    ]
+                  },
+                  "duration_ms": 262.7241669688374
+                },
+                "error": null
+              },
+              {
+                "call_id": "call_SW7Oz4I9xKzL8Rgv8CMU3nm6",
+                "tool": "code_verify_template_structure",
+                "requested_arguments": {},
+                "application_arguments": {},
+                "evidence": {
+                  "tool": "code_verify_template_structure",
+                  "version": "1.1.0",
+                  "status": "passed",
+                  "findings": [],
+                  "details": {
+                    "cases": 9,
+                    "features": [
+                      "arithmetic"
+                    ]
+                  },
+                  "duration_ms": 1.5377910458482802
+                },
+                "error": null
+              },
+              {
+                "call_id": "call_ZkcKMX33CeFuqRykNctA51ML",
+                "tool": "code_assess_template_difficulty",
+                "requested_arguments": {},
+                "application_arguments": {
+                  "candidate": {
+                    "template_id": "code.easy.7aa8355ff166",
+                    "topic": null,
+                    "difficulty": "easy",
+                    "code": "def add_integers(a, b):\n    # Return the integer sum of the two inputs\n    result = a + b\n    return result",
+                    "entry_function": "add_integers",
+                    "parameters": [
+                      {
+                        "name": "a",
+                        "kind": "integer",
+                        "values": [
+                          2,
+                          3,
+                          5
+                        ]
+                      },
+                      {
+                        "name": "b",
+                        "kind": "integer",
+                        "values": [
+                          4,
+                          6,
+                          7
+                        ]
+                      }
+                    ],
+                    "question_template": "What does add_integers({a}, {b}) return?",
+                    "answer_target": "return_value",
+                    "answer_expression": null,
+                    "distractors": [
+                      {
+                        "expression": "a - b",
+                        "reason_template": "Subtracts {b} from {a} instead of adding."
+                      },
+                      {
+                        "expression": "a * b",
+                        "reason_template": "Multiplies {a} and {b} instead of adding."
+                      },
+                      {
+                        "expression": "max([a, b])",
+                        "reason_template": "Takes the larger of {a} and {b} rather than their sum."
+                      }
+                    ],
+                    "question_type": "mcq",
+                    "eligible_inputs": null
+                  }
+                },
+                "evidence": {
+                  "tool": "code_assess_template_difficulty",
+                  "version": "1.1.0",
+                  "status": "passed",
+                  "findings": [],
+                  "details": {
+                    "advisory": true,
+                    "retryable": false,
+                    "assessment_scope": "typical_instance_uniform_eligible_combinations",
+                    "policy_version": "confidence-gated-v1",
+                    "high_confidence_threshold": 0.8,
+                    "confidence_calibrated": false,
+                    "template_sha256": "3d942806327cc105961cf634bff09750ca103c6573d960da582d44cb27f1a4a0",
+                    "requested_difficulty": "easy",
+                    "rubric_version": "python-tracing-v0.2",
+                    "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+                    "assessment_conditions_version": "manual-tracing-v0.1",
+                    "judge": {
+                      "status": "completed",
+                      "provider": "soclaas",
+                      "model": "x-test-1",
+                      "provider_settings": {
+                        "sampling": "provider_defaults",
+                        "response_format": "json_schema",
+                        "strict": true,
+                        "tool_choice": "required",
+                        "parallel_tool_calls": true,
+                        "timeout_seconds": 300.0,
+                        "max_retries": 0,
+                        "tool_max_tokens": 4096,
+                        "generation_max_tokens": 16384,
+                        "reasoning_effort": "provider_default"
+                      },
+                      "prompt_version": "code-template-difficulty-v2-eligible-confidence",
+                      "request_sha256": "4acb6af7f12e96e2ef6a5719708f45c612a25e6a55952ce5e13552a9f8941327",
+                      "timeout_seconds": 310.0,
+                      "assessment": {
+                        "estimated_difficulty": "easy",
+                        "confidence": 0.97,
+                        "dimensions": {
+                          "execution_burden": {
+                            "rating": "low",
+                            "reason": "The entire trace is one assignment and one return - a direct calculation with no decisions, repetition, or path changes, on scratch paper, untimed."
+                          },
+                          "changing_state": {
+                            "rating": "low",
+                            "reason": "One local variable `result` is written once and returned; a two-step dependency chain with nothing accumulated, reset, or carried across contexts."
+                          },
+                          "conceptual_interaction": {
+                            "rating": "low",
+                            "reason": "A single semantic rule (addition of two parameters); no construct controls another, and the code comment even names the rule outright."
+                          },
+                          "answer_discrimination": {
+                            "rating": "low",
+                            "reason": "All three distractors differ from the true sum in every eligible pair, and rejecting them needs only the basic check 'the function adds its two inputs' - no coordinated updates must be tracked."
+                          }
+                        },
+                        "reason": "This template sits at or slightly below the easy anchor. The easy anchor already required two chained operations and an intermediate variable (y = x+2, then y*2); here there is a single operation, one transient local, and one semantic rule. The medium boundary - a small organised trace coordinating repeated updates or a construct combination - is far away: nothing in any of the 9 eligible pairs produces repetition, an accumulator, or interaction between constructs, and the closest hard-boundary features (nested or conditional state coordination) are entirely absent. The rating is not borderline with medium.",
+                        "solution_reasoning": "For any sampled pair, result = a + b (e.g., add_integers(2,7) = 9, add_integers(5,4) = 9, add_integers(3,6) = 9), then returned directly. No intermediate decisions or state to track beyond the single assignment.",
+                        "concepts_and_dependencies": "The template body is `result = a + b; return result`. The only dependency is: two integer parameters feed one addition, whose result is returned unchanged. No loops, conditionals, helpers, or cross-call state exist, so no parameter combination can add reasoning steps.",
+                        "shortcuts": "The comment reveals the operation, the function name 'add_integers' confirms it, and the whole trace fits in one mental step; a learner can answer by pattern-matching 'a + b' without executing anything. These shortcuts reduce all four dimensions simultaneously and are present in every eligible combination, so the typical instance is a direct calculation.",
+                        "nearest_anchor": "easy",
+                        "domain_variation": "Minimal. eligible_inputs is null, so all 9 independent pairs from {2,3,5} x {4,6,7} are equally likely, and every one reduces to the identical one-step addition of small positive integers. No combination changes the construct, state, trace length, or distractor behaviour, so difficulty is essentially uniform; only the arithmetic values differ.",
+                        "unable_to_assess_reason": null,
+                        "quality_concerns": [
+                          "The inline comment 'Return the integer sum of the two inputs' states the semantics explicitly, giving the answer away and further lowering demand.",
+                          "answer_expression is null; the return value is nevertheless unambiguously a+b from the code, so this is a minor template gap, not essential missing information.",
+                          "D1 is negative in 8 of 9 combos and D3 is ruled out by the comment, so only D2 is even mildly plausible - distractor strength is low overall.",
+                          "Distractor rules are generic operator-confusion recipes (hypotheses only), but they never collide with the true sum in any eligible combo, so option validity is intact."
+                        ],
+                        "distractor_evidence": {
+                          "D1": {
+                            "reasoning": "Values across the 9 pairs: -2, -4, -5, -1, -3, -4, 1, -1, -2. Negative in 8 of 9 combos, so it is usually rejected at a glance; a weak option that adds almost no discrimination demand.",
+                            "hypothesised_error": "Subtracting instead of adding.",
+                            "shortcut_or_cue": "Sign cue: most learners expect a positive sum of positives."
+                          },
+                          "D2": {
+                            "reasoning": "Always larger than the sum for these pairs (e.g., 2*4=8 vs 6; 5*7=35 vs 12). Rejecting it requires only recognising the `+` operator.",
+                            "hypothesised_error": "Multiplying instead of adding.",
+                            "shortcut_or_cue": "Magnitude cue: product clearly exceeds a small sum."
+                          },
+                          "D3": {
+                            "reasoning": "max(a, b) is always strictly below the sum for positive operands; rejection requires noticing both operands contribute.",
+                            "hypothesised_error": "Returning one input rather than combining them.",
+                            "shortcut_or_cue": "The code comment ('sum of the two inputs') directly rules it out."
+                          }
+                        }
+                      },
+                      "error_code": null,
+                      "validation_errors": [],
+                      "model_calls": [
+                        {
+                          "input_tokens": 1538,
+                          "output_tokens": 3929,
+                          "operation": "judging",
+                          "duration_ms": 45230.09624995757,
+                          "error": null,
+                          "usage_unavailable_reason": null
+                        }
+                      ],
+                      "usage": {
+                        "model_call_count": 1,
+                        "unavailable_call_count": 0,
+                        "input_tokens": 1538,
+                        "output_tokens": 3929,
+                        "reported_input_tokens": 1538,
+                        "reported_output_tokens": 3929
+                      },
+                      "duration_ms": 45238.845540967304
+                    },
+                    "usage": {
+                      "model_call_count": 1,
+                      "unavailable_call_count": 0,
+                      "input_tokens": 1538,
+                      "output_tokens": 3929,
+                      "reported_input_tokens": 1538,
+                      "reported_output_tokens": 3929
+                    },
+                    "difficulty_match": "matches",
+                    "decision": "matches"
+                  },
+                  "duration_ms": 45242.0600829646
+                },
+                "error": null
+              }
+            ],
+            "pending": [],
+            "complete": true,
+            "passed": true
+          }
+        ],
+        "artifact": {
+          "artifact_id": "351532b5471b46f19212825c0c8bc0ae",
+          "authoring": {
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "provider_settings": {
+              "sampling": "provider_defaults",
+              "response_format": "json_schema",
+              "strict": true,
+              "tool_choice": "required",
+              "parallel_tool_calls": true,
+              "timeout_seconds": 120.0,
+              "max_retries": 0
+            },
+            "domain": "code",
+            "base_prompt_version": "code-template-v20-execution-eligible+response-v5",
+            "generated_at": "2026-10-22T13:30:30.512239Z",
+            "generation_duration_ms": 24943.436333036516
+          },
+          "template": {
+            "template_id": "code.easy.7aa8355ff166",
+            "topic": null,
+            "difficulty": "easy",
+            "code": "def add_integers(a, b):\n    # Return the integer sum of the two inputs\n    result = a + b\n    return result",
+            "entry_function": "add_integers",
+            "parameters": [
+              {
+                "name": "a",
+                "kind": "integer",
+                "values": [
+                  2,
+                  3,
+                  5
+                ]
+              },
+              {
+                "name": "b",
+                "kind": "integer",
+                "values": [
+                  4,
+                  6,
+                  7
+                ]
+              }
+            ],
+            "question_template": "What does add_integers({a}, {b}) return?",
+            "answer_target": "return_value",
+            "answer_expression": null,
+            "distractors": [
+              {
+                "expression": "a - b",
+                "reason_template": "Subtracts {b} from {a} instead of adding."
+              },
+              {
+                "expression": "a * b",
+                "reason_template": "Multiplies {a} and {b} instead of adding."
+              },
+              {
+                "expression": "max([a, b])",
+                "reason_template": "Takes the larger of {a} and {b} rather than their sum."
+              }
+            ],
+            "question_type": "mcq",
+            "eligible_inputs": null
+          },
+          "validation": {
+            "validator_version": "mcp-code-template-v1",
+            "cases_validated": 9,
+            "validated_cases": [
+              {
+                "inputs": {
+                  "a": 2,
+                  "b": 4
+                },
+                "answer": 6
+              },
+              {
+                "inputs": {
+                  "a": 2,
+                  "b": 6
+                },
+                "answer": 8
+              },
+              {
+                "inputs": {
+                  "a": 2,
+                  "b": 7
+                },
+                "answer": 9
+              },
+              {
+                "inputs": {
+                  "a": 3,
+                  "b": 4
+                },
+                "answer": 7
+              },
+              {
+                "inputs": {
+                  "a": 3,
+                  "b": 6
+                },
+                "answer": 9
+              },
+              {
+                "inputs": {
+                  "a": 3,
+                  "b": 7
+                },
+                "answer": 10
+              },
+              {
+                "inputs": {
+                  "a": 5,
+                  "b": 4
+                },
+                "answer": 9
+              },
+              {
+                "inputs": {
+                  "a": 5,
+                  "b": 6
+                },
+                "answer": 11
+              },
+              {
+                "inputs": {
+                  "a": 5,
+                  "b": 7
+                },
+                "answer": 12
+              }
+            ],
+            "evidence": [
+              {
+                "check": "code_validate_answers_and_distractors",
+                "status": "passed",
+                "issues": [],
+                "details": {
+                  "tool_version": "1.1.0",
+                  "eligible_case_count": 9,
+                  "excluded_case_count": 0,
+                  "sampling_policy": "uniform_eligible_combinations-v1"
+                },
+                "duration_ms": 262.7241669688374
+              },
+              {
+                "check": "code_verify_template_structure",
+                "status": "passed",
+                "issues": [],
+                "details": {
+                  "tool_version": "1.1.0"
+                },
+                "duration_ms": 1.5377910458482802
+              },
+              {
+                "check": "code_assess_template_difficulty",
+                "status": "passed",
+                "issues": [],
+                "details": {
+                  "tool_version": "1.1.0",
+                  "advisory": true,
+                  "retryable": false,
+                  "assessment_scope": "typical_instance_uniform_eligible_combinations",
+                  "policy_version": "confidence-gated-v1",
+                  "high_confidence_threshold": 0.8,
+                  "confidence_calibrated": false,
+                  "template_sha256": "3d942806327cc105961cf634bff09750ca103c6573d960da582d44cb27f1a4a0",
+                  "requested_difficulty": "easy",
+                  "rubric_version": "python-tracing-v0.2",
+                  "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+                  "assessment_conditions_version": "manual-tracing-v0.1",
+                  "judge": {
+                    "status": "completed",
+                    "provider": "soclaas",
+                    "model": "x-test-1",
+                    "provider_settings": {
+                      "sampling": "provider_defaults",
+                      "response_format": "json_schema",
+                      "strict": true,
+                      "tool_choice": "required",
+                      "parallel_tool_calls": true,
+                      "timeout_seconds": 300.0,
+                      "max_retries": 0,
+                      "tool_max_tokens": 4096,
+                      "generation_max_tokens": 16384,
+                      "reasoning_effort": "provider_default"
+                    },
+                    "prompt_version": "code-template-difficulty-v2-eligible-confidence",
+                    "request_sha256": "4acb6af7f12e96e2ef6a5719708f45c612a25e6a55952ce5e13552a9f8941327",
+                    "timeout_seconds": 310.0,
+                    "assessment": {
+                      "estimated_difficulty": "easy",
+                      "confidence": 0.97,
+                      "dimensions": {
+                        "execution_burden": {
+                          "rating": "low",
+                          "reason": "The entire trace is one assignment and one return - a direct calculation with no decisions, repetition, or path changes, on scratch paper, untimed."
+                        },
+                        "changing_state": {
+                          "rating": "low",
+                          "reason": "One local variable `result` is written once and returned; a two-step dependency chain with nothing accumulated, reset, or carried across contexts."
+                        },
+                        "conceptual_interaction": {
+                          "rating": "low",
+                          "reason": "A single semantic rule (addition of two parameters); no construct controls another, and the code comment even names the rule outright."
+                        },
+                        "answer_discrimination": {
+                          "rating": "low",
+                          "reason": "All three distractors differ from the true sum in every eligible pair, and rejecting them needs only the basic check 'the function adds its two inputs' - no coordinated updates must be tracked."
+                        }
+                      },
+                      "reason": "This template sits at or slightly below the easy anchor. The easy anchor already required two chained operations and an intermediate variable (y = x+2, then y*2); here there is a single operation, one transient local, and one semantic rule. The medium boundary - a small organised trace coordinating repeated updates or a construct combination - is far away: nothing in any of the 9 eligible pairs produces repetition, an accumulator, or interaction between constructs, and the closest hard-boundary features (nested or conditional state coordination) are entirely absent. The rating is not borderline with medium.",
+                      "solution_reasoning": "For any sampled pair, result = a + b (e.g., add_integers(2,7) = 9, add_integers(5,4) = 9, add_integers(3,6) = 9), then returned directly. No intermediate decisions or state to track beyond the single assignment.",
+                      "concepts_and_dependencies": "The template body is `result = a + b; return result`. The only dependency is: two integer parameters feed one addition, whose result is returned unchanged. No loops, conditionals, helpers, or cross-call state exist, so no parameter combination can add reasoning steps.",
+                      "shortcuts": "The comment reveals the operation, the function name 'add_integers' confirms it, and the whole trace fits in one mental step; a learner can answer by pattern-matching 'a + b' without executing anything. These shortcuts reduce all four dimensions simultaneously and are present in every eligible combination, so the typical instance is a direct calculation.",
+                      "nearest_anchor": "easy",
+                      "domain_variation": "Minimal. eligible_inputs is null, so all 9 independent pairs from {2,3,5} x {4,6,7} are equally likely, and every one reduces to the identical one-step addition of small positive integers. No combination changes the construct, state, trace length, or distractor behaviour, so difficulty is essentially uniform; only the arithmetic values differ.",
+                      "unable_to_assess_reason": null,
+                      "quality_concerns": [
+                        "The inline comment 'Return the integer sum of the two inputs' states the semantics explicitly, giving the answer away and further lowering demand.",
+                        "answer_expression is null; the return value is nevertheless unambiguously a+b from the code, so this is a minor template gap, not essential missing information.",
+                        "D1 is negative in 8 of 9 combos and D3 is ruled out by the comment, so only D2 is even mildly plausible - distractor strength is low overall.",
+                        "Distractor rules are generic operator-confusion recipes (hypotheses only), but they never collide with the true sum in any eligible combo, so option validity is intact."
+                      ],
+                      "distractor_evidence": {
+                        "D1": {
+                          "reasoning": "Values across the 9 pairs: -2, -4, -5, -1, -3, -4, 1, -1, -2. Negative in 8 of 9 combos, so it is usually rejected at a glance; a weak option that adds almost no discrimination demand.",
+                          "hypothesised_error": "Subtracting instead of adding.",
+                          "shortcut_or_cue": "Sign cue: most learners expect a positive sum of positives."
+                        },
+                        "D2": {
+                          "reasoning": "Always larger than the sum for these pairs (e.g., 2*4=8 vs 6; 5*7=35 vs 12). Rejecting it requires only recognising the `+` operator.",
+                          "hypothesised_error": "Multiplying instead of adding.",
+                          "shortcut_or_cue": "Magnitude cue: product clearly exceeds a small sum."
+                        },
+                        "D3": {
+                          "reasoning": "max(a, b) is always strictly below the sum for positive operands; rejection requires noticing both operands contribute.",
+                          "hypothesised_error": "Returning one input rather than combining them.",
+                          "shortcut_or_cue": "The code comment ('sum of the two inputs') directly rules it out."
+                        }
+                      }
+                    },
+                    "error_code": null,
+                    "validation_errors": [],
+                    "model_calls": [
+                      {
+                        "input_tokens": 1538,
+                        "output_tokens": 3929,
+                        "operation": "judging",
+                        "duration_ms": 45230.09624995757,
+                        "error": null,
+                        "usage_unavailable_reason": null
+                      }
+                    ],
+                    "usage": {
+                      "model_call_count": 1,
+                      "unavailable_call_count": 0,
+                      "input_tokens": 1538,
+                      "output_tokens": 3929,
+                      "reported_input_tokens": 1538,
+                      "reported_output_tokens": 3929
+                    },
+                    "duration_ms": 45238.845540967304
+                  },
+                  "usage": {
+                    "model_call_count": 1,
+                    "unavailable_call_count": 0,
+                    "input_tokens": 1538,
+                    "output_tokens": 3929,
+                    "reported_input_tokens": 1538,
+                    "reported_output_tokens": 3929
+                  },
+                  "difficulty_match": "matches",
+                  "decision": "matches"
+                },
+                "duration_ms": 45242.0600829646
+              }
+            ]
+          }
+        },
+        "reason": null,
+        "warnings": []
+      }
+    },
+    {
+      "operation": "validate",
+      "report": {
+        "status": "checked",
+        "provider": "openai",
+        "model": "gpt-5-mini",
+        "domain": "code",
+        "provider_settings": {
+          "sampling": "provider_defaults",
+          "response_format": "json_schema",
+          "strict": true,
+          "tool_choice": "required",
+          "parallel_tool_calls": true,
+          "timeout_seconds": 120.0,
+          "max_retries": 0
+        },
+        "generated_at": "2026-10-22T13:31:50.198372Z",
+        "request": {
+          "operation": "validate"
+        },
+        "prompt_version": "code-validation-v3-typical-difficulty",
+        "duration_ms": 70552.43654199876,
+        "generation_duration_ms": 4471.926416968927,
+        "model_calls": [
+          {
+            "input_tokens": 1208,
+            "output_tokens": 185,
+            "operation": "generation",
+            "duration_ms": 4471.8890829826705,
+            "error": null,
+            "usage_unavailable_reason": null
+          },
+          {
+            "input_tokens": 1577,
+            "output_tokens": 183,
+            "operation": "checking",
+            "duration_ms": 3031.067667005118,
+            "error": null,
+            "usage_unavailable_reason": null
+          },
+          {
+            "input_tokens": 1671,
+            "output_tokens": 17,
+            "operation": "checking",
+            "duration_ms": 862.3946249717847,
+            "error": null,
+            "usage_unavailable_reason": null
+          },
+          {
+            "input_tokens": 1491,
+            "output_tokens": 244,
+            "operation": "acknowledgement",
+            "duration_ms": 3110.0629160064273,
+            "error": null,
+            "usage_unavailable_reason": null
+          }
+        ],
+        "usage": {
+          "model_call_count": 4,
+          "unavailable_call_count": 0,
+          "input_tokens": 5947,
+          "output_tokens": 629,
+          "reported_input_tokens": 5947,
+          "reported_output_tokens": 629
+        },
+        "feedback_error": null,
+        "failure": null,
+        "fixed_plan": [
+          "code_assess_template_difficulty",
+          "code_validate_answers_and_distractors",
+          "code_verify_template_structure"
+        ],
+        "tool_catalogue": [
+          {
+            "name": "code_assess_template_difficulty",
+            "version": "1.1.0",
+            "description": "Assess the difficulty of a reusable Python tracing MCQ template. Select this check when authoring or validating a template with a target difficulty. SocLaas estimates the typical instance across the effective domain: uniform eligible combinations when supplied, otherwise independent uniform parameter values, using code, question pattern, answer target and distractor recipes. The declared level is hidden from the judge and compared afterwards. Passed means a match or a low-confidence advisory mismatch; inspect difficulty_match and decision. A mismatch at self-reported confidence 0.80 or higher fails and requests author revision; this confidence threshold is provisional, not calibrated accuracy. Missing essential information also fails. Reports parameter-dependent variation. One judge call, no check corrections or retries. Does not execute code or verify correctness; use separate correctness tools. May incur cost."
+          },
+          {
+            "name": "code_require_features",
+            "version": "1.1.0",
+            "description": "Select this tool when the authoring request requires concrete Python features such as a loop, conditional, helper function, or list operation. Require only features explicitly requested by the author; arithmetic alone does not require a loop or conditional. Correct mistaken feature arguments instead of adding unrelated code to satisfy them. helper_function means a separate helper called from the entry function. list_aggregate means calls to sum, min, max, all, or any, not manual accumulation in a loop. It checks the supported program structure and reports features reachable from the entry function. It establishes syntactic presence, not that the feature is pedagogically central or that the requested difficulty matches."
+          },
+          {
+            "name": "code_validate_answers_and_distractors",
+            "version": "1.1.0",
+            "description": "Select this tool when canonical answers and usable MCQ distractors must be established. It checks the template, executes every finite parameter case in an isolated worker with a 2-second per-case timeout and derives answers from execution. Legacy supplied answer expressions are compared with execution. It selects model-proposed distractors maximizing collision-free input coverage, requiring at least two combinations and half the domain. Collisions are excluded from the eligible sampling set; invalid code, expressions and answer types still fail. No correction or fallback distractor is inserted. Evidence is exhaustive only over the declared finite parameter domain. Recursion is supported when every finite input case completes within the execution limits. Execution uses the supported Python subset and a bounded trace; timeout, trace-limit, or resource-limit termination produces error evidence rather than validation failure."
+          },
+          {
+            "name": "code_verify_template_structure",
+            "version": "1.1.0",
+            "description": "Select this tool to establish that a Python template uses the supported safe subset, declares a matching entry function and finite parameter domain, contains valid answer and distractor expressions, and renders for every input. It performs bounded static and expression checks only; it does not execute the program or establish that answers are correct."
+          }
+        ],
+        "attempts": [
+          {
+            "number": 1,
+            "candidate": {
+              "template_id": "code.easy.7aa8355ff166",
+              "topic": null,
+              "difficulty": "easy",
+              "code": "def add_integers(a, b):\n    # Return the integer sum of the two inputs\n    result = a + b\n    return result",
+              "entry_function": "add_integers",
+              "parameters": [
+                {
+                  "name": "a",
+                  "kind": "integer",
+                  "values": [
+                    2,
+                    3,
+                    5
+                  ]
+                },
+                {
+                  "name": "b",
+                  "kind": "integer",
+                  "values": [
+                    4,
+                    6,
+                    7
+                  ]
+                }
+              ],
+              "question_template": "Consider this code. What does add_integers({a}, {b}) return?",
+              "answer_target": "return_value",
+              "answer_expression": null,
+              "distractors": [
+                {
+                  "expression": "a - b",
+                  "reason_template": "Subtracts {b} from {a} instead of adding."
+                },
+                {
+                  "expression": "a * b",
+                  "reason_template": "Multiplies {a} and {b} instead of adding."
+                },
+                {
+                  "expression": "max([a, b])",
+                  "reason_template": "Takes the larger of {a} and {b} rather than their sum."
+                },
+                {
+                  "expression": "a + b - 1",
+                  "reason_template": "Computes the sum of {a} and {b} but misses one."
+                }
+              ],
+              "question_type": "mcq",
+              "eligible_inputs": null
+            },
+            "executions": [
+              {
+                "call_id": "call_mEQtn48InXYGuwOOSHMkv9ra",
+                "tool": "code_validate_answers_and_distractors",
+                "requested_arguments": {},
+                "application_arguments": {
+                  "required_distractors": 3
+                },
+                "evidence": {
+                  "tool": "code_validate_answers_and_distractors",
+                  "version": "1.1.0",
+                  "status": "passed",
+                  "findings": [],
+                  "details": {
+                    "cases": 9,
+                    "eligible_inputs": null,
+                    "eligible_case_count": 9,
+                    "excluded_case_count": 0,
+                    "sampling_policy": "uniform_eligible_combinations-v1",
+                    "canonical_answers": [
+                      {
+                        "inputs": {
+                          "a": 2,
+                          "b": 4
+                        },
+                        "answer": 6,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      },
+                      {
+                        "inputs": {
+                          "a": 2,
+                          "b": 6
+                        },
+                        "answer": 8,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      },
+                      {
+                        "inputs": {
+                          "a": 2,
+                          "b": 7
+                        },
+                        "answer": 9,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      },
+                      {
+                        "inputs": {
+                          "a": 3,
+                          "b": 4
+                        },
+                        "answer": 7,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      },
+                      {
+                        "inputs": {
+                          "a": 3,
+                          "b": 6
+                        },
+                        "answer": 9,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      },
+                      {
+                        "inputs": {
+                          "a": 3,
+                          "b": 7
+                        },
+                        "answer": 10,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      },
+                      {
+                        "inputs": {
+                          "a": 5,
+                          "b": 4
+                        },
+                        "answer": 9,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      },
+                      {
+                        "inputs": {
+                          "a": 5,
+                          "b": 6
+                        },
+                        "answer": 11,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      },
+                      {
+                        "inputs": {
+                          "a": 5,
+                          "b": 7
+                        },
+                        "answer": 12,
+                        "trace_summary": {
+                          "entry_function": "add_integers",
+                          "function_calls": 1,
+                          "loop_executions": 0,
+                          "loop_iterations": 0,
+                          "branch_executions": 0,
+                          "variable_snapshots": 3
+                        }
+                      }
+                    ],
+                    "selected_distractors": [
+                      {
+                        "expression": "a - b",
+                        "reason_template": "Subtracts {b} from {a} instead of adding."
+                      },
+                      {
+                        "expression": "a * b",
+                        "reason_template": "Multiplies {a} and {b} instead of adding."
+                      },
+                      {
+                        "expression": "max([a, b])",
+                        "reason_template": "Takes the larger of {a} and {b} rather than their sum."
+                      }
+                    ]
+                  },
+                  "duration_ms": 272.82379200914875
+                },
+                "error": null
+              },
+              {
+                "call_id": "call_yMgXUSXwrK17qhsvwcysSO67",
+                "tool": "code_verify_template_structure",
+                "requested_arguments": {},
+                "application_arguments": {},
+                "evidence": {
+                  "tool": "code_verify_template_structure",
+                  "version": "1.1.0",
+                  "status": "passed",
+                  "findings": [],
+                  "details": {
+                    "cases": 9,
+                    "features": [
+                      "arithmetic"
+                    ]
+                  },
+                  "duration_ms": 0.982708006631583
+                },
+                "error": null
+              },
+              {
+                "call_id": "call_GXxusA1tSG6RshxiFZG1NDkV",
+                "tool": "code_assess_template_difficulty",
+                "requested_arguments": {},
+                "application_arguments": {
+                  "candidate": {
+                    "template_id": "code.easy.7aa8355ff166",
+                    "topic": null,
+                    "difficulty": "easy",
+                    "code": "def add_integers(a, b):\n    # Return the integer sum of the two inputs\n    result = a + b\n    return result",
+                    "entry_function": "add_integers",
+                    "parameters": [
+                      {
+                        "name": "a",
+                        "kind": "integer",
+                        "values": [
+                          2,
+                          3,
+                          5
+                        ]
+                      },
+                      {
+                        "name": "b",
+                        "kind": "integer",
+                        "values": [
+                          4,
+                          6,
+                          7
+                        ]
+                      }
+                    ],
+                    "question_template": "Consider this code. What does add_integers({a}, {b}) return?",
+                    "answer_target": "return_value",
+                    "answer_expression": null,
+                    "distractors": [
+                      {
+                        "expression": "a - b",
+                        "reason_template": "Subtracts {b} from {a} instead of adding."
+                      },
+                      {
+                        "expression": "a * b",
+                        "reason_template": "Multiplies {a} and {b} instead of adding."
+                      },
+                      {
+                        "expression": "max([a, b])",
+                        "reason_template": "Takes the larger of {a} and {b} rather than their sum."
+                      }
+                    ],
+                    "question_type": "mcq",
+                    "eligible_inputs": null
+                  }
+                },
+                "evidence": {
+                  "tool": "code_assess_template_difficulty",
+                  "version": "1.1.0",
+                  "status": "passed",
+                  "findings": [],
+                  "details": {
+                    "advisory": true,
+                    "retryable": false,
+                    "assessment_scope": "typical_instance_uniform_eligible_combinations",
+                    "policy_version": "confidence-gated-v1",
+                    "high_confidence_threshold": 0.8,
+                    "confidence_calibrated": false,
+                    "template_sha256": "48d04c0a80f6366b2f3740fa93210490274854dd5e9d723e04b0bef2ebd00f9c",
+                    "requested_difficulty": "easy",
+                    "rubric_version": "python-tracing-v0.2",
+                    "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+                    "assessment_conditions_version": "manual-tracing-v0.1",
+                    "judge": {
+                      "status": "completed",
+                      "provider": "soclaas",
+                      "model": "x-test-1",
+                      "provider_settings": {
+                        "sampling": "provider_defaults",
+                        "response_format": "json_schema",
+                        "strict": true,
+                        "tool_choice": "required",
+                        "parallel_tool_calls": true,
+                        "timeout_seconds": 300.0,
+                        "max_retries": 0,
+                        "tool_max_tokens": 4096,
+                        "generation_max_tokens": 16384,
+                        "reasoning_effort": "provider_default"
+                      },
+                      "prompt_version": "code-template-difficulty-v2-eligible-confidence",
+                      "request_sha256": "4e7a0f4e503297180acd49553c618e921e8be8e92a63a6495432fa738d86a7c4",
+                      "timeout_seconds": 310.0,
+                      "assessment": {
+                        "estimated_difficulty": "easy",
+                        "confidence": 0.98,
+                        "dimensions": {
+                          "execution_burden": {
+                            "rating": "low",
+                            "reason": "A short direct calculation: one addition, one assignment, one return. No loop, branch, call/return transition, or organised trace is needed in any sampled instance."
+                          },
+                          "changing_state": {
+                            "rating": "low",
+                            "reason": "One local variable, result, is assigned once and returned. Nothing accumulates, resets, or must be carried across contexts; the dependency chain is two inputs to one output."
+                          },
+                          "conceptual_interaction": {
+                            "rating": "low",
+                            "reason": "A single semantic rule (integer addition) governs the answer. No construct controls another and no prior state shapes later decisions, so the interaction demand is below even the easy anchor's two chained operations."
+                          },
+                          "answer_discrimination": {
+                            "rating": "low",
+                            "reason": "Relative to the return_value target, a basic semantic check of the single line result = a + b rejects all three options; no coordination of updates or decisions is needed. The comment naming the operation makes the check even more direct."
+                          }
+                        },
+                        "reason": "The template is strictly simpler than the easy anchor (f(x): y = x + 2; return y * 2), which already sits at the floor with two sequential operations and all-low dimensions. Here there is a single operation, one pass-through local variable, no construct interaction, and every distractor is rejected by one basic semantic check. Medium would require a small organised trace coordinating repeated updates or a construct combination, which is absent in every sampled instance; the closest boundary is therefore the easy/medium boundary, firmly on the easy side. Borderline consideration does not arise because no parameter combination increases the demand.",
+                        "solution_reasoning": "The correct return value for any pair (a, b) is a + b; for the nine equally likely pairs the sums are 6, 8, 9, 7, 9, 10, 9, 11, 12, each obtained by one direct computation with no intermediate state to track.",
+                        "concepts_and_dependencies": "Trace of the typical instance (e.g., add_integers(3, 6)): result = 3 + 6, return result. Dependencies are a, b -> result -> return value. Shortcut: the inline comment already names the operation, so the semantics can be read off without tracing. Shortcuts were accounted for in the ratings below.",
+                        "shortcuts": "The explanatory comment and descriptive function name let a learner bypass tracing entirely; this was treated as a legitimate shortcut, not additional difficulty.",
+                        "nearest_anchor": "easy",
+                        "domain_variation": "Negligible. eligible_inputs is null, so all nine pairs (a in {2,3,5} x b in {4,6,7}) are equally likely and independent, but every pair yields the identical one-step trace (result = a + b, return result). Only numerals change (sums 6-12); no parameter regime raises or lowers the reasoning demand, so the typical instance equals every instance. Distinctness was checked across the whole domain: the sum never collides with a - b, a * b, or max(a, b), and the three distractors are pairwise distinct in all nine cases (e.g., (5,4): 9 vs 1, 20, 5; (2,6): 8 vs -4, 12, 6).",
+                        "unable_to_assess_reason": null,
+                        "quality_concerns": [
+                          "The inline comment 'Return the integer sum of the two inputs' states the answer's semantics directly, reducing the discrimination demand below what the code alone would require.",
+                          "Distractors are generic operator/semantic swaps with no grounding in observed learner errors; D1 carries a sign cue (negative in 8 of 9 pairs) and D3 (max) is a weak semantic misread, so option quality is uneven though all options are usable.",
+                          "answer_expression is null, but this is not blocking essential information: the return value is uniquely determined by the supplied code, so no abstention is warranted."
+                        ],
+                        "distractor_evidence": {
+                          "D1": {
+                            "reasoning": "Plausible only as an operator slip. In 8 of 9 pairs (all except (5,4), where it is 1) the value is negative, so a surface sign cue rejects it without any semantic understanding.",
+                            "hypothesised_error": "Operator misreading: addition replaced by subtraction (a - b).",
+                            "shortcut_or_cue": "Sign cue; also the comment names addition directly."
+                          },
+                          "D2": {
+                            "reasoning": "Positive and type-consistent, so marginally more plausible than D1, but still eliminated by re-reading one line; no partial-trace reasoning is required to reject it.",
+                            "hypothesised_error": "Operator substitution: multiplication used instead of addition (a * b).",
+                            "shortcut_or_cue": "The inline comment states the sum semantics."
+                          },
+                          "D3": {
+                            "reasoning": "Weakest plausibility of the three, since the code and comment make the intent explicit; it functions close to a giveaway option.",
+                            "hypothesised_error": "Semantic misread of the function's purpose: choosing the larger input (max(a, b)) rather than summing.",
+                            "shortcut_or_cue": "Comment plus function name add_integers."
+                          }
+                        }
+                      },
+                      "error_code": null,
+                      "validation_errors": [],
+                      "model_calls": [
+                        {
+                          "input_tokens": 1542,
+                          "output_tokens": 5477,
+                          "operation": "judging",
+                          "duration_ms": 58741.127165965736,
+                          "error": null,
+                          "usage_unavailable_reason": null
+                        }
+                      ],
+                      "usage": {
+                        "model_call_count": 1,
+                        "unavailable_call_count": 0,
+                        "input_tokens": 1542,
+                        "output_tokens": 5477,
+                        "reported_input_tokens": 1542,
+                        "reported_output_tokens": 5477
+                      },
+                      "duration_ms": 58750.2897909726
+                    },
+                    "usage": {
+                      "model_call_count": 1,
+                      "unavailable_call_count": 0,
+                      "input_tokens": 1542,
+                      "output_tokens": 5477,
+                      "reported_input_tokens": 1542,
+                      "reported_output_tokens": 5477
+                    },
+                    "difficulty_match": "matches",
+                    "decision": "matches"
+                  },
+                  "duration_ms": 58751.33887497941
+                },
+                "error": null
+              }
+            ],
+            "pending": [],
+            "complete": true,
+            "passed": true
+          }
+        ],
+        "artifact": {
+          "artifact_id": "c66f73b6058143b49d821851eb9426a1",
+          "authoring": {
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "provider_settings": {
+              "sampling": "provider_defaults",
+              "response_format": "json_schema",
+              "strict": true,
+              "tool_choice": "required",
+              "parallel_tool_calls": true,
+              "timeout_seconds": 120.0,
+              "max_retries": 0
+            },
+            "domain": "code",
+            "base_prompt_version": "code-validation-v3-typical-difficulty",
+            "generated_at": "2026-10-22T13:31:50.198372Z",
+            "generation_duration_ms": 4471.926416968927
+          },
+          "template": {
+            "template_id": "code.easy.7aa8355ff166",
+            "topic": null,
+            "difficulty": "easy",
+            "code": "def add_integers(a, b):\n    # Return the integer sum of the two inputs\n    result = a + b\n    return result",
+            "entry_function": "add_integers",
+            "parameters": [
+              {
+                "name": "a",
+                "kind": "integer",
+                "values": [
+                  2,
+                  3,
+                  5
+                ]
+              },
+              {
+                "name": "b",
+                "kind": "integer",
+                "values": [
+                  4,
+                  6,
+                  7
+                ]
+              }
+            ],
+            "question_template": "Consider this code. What does add_integers({a}, {b}) return?",
+            "answer_target": "return_value",
+            "answer_expression": null,
+            "distractors": [
+              {
+                "expression": "a - b",
+                "reason_template": "Subtracts {b} from {a} instead of adding."
+              },
+              {
+                "expression": "a * b",
+                "reason_template": "Multiplies {a} and {b} instead of adding."
+              },
+              {
+                "expression": "max([a, b])",
+                "reason_template": "Takes the larger of {a} and {b} rather than their sum."
+              }
+            ],
+            "question_type": "mcq",
+            "eligible_inputs": null
+          },
+          "validation": {
+            "validator_version": "mcp-code-template-v1",
+            "cases_validated": 9,
+            "validated_cases": [
+              {
+                "inputs": {
+                  "a": 2,
+                  "b": 4
+                },
+                "answer": 6
+              },
+              {
+                "inputs": {
+                  "a": 2,
+                  "b": 6
+                },
+                "answer": 8
+              },
+              {
+                "inputs": {
+                  "a": 2,
+                  "b": 7
+                },
+                "answer": 9
+              },
+              {
+                "inputs": {
+                  "a": 3,
+                  "b": 4
+                },
+                "answer": 7
+              },
+              {
+                "inputs": {
+                  "a": 3,
+                  "b": 6
+                },
+                "answer": 9
+              },
+              {
+                "inputs": {
+                  "a": 3,
+                  "b": 7
+                },
+                "answer": 10
+              },
+              {
+                "inputs": {
+                  "a": 5,
+                  "b": 4
+                },
+                "answer": 9
+              },
+              {
+                "inputs": {
+                  "a": 5,
+                  "b": 6
+                },
+                "answer": 11
+              },
+              {
+                "inputs": {
+                  "a": 5,
+                  "b": 7
+                },
+                "answer": 12
+              }
+            ],
+            "evidence": [
+              {
+                "check": "code_validate_answers_and_distractors",
+                "status": "passed",
+                "issues": [],
+                "details": {
+                  "tool_version": "1.1.0",
+                  "eligible_case_count": 9,
+                  "excluded_case_count": 0,
+                  "sampling_policy": "uniform_eligible_combinations-v1"
+                },
+                "duration_ms": 272.82379200914875
+              },
+              {
+                "check": "code_verify_template_structure",
+                "status": "passed",
+                "issues": [],
+                "details": {
+                  "tool_version": "1.1.0"
+                },
+                "duration_ms": 0.982708006631583
+              },
+              {
+                "check": "code_assess_template_difficulty",
+                "status": "passed",
+                "issues": [],
+                "details": {
+                  "tool_version": "1.1.0",
+                  "advisory": true,
+                  "retryable": false,
+                  "assessment_scope": "typical_instance_uniform_eligible_combinations",
+                  "policy_version": "confidence-gated-v1",
+                  "high_confidence_threshold": 0.8,
+                  "confidence_calibrated": false,
+                  "template_sha256": "48d04c0a80f6366b2f3740fa93210490274854dd5e9d723e04b0bef2ebd00f9c",
+                  "requested_difficulty": "easy",
+                  "rubric_version": "python-tracing-v0.2",
+                  "rubric_sha256": "f6db392f32c41566d3f0520d6734a80745ccff15350a50afa638fb22e3f66e8f",
+                  "assessment_conditions_version": "manual-tracing-v0.1",
+                  "judge": {
+                    "status": "completed",
+                    "provider": "soclaas",
+                    "model": "x-test-1",
+                    "provider_settings": {
+                      "sampling": "provider_defaults",
+                      "response_format": "json_schema",
+                      "strict": true,
+                      "tool_choice": "required",
+                      "parallel_tool_calls": true,
+                      "timeout_seconds": 300.0,
+                      "max_retries": 0,
+                      "tool_max_tokens": 4096,
+                      "generation_max_tokens": 16384,
+                      "reasoning_effort": "provider_default"
+                    },
+                    "prompt_version": "code-template-difficulty-v2-eligible-confidence",
+                    "request_sha256": "4e7a0f4e503297180acd49553c618e921e8be8e92a63a6495432fa738d86a7c4",
+                    "timeout_seconds": 310.0,
+                    "assessment": {
+                      "estimated_difficulty": "easy",
+                      "confidence": 0.98,
+                      "dimensions": {
+                        "execution_burden": {
+                          "rating": "low",
+                          "reason": "A short direct calculation: one addition, one assignment, one return. No loop, branch, call/return transition, or organised trace is needed in any sampled instance."
+                        },
+                        "changing_state": {
+                          "rating": "low",
+                          "reason": "One local variable, result, is assigned once and returned. Nothing accumulates, resets, or must be carried across contexts; the dependency chain is two inputs to one output."
+                        },
+                        "conceptual_interaction": {
+                          "rating": "low",
+                          "reason": "A single semantic rule (integer addition) governs the answer. No construct controls another and no prior state shapes later decisions, so the interaction demand is below even the easy anchor's two chained operations."
+                        },
+                        "answer_discrimination": {
+                          "rating": "low",
+                          "reason": "Relative to the return_value target, a basic semantic check of the single line result = a + b rejects all three options; no coordination of updates or decisions is needed. The comment naming the operation makes the check even more direct."
+                        }
+                      },
+                      "reason": "The template is strictly simpler than the easy anchor (f(x): y = x + 2; return y * 2), which already sits at the floor with two sequential operations and all-low dimensions. Here there is a single operation, one pass-through local variable, no construct interaction, and every distractor is rejected by one basic semantic check. Medium would require a small organised trace coordinating repeated updates or a construct combination, which is absent in every sampled instance; the closest boundary is therefore the easy/medium boundary, firmly on the easy side. Borderline consideration does not arise because no parameter combination increases the demand.",
+                      "solution_reasoning": "The correct return value for any pair (a, b) is a + b; for the nine equally likely pairs the sums are 6, 8, 9, 7, 9, 10, 9, 11, 12, each obtained by one direct computation with no intermediate state to track.",
+                      "concepts_and_dependencies": "Trace of the typical instance (e.g., add_integers(3, 6)): result = 3 + 6, return result. Dependencies are a, b -> result -> return value. Shortcut: the inline comment already names the operation, so the semantics can be read off without tracing. Shortcuts were accounted for in the ratings below.",
+                      "shortcuts": "The explanatory comment and descriptive function name let a learner bypass tracing entirely; this was treated as a legitimate shortcut, not additional difficulty.",
+                      "nearest_anchor": "easy",
+                      "domain_variation": "Negligible. eligible_inputs is null, so all nine pairs (a in {2,3,5} x b in {4,6,7}) are equally likely and independent, but every pair yields the identical one-step trace (result = a + b, return result). Only numerals change (sums 6-12); no parameter regime raises or lowers the reasoning demand, so the typical instance equals every instance. Distinctness was checked across the whole domain: the sum never collides with a - b, a * b, or max(a, b), and the three distractors are pairwise distinct in all nine cases (e.g., (5,4): 9 vs 1, 20, 5; (2,6): 8 vs -4, 12, 6).",
+                      "unable_to_assess_reason": null,
+                      "quality_concerns": [
+                        "The inline comment 'Return the integer sum of the two inputs' states the answer's semantics directly, reducing the discrimination demand below what the code alone would require.",
+                        "Distractors are generic operator/semantic swaps with no grounding in observed learner errors; D1 carries a sign cue (negative in 8 of 9 pairs) and D3 (max) is a weak semantic misread, so option quality is uneven though all options are usable.",
+                        "answer_expression is null, but this is not blocking essential information: the return value is uniquely determined by the supplied code, so no abstention is warranted."
+                      ],
+                      "distractor_evidence": {
+                        "D1": {
+                          "reasoning": "Plausible only as an operator slip. In 8 of 9 pairs (all except (5,4), where it is 1) the value is negative, so a surface sign cue rejects it without any semantic understanding.",
+                          "hypothesised_error": "Operator misreading: addition replaced by subtraction (a - b).",
+                          "shortcut_or_cue": "Sign cue; also the comment names addition directly."
+                        },
+                        "D2": {
+                          "reasoning": "Positive and type-consistent, so marginally more plausible than D1, but still eliminated by re-reading one line; no partial-trace reasoning is required to reject it.",
+                          "hypothesised_error": "Operator substitution: multiplication used instead of addition (a * b).",
+                          "shortcut_or_cue": "The inline comment states the sum semantics."
+                        },
+                        "D3": {
+                          "reasoning": "Weakest plausibility of the three, since the code and comment make the intent explicit; it functions close to a giveaway option.",
+                          "hypothesised_error": "Semantic misread of the function's purpose: choosing the larger input (max(a, b)) rather than summing.",
+                          "shortcut_or_cue": "Comment plus function name add_integers."
+                        }
+                      }
+                    },
+                    "error_code": null,
+                    "validation_errors": [],
+                    "model_calls": [
+                      {
+                        "input_tokens": 1542,
+                        "output_tokens": 5477,
+                        "operation": "judging",
+                        "duration_ms": 58741.127165965736,
+                        "error": null,
+                        "usage_unavailable_reason": null
+                      }
+                    ],
+                    "usage": {
+                      "model_call_count": 1,
+                      "unavailable_call_count": 0,
+                      "input_tokens": 1542,
+                      "output_tokens": 5477,
+                      "reported_input_tokens": 1542,
+                      "reported_output_tokens": 5477
+                    },
+                    "duration_ms": 58750.2897909726
+                  },
+                  "usage": {
+                    "model_call_count": 1,
+                    "unavailable_call_count": 0,
+                    "input_tokens": 1542,
+                    "output_tokens": 5477,
+                    "reported_input_tokens": 1542,
+                    "reported_output_tokens": 5477
+                  },
+                  "difficulty_match": "matches",
+                  "decision": "matches"
+                },
+                "duration_ms": 58751.33887497941
+              }
+            ]
+          }
+        },
+        "reason": null,
+        "warnings": []
+      }
+    }
+  ]
+}

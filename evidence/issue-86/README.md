@@ -13,7 +13,8 @@ See [the report](../../docs/difficulty-glm-comparison-v0.3.md) for interpretatio
 | `reference-changes.csv` | The 22 rating changes from v0.2 to v0.3. |
 | `v0.3-glm-qwen.zip` | Raw responses, final records, all returned attempts, exact requests/settings, model catalogue and reference inputs. |
 | `v0.4-stopped.zip` | Stopped experiment: 41/58 matches, 59 returned attempts, one transport-excluded and one unreturned slot. |
-| `workflow-smoke.json` | Separate live authoring failure at the production judge's 60-second deadline. |
+| `workflow-smoke.json` | Historical live authoring failure at the former 60-second deadline. |
+| `workflow-deadline-smoke.json` | Complete successful author/edit/check/replay reports with 300-second transport, 310-second judge and 330-second tool limits. |
 
 The compact archives remove repeated source copies, phase copies, checksum files
 and export bookkeeping. Predictions, raw responses, reference labels and aggregate
@@ -48,5 +49,6 @@ missing labels are never rerun.
 All questions informed rubric development. These are agreement results on an
 AI-assisted reference, not unseen accuracy or learner calibration. Independent
 review, fresh families, production v0.3 migration and mismatch-policy evaluation
-remain open under issue 86. The separate live workflow smoke still failed because
-GLM exceeded the existing production judge deadline; the PR remains draft.
+remain open under issue 86. After increasing production deadlines, the follow-up
+live workflow passed: both authoring and edited-template revalidation produced
+finalized artifacts. The historical 60-second failure remains separately recorded.

@@ -206,4 +206,9 @@ checks passed: GLM exceeded the existing production judge deadline of 60 seconds
 (`JUDGE_TIMEOUT`), leaving the template at `needs_review`. No finalized artifact
 was produced. See [the smoke record](../evidence/issue-86/workflow-smoke.json).
 This availability failure does not alter the frozen offline agreement scores.
-Review production deadline/retry policy and pass the live workflow before merge.
+The production limits were then increased to 300 seconds for transport, 310 for
+the judge and 330 for the tool client. The follow-up live author/edit/check/replay
+test passed in 150.58 seconds; GLM assessments completed in 45.24 and 58.75 seconds.
+Both stages produced finalized artifacts. See the
+[complete follow-up evidence](../evidence/issue-86/workflow-deadline-smoke.json).
+This verifies one production workflow, independently of the frozen accuracy run.
