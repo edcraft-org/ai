@@ -16,11 +16,7 @@ this evaluation, rather than independently human-validated learner difficulties.
 Do not replace them with model predictions or recalculate them from the reasons.
 Question content, answers, topics and historical splits are unchanged. Ratings
 and reasons follow [v0.3](../../docs/difficulty-rubric-v0.3.md).
-The exact v0.3 snapshot is preserved in
-[archive/dataset-v0.3.json](archive/dataset-v0.3.json). The superseded v0.4
-experiment is retained in [archive/dataset-v0.4.json](archive/dataset-v0.4.json).
-Both versions use the same overall and dimension labels. The exact previous
-v0.2 dataset is preserved in [archive/dataset-v0.2.json](archive/dataset-v0.2.json).
+The active dataset is the single current reference in this checkout.
 The two overall changes are `arithmetic-reassignment-01` and
 `lists-endpoint-swap-02`, both medium to easy. Model disagreements must not
 rewrite this frozen reference.
@@ -47,16 +43,14 @@ There are six questions per topic: arithmetic, conditionals, loops, functions an
 lists. The historical split is 18 development and 12 held-out questions. All 30 have now
 been inspected during rubric development, so neither group is an unseen test.
 Use fresh families for a subsequent independent generalisation evaluation.
-Dataset-level review metadata records the approved boundary rulings. Per-item
-execution records are produced by `scripts/difficulty_trace.py`. The correct answer value
-is available from the option identified by `correct_option`.
+Dataset-level review metadata records the approved boundary rulings. The correct
+answer value is available from the option identified by `correct_option`.
 
 Keep question content, approved categories and dimension ratings, topics and
 splits fixed so evaluation results remain comparable. Git history records changes
-to this dataset. Run the explicitly opt-in SoCLaaS evaluation using
-`scripts/evaluate_difficulty.py`; see the v0.3 model-comparison section in
-[the evaluation guide](../../docs/evaluation.md). Existing production MCP judging
-retains its v0.2 contract and is not the request evaluated by this script.
+to this dataset. See the [evaluation statistics](../../docs/difficulty-glm-comparison-v0.3.md).
+Production MCP judging retains its v0.2 contract; the v0.3 reference assessment
+is a separate workflow.
 
 ## Attribution
 

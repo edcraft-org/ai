@@ -101,59 +101,7 @@ Use `--topic all --difficulty all` for all 15 profiles. Each run uses multiple m
 calls and may include revisions. Completed records are flushed to JSONL as they
 finish, so they survive an interruption.
 
-## v0.3 ordinary-trace reference agreement
-
-Use the [v0.3 rubric](difficulty-rubric-v0.3.md) and approved reference: 15 easy,
-9 medium and 6 hard questions. Shortcuts do not lower ratings; answer-option
-quality is separate. All 30 questions informed rubric development, so results
-measure reference agreement rather than unseen accuracy or learner calibration.
-Production judging still uses v0.2.
-
-One runner supports a new model run, paired comparison and transport-only resume:
-
-```sh
-PYTHONPATH=src python -m scripts.evaluate_difficulty --env-file /path/to/.env \
-  --model x-test-1 --repetitions 2 --concurrency 2 \
-  --output .artifacts/glm-new
-```
-
-The output directory must not exist. The runner records the Git commit, exact
-blinded requests/schema, reference questions, model/settings, repetitions and retry
-budget. It uses strict JSON schema, 16,384 output tokens, provider-default
-reasoning/sampling, zero SDK retries and no client/judge deadlines. An upstream
-service deadline can still apply. Keep evaluation changes committed before a run.
-
-Add `--baseline /path/to/qwen-run` for paired results. That directory must contain
-`manifest.json` and `records.jsonl` from the baseline, with the same requests,
-references and repetition count. See [the evidence guide](../evidence/issue-86/README.md)
-for preparing the published Qwen records as a baseline.
-
-To continue an interrupted run, use a fresh output directory:
-
-```sh
-PYTHONPATH=src python -m scripts.evaluate_difficulty --env-file /path/to/.env \
-  --model x-test-1 --resume .artifacts/glm-new \
-  --output .artifacts/glm-resumed
-```
-
-Only unreturned or transport-failed slots run again. Completed predictions,
-including wrong labels, schema failures and missing labels, are preserved. Each
-invocation allows one transport retry per pending slot by default;
-`--transport-retries` changes that declared budget. Resume checks the saved
-requests, model, settings and reference labels before inference. It needs no
-operator audit or parent-directory chain. The new directory contains the complete
-attempt history and final outcomes, independently of the previous directory.
-
-`attempts.jsonl` flushes every returned response. `records.jsonl` holds the latest
-outcome per slot, `predictions.csv` supports report tables, and `summary.json`
-contains agreement, dimensions, confusion counts, per-class F1, repeat stability,
-coverage, successful-response latency and tokens. Transport errors are excluded
-from accuracy; content failures and missing labels remain nonmatches. Unreturned
-slots reduce coverage. Retries are attempts, not additional assessment samples.
-A descriptive family-cluster bootstrap is saved at completion. Unknown failed-call
-usage remains unknown. No checksums or source-tree copies are generated.
-
-## Original v0.2 provisional difficulty review
+## Provisional difficulty review
 
 Use the versioned [Python tracing difficulty rubric](difficulty-rubric.md) for
 requested-versus-generated difficulty review. It defines assessment conditions,
@@ -164,21 +112,17 @@ independently, then compare it with the requested level to report `matches`,
 estimates and learner performance. Difficulty evidence is advisory and cannot
 override failed technical checks.
 
-For the original issue 42 reference, use the archived dataset at
-`reference_sets/python_tracing/archive/dataset-v0.2.json`. It contains 30 complete,
-execution-verified MCQs with human-reviewed categories: 13 easy, 11 medium and
-six hard. Each question has one fixed `difficulty` label, four dimension ratings,
-a topic and a development/reserved split (18/12). These assignments are frozen;
-judge outputs and later model disagreements must never rewrite them.
+The current [reference dataset](../reference_sets/python_tracing/README.md) uses
+[v0.3](difficulty-rubric-v0.3.md), with 15 easy, 9 medium and 6 hard questions.
+This is separate from the production v0.2 judge contract above. Hide reference
+labels, dimensions, counts and solutions during assessment. Transport failures
+are excluded from classification accuracy; content failures and missing labels
+remain nonmatches. Report coverage and attempt failures separately.
 
-The human-approved `difficulty` categories and dimension ratings are the
-authoritative reference. When evaluating the advisory judge, send only the MCQ
-content; keep reference labels, dimensions, reasons and solutions hidden. Count
-failed assessments as nonmatches and report valid-only agreement separately.
-The dataset remains an AI-assisted, single-human reference, not independent
-human agreement or learner calibration. Technical verification is not a human
-difficulty label. See [difficulty judging](difficulty-judging.md) for the tool
-contract; record evaluation results in the pull request.
+See the [concise statistics](difficulty-glm-comparison-v0.3.md) and
+[project log](edcraft%20logs.docx) for the results.
+All 30 items informed rubric development; results are descriptive agreement, not
+unseen accuracy, independent human agreement or learner calibration.
 
 ## What to report
 
@@ -261,14 +205,3 @@ failed question checks, and generation time includes unsuccessful correction cal
 See the [workflow guide](question-generation/README.md#saving-editing-and-reuse)
 for saving and replaying questions, and [evaluation results](evaluation-history.md)
 for the recorded baseline and historical evidence.
-
-
-## Active v0.3 model comparison: GLM5.3 Flash versus Qwen
-
-GLM matched 51/54 labels (94.4%) versus Qwen's 43/54 (79.6%) on identical scored
-slots. Six final GLM transport slots were excluded. See the
-[full comparison](difficulty-glm-comparison-v0.3.md) and
-[raw evidence](../evidence/issue-86/README.md). Historical GLM recovery phases
-preserved completed outcomes; the consolidated runner above uses the same scoring
-rule with simpler resume handling. The stopped v0.4 experiment remains in
-[evaluation history](evaluation-history.md#difficulty-matrix-v04-soclaas-22-october-2026).

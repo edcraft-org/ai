@@ -238,6 +238,6 @@ For live model calls and workflow evaluation, see the [evaluation guide](docs/ev
 - [Earlier evaluation results](docs/evaluation-history.md)
 
 The current offline difficulty reference is [v0.3](docs/difficulty-rubric-v0.3.md).
-See the [GLM/Qwen comparison](docs/difficulty-glm-comparison-v0.3.md) and
-[versioned evidence](evidence/issue-86/README.md). Production difficulty tools
-retain their v0.2 contract; the offline rubric is a separate evaluation.
+See the [GLM/Qwen statistics](docs/difficulty-glm-comparison-v0.3.md).
+Production difficulty tools retain their v0.2 contract; the offline rubric is a
+separate evaluation.

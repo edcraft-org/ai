@@ -42,7 +42,7 @@ class JudgeRun[AssessmentT: BaseModel](BaseModel):
     provider_settings: dict[str, Any] = Field(default_factory=dict)
     prompt_version: str
     request_sha256: str
-    timeout_seconds: float | None
+    timeout_seconds: float
     assessment: AssessmentT | None = None
     error_code: str | None = None
     validation_errors: list[JudgeValidationFinding] = Field(default_factory=list)
@@ -55,18 +55,15 @@ async def run_judge[AssessmentT: BaseModel](
     request: StructuredGenerationRequest[AssessmentT],
     *,
     provider_factory: JudgeProviderFactory,
-    timeout_seconds: float | None = DEFAULT_JUDGE_TIMEOUT_SECONDS,
+    timeout_seconds: float = DEFAULT_JUDGE_TIMEOUT_SECONDS,
 ) -> JudgeRun[AssessmentT]:
     """One application call; no repair retries or replacement judgments.
 
     A deadline stops waiting, not the synchronous provider thread. Late results
     are ignored. Token usage on that path is unknown; transport timeouts/retries
-    still belong to the configured provider. An explicit None disables the outer
-    deadline; existing callers retain their finite default.
+    still belong to the configured provider.
     """
-    if timeout_seconds is not None and (
-        not math.isfinite(timeout_seconds) or timeout_seconds <= 0
-    ):
+    if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError("judge timeout must be finite and positive")
     started = time.perf_counter()
     report = JudgeRun[AssessmentT](

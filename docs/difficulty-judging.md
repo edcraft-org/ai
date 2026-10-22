@@ -97,8 +97,7 @@ timeout defaults to 300 seconds, and the built-in MCP client allows 330 seconds
 per tool call. These limits accommodate GLM's measured 178-second p95 with room
 for slower responses and tool overhead. Keep custom client timeouts longer than
 the judge deadline. An application deadline stops waiting and discards late
-results; it cannot terminate a synchronous provider thread. Offline evaluation
-continues to use explicitly disabled deadlines.
+results; it cannot terminate a synchronous provider thread. The separate research evaluation uses disabled deadlines.
 
 ## Input and output
 
