@@ -26,9 +26,7 @@ def register_relevance_tools(
         description=(
             "Domain-independent embedding relatedness between an original author "
             "request and a complete textual question representation. Supply all "
-            "learner-facing content needed to understand the task, a rendering "
-            "version and any representation limitations (especially omitted "
-            "images or diagrams). Makes one batched embedding request, no "
+            "learner-facing question text. Makes one batched embedding request, no "
             "generative judge call, no code execution and no requirement checks. "
             "Consumes no correctness or difficulty evidence. Records exact text, "
             "input identity, model, dimensions, usage and latency. Assessed means "

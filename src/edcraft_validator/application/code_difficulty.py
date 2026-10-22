@@ -58,7 +58,7 @@ async def assess_code_question_difficulty(
         raise ValueError("judge timeout must be finite and positive")
     # Validate the input contract and isolate caller state, without checking code
     # semantics, the answer, option correctness or execution eligibility.
-    question = CodeDifficultyQuestion.model_validate_json(question.model_dump_json())
+    question = CodeDifficultyQuestion.model_validate(question.model_dump())
     started = time.perf_counter()
     report = CodeDifficultyReport(
         question_sha256=question.sha256,

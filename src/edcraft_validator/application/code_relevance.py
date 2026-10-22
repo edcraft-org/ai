@@ -53,8 +53,9 @@ async def review_code_question_relevance(
     for timeout in (embedding_timeout_seconds, execution_timeout_seconds):
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("review timeouts must be finite and positive")
-    question = CodeDifficultyQuestion.model_validate_json(question.model_dump_json())
-    request = CodeQuestionRequest.model_validate_json(request.model_dump_json())
+    # Snapshot caller-owned lists and options for the asynchronous review.
+    question = question.model_copy(deep=True)
+    request = request.model_copy(deep=True)
     representation = relevance_input(question, request)
     started = time.perf_counter()
     technical = await check_code_question_correctness(

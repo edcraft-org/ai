@@ -281,10 +281,9 @@ Historical workspace evidence was under
 The final Qwen records and original/retry attempts are now included in the
 [portable evidence bundle](../evidence/issue-86/README.md):
 `manifest.json`, `retry-records.jsonl`, `merged-records.jsonl`, `summary.json`,
-`predictions.csv` and checksums. The manifest links hashes of the original run and
-states the changed protocol and scoring policy. The original 60 records are
-unchanged. The evidence ZIP includes both generations of results and relevant
-source snapshots.
+`predictions.csv`. The original local archive records the changed protocol and
+scoring policy. The compact repository archive preserves the original and retry
+attempts, merged outcomes and requests; duplicate source copies were removed.
 
 This remains descriptive agreement on the same inspected, AI-assisted reference;
 reference labels were not revised after seeing model outputs. The limitations
@@ -396,9 +395,9 @@ in this run.
 Historical evidence was saved under the workspace path
 `outputs/issue86/2026-10-22/soclaas-v0.3-qwen36-2passes/`:
 `manifest.json`, `records.jsonl`, `summary.json`, `predictions.csv` and
-`evidence-checksums.json`. The adjacent `reference-v0.3-changes.csv` lists all
-22 rating-cell changes. A ZIP bundle includes the raw evidence, revised and
-archived references, rubric, evaluation source and this report. Reproduce using
+the original run metadata. The versioned `reference-changes.csv` lists all
+22 rating-cell changes. The compact repository ZIP retains raw evidence, references
+and requests. Reproduce using
 [the evaluation guide](evaluation.md#v03-ordinary-trace-reference-agreement)
 with a fresh output directory; preserve each run separately.
 The [portable evidence bundle](../evidence/issue-86/README.md) now preserves the

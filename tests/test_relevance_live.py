@@ -1,6 +1,5 @@
 """Four synthetic MCP integration cases; opt-in, paid embedding requests only."""
 
-import hashlib
 import json
 import math
 import os
@@ -123,10 +122,7 @@ async def test_real_shared_relevance_and_independent_python_checks():
             "Two angles of a triangle are 50 and 60 degrees. What is the third "
             "angle? Options: A 60 degrees; B 70 degrees; C 80 degrees."
         ),
-        rendering_version="generic-text-v1",
-        representation_limitations=["The accompanying diagram is not represented."],
     )
-    source_files = sorted((root / "src").rglob("*.py")) + [Path(__file__)]
     save(
         "manifest.json",
         {
@@ -135,12 +131,6 @@ async def test_real_shared_relevance_and_independent_python_checks():
             "source_revision": subprocess.check_output(
                 ["git", "rev-parse", "HEAD"], cwd=root, text=True
             ).strip(),
-            "source_sha256": hashlib.sha256(
-                b"".join(
-                    str(p.relative_to(root)).encode() + b"\0" + p.read_bytes()
-                    for p in source_files
-                )
-            ).hexdigest(),
             "endpoint_host": urlsplit(
                 os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1"
             ).hostname,
@@ -193,11 +183,6 @@ async def test_real_shared_relevance_and_independent_python_checks():
                 assert len(calls) == before_calls + 1
                 assert len(executions) == before_executions
                 assert data["input_sha256"] == representation.sha256
-                assert data["rendering_version"] == representation.rendering_version
-                assert (
-                    data["representation_limitations"]
-                    == representation.representation_limitations
-                )
                 assert not {
                     "technical",
                     "requirements",

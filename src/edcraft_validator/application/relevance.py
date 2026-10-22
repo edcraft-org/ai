@@ -15,7 +15,7 @@ async def assess_relevance(
     embedding_provider_factory: EmbeddingProviderFactory,
     embedding_timeout_seconds: float = 35,
 ) -> RelevanceReport:
-    request = RelevanceInput.model_validate_json(request.model_dump_json())
+    request = RelevanceInput.model_validate(request.model_dump())
     started = time.perf_counter()
     similarity = await measure_similarity(
         request.author_request,
@@ -26,8 +26,6 @@ async def assess_relevance(
     return RelevanceReport(
         status="assessed" if similarity.status == "measured" else "error",
         input_sha256=request.sha256,
-        rendering_version=request.rendering_version,
-        representation_limitations=request.representation_limitations.copy(),
         similarity=similarity,
         duration_ms=(time.perf_counter() - started) * 1000,
     )

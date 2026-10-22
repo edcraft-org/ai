@@ -54,7 +54,7 @@ is available from the option identified by `correct_option`.
 Keep question content, approved categories and dimension ratings, topics and
 splits fixed so evaluation results remain comparable. Git history records changes
 to this dataset. Run the explicitly opt-in SoCLaaS evaluation using
-`scripts/compare_soclaas_difficulty.py`; see the v0.3 model-comparison section in
+`scripts/evaluate_difficulty.py`; see the v0.3 model-comparison section in
 [the evaluation guide](../../docs/evaluation.md). Existing production MCP judging
 retains its v0.2 contract and is not the request evaluated by this script.
 

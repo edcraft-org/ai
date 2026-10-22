@@ -74,7 +74,6 @@ def test_five_job_run_retains_provider_setup_failure_and_replays_saved_templates
         lambda: {
             "git_revision": "test",
             "working_tree_dirty": True,
-            "source_sha256": "test",
         },
     )
     output = tmp_path / "baseline.jsonl"

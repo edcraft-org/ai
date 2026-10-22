@@ -172,16 +172,16 @@ excluded from scoring. All raw outputs and explanations remain available.
 
 ## Evidence and verification
 
-Versioned [portable evidence and verification instructions](../evidence/issue-86/README.md)
-include the frozen requests, final records and all returned attempts.
-The export removes local home paths; original provenance digests are identified separately.
+The [evidence guide](../evidence/issue-86/README.md) links raw responses, final
+slot records, all returned attempts, frozen requests/settings, reference inputs,
+CSV predictions and comparison statistics. The current archives omit redundant
+source copies and checksum/export bookkeeping. Original full snapshots remain
+in Git at `7601a8d` and in the original workspace archives. This packaging cleanup
+did not change predictions, references or statistics.
 
-Retained manifest, exact requests/schema/settings/catalogue, raw responses,
-all attempts, final slot records, CSV predictions, dataset/rubric/source snapshots,
-Qwen baseline records, aggregate and paired statistics, verification and checksums.
 GLM recovery-phase wall time: 113.0 seconds.
 The initial phase and operator-approved interruption are recorded in
-`recovery-parent/operator-recovery.json`; this phase duration excludes the
+the original recovery audit; this phase duration excludes the
 initial phase and the restart preparation interval.
 
 Reported-token catalogue metering equivalents: Qwen

@@ -12,7 +12,7 @@ from edcraft_validator.domains.code.difficulty import (
 )
 from edcraft_validator.llm.judging import run_judge
 from edcraft_validator.llm.llm_errors import GenerationTransportError
-from scripts.retry_trace_difficulty_transport import (
+from scripts.evaluate_difficulty import (
     classification_metrics,
     safe_diagnostic,
 )

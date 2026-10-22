@@ -24,7 +24,7 @@ async def assess_template_difficulty(
     judge_timeout_seconds: float = 60,
 ) -> ToolEvidence:
     started = time.perf_counter()
-    candidate = CodeTemplateCandidate.model_validate_json(candidate.model_dump_json())
+    candidate = CodeTemplateCandidate.model_validate(candidate.model_dump())
     details = {
         "advisory": True,
         "retryable": False,

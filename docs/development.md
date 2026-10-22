@@ -30,29 +30,18 @@ All paths below are under `src/edcraft_validator/`.
 
 `assess_relevance` is registered once with `capability:relevance`, without a
 `domain:code` tag. It is explicitly callable and is not added to the template
-author's fixed check catalogue. Its `RelevanceInput` contains `author_request`,
-`question_text`, `rendering_version` (default `plain-text-v1`) and
-`representation_limitations`. Text is normalized with `lf-strip-v1`; empty text,
-extra fields, invalid rendering identifiers and texts exceeding 200,000 characters
-are rejected. Provider context limits can be smaller; no text is silently truncated.
-Record important omitted non-text content, such as diagrams, as a representation
-limitation. The service measures the supplied representation and cannot verify
-that a caller included the complete original question.
+author's fixed check catalogue. Its input contains only `author_request` and
+`question_text`. Empty text, extra fields and texts exceeding 200,000 characters
+are rejected; line endings and surrounding whitespace are normalized. The service
+makes one batched embedding request and records exact texts, their input identity,
+model, dimensions, usage, duration and errors. A completed measurement is advisory.
 
-The shared service and contracts import no domain or MCP modules. The MCP wrapper
-delegates to the application service; internal callers invoke the same service
-directly. `input_sha256` identifies the normalized texts, rendering version and
-representation limitations. The report preserves exact embedded strings, provider
-model information, dimensions, usage, duration and errors. A completed measurement
-is advisory and does not certify relevance, requirements, correctness or difficulty.
-
-`domains/code/relevance.py` owns `code-question-json-v1`. It retains every
-learner-facing question field and excludes `correct_option`; changing only that
-designation changes correctness identity but not the relevance input identity.
-It serializes the structured author request exactly as the former v3 assessment
-did. Other domains can supply their own renderers without changing the shared
-service or registering another relevance MCP tool. No second domain is implemented
-and no cross-domain relevance accuracy is claimed.
+The shared service has no domain or MCP dependencies. The Python adapter renders
+all learner-facing question fields except `correct_option`. Changing only the
+answer designation changes correctness identity but leaves relevance text unchanged.
+There is no diagram metadata or caller-supplied rendering-version field.
+Public checks validate their own inputs. Internal rendering trusts validated objects;
+reviews copy mutable caller data before asynchronous work.
 
 `check_code_question_correctness` runs bounded Python execution and identifies
 its question with `question_sha256`. `check_code_question_requirements` independently

@@ -68,7 +68,7 @@ SDK retries to zero (for example `OPENAI_MAX_RETRIES=0`) for an interpretable ru
 
 The script writes one `authoring_result` per job to JSONL and flushes after every
 job. Alongside it, `.manifest.json` records the fixed cases, source revision,
-uncommitted-source hash, and preview seeds; `.summary.json` records outcomes, first
+working-tree status, and preview seeds; `.summary.json` records outcomes, first
 attempt and correction rates, attempts per job, failure categories, median/range
 latency, model calls, and token usage. Until all requested jobs are recorded, the
 remaining jobs are counted as unresolved. `--jobs` controls total jobs; additional
@@ -103,71 +103,55 @@ finish, so they survive an interruption.
 
 ## v0.3 ordinary-trace reference agreement
 
-The issue 86 revision uses [the v0.3 ordinary-trace rubric](difficulty-rubric-v0.3.md)
-and 30 revised reference questions: 15 easy, nine medium and six hard. Shortcuts
-do not lower difficulty. Three difficulty dimensions replace the previous four;
-answer-option quality remains separate. The exact previous dataset is archived at
-`reference_sets/python_tracing/archive/dataset-v0.2.json`.
+Use the [v0.3 rubric](difficulty-rubric-v0.3.md) and approved reference: 15 easy,
+9 medium and 6 hard questions. Shortcuts do not lower ratings; answer-option
+quality is separate. All 30 questions informed rubric development, so results
+measure reference agreement rather than unseen accuracy or learner calibration.
+Production judging still uses v0.2.
 
-Run this opt-in evaluation from the repository, with the configured SoCLaaS key:
+One runner supports a new model run, paired comparison and transport-only resume:
 
-```bash
-uv run python scripts/evaluate_trace_difficulty.py --env-file /path/to/.env \
-  --model qwen3.6:35b --repetitions 2 --concurrency 2 --timeout 180 \
-  --output /path/to/new-evidence-directory
+```sh
+PYTHONPATH=src python -m scripts.evaluate_difficulty --env-file /path/to/.env \
+  --model x-test-1 --repetitions 2 --concurrency 2 \
+  --output .artifacts/glm-new
 ```
 
-The directory must not exist. Before generation, a manifest freezes all 60 planned
-assessments, source/data/rubric hashes, complete blinded requests and schemas,
-explicit model ID, accessible catalogue and non-secret settings. There is one call
-per assessment, zero SDK/application retries, strict JSON schema, model-default
-reasoning/sampling, a 16,384-token output budget and a 180-second transport timeout.
-The shared judge deadline is five seconds longer. No expected level, dimension,
-event count, reference explanation, question ID or split is sent to the model.
+The output directory must not exist. The runner records the Git commit, exact
+blinded requests/schema, reference questions, model/settings, repetitions and retry
+budget. It uses strict JSON schema, 16,384 output tokens, provider-default
+reasoning/sampling, zero SDK retries and no client/judge deadlines. An upstream
+service deadline can still apply. Keep evaluation changes committed before a run.
 
-`records.jsonl` retains each parsed assessment, raw API response, returned model,
-usage, errors, latency and reference. It flushes each completed record and updates
-`summary.json`; final `predictions.csv` supports report tables. Errors and unknowns
-are primary-accuracy nonmatches, and unfinished jobs remain unresolved in the
-planned denominator. Valid-only agreement is separate. Per-dimension agreement,
-exact event-count agreement, confusion counts, per-class precision/recall/F1,
-severe disagreements, repeat stability and rule-consistency findings are retained.
-Output differences do not trigger reference edits, prompt tuning or reruns.
+Add `--baseline /path/to/qwen-run` for paired results. That directory must contain
+`manifest.json` and `records.jsonl` from the baseline, with the same requests,
+references and repetition count. See [the evidence guide](../evidence/issue-86/README.md)
+for preparing the published Qwen records as a baseline.
 
-The percentile interval uses 2,000 bootstrap resamples of exact code families,
-retaining repeated assessments together, with seed 86. It is descriptive for this
-small, purposive reference; related nonidentical programs can remain correlated.
-Catalogue-based metering estimates are not a claim of out-of-pocket charges.
+To continue an interrupted run, use a fresh output directory:
 
-All 30 items, including the historical held-out group, informed rubric review.
-Report these results as descriptive agreement with an AI-assisted reference and
-user-approved boundaries, not independent held-out accuracy or learner calibration.
-Existing production MCP judging and authoring retain their v0.2 prompt/schema and
-policy; this explicitly versioned offline v0.3 request is a different configuration.
-
-### Transport retries and current accuracy policy
-
-The preceding full-run command reproduces the initial bounded r1 protocol.
-For the user-requested follow-up, use the original run as immutable input:
-
-```bash
-uv run python -m scripts.retry_trace_difficulty_transport \
-  --env-file /path/to/.env --parent /path/to/original-run \
-  --output /path/to/new-retry-evidence-directory
+```sh
+PYTHONPATH=src python -m scripts.evaluate_difficulty --env-file /path/to/.env \
+  --model x-test-1 --resume .artifacts/glm-new \
+  --output .artifacts/glm-resumed
 ```
 
-This follows the three original transport failures only. It disables HTTP and
-judge deadlines using explicit `None`, keeps SDK retries at zero, replays each
-exact frozen request once and records redacted underlying error diagnostics.
-It cannot disable an upstream service limit. Other predictions are never retried.
+Only unreturned or transport-failed slots run again. Completed predictions,
+including wrong labels, schema failures and missing labels, are preserved. Each
+invocation allows one transport retry per pending slot by default;
+`--transport-retries` changes that declared budget. Resume checks the saved
+requests, model, settings and reference labels before inference. It needs no
+operator audit or parent-directory chain. The new directory contains the complete
+attempt history and final outcomes, independently of the previous directory.
 
-The current accuracy policy excludes transport-failed slots from the denominator
-and reports classification coverage and transport attempt failures separately.
-Other errors and abstentions remain nonmatches. The combined 60-slot view replaces
-only each targeted slot with its new attempt, irrespective of the prediction;
-all original records remain intact. A protocol manifest, raw retry records, merged
-records, CSV and summary identify this follow-up separately from the initial run.
-See [the report](evaluation-history.md) for both configurations and their results.
+`attempts.jsonl` flushes every returned response. `records.jsonl` holds the latest
+outcome per slot, `predictions.csv` supports report tables, and `summary.json`
+contains agreement, dimensions, confusion counts, per-class F1, repeat stability,
+coverage, successful-response latency and tokens. Transport errors are excluded
+from accuracy; content failures and missing labels remain nonmatches. Unreturned
+slots reduce coverage. Retries are attempts, not additional assessment samples.
+A descriptive family-cluster bootstrap is saved at completion. Unknown failed-call
+usage remains unknown. No checksums or source-tree copies are generated.
 
 ## Original v0.2 provisional difficulty review
 
@@ -281,71 +265,10 @@ for the recorded baseline and historical evidence.
 
 ## Active v0.3 model comparison: GLM5.3 Flash versus Qwen
 
-Versioned requests, raw outcomes, attempts and recovery audits are in the
-[portable evidence bundle](../evidence/issue-86/README.md). It also contains the
-frozen Qwen baseline needed by the comparison command.
-The superseded v0.4 result is summarized in
-[evaluation history](evaluation-history.md#difficulty-matrix-v04-soclaas-22-october-2026);
-its historical rubric is [archived](archive/difficulty-rubric-v0.4.md).
-
-The user selected v0.3 after the v0.4 experiment did not improve observed overall
-agreement. `reference_sets/python_tracing/dataset.json` has been restored byte for
-byte from `archive/dataset-v0.3.json`; the superseded v0.4 data is preserved in
-`archive/dataset-v0.4.json`. The active reference uses
-[difficulty-rubric-v0.3.md](difficulty-rubric-v0.3.md), with 15 easy, 9 medium and
-6 hard questions. Production MCP v0.2 contracts remain unchanged.
-
-`scripts/compare_soclaas_difficulty.py` validates the exact dataset/rubric hashes,
-messages, schema and prompt versions against the frozen Qwen run before making
-any inference request. It uses the original v0.3 response schema and raw model
-ratings; it does not use v0.4's derived ratings or stricter evidence validators.
-The SoCLaaS catalogue identifies `x-test-1` as **Testing GLM 5.3 Flash**. This is a
-serving alias, not an immutable model-weight identifier.
-
-The comparison has two assessments per question, concurrency two, the same
-16,384-token output budget and provider-default reasoning/sampling. Client and
-judge deadlines are disabled, SDK retries are zero, and transport failures receive
-one explicit identical-request retry. Each failed attempt releases its concurrency
-slot before retrying; an unrelated pending request does not hold up the retry
-phase. Neither transport failures nor unreturned requests count as accuracy
-failures. Content/schema failures and abstentions remain nonmatches.
-
-Invoke with `python -m scripts.compare_soclaas_difficulty` and supply
-`--env-file`, `--baseline` (original Qwen run directory), `--baseline-records`
-(transport-retried Qwen final records), `--catalogue` (fresh saved model catalogue),
-`--model x-test-1`, `--expected-display-name 'Testing GLM 5.3 Flash'` and a fresh
-`--output` directory. The model identity must match the catalogue display name.
-
-Retain exact requests, source/dataset/rubric snapshots, raw responses, all attempts,
-final slot records, predictions CSV, latency/tokens, confusion, dimension scores,
-per-class F1, repeat stability, paired gains/losses against Qwen and checksums.
-Qwen's existing result is 47/60 (78.3%). Its initial calls used finite deadlines,
-while its three retries and the GLM comparison use no local deadlines. This is a
-historical model comparison on an inspected reference, not a fresh independently
-held-out study or an isolated test of deadline effects.
-
-
-### GLM transport recovery amendments
-
-Two unreturned calls stalled the initial GLM run. The user explicitly selected
-restarting only unfinished requests. `--resume` validates the parent model and
-frozen requests, retains every completed non-transport assessment byte for byte
-(including incorrect labels, schema failures and abstentions), and schedules only
-unreturned/queued or eligible transport-failed slots. Operator interruptions are
-recorded separately from transport failures and do not enter accuracy.
-
-A subsequent provider-wide HTTP 503 burst exhausted the original retry budget.
-One extra transport retry per failed slot was declared with
-`--extra-transport-retries 1` before further inference. HTTP 429/502/503/504
-responses trigger 5–60-second availability backoff. This pauses new requests;
-it does not impose a deadline on in-flight requests. Request starts are now
-logged separately. Every phase preserves its own manifest, requests, attempts,
-source snapshots, operator audit and final records. Never retry a completed
-assessment just because it disagrees with the reference or exhausts its output
-budget. The token budget remains the Qwen baseline's 16,384 throughout.
-
-Report both agreement and classification coverage. Successful-response latency
-must exclude immediate service errors: a fast HTTP 503 is not a fast model
-assessment. Failed-transport and interrupted-call token usage may be unavailable.
-These operational amendments and different service conditions limit causal
-claims about model differences.
+GLM matched 51/54 labels (94.4%) versus Qwen's 43/54 (79.6%) on identical scored
+slots. Six final GLM transport slots were excluded. See the
+[full comparison](difficulty-glm-comparison-v0.3.md) and
+[raw evidence](../evidence/issue-86/README.md). Historical GLM recovery phases
+preserved completed outcomes; the consolidated runner above uses the same scoring
+rule with simpler resume handling. The stopped v0.4 experiment remains in
+[evaluation history](evaluation-history.md#difficulty-matrix-v04-soclaas-22-october-2026).

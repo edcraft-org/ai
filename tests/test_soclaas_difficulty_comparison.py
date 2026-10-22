@@ -1,56 +1,24 @@
-"""Guard the exact-baseline comparison and transport-aware paired statistics."""
+"""Frozen comparisons, safe resume and failures in the consolidated runner."""
 
 import copy
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from scripts.compare_soclaas_difficulty import (
-    attempt_plan,
+from scripts.evaluate_difficulty import (
+    build_request,
+    evaluate,
+    frozen_requests,
+    index_records,
+    load_previous,
     paired_comparison,
-    validate_frozen_requests,
+    pending_questions,
+    reference,
 )
-from scripts.evaluate_trace_difficulty import build_request, digest
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def test_frozen_request_validation_detects_label_rubric_schema_and_message_drift():
-    dataset = (ROOT / "reference_sets/python_tracing/dataset.json").read_bytes()
-    rubric = (ROOT / "docs/difficulty-rubric-v0.3.md").read_bytes()
-    assert json.loads(dataset)["rubric_version"] == "python-tracing-v0.3"
-    assert (
-        dataset
-        == (
-            ROOT / "reference_sets/python_tracing/archive/dataset-v0.3.json"
-        ).read_bytes()
-    )
-    questions = json.loads(dataset)["questions"]
-    frozen = {}
-    for q in questions:
-        r = build_request(q, rubric.decode())
-        frozen[q["question_id"]] = {
-            "messages": r.messages,
-            "schema": r.response_model.model_json_schema(),
-            "prompt_version": r.prompt_version,
-            "schema_name": r.schema_name,
-        }
-    baseline = {
-        "dataset_sha256": digest(dataset),
-        "rubric_sha256": digest(rubric),
-        "requests": frozen,
-    }
-    assert len(validate_frozen_requests(dataset, rubric, baseline)[1]) == 30
-    with pytest.raises(ValueError, match="Dataset"):
-        validate_frozen_requests(dataset + b" ", rubric, baseline)
-    with pytest.raises(ValueError, match="Rubric"):
-        validate_frozen_requests(dataset, rubric + b" ", baseline)
-    for key in ["schema", "messages"]:
-        altered = copy.deepcopy(baseline)
-        altered["requests"][questions[0]["question_id"]][key] = {}
-        with pytest.raises(ValueError, match="Request"):
-            validate_frozen_requests(dataset, rubric, altered)
 
 
 def paired_record(question_id, prediction, error=None):
@@ -78,34 +46,194 @@ def test_paired_comparison_excludes_transport_but_keeps_content_failures():
     assert result["paired_slots"] == 2
     assert result["candidate_only_correct"] == 1
     assert result["qwen_only_correct"] == 1
-    assert len(result["changes"]) == 2
     after[0]["reference"] = {"difficulty": "hard"}
     with pytest.raises(ValueError, match="Reference drift"):
         paired_comparison(after, before)
 
 
-def test_recovery_preserves_completed_results_and_tracks_transport_separately():
-    correct = paired_record("correct", "easy") | {"attempt": 1}
-    wrong = paired_record("wrong", "medium") | {"attempt": 1}
-    invalid = paired_record("invalid", None, "JUDGE_SCHEMA_VALIDATION") | {"attempt": 1}
-    failed = paired_record("failed", None, "JUDGE_TRANSPORT") | {"attempt": 1}
-    history = [correct, wrong, invalid, failed]
-    slots = {(r["question_id"], r["repetition"]): r for r in history}
-    interrupted = [{"question_id": "interrupted", "repetition": 1, "attempt": 1}]
-    for q in ["correct", "wrong", "invalid"]:
-        assert attempt_plan(q, 1, slots, history, interrupted) == []
-    assert attempt_plan("failed", 1, slots, history, interrupted) == [2]
-    assert attempt_plan("interrupted", 1, slots, history, interrupted) == [2, 3]
-    assert attempt_plan("queued", 1, slots, history, interrupted) == [1, 2]
-    assert slots[("wrong", 1)] is wrong
+def test_resume_preserves_correct_wrong_and_content_failures():
+    questions = [
+        {"question_id": name}
+        for name in ["correct", "wrong", "invalid", "transport", "unfinished"]
+    ]
+    records = [
+        paired_record("correct", "easy"),
+        paired_record("wrong", "medium"),
+        paired_record("invalid", None, "JUDGE_INVALID_RESPONSE"),
+        paired_record("transport", None, "JUDGE_TRANSPORT"),
+    ]
+    slots = {(r["question_id"], r["repetition"]): r for r in records}
+    assert [
+        (q["question_id"], rep) for q, rep in pending_questions(questions, 1, slots)
+    ] == [("transport", 1), ("unfinished", 1)]
+    assert slots[("wrong", 1)]["prediction"] == "medium"
 
 
-def test_outage_recovery_extends_transport_budget_without_rerunning_predictions():
-    failed = paired_record("failed", None, "JUDGE_TRANSPORT") | {"attempt": 1}
-    again = failed | {"attempt": 2}
-    slots = {("failed", 1): again}
-    assert attempt_plan("failed", 1, slots, [failed, again], []) == []
-    assert attempt_plan("failed", 1, slots, [failed, again], [], 1) == [3]
-    completed = paired_record("failed", "medium") | {"attempt": 3}
-    slots[("failed", 1)] = completed
-    assert attempt_plan("failed", 1, slots, [failed, again, completed], [], 1) == []
+def test_resume_rejects_changed_requests_settings_and_references(tmp_path):
+    question = json.loads(
+        (ROOT / "reference_sets/python_tracing/dataset.json").read_text()
+    )["questions"][0]
+    requests = {question["question_id"]: build_request(question, "RUBRIC")}
+    manifest = {
+        "requests": frozen_requests(requests),
+        "model": "x-test-1",
+        "settings": {"generation_max_tokens": 16384},
+        "repetitions": 1,
+    }
+    record = paired_record(question["question_id"], "easy") | {
+        "reference": reference(question)
+    }
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    (tmp_path / "records.jsonl").write_text(json.dumps(record) + "\n")
+    slots, attempts = load_previous(
+        tmp_path,
+        [question],
+        requests,
+        1,
+        model="x-test-1",
+        settings=manifest["settings"],
+    )
+    assert len(slots) == len(attempts) == 1
+    with pytest.raises(ValueError, match="settings"):
+        load_previous(tmp_path, [question], requests, 1, model="x-test-1", settings={})
+    with pytest.raises(ValueError, match="Requests"):
+        load_previous(
+            tmp_path,
+            [question],
+            {question["question_id"]: build_request(question, "DIFFERENT")},
+            1,
+        )
+    changed = copy.deepcopy(question)
+    changed["dimensions"]["execution_burden"] = "unknown"
+    with pytest.raises(ValueError, match="Reference"):
+        load_previous(tmp_path, [changed], requests, 1)
+    with pytest.raises(ValueError, match="Duplicate"):
+        index_records([record, record], [question], 1)
+
+
+def test_resume_uses_flushed_attempt_if_final_records_update_was_interrupted(tmp_path):
+    question = json.loads(
+        (ROOT / "reference_sets/python_tracing/dataset.json").read_text()
+    )["questions"][0]
+    requests = {question["question_id"]: build_request(question, "RUBRIC")}
+    (tmp_path / "manifest.json").write_text(
+        json.dumps({"requests": frozen_requests(requests), "repetitions": 1})
+    )
+    failed = paired_record(question["question_id"], None, "JUDGE_TRANSPORT") | {
+        "reference": reference(question)
+    }
+    completed = failed | {
+        "prediction": "medium",
+        "report": {"status": "completed", "error_code": None},
+    }
+    (tmp_path / "attempts.jsonl").write_text(
+        json.dumps(failed) + "\n" + json.dumps(completed) + "\n"
+    )
+    (tmp_path / "records.jsonl").write_text(json.dumps(failed) + "\n")
+    slots, attempts = load_previous(tmp_path, [question], requests, 1)
+    assert slots[(question["question_id"], 1)] == completed
+    assert len(attempts) == 2
+    assert pending_questions([question], 1, slots) == []
+
+
+async def test_runner_writes_results_without_network_or_overwriting_existing_run(
+    tmp_path, monkeypatch
+):
+    from edcraft_validator.llm.judging import JudgeRun
+    from edcraft_validator.llm.usage import ModelUsageSummary
+    from scripts import evaluate_difficulty as runner
+
+    class Client:
+        def close(self):
+            pass
+
+    class Provider:
+        raw_response = {"model": "fake"}
+        diagnostic = None
+        client = Client()
+
+        def __init__(self, **kwargs):
+            pass
+
+        def generation_settings(self):
+            return {"generation_max_tokens": 16384}
+
+    calls = 0
+
+    async def no_delay(seconds):
+        pass
+
+    async def judge(request, **kwargs):
+        nonlocal calls
+        calls += 1
+        assert kwargs["timeout_seconds"] is None
+        return JudgeRun(
+            status="error",
+            provider="soclaas",
+            model="fake",
+            prompt_version=request.prompt_version,
+            request_sha256="test",
+            timeout_seconds=None,
+            error_code="JUDGE_TRANSPORT" if calls == 1 else "JUDGE_INVALID_RESPONSE",
+            duration_ms=1,
+            usage=ModelUsageSummary(),
+        )
+
+    monkeypatch.setenv("SOCLAAS_API_KEY", "test")
+    monkeypatch.setenv("SOCLAAS_BASE_URL", "http://unused")
+    monkeypatch.setattr(runner, "OpenAI", lambda **kwargs: Client())
+    monkeypatch.setattr(runner, "EvaluationProvider", Provider)
+    monkeypatch.setattr(runner, "run_judge", judge)
+    monkeypatch.setattr(runner.asyncio, "sleep", no_delay)
+    args = SimpleNamespace(
+        model="fake",
+        output=tmp_path / "run",
+        baseline=None,
+        resume=None,
+        repetitions=1,
+        concurrency=2,
+        transport_retries=1,
+    )
+    result = await evaluate(args)
+    assert result["scored"] == 30 and result["correct"] == 0
+    assert len((args.output / "records.jsonl").read_text().splitlines()) == 30
+    assert (args.output / "predictions.csv").exists()
+    assert calls == 31
+    assert result["transport_failed_attempts"] == 1
+    args.resume = args.output
+    args.output = tmp_path / "resumed"
+    resumed = await evaluate(args)
+    assert calls == 31  # Completed content failures are not sampled again.
+    assert resumed["attempts"] == 31 and resumed["scored"] == 30
+    with pytest.raises(FileExistsError):
+        await evaluate(args)
+
+
+def test_published_records_reproduce_scores_and_exact_frozen_requests():
+    from zipfile import ZipFile
+
+    from scripts.evaluate_difficulty import classification_metrics
+
+    with ZipFile(ROOT / "evidence/issue-86/v0.3-glm-qwen.zip") as archive:
+        prefix = "soclaas-v0.3-glm53flash-recovery-r4/"
+        glm, qwen = [
+            [json.loads(line) for line in archive.read(prefix + name).splitlines()]
+            for name in ["records.jsonl", "baseline-records.jsonl"]
+        ]
+        manifest = json.loads(archive.read(prefix + "baseline-manifest.json"))
+    questions = json.loads(
+        (ROOT / "reference_sets/python_tracing/dataset.json").read_text()
+    )["questions"]
+    assert len(index_records(glm, questions, 2)) == 60
+    assert len(index_records(qwen, questions, 2)) == 60
+    assert classification_metrics(glm)["correct"] == 51
+    assert classification_metrics(glm)["scored"] == 54
+    assert classification_metrics(qwen)["correct"] == 47
+    paired = paired_comparison(glm, qwen)
+    assert paired["paired_slots"] == 54
+    assert paired["both_correct"] == 41
+    assert paired["candidate_only_correct"] == 10
+    assert paired["qwen_only_correct"] == 2
+    rubric = (ROOT / "docs/difficulty-rubric-v0.3.md").read_text()
+    requests = {q["question_id"]: build_request(q, rubric) for q in questions}
+    assert frozen_requests(requests) == manifest["requests"]

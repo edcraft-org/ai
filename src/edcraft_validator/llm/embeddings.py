@@ -66,7 +66,6 @@ class SimilarityReport(BaseModel):
     provider: str | None = None
     model: str | None = None
     model_version: str | None = None
-    preprocessing: Literal["lf-strip-v1"] = "lf-strip-v1"
     metric: Literal["cosine"] = "cosine"
     request_text: str
     question_text: str

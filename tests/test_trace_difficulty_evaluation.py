@@ -5,7 +5,7 @@ from collections import Counter
 from pathlib import Path
 
 from scripts.difficulty_trace import Trace
-from scripts.evaluate_trace_difficulty import (
+from scripts.evaluate_difficulty import (
     DIMENSIONS,
     build_request,
     derived_level,
