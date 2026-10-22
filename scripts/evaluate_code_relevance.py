@@ -1,4 +1,4 @@
-"""Freeze an embedding relevance review; never start a generative judge call."""
+"""Review local relevance decisions without starting a generative judge call."""
 
 import argparse
 import asyncio
@@ -21,7 +21,10 @@ from edcraft_validator.domains.code.difficulty import CodeDifficultyQuestion
 from edcraft_validator.domains.code.relevance import (
     CodeQuestionRequest,
 )
-from edcraft_validator.llm.embeddings import OpenAIEmbeddingProvider
+from edcraft_validator.llm.decision import (
+    DEFAULT_RELEVANCE_THRESHOLD,
+    QwenDecisionProvider,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = ROOT / "reference_sets/python_tracing/dataset.json"
@@ -115,10 +118,10 @@ def summary(records: list[dict], requested: int) -> dict:
                 disagreements.append(
                     {"case_id": record["case_id"], "fields": mismatches}
                 )
-        similarities = [
-            r["report"]["relevance"]["similarity"]["similarity"]
+        scores = [
+            r["report"]["relevance"]["decision"]["score"]
             for r in selected
-            if r["report"]["relevance"]["similarity"]["status"] == "measured"
+            if r["report"]["relevance"]["decision"]["status"] == "assessed"
         ]
         groups[group] = {
             "recorded": len(selected),
@@ -126,15 +129,10 @@ def summary(records: list[dict], requested: int) -> dict:
             "requirements": Counter(
                 r["report"]["requirements"]["status"] for r in selected
             ),
-            "similarity_range": [min(similarities), max(similarities)]
-            if similarities
-            else None,
+            "score_range": [min(scores), max(scores)] if scores else None,
             "control_disagreements": disagreements,
         }
     times = [r["report"]["duration_ms"] for r in records]
-    tokens = [
-        r["report"]["relevance"]["similarity"]["usage"]["input_tokens"] for r in records
-    ]
     return {
         "requested": requested,
         "recorded": len(records),
@@ -159,20 +157,16 @@ def summary(records: list[dict], requested: int) -> dict:
             bool(r.get("protocol_findings")) for r in records
         ),
         "new_judge_calls": 0,
-        "embedding_input_tokens": sum(tokens)
-        if all(v is not None for v in tokens)
-        else None,
         "median_duration_ms": statistics.median(times) if times else None,
         "limitations": [
-            "Embedding similarity is advisory, with no pass cutoff "
-            "or verified semantic alignment.",
-            "No relevance rubric is judged. Ambiguity and missing concepts "
-            "can escape these checks.",
+            "Decision scores and the chemistry pilot threshold are advisory; "
+            "they do not establish Python relevance accuracy.",
+            "Ambiguity and missing concepts can escape these checks.",
             "Difficulty judgments and their quality concerns are separate; "
             "this review never consumes another check's report.",
             "The held-out set has no human relevance labels; "
             "no relevance accuracy is claimed.",
-            "Provider model IDs do not establish immutable model weights.",
+            "Local model paths must contain the documented Qwen weights.",
         ],
     }
 
@@ -183,24 +177,22 @@ async def evaluate(output: Path) -> dict:
     )
     manifest_path = output.with_suffix(".manifest.json")
     summary_path = output.with_suffix(".summary.json")
-    embedding = OpenAIEmbeddingProvider()
+    decision = QwenDecisionProvider()
     manifest = {
-        "protocol": "code-relevance-evaluation-v4-shared",
-        "relevance_tool_version": "1.0.0",
-        "review_report_version": "4.0.0",
+        "protocol": "code-relevance-evaluation-v5-decision",
+        "relevance_tool_version": "2.0.0",
+        "review_report_version": "5.0.0",
         "created_at": datetime.now(UTC).isoformat(),
         "source_revision": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
         ).strip(),
-        "embedding": {
-            "provider": embedding.provider,
-            "model": embedding.model,
-            "model_version": embedding.model_version,
-            "max_retries": 0,
-            "transport_timeout_seconds": 30,
+        "decision": {
+            "provider": decision.provider,
+            "model": decision.model,
+            "threshold": DEFAULT_RELEVANCE_THRESHOLD,
         },
         "new_judge_calls": 0,
-        "embedding_deadline_seconds": 35,
+        "decision_deadline_seconds": 35,
         "execution_timeout_seconds": 2,
         "concurrency": 2,
         "cases": cases,
@@ -222,14 +214,14 @@ async def evaluate(output: Path) -> dict:
                 report = await review_code_question_relevance(
                     question,
                     CodeQuestionRequest.model_validate(case["request"]),
-                    embedding_provider_factory=OpenAIEmbeddingProvider,
+                    decision_provider_factory=lambda: decision,
                 )
                 findings = []
                 if (
-                    report.relevance.similarity.model is not None
-                    and report.relevance.similarity.model != embedding.model
+                    report.relevance.decision.model is not None
+                    and report.relevance.decision.model != decision.model
                 ):
-                    findings.append("EMBEDDING_MODEL_DRIFT")
+                    findings.append("RELEVANCE_MODEL_DRIFT")
                 record = {
                     "case_id": case["case_id"],
                     "group": case["group"],

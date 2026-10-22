@@ -23,7 +23,7 @@ All paths below are under `src/edcraft_validator/`.
 | Question generation | `domains/code/question_generator.py`, expressions and rendering | Local expansion from saved answers and recipes. |
 | Python tools | `tools/python_analysis.py`, `tools/python_execution.py`, `tools/python_worker.py` | Supported syntax and batched tracing. |
 | Advisory difficulty | `mcp/difficulty_tools.py`, `application/code_difficulty.py`, `domains/code/difficulty.py`, `llm/judging.py` | Template difficulty and standalone concrete-MCQ judging, independent of correctness. |
-| Shared relevance | `relevance_contracts.py`, `application/relevance.py`, `mcp/relevance_tools.py`, `llm/embeddings.py` | Domain-independent text measurement; no correctness, requirements or difficulty dependency. |
+| Shared relevance | `relevance_contracts.py`, `application/relevance.py`, `mcp/relevance_tools.py`, `llm/decision.py` | Domain-independent local alignment decision; no correctness, requirements or difficulty dependency. |
 | Python relevance adapter and review | `domains/code/relevance.py`, `application/code_relevance.py` | Complete learner-facing rendering and caller-side collection of independent reports. |
 
 ## Shared relevance and domain responsibilities
@@ -33,8 +33,10 @@ All paths below are under `src/edcraft_validator/`.
 author's fixed check catalogue. Its input contains only `author_request` and
 `question_text`. Empty text, extra fields and texts exceeding 200,000 characters
 are rejected; line endings and surrounding whitespace are normalized. The service
-makes one batched embedding request and records exact texts, their input identity,
-model, dimensions, usage, duration and errors. A completed measurement is advisory.
+runs one local Qwen yes/no forward pass and records exact texts, input identity,
+model, raw score, threshold, relevance decision, duration and errors. The model is
+loaded lazily and reused under a process lock. Errors contain no relevance decision.
+A completed assessment is advisory; its score is not a calibrated probability.
 
 The shared service has no domain or MCP dependencies. The Python adapter renders
 all learner-facing question fields except `correct_option`. Changing only the
@@ -47,12 +49,12 @@ reviews copy mutable caller data before asynchronous work.
 its question with `question_sha256`. `check_code_question_requirements` independently
 checks reachable syntax, target and option count and records its own question and
 request. Both use `quality:code`, outside the template catalogue. Neither constructs
-an embedding provider or difficulty judge. `review_code_question_relevance` collects
+a relevance provider or difficulty judge. `review_code_question_relevance` collects
 these results and `RelevanceReport` for evaluation; no check consumes another
 check's report. This refactor does not change authoring dispatch or difficulty policy.
 
 The former combined `assess_code_quality` tool is removed. Its replacement is the
-shared `assess_relevance` measurement plus the two Python checks above; see the
+shared `assess_relevance` decision plus the two Python checks above; see the
 [migration and review protocol](evaluation.md#what-to-report).
 
 ## Model and tool calls

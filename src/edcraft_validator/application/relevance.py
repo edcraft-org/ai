@@ -2,9 +2,9 @@
 
 import time
 
-from edcraft_validator.llm.embeddings import (
-    EmbeddingProviderFactory,
-    measure_similarity,
+from edcraft_validator.llm.decision import (
+    DecisionProviderFactory,
+    measure_relevance,
 )
 from edcraft_validator.relevance_contracts import RelevanceInput, RelevanceReport
 
@@ -12,20 +12,20 @@ from edcraft_validator.relevance_contracts import RelevanceInput, RelevanceRepor
 async def assess_relevance(
     request: RelevanceInput,
     *,
-    embedding_provider_factory: EmbeddingProviderFactory,
-    embedding_timeout_seconds: float = 35,
+    decision_provider_factory: DecisionProviderFactory,
+    relevance_timeout_seconds: float = 35,
 ) -> RelevanceReport:
     request = RelevanceInput.model_validate(request.model_dump())
     started = time.perf_counter()
-    similarity = await measure_similarity(
+    decision = await measure_relevance(
         request.author_request,
         request.question_text,
-        provider_factory=embedding_provider_factory,
-        timeout_seconds=embedding_timeout_seconds,
+        provider_factory=decision_provider_factory,
+        timeout_seconds=relevance_timeout_seconds,
     )
     return RelevanceReport(
-        status="assessed" if similarity.status == "measured" else "error",
+        status="assessed" if decision.status == "assessed" else "error",
         input_sha256=request.sha256,
-        similarity=similarity,
+        decision=decision,
         duration_ms=(time.perf_counter() - started) * 1000,
     )

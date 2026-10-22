@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
-from edcraft_validator.llm.embeddings import SimilarityReport
+from edcraft_validator.llm.decision import DecisionReport
 
 NonemptyText = Annotated[str, StringConstraints(min_length=1, max_length=200_000)]
 
@@ -43,10 +43,10 @@ class RelevanceReport(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
 
     tool: Literal["assess_relevance"] = "assess_relevance"
-    version: Literal["1.0.0"] = "1.0.0"
+    version: Literal["2.0.0"] = "2.0.0"
     advisory: Literal[True] = True
     status: Literal["assessed", "error"]
     generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     input_sha256: str
-    similarity: SimilarityReport
+    decision: DecisionReport
     duration_ms: float = Field(ge=0)

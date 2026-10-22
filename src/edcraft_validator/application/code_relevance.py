@@ -21,7 +21,7 @@ from edcraft_validator.domains.code.relevance import (
     CodeQuestionRequest,
     relevance_input,
 )
-from edcraft_validator.llm.embeddings import EmbeddingProviderFactory
+from edcraft_validator.llm.decision import DecisionProviderFactory
 from edcraft_validator.relevance_contracts import RelevanceReport
 from edcraft_validator.tools.python_execution import PythonExecutionTool
 
@@ -29,7 +29,7 @@ from edcraft_validator.tools.python_execution import PythonExecutionTool
 class CodeRelevanceReview(Record):
     """A caller-side collection, never an overall correctness or relevance pass."""
 
-    version: Literal["4.0.0"] = "4.0.0"
+    version: Literal["5.0.0"] = "5.0.0"
     advisory: Literal[True] = True
     status: Literal["assessed", "error"]
     generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -45,12 +45,12 @@ async def review_code_question_relevance(
     question: CodeDifficultyQuestion,
     request: CodeQuestionRequest,
     *,
-    embedding_provider_factory: EmbeddingProviderFactory,
+    decision_provider_factory: DecisionProviderFactory,
     execution_tool: PythonExecutionTool | None = None,
-    embedding_timeout_seconds: float = 35,
+    relevance_timeout_seconds: float = 35,
     execution_timeout_seconds: float = 2,
 ) -> CodeRelevanceReview:
-    for timeout in (embedding_timeout_seconds, execution_timeout_seconds):
+    for timeout in (relevance_timeout_seconds, execution_timeout_seconds):
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("review timeouts must be finite and positive")
     # Snapshot caller-owned lists and options for the asynchronous review.
@@ -66,8 +66,8 @@ async def review_code_question_relevance(
     requirements = check_code_question_requirements(question, request)
     relevance = await assess_relevance(
         representation,
-        embedding_provider_factory=embedding_provider_factory,
-        embedding_timeout_seconds=embedding_timeout_seconds,
+        decision_provider_factory=decision_provider_factory,
+        relevance_timeout_seconds=relevance_timeout_seconds,
     )
     return CodeRelevanceReview(
         status=relevance.status,

@@ -17,6 +17,9 @@ dependencies = [
     "step-tracer",
 ]
 
+[project.optional-dependencies]
+relevance = ["torch>=2.6,<3", "transformers>=5.0,<6"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.4,<9",
@@ -37,7 +40,7 @@ pythonpath = ["."]
 markers = [
     "openai_live: real OpenAI template-authoring API test, run before a PR",
     "ollama_live: real Ollama template workflow, requires a running local model",
-    "embedding_live: bounded real embedding calls through shared relevance MCP tools",
+    "relevance_live: local Qwen relevance integration, requires downloaded model weights",
 ]
 
 [tool.ruff]

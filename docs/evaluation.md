@@ -128,22 +128,22 @@ unseen accuracy, independent human agreement or learner calibration.
 
 For issue 44, see the [project report](edcraft%20logs.docx),
 Section 6, for relevance checks, model selection and evaluation findings.
-The v4 runner freezes all 12 reserved MCQs and seven versioned control contents,
+The v5 runner freezes all 12 reserved MCQs and seven versioned control contents,
 and collects independent Python correctness, explicit requirements and shared
 relevance reports. The reference and control files are unchanged.
 It neither consumes difficulty reports nor makes generative judge calls.
 Difficulty judgments and quality concerns remain in their separate report.
 The original v1 live review is retained
 as historical evidence. There are no human relevance labels for the reserved set;
-similarity does not establish relevance accuracy.
-The embedding selection in the log compares published online
-benchmarks rather than claiming a new domain evaluation. Model calls remain opt-in.
+the local decision does not establish Python relevance accuracy.
+Earlier embedding selection is historical. Current pilot statistics are below;
+local model integration tests remain opt-in.
 
-Run the frozen review with `uv run python scripts/evaluate_code_relevance.py
---env-file .env --output .artifacts/relevance-v4.jsonl`.
-The new protocol is `code-relevance-evaluation-v4-shared`. Reports contain
-`technical`, `requirements` and `relevance`; embedding details are now under
-`relevance.similarity`. The manifest identifies the renderer, shared tool and
+Run the frozen review with `uv run --extra relevance python scripts/evaluate_code_relevance.py
+--env-file .env --output .artifacts/relevance-v5.jsonl`.
+The new protocol is `code-relevance-evaluation-v5-decision`. Reports contain
+`technical`, `requirements` and `relevance`; local decision details are under
+`relevance.decision`. The manifest identifies the renderer, shared tool and
 review-report versions. Existing evaluation artifacts retain their original schemas.
 
 The former `assess_code_quality` MCP name and the old script name are removed.
@@ -153,11 +153,11 @@ call `assess_relevance` with that object as `request`. Call
 `check_code_question_correctness(question)` and
 `check_code_question_requirements(question, request)` separately when those checks
 are needed. For other domains, supply an original author request and complete
-textual question representation with rendering provenance and any omissions.
+textual question representation.
 The shared service does not infer or enforce domain requirements. All tools reject
 attached difficulty/correctness reports; no check reuses another check's judgment.
 The runner continues to reject `--difficulty-reports`.
-The runner retains errors and usage, flushes completed records and refuses to
+The runner retains errors and scores, flushes completed records and refuses to
 overwrite earlier reviews. It never requests a replacement difficulty judgment.
 It exclusively reserves the JSONL, manifest and summary files before writing any
 of them. A reservation conflict removes only empty files created by that attempt;
@@ -169,7 +169,44 @@ pass and explicit requirements to be satisfied. Controls use their frozen
 expectations, so an expected wrong-answer rejection or missing requirement is not
 a run failure. `mandatory_check_failure_count` counts cases that disagree with
 those expectations, including execution errors and unknown requirement results.
-This run-success check does not turn similarity into a relevance pass threshold.
+Run success records completed assessments and mandatory checks, independently of
+the advisory relevance decision. No relevance labels exist for the reserved set.
+
+### Local relevance pilot (issue 88, 23 October 2026)
+
+On the same 54 [SmartSTEM](https://github.com/AmirZur/smartstem-ai) test pairs, the original Qwen prompt scored 47/54
+(87.0%), versus 39/54 (72.2%) for `text-embedding-3-large`, with separate cutoffs
+selected on 18 development pairs. Qwen made 1 false acceptance and 6 false
+rejections; embeddings made 11 and 4 respectively. Observed median times were
+50.6 ms for warm local Qwen and 547.3 ms for the hosted embedding application
+path, including network/client setup. These are different deployment costs.
+
+For the revised prompt, all previous 24 questions/72 pairs became development
+data. On 12 fresh questions/36 pairs across 11 disjoint families:
+
+| Variant | Correct | Accuracy | Balanced accuracy | False rejection / acceptance |
+| --- | --- | --- | --- | --- |
+| Original prompt and old cutoff | 27/36 | 75.0% | 66.7% | 7 / 2 |
+| Original prompt, recalibrated | 27/36 | 75.0% | 70.8% | 5 / 4 |
+| Revised prompt, recalibrated (default) | 28/36 | 77.8% | 72.9% | 5 / 3 |
+
+The revised prompt recognizes implicitly required methods and partial coverage of
+broad objectives while preserving specific restrictions. Its development-selected
+cutoff is `0.0020295610011089593`; median warm time was 81.5 ms. This is a marginal
+one-pair gain. Embeddings were not rerun on the fresh set. The exact revised
+configuration therefore has no direct embedding comparison on that set.
+
+A floating-point tie-break bug initially reported 30/36 for original
+recalibration. Verification corrected the predeclared nearest-0.5 tie-break using
+exact development counts only after holdout scoring; the table is corrected.
+No prompt or cutoff was chosen from holdout outcomes.
+
+Both pilots are curated chemistry samples with source-labelled positives and
+Codex-curated negatives, without independent expert adjudication of negatives.
+Three pairs share each question; two fresh questions share a parent stem.
+The threshold is provisional, especially outside chemistry and on CPU FP32.
+Neither Python accuracy, explicit combined requests, nor statistical superiority
+is established. Only concise statistics are retained in the repository.
 
 Use the fixed supported requests for the initial live baseline. Scripted regression
 tests cover repairable and repeated failures, unsuitable check plans, invalid

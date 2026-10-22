@@ -4,9 +4,9 @@ import math
 
 from fastmcp import FastMCP
 
-from edcraft_validator.llm.embeddings import (
-    EmbeddingProviderFactory,
-    OpenAIEmbeddingProvider,
+from edcraft_validator.llm.decision import (
+    DecisionProviderFactory,
+    QwenDecisionProvider,
 )
 from edcraft_validator.llm.judging import (
     DEFAULT_JUDGE_TIMEOUT_SECONDS,
@@ -31,14 +31,14 @@ def create_validation_server(
     code_execution_timeout_seconds: float = 2.0,
     difficulty_provider_factory: JudgeProviderFactory | None = None,
     difficulty_judge_timeout_seconds: float = DEFAULT_JUDGE_TIMEOUT_SECONDS,
-    embedding_provider_factory: EmbeddingProviderFactory | None = None,
-    embedding_timeout_seconds: float = 35.0,
+    decision_provider_factory: DecisionProviderFactory | None = None,
+    relevance_timeout_seconds: float = 35.0,
 ) -> FastMCP:
     """Build the centralized server with injectable code-domain dependencies."""
     for timeout in (
         code_execution_timeout_seconds,
         difficulty_judge_timeout_seconds,
-        embedding_timeout_seconds,
+        relevance_timeout_seconds,
     ):
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("tool timeouts must be finite and positive")
@@ -65,9 +65,8 @@ def create_validation_server(
     )
     register_relevance_tools(
         server,
-        embedding_provider_factory=embedding_provider_factory
-        or OpenAIEmbeddingProvider,
-        embedding_timeout_seconds=embedding_timeout_seconds,
+        decision_provider_factory=decision_provider_factory or QwenDecisionProvider,
+        relevance_timeout_seconds=relevance_timeout_seconds,
     )
     return server
 
