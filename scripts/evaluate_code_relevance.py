@@ -15,11 +15,14 @@ from typing import TextIO
 
 from dotenv import load_dotenv
 
-from edcraft_validator.application.code_quality import (
-    assess_code_question_quality,
+from edcraft_validator.application.code_relevance import (
+    review_code_question_relevance,
 )
 from edcraft_validator.domains.code.difficulty import CodeDifficultyQuestion
-from edcraft_validator.domains.code.quality import QualityRequest
+from edcraft_validator.domains.code.relevance import (
+    CODE_RELEVANCE_RENDERING_VERSION,
+    CodeQuestionRequest,
+)
 from edcraft_validator.llm.embeddings import OpenAIEmbeddingProvider
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,7 +70,7 @@ def evaluation_cases(dataset: dict, controls: dict) -> list[dict]:
                 "case_id": raw["question_id"],
                 "group": "held_out",
                 "question": question.model_dump(mode="json"),
-                "request": QualityRequest(
+                "request": CodeQuestionRequest(
                     prompt=f"Create a Python tracing MCQ about {raw['topic']}.",
                     answer_target=raw["answer_target"],
                     num_distractors=len(raw["options"]) - 1,
@@ -95,7 +98,7 @@ def evaluation_cases(dataset: dict, controls: dict) -> list[dict]:
     # Validate the entire frozen plan before making any external calls.
     for case in cases:
         CodeDifficultyQuestion.model_validate(case["question"])
-        QualityRequest.model_validate(case["request"])
+        CodeQuestionRequest.model_validate(case["request"])
     return cases
 
 
@@ -119,9 +122,9 @@ def summary(records: list[dict], requested: int) -> dict:
                     {"case_id": record["case_id"], "fields": mismatches}
                 )
         similarities = [
-            r["report"]["similarity"]["similarity"]
+            r["report"]["relevance"]["similarity"]["similarity"]
             for r in selected
-            if r["report"]["similarity"]["status"] == "measured"
+            if r["report"]["relevance"]["similarity"]["status"] == "measured"
         ]
         groups[group] = {
             "recorded": len(selected),
@@ -135,7 +138,9 @@ def summary(records: list[dict], requested: int) -> dict:
             "control_disagreements": disagreements,
         }
     times = [r["report"]["duration_ms"] for r in records]
-    tokens = [r["report"]["similarity"]["usage"]["input_tokens"] for r in records]
+    tokens = [
+        r["report"]["relevance"]["similarity"]["usage"]["input_tokens"] for r in records
+    ]
     return {
         "requested": requested,
         "recorded": len(records),
@@ -187,7 +192,10 @@ async def evaluate(output: Path) -> dict:
     embedding = OpenAIEmbeddingProvider()
     source_files = sorted((ROOT / "src").rglob("*.py")) + [Path(__file__)]
     manifest = {
-        "protocol": "code-quality-evaluation-v3-independent",
+        "protocol": "code-relevance-evaluation-v4-shared",
+        "rendering_version": CODE_RELEVANCE_RENDERING_VERSION,
+        "relevance_tool_version": "1.0.0",
+        "review_report_version": "4.0.0",
         "created_at": datetime.now(UTC).isoformat(),
         "source_revision": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
@@ -227,15 +235,15 @@ async def evaluate(output: Path) -> dict:
         async def run(case):
             async with semaphore:
                 question = CodeDifficultyQuestion.model_validate(case["question"])
-                report = await assess_code_question_quality(
+                report = await review_code_question_relevance(
                     question,
-                    QualityRequest.model_validate(case["request"]),
+                    CodeQuestionRequest.model_validate(case["request"]),
                     embedding_provider_factory=OpenAIEmbeddingProvider,
                 )
                 findings = []
                 if (
-                    report.similarity.model is not None
-                    and report.similarity.model != embedding.model
+                    report.relevance.similarity.model is not None
+                    and report.relevance.similarity.model != embedding.model
                 ):
                     findings.append("EMBEDDING_MODEL_DRIFT")
                 record = {

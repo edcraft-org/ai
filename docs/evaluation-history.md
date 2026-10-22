@@ -7,11 +7,58 @@ not be treated as its current pass rates.
 Historical records may use `beginner`, `intermediate`, and `advanced`. The current
 labels are `easy`, `medium`, and `hard`.
 
+## Shared relevance service and independent Python checks: 22 October 2026
+
+The shared `assess_relevance` MCP tool replaces the former combined
+`assess_code_quality` name. Python correctness and explicit requirements now have
+separate tools. The evaluator collects their reports under the
+`code-relevance-evaluation-v4-shared` protocol. Existing references, controls and
+historical live records are unchanged. The Python renderer retains the exact v3
+comparison text and excludes the correct-option designation.
+
+Automated verification passed 616 tests, with three opt-in live tests skipped.
+Lint, formatting, dependency-lock, diff-whitespace and source/wheel builds passed.
+Review covered service and adapter dependencies, input rejection, rendering
+identity, independent failure paths, unchanged comparison text and evaluator
+output ownership. Authoring dispatch and difficulty policy were not changed.
+
+The final opt-in MCP integration test passed all four synthetic cases with
+`text-embedding-3-large` and 3,072-dimensional responses:
+
+| Case | Correctness | Explicit requirements | Relevance measurement | Cosine |
+| --- | --- | --- | --- | --- |
+| Python arithmetic | Passed; canonical answer 10 | Satisfied | Completed | 0.493973 |
+| Same question, wrong answer designation | Failed | Satisfied | Completed | 0.493973 |
+| Arithmetic when a loop was required | Passed | Missing | Completed | 0.453291 |
+| Generic triangle-angle text | Not invoked | Not invoked | Completed | 0.499359 |
+
+The run used four embedding requests and 664 input tokens, three Python execution
+requests, zero judge calls and zero SDK retries. Shared relevance triggered no
+execution requests. Exact comparison text, rendering provenance, input hashes,
+response dimensions and usage were checked, and cosine was independently
+recomputed from the saved vectors. Changing only the answer designation changed
+correctness identity but preserved relevance identity and the observed score.
+The generic text case retained its declared omitted-diagram limitation.
+
+Evidence is saved locally in
+`.artifacts/shared-relevance-2026-10-22/live-20261021T183345540367Z/` as manifest,
+tool schemas, reports, calls/vectors and verification JSON. The UTC timestamp
+corresponds to 22 October in Singapore. The source fingerprint, including the live
+test, is `b9199f3d199fe8dce09c6201cc44b8e901e7b15f2bfd802a3c725c7d4e466e52`.
+Reproduce with `RUN_EMBEDDING_LIVE_TESTS=1 uv run pytest -q
+tests/test_relevance_live.py` after supplying the embedding configuration. Each
+run creates a new evidence directory and is capped at four embedding requests.
+
+These are integration and independence checks, not relevance accuracy, model
+ranking or threshold calibration. The generic text case does not implement or
+validate a second question domain. The two authoring-provider live tests were not
+rerun because this change does not alter authoring or difficulty judging.
+
 ## Issue 44 simplification and model selection: 21 October 2026
 
 This section records the historical v2 design. The later v3 design removes its
 difficulty-report reuse to keep assessments independent; see the
-[project log](edcraft%20logs.docx), page 22. The measurements below remain historical.
+[project report](edcraft%20logs.docx), Section 6. The measurements below remain historical.
 
 At the user's request, v2 removes the separate SocLaas quality assessment and
 reuses an already available concrete difficulty report for the exact question.
@@ -19,7 +66,7 @@ Missing evidence stays explicit; the tool never generates a replacement.
 Correctness and explicit requirement checks remain independent of cosine
 similarity and reused opinions. Existing difficulty prompts are unchanged.
 
-The [project log](edcraft%20logs.docx), pages 19–21, evaluates the
+The [project report](edcraft%20logs.docx), Section 6, evaluates the
 vendor-published MTEB results for small, large and ada-002, with current documented
 prices. Large is the provisional default; small remains configurable. This is
 published general benchmark evidence, not a new EdCraft accuracy measurement.

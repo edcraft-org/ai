@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 
 from edcraft_validator.application import code_difficulty
-from scripts import evaluate_code_quality as evaluation
-from tests.test_code_quality import Embeddings
+from scripts import evaluate_code_relevance as evaluation
+from tests.test_code_relevance import Embeddings
 
 
 def test_plan_keeps_held_out_content_fixed_and_reference_labels_hidden():
@@ -76,7 +76,7 @@ async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreem
     manifest = json.loads(output.with_suffix(".manifest.json").read_text())
     assert len(manifest["cases"]) == 19 and manifest["dataset_sha256"]
     assert "judge" not in manifest and manifest["new_judge_calls"] == 0
-    assert manifest["protocol"] == "code-quality-evaluation-v3-independent"
+    assert manifest["protocol"] == "code-relevance-evaluation-v4-shared"
     assert "difficulty_report_sha256" not in manifest
     assert result == json.loads(output.with_suffix(".summary.json").read_text())
     assert evaluation.DATASET.read_bytes() == before
@@ -164,7 +164,9 @@ def test_concurrent_run_cannot_replace_the_winning_manifest(monkeypatch, tmp_pat
     manifest = json.loads(output.with_suffix(".manifest.json").read_text())
     records = [json.loads(line) for line in output.read_text().splitlines()]
     assert manifest["embedding"]["model"] == "first-run"
-    assert {r["report"]["similarity"]["model"] for r in records} == {"first-run"}
+    assert {r["report"]["relevance"]["similarity"]["model"] for r in records} == {
+        "first-run"
+    }
     assert json.loads(output.with_suffix(".summary.json").read_text())["recorded"] == 19
 
 
@@ -197,7 +199,7 @@ async def test_output_collision_preserves_existing_files_and_rolls_back_reservat
 def test_cli_checks_held_out_measurements_and_preserves_expected_control_failures(
     monkeypatch, tmp_path, section, status
 ):
-    original_assess = evaluation.assess_code_question_quality
+    original_assess = evaluation.review_code_question_relevance
     cases = evaluation.evaluation_cases(
         json.loads(evaluation.DATASET.read_text()),
         json.loads(evaluation.CONTROLS.read_text()),
@@ -212,7 +214,7 @@ def test_cli_checks_held_out_measurements_and_preserves_expected_control_failure
 
     output = tmp_path / "review.jsonl"
     monkeypatch.setattr(evaluation, "OpenAIEmbeddingProvider", Embeddings)
-    monkeypatch.setattr(evaluation, "assess_code_question_quality", assess)
+    monkeypatch.setattr(evaluation, "review_code_question_relevance", assess)
     monkeypatch.setattr(sys, "argv", ["review", "--output", str(output)])
     assert evaluation.main() == (0 if section is None else 2)
     result = json.loads(output.with_suffix(".summary.json").read_text())

@@ -190,15 +190,24 @@ one closest difficulty label, reasons, model usage and comparison in a single
 assessment call. Failed checks return errors without correction or reassessment.
 Difficulty checks use SocLaas only, with no provider fallback.
 
-The explicitly invoked `assess_code_quality` MCP tool
-separately records correctness, explicit requirements and embedding relevance of
-a complete rendered MCQ. It accepts only the question and author request, never
-consumes another check's report, and makes no generative judge call. Difficulty
-judgments and their quality concerns remain in their own report. Similarity has
-no universal pass threshold. A frozen review runner covers
-the 12 reserved questions and seven engineering controls. The provisional embedding
-default is `text-embedding-3-large`; see the
-[project log](docs/edcraft%20logs.docx), pages 19–22.
+The explicitly invoked `assess_relevance` MCP tool measures embedding relatedness
+between an author request and a complete textual question representation from any
+domain. It makes one batched embedding request and records the exact text,
+rendering version, representation limitations, input identity, model and usage.
+It performs no Python execution, requirement checking or generative judging, and
+consumes no other assessment's report. Similarity has no universal pass threshold
+or established accuracy across domains. The provisional default is
+`text-embedding-3-large`.
+
+Python callers use `domains/code/relevance.py` to render code, exact inputs,
+wording, target and all options while excluding the correct-option designation.
+The separate `check_code_question_correctness` and
+`check_code_question_requirements` MCP tools provide execution-backed answer
+checks and explicit syntax/target/count checks respectively. The evaluation runner
+collects these independent results alongside shared relevance evidence for the
+12 reserved questions and seven engineering controls. Difficulty judgments remain
+separate. See [evaluation and migration](docs/evaluation.md#what-to-report) and the
+[project report](docs/edcraft%20logs.docx), Section 6, for the earlier experiments.
 
 ## Tests
 

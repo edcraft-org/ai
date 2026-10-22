@@ -9,12 +9,13 @@ from edcraft_validator.llm.embeddings import (
     OpenAIEmbeddingProvider,
 )
 from edcraft_validator.llm.judging import JudgeProviderFactory
+from edcraft_validator.mcp.code_question_tools import register_code_question_tools
 from edcraft_validator.mcp.code_tools import register_code_validation_tools
 from edcraft_validator.mcp.difficulty_tools import (
     configured_difficulty_provider,
     register_difficulty_tools,
 )
-from edcraft_validator.mcp.quality_tools import register_quality_tools
+from edcraft_validator.mcp.relevance_tools import register_relevance_tools
 from edcraft_validator.tools.python_execution import (
     LocalPythonTool,
     PythonExecutionTool,
@@ -54,12 +55,15 @@ def create_validation_server(
         provider_factory=difficulty_provider_factory or configured_difficulty_provider,
         judge_timeout_seconds=difficulty_judge_timeout_seconds,
     )
-    register_quality_tools(
+    register_code_question_tools(
+        server,
+        execution_tool=execution_tool,
+        execution_timeout_seconds=code_execution_timeout_seconds,
+    )
+    register_relevance_tools(
         server,
         embedding_provider_factory=embedding_provider_factory
         or OpenAIEmbeddingProvider,
-        execution_tool=execution_tool,
-        execution_timeout_seconds=code_execution_timeout_seconds,
         embedding_timeout_seconds=embedding_timeout_seconds,
     )
     return server

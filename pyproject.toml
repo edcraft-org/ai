@@ -37,6 +37,7 @@ pythonpath = ["."]
 markers = [
     "openai_live: real OpenAI template-authoring API test, run before a PR",
     "ollama_live: real Ollama template workflow, requires a running local model",
+    "embedding_live: bounded real embedding calls through shared relevance MCP tools",
 ]
 
 [tool.ruff]
