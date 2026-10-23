@@ -3,41 +3,41 @@
 from fastmcp import FastMCP
 
 from edcraft_validator.application.relevance import assess_relevance
-from edcraft_validator.llm.embeddings import EmbeddingProviderFactory
+from edcraft_validator.llm.decision import DecisionProviderFactory
 from edcraft_validator.relevance_contracts import RelevanceInput, RelevanceReport
 
 
 def register_relevance_tools(
     server: FastMCP,
     *,
-    embedding_provider_factory: EmbeddingProviderFactory,
-    embedding_timeout_seconds: float,
+    decision_provider_factory: DecisionProviderFactory,
+    relevance_timeout_seconds: float,
 ) -> None:
     @server.tool(
         name="assess_relevance",
-        version="1.0.0",
+        version="2.0.0",
         tags={"capability:relevance"},
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
             "idempotentHint": False,
-            "openWorldHint": True,
+            "openWorldHint": False,
         },
         description=(
-            "Domain-independent embedding relatedness between an original author "
-            "request and a complete textual question representation. Supply all "
-            "learner-facing question text. Makes one batched embedding request, no "
-            "generative judge call, no code execution and no requirement checks. "
-            "Consumes no correctness or difficulty evidence. Records exact text, "
-            "input identity, model, dimensions, usage and latency. Assessed means "
-            "measurement completed, never a relevance or quality pass. No pass "
-            "threshold or calibrated accuracy is established for any domain. "
-            "Sends the supplied texts to the configured provider and may incur cost."
+            "Assess semantic alignment between an original author request and a "
+            "complete textual question, using local Qwen3-Reranker-0.6B. Supply "
+            "all learner-facing text. Returns an advisory yes/no decision, raw "
+            "yes/no score and pilot-derived threshold. The score is not a "
+            "calibrated probability. No embedding API, text generation, code "
+            "execution or difficulty judge is used. Consumes no other assessment "
+            "reports. Errors have no relevance decision. Model files must already "
+            "be downloaded; relevance inputs remain local. Pilot chemistry "
+            "results do not establish accuracy in every domain."
         ),
     )
     async def relevance(request: RelevanceInput) -> RelevanceReport:
         return await assess_relevance(
             request,
-            embedding_provider_factory=embedding_provider_factory,
-            embedding_timeout_seconds=embedding_timeout_seconds,
+            decision_provider_factory=decision_provider_factory,
+            relevance_timeout_seconds=relevance_timeout_seconds,
         )

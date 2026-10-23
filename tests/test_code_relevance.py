@@ -1,9 +1,6 @@
 """Quality remains advisory even for similar, malformed or incorrect questions."""
 
-import asyncio
 import json
-import threading
-from types import SimpleNamespace
 
 import pytest
 from fastmcp import Client
@@ -22,30 +19,23 @@ from edcraft_validator.domains.code.relevance import (
     relevance_input,
     rendered_question,
 )
-from edcraft_validator.llm.embeddings import (
-    OpenAIEmbeddingProvider,
-    cosine_similarity,
-    measure_similarity,
-)
-from edcraft_validator.llm.usage import TokenUsage
 from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.tools.python_execution import ExecutionResult
 from tests.test_difficulty_tool import Provider, question
 
 
-class Embeddings:
-    provider, model, model_version = "fake", "embed-test", "fixed-v1"
+class Decisions:
+    provider, model = "fake", "decision-test"
 
-    def __init__(self, vectors=None):
-        self.vectors = vectors if vectors is not None else [[1.0, 0.0], [1.0, 0.0]]
-        self.last_usage = TokenUsage(input_tokens=40, output_tokens=0)
+    def __init__(self, value=1.0):
+        self.value = value
         self.texts = None
 
-    def embed(self, texts):
-        self.texts = texts
-        if isinstance(self.vectors, Exception):
-            raise self.vectors
-        return self.vectors
+    def score(self, request_text, question_text):
+        self.texts = [request_text, question_text]
+        if isinstance(self.value, Exception):
+            raise self.value
+        return self.value
 
 
 class Executor:
@@ -58,42 +48,41 @@ class Executor:
         return [self.result]
 
 
-async def assess(*, item=None, request=None, embeddings=None, **kwargs):
+async def assess(*, item=None, request=None, decisions=None, **kwargs):
     return await review_code_question_relevance(
         item or question(),
         request or CodeQuestionRequest(prompt="Trace arithmetic."),
-        embedding_provider_factory=lambda: embeddings or Embeddings(),
+        decision_provider_factory=lambda: decisions or Decisions(),
         execution_tool=Executor(),
         **kwargs,
     )
 
 
 async def test_full_content_and_independent_evidence_are_explicit():
-    embeddings = Embeddings()
-    report = await assess(embeddings=embeddings)
+    decisions = Decisions()
+    report = await assess(decisions=decisions)
     data = json.loads(report.model_dump_json())
     assert report.status == "assessed" and report.advisory
     assert report.technical.status == "passed"
-    assert report.relevance.similarity.similarity == 1
-    assert report.relevance.similarity.usage.input_tokens == 40
-    assert report.relevance.similarity.duration_ms > 0
-    assert data["version"] == "4.0.0"
+    assert report.relevance.decision.score == 1
+    assert report.relevance.decision.duration_ms > 0
+    assert data["version"] == "5.0.0"
     assert "difficulty_quality" not in data and "quality_concerns" not in data
     assert "judge" not in data and "relevance" in data
     assert "quality_score" not in data
-    embedded = json.loads(embeddings.texts[1])
-    assert embedded == question().model_dump(mode="json", exclude={"correct_option"})
-    assert embeddings.texts == [
-        report.relevance.similarity.request_text,
-        report.relevance.similarity.question_text,
+    rendered = json.loads(decisions.texts[1])
+    assert rendered == question().model_dump(mode="json", exclude={"correct_option"})
+    assert decisions.texts == [
+        report.relevance.decision.request_text,
+        report.relevance.decision.question_text,
     ]
 
 
-async def test_application_rejects_difficulty_report_input_without_embedding():
-    embeddings = Embeddings()
+async def test_application_rejects_difficulty_report_input_without_decision():
+    decisions = Decisions()
     with pytest.raises(TypeError, match="difficulty_report"):
-        await assess(embeddings=embeddings, difficulty_report={"status": "error"})
-    assert embeddings.texts is None
+        await assess(decisions=decisions, difficulty_report={"status": "error"})
+    assert decisions.texts is None
 
 
 async def test_report_rejects_attached_difficulty_evidence():
@@ -104,7 +93,7 @@ async def test_report_rejects_attached_difficulty_evidence():
         CodeRelevanceReview.model_validate_json(json.dumps(data))
 
 
-async def test_perfect_similarity_does_not_override_failures():
+async def test_positive_decision_does_not_override_failures():
     item = question().model_copy(update={"correct_option": "A"})
     request = CodeQuestionRequest(
         prompt="Trace nested loops.",
@@ -125,7 +114,7 @@ async def test_perfect_similarity_does_not_override_failures():
         "ANSWER_TARGET_MISMATCH",
         "DISTRACTOR_COUNT_MISMATCH",
     }
-    assert report.relevance.similarity.similarity == 1
+    assert report.relevance.decision.score == 1
 
 
 def test_keyword_and_unreachable_helper_cannot_satisfy_syntax_requirement():
@@ -193,38 +182,6 @@ def test_counts_use_trace_summary_instead_of_return_value(target):
     assert result.status == "passed" and result.canonical_answer == 10
 
 
-@pytest.mark.parametrize(
-    "vectors",
-    [
-        [],
-        [[1]],
-        [[1], [1, 2]],
-        [[0], [1]],
-        [[float("nan")], [1]],
-        [[float("inf")], [1]],
-        [[True], [1]],
-    ],
-)
-async def test_bad_embeddings_keep_technical_results(vectors):
-    report = await assess(embeddings=Embeddings(vectors))
-    assert report.status == "error"
-    assert report.relevance.similarity.error_code == "EMBEDDING_FAILED"
-    assert report.relevance.similarity.similarity is None
-    assert report.technical.status == "passed"
-
-
-@pytest.mark.parametrize(
-    "vectors,expected",
-    [
-        ([[1, 0], [0, 1]], 0),
-        ([[1], [-1]], -1),
-        ([[1e308, 1e308], [1e308, 1e308]], 1),
-    ],
-)
-def test_cosine_range_and_numerical_stability(vectors, expected):
-    assert cosine_similarity(vectors) == pytest.approx(expected)
-
-
 @pytest.mark.parametrize("difficulty_error", [False, True])
 async def test_mcp_difficulty_success_or_failure_cannot_affect_relevance(
     difficulty_error,
@@ -235,7 +192,7 @@ async def test_mcp_difficulty_success_or_failure_cannot_affect_relevance(
     executor = Executor()
     server = create_validation_server(
         difficulty_provider_factory=lambda: provider,
-        embedding_provider_factory=Embeddings,
+        decision_provider_factory=Decisions,
         code_execution_tool=executor,
     )
     async with Client(server) as client:
@@ -258,7 +215,7 @@ async def test_mcp_difficulty_success_or_failure_cannot_affect_relevance(
         assert difficulty.structured_content["judge"]["assessment"]["quality_concerns"]
     data = relevance.structured_content
     assert data["status"] == "assessed" and executor.calls == 0
-    assert data["similarity"]["usage"]["input_tokens"] == 40
+    assert data["decision"]["relevant"] is True
     assert "difficulty_quality" not in data and "judge" not in data
     assert "PRIVATE REMOTE ERROR" not in json.dumps(data)
 
@@ -270,52 +227,13 @@ async def test_configuration_errors_are_explicit_and_do_not_leak_secrets():
     report = await review_code_question_relevance(
         question(),
         CodeQuestionRequest(prompt="Arithmetic"),
-        embedding_provider_factory=broken,
+        decision_provider_factory=broken,
         execution_tool=Executor(),
     )
     assert report.status == "error"
     assert report.technical.status == "passed"
-    assert report.relevance.similarity.error_code == "EMBEDDING_CONFIGURATION_ERROR"
+    assert report.relevance.decision.error_code == "RELEVANCE_FAILED"
     assert "PRIVATE TOKEN" not in report.model_dump_json()
-
-
-async def test_embedding_deadline_returns_immutable_usage_snapshot():
-    started, release, finished = threading.Event(), threading.Event(), threading.Event()
-
-    class Slow(Embeddings):
-        def embed(self, texts):
-            started.set()
-            try:
-                release.wait(5)
-                return super().embed(texts)
-            finally:
-                finished.set()
-
-    try:
-        result = await measure_similarity(
-            "\r\nRequest\r", "Question\r\n", provider_factory=Slow, timeout_seconds=0.1
-        )
-        assert started.is_set() and not finished.is_set()
-        assert result.error_code == "EMBEDDING_TIMEOUT"
-        assert result.usage.input_tokens is None
-        assert result.request_text == "Request" and result.question_text == "Question"
-        snapshot = result.model_dump_json()
-    finally:
-        release.set()
-        assert await asyncio.to_thread(finished.wait, 2)
-    assert result.model_dump_json() == snapshot
-
-
-async def test_missing_embedding_usage_stays_unknown_without_losing_similarity():
-    class Unmetered(Embeddings):
-        def embed(self, texts):
-            result = super().embed(texts)
-            del self.last_usage
-            return result
-
-    result = await measure_similarity("request", "question", provider_factory=Unmetered)
-    assert result.status == "measured" and result.similarity == 1
-    assert result.usage.input_tokens is None
 
 
 async def test_three_options_are_assessed_without_difficulty_evidence():
@@ -323,55 +241,27 @@ async def test_three_options_are_assessed_without_difficulty_evidence():
     item.options.pop()
     result = await assess(item=item)
     assert result.status == "assessed" and result.technical.status == "passed"
-    assert len(json.loads(result.relevance.similarity.question_text)["options"]) == 3
+    assert len(json.loads(result.relevance.decision.question_text)["options"]) == 3
 
 
 @pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf")])
 async def test_invalid_deadlines_fail_before_provider_calls(timeout):
-    embeddings = Embeddings()
+    decisions = Decisions()
     with pytest.raises(ValueError, match="finite and positive"):
-        await assess(embeddings=embeddings, embedding_timeout_seconds=timeout)
-    assert embeddings.texts is None
+        await assess(decisions=decisions, relevance_timeout_seconds=timeout)
+    assert decisions.texts is None
     with pytest.raises(ValueError, match="finite and positive"):
-        create_validation_server(embedding_timeout_seconds=timeout)
-
-
-def test_embedding_adapter_orders_indices_and_preserves_usage_on_bad_response():
-    response = SimpleNamespace(
-        model="embed-test",
-        usage=SimpleNamespace(prompt_tokens=44),
-        data=[
-            SimpleNamespace(index=1, embedding=[0, 1]),
-            SimpleNamespace(index=0, embedding=[1, 0]),
-        ],
-    )
-    calls = []
-
-    def create(**kwargs):
-        calls.append(kwargs)
-        return response
-
-    provider = OpenAIEmbeddingProvider(
-        model="embed-test",
-        client=SimpleNamespace(embeddings=SimpleNamespace(create=create)),
-    )
-    assert provider.embed(["request", "question"]) == [[1, 0], [0, 1]]
-    assert provider.last_usage.input_tokens == 44
-    assert calls[0]["input"] == ["request", "question"]
-    response.data[1].index = 1
-    with pytest.raises(ValueError, match="indices"):
-        provider.embed(["request", "question"])
-    assert provider.last_usage.input_tokens == 44
+        create_validation_server(relevance_timeout_seconds=timeout)
 
 
 async def test_mcp_tool_has_full_evidence_and_is_not_an_authoring_check():
     def forbidden():
         pytest.fail("Relevance assessment must not construct a difficulty judge")
 
-    embeddings, executor = Embeddings(), Executor()
+    decisions, executor = Decisions(), Executor()
     server = create_validation_server(
         difficulty_provider_factory=forbidden,
-        embedding_provider_factory=lambda: embeddings,
+        decision_provider_factory=lambda: decisions,
         code_execution_tool=executor,
     )
     async with Client(server) as client:
@@ -388,12 +278,12 @@ async def test_mcp_tool_has_full_evidence_and_is_not_an_authoring_check():
         ).model_dump(mode="json")
         result = await client.call_tool("assess_relevance", {"request": payload})
         assert result.structured_content["status"] == "assessed"
-        assert result.structured_content["version"] == "1.0.0"
+        assert result.structured_content["version"] == "2.0.0"
         assert "technical" not in result.structured_content
         assert executor.calls == 0
         assert "difficulty_quality" not in result.structured_content
         assert "judge" not in result.structured_content
-        embeddings.texts = None
+        decisions.texts = None
         executions = executor.calls
         with pytest.raises(ToolError):
             await client.call_tool(
@@ -403,7 +293,7 @@ async def test_mcp_tool_has_full_evidence_and_is_not_an_authoring_check():
                     "difficulty_report": {"status": "error"},
                 },
             )
-        assert embeddings.texts is None and executor.calls == executions
+        assert decisions.texts is None and executor.calls == executions
         with pytest.raises(ToolError):
             await client.call_tool(
                 "assess_relevance",
@@ -413,7 +303,7 @@ async def test_mcp_tool_has_full_evidence_and_is_not_an_authoring_check():
             )
         with pytest.raises(ToolError, match="Unknown tool"):
             await client.call_tool("assess_code_quality", {})
-        assert embeddings.texts is None and executor.calls == 0
+        assert decisions.texts is None and executor.calls == 0
 
 
 def test_rendering_preserves_all_learner_content_and_omits_the_designation():
@@ -423,10 +313,3 @@ def test_rendering_preserves_all_learner_content_and_omits_the_designation():
     assert content["code"] == item.code
     assert len(content["options"]) == 3
     assert "correct_option" not in content
-
-
-def test_default_and_override_embedding_models(monkeypatch):
-    monkeypatch.delenv("EDCRAFT_EMBEDDING_MODEL", raising=False)
-    assert OpenAIEmbeddingProvider(client=object()).model == "text-embedding-3-large"
-    monkeypatch.setenv("EDCRAFT_EMBEDDING_MODEL", "text-embedding-3-small")
-    assert OpenAIEmbeddingProvider(client=object()).model == "text-embedding-3-small"

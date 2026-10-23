@@ -11,7 +11,7 @@ import pytest
 
 from edcraft_validator.application import code_difficulty
 from scripts import evaluate_code_relevance as evaluation
-from tests.test_code_relevance import Embeddings
+from tests.test_code_relevance import Decisions
 
 
 def test_plan_keeps_held_out_content_fixed_and_reference_labels_hidden():
@@ -48,20 +48,20 @@ def test_plan_keeps_held_out_content_fixed_and_reference_labels_hidden():
 async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreement(
     monkeypatch, tmp_path
 ):
-    class PartialEmbeddings(Embeddings):
+    class PartialDecisions(Decisions):
         calls = 0
 
-        def embed(self, texts):
+        def score(self, request_text, question_text):
             type(self).calls += 1
             if self.calls == 1:
                 raise RuntimeError("PRIVATE REMOTE ERROR")
-            return super().embed(texts)
+            return super().score(request_text, question_text)
 
     def forbidden(*args, **kwargs):
         pytest.fail("Relevance evaluation must not start another judge call")
 
     monkeypatch.setattr(code_difficulty, "run_judge", forbidden)
-    monkeypatch.setattr(evaluation, "OpenAIEmbeddingProvider", PartialEmbeddings)
+    monkeypatch.setattr(evaluation, "QwenDecisionProvider", PartialDecisions)
     before = evaluation.DATASET.read_bytes()
     output = tmp_path / "review.jsonl"
     result = await evaluation.evaluate(output)
@@ -79,7 +79,7 @@ async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreem
         json.loads(before), json.loads(evaluation.CONTROLS.read_text())
     )
     assert "judge" not in manifest and manifest["new_judge_calls"] == 0
-    assert manifest["protocol"] == "code-relevance-evaluation-v4-shared"
+    assert manifest["protocol"] == "code-relevance-evaluation-v5-decision"
     assert "difficulty_report_sha256" not in manifest
     assert result == json.loads(output.with_suffix(".summary.json").read_text())
     assert evaluation.DATASET.read_bytes() == before
@@ -125,7 +125,7 @@ def test_removed_difficulty_report_cli_option_fails_before_evaluation(
 def test_empty_summary_counts_all_requested_cases_as_unresolved():
     result = evaluation.summary([], 19)
     assert result["unresolved"] == 19 and result["recorded"] == 0
-    assert result["groups"]["held_out"]["similarity_range"] is None
+    assert result["groups"]["held_out"]["score_range"] is None
     assert result["median_duration_ms"] is None
 
 
@@ -136,7 +136,7 @@ def test_concurrent_run_cannot_replace_the_winning_manifest(monkeypatch, tmp_pat
     output = tmp_path / "review.jsonl"
     original_open = Path.open
 
-    class RacingEmbeddings(Embeddings):
+    class RacingDecisions(Decisions):
         def __init__(self):
             super().__init__()
             self.model = local.name
@@ -156,7 +156,7 @@ def test_concurrent_run_cannot_replace_the_winning_manifest(monkeypatch, tmp_pat
         local.name = name
         return asyncio.run(evaluation.evaluate(output))
 
-    monkeypatch.setattr(evaluation, "OpenAIEmbeddingProvider", RacingEmbeddings)
+    monkeypatch.setattr(evaluation, "QwenDecisionProvider", RacingDecisions)
     monkeypatch.setattr(Path, "open", observed_open)
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(invoke, "first-run")
@@ -166,8 +166,8 @@ def test_concurrent_run_cannot_replace_the_winning_manifest(monkeypatch, tmp_pat
         assert first.result(timeout=20)["recorded"] == 19
     manifest = json.loads(output.with_suffix(".manifest.json").read_text())
     records = [json.loads(line) for line in output.read_text().splitlines()]
-    assert manifest["embedding"]["model"] == "first-run"
-    assert {r["report"]["relevance"]["similarity"]["model"] for r in records} == {
+    assert manifest["decision"]["model"] == "first-run"
+    assert {r["report"]["relevance"]["decision"]["model"] for r in records} == {
         "first-run"
     }
     assert json.loads(output.with_suffix(".summary.json").read_text())["recorded"] == 19
@@ -182,7 +182,7 @@ async def test_output_collision_preserves_existing_files_and_rolls_back_reservat
     output = tmp_path / "review.jsonl"
     existing = output.with_suffix(occupied_suffix)
     existing.write_bytes(b"prior evaluation evidence\n")
-    monkeypatch.setattr(evaluation, "OpenAIEmbeddingProvider", Embeddings)
+    monkeypatch.setattr(evaluation, "QwenDecisionProvider", Decisions)
     with pytest.raises(FileExistsError):
         await evaluation.evaluate(output)
     assert list(tmp_path.iterdir()) == [existing]
@@ -216,7 +216,7 @@ def test_cli_checks_held_out_measurements_and_preserves_expected_control_failure
         return report
 
     output = tmp_path / "review.jsonl"
-    monkeypatch.setattr(evaluation, "OpenAIEmbeddingProvider", Embeddings)
+    monkeypatch.setattr(evaluation, "QwenDecisionProvider", Decisions)
     monkeypatch.setattr(evaluation, "review_code_question_relevance", assess)
     monkeypatch.setattr(sys, "argv", ["review", "--output", str(output)])
     assert evaluation.main() == (0 if section is None else 2)

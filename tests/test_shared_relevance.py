@@ -22,23 +22,23 @@ from edcraft_validator.domains.code.relevance import (
 )
 from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.relevance_contracts import RelevanceInput, RelevanceReport
-from tests.test_code_relevance import Embeddings, Executor
+from tests.test_code_relevance import Decisions, Executor
 from tests.test_difficulty_tool import question
 
 
 async def test_shared_service_preserves_non_python_text():
-    embeddings = Embeddings()
+    decisions = Decisions()
     request = RelevanceInput(
         author_request="Create a question about triangle angles.",
         question_text="Two angles are 50 and 60 degrees. Find the third angle.",
     )
     report = await assess_relevance(
-        request, embedding_provider_factory=lambda: embeddings
+        request, decision_provider_factory=lambda: decisions
     )
     assert report.status == "assessed" and report.advisory
     assert report.input_sha256 == request.sha256
-    assert embeddings.texts == [request.author_request, request.question_text]
-    assert report.similarity.dimensions == 2
+    assert decisions.texts == [request.author_request, request.question_text]
+    assert report.decision.relevant is True
     assert not {"technical", "requirements", "judge", "difficulty"} & set(
         report.model_dump()
     )
@@ -90,7 +90,7 @@ async def test_invalid_shared_input_fails_before_provider_creation(change):
         invalid = RelevanceInput.model_validate(
             {"author_request": "request", "question_text": "question"} | change
         )
-        await assess_relevance(invalid, embedding_provider_factory=forbidden)
+        await assess_relevance(invalid, decision_provider_factory=forbidden)
 
 
 async def test_service_revalidates_mutated_typed_input_before_provider_creation():
@@ -100,7 +100,7 @@ async def test_service_revalidates_mutated_typed_input_before_provider_creation(
     request = RelevanceInput(author_request="request", question_text="question")
     request.question_text = " "
     with pytest.raises(ValueError):
-        await assess_relevance(request, embedding_provider_factory=forbidden)
+        await assess_relevance(request, decision_provider_factory=forbidden)
 
 
 @pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf")])
@@ -111,15 +111,15 @@ async def test_invalid_shared_timeout_fails_before_provider_creation(timeout):
     with pytest.raises(ValueError, match="finite and positive"):
         await assess_relevance(
             RelevanceInput(author_request="request", question_text="question"),
-            embedding_provider_factory=forbidden,
-            embedding_timeout_seconds=timeout,
+            decision_provider_factory=forbidden,
+            relevance_timeout_seconds=timeout,
         )
 
 
 async def test_shared_report_cannot_acquire_another_checks_evidence():
     report = await assess_relevance(
         RelevanceInput(author_request="request", question_text="question"),
-        embedding_provider_factory=Embeddings,
+        decision_provider_factory=Decisions,
     )
     for field in ("technical", "requirements", "difficulty_report", "judge"):
         with pytest.raises(ValueError, match="extra_forbidden"):
@@ -131,12 +131,12 @@ async def test_shared_report_cannot_acquire_another_checks_evidence():
 async def test_caller_mutation_cannot_change_in_flight_identity_or_representation():
     started, release, finished = threading.Event(), threading.Event(), threading.Event()
 
-    class Delayed(Embeddings):
-        def embed(self, texts):
+    class Delayed(Decisions):
+        def score(self, request_text, question_text):
             started.set()
             try:
                 assert release.wait(5)
-                return super().embed(texts)
+                return super().score(request_text, question_text)
             finally:
                 finished.set()
 
@@ -146,7 +146,7 @@ async def test_caller_mutation_cannot_change_in_flight_identity_or_representatio
     )
     identity = request.sha256
     task = asyncio.create_task(
-        assess_relevance(request, embedding_provider_factory=Delayed)
+        assess_relevance(request, decision_provider_factory=Delayed)
     )
     try:
         assert await asyncio.to_thread(started.wait, 2)
@@ -158,7 +158,7 @@ async def test_caller_mutation_cannot_change_in_flight_identity_or_representatio
         assert await asyncio.to_thread(finished.wait, 2)
         await task
     assert report.input_sha256 == identity
-    assert report.similarity.question_text == "original"
+    assert report.decision.question_text == "original"
 
 
 async def test_each_mcp_check_runs_without_calling_the_other_services():
@@ -168,7 +168,7 @@ async def test_each_mcp_check_runs_without_calling_the_other_services():
     executor = Executor()
     server = create_validation_server(
         difficulty_provider_factory=forbidden,
-        embedding_provider_factory=forbidden,
+        decision_provider_factory=forbidden,
         code_execution_tool=executor,
     )
     item = question().model_copy(update={"correct_option": "A"})
@@ -210,7 +210,7 @@ async def test_shared_mcp_works_even_when_python_execution_is_unavailable():
             pytest.fail("Shared relevance must not execute Python")
 
     server = create_validation_server(
-        code_execution_tool=ForbiddenExecutor(), embedding_provider_factory=Embeddings
+        code_execution_tool=ForbiddenExecutor(), decision_provider_factory=Decisions
     )
     async with Client(server) as client:
         result = await client.call_tool(

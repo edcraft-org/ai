@@ -193,14 +193,34 @@ one closest difficulty label, reasons, model usage and comparison in a single
 assessment call. Failed checks return errors without correction or reassessment.
 Difficulty checks use SocLaas only, with no provider fallback.
 
-The explicitly invoked `assess_relevance` MCP tool measures embedding relatedness
-between an author request and a complete textual question representation from any
-domain. It makes one batched embedding request and records the exact text,
-rendering version, representation limitations, input identity, model and usage.
-It performs no Python execution, requirement checking or generative judging, and
-consumes no other assessment's report. Similarity has no universal pass threshold
-or established accuracy across domains. The provisional default is
-`text-embedding-3-large`.
+The explicitly invoked `assess_relevance` MCP tool uses local
+`Qwen/Qwen3-Reranker-0.6B` to assess whether a question exercises an author request.
+It returns an advisory `decision.relevant`, raw `decision.score`, and threshold
+(`0.0020295610011089593`). The score is a yes/no token score, not a calibrated
+probability. No embedding API or generated answer is used. Correctness,
+requirements and difficulty remain separate checks.
+
+Install the local inference extra and download weights once:
+
+```bash
+uv sync --locked --extra relevance
+uv run --extra relevance hf download Qwen/Qwen3-Reranker-0.6B
+```
+
+Inference reads existing local files and sends no question text outside the
+process. Set `EDCRAFT_RELEVANCE_MODEL_PATH` to a downloaded copy of that model,
+or leave it unset to use the Hugging Face cache. Weights are loaded lazily once
+per process and reused; MPS/CUDA use FP16, with FP32 CPU fallback. Allow roughly
+3 GB of memory for the model and inference. Inputs over 4,096 tokens are rejected
+rather than truncated. Missing dependencies/weights and inference timeouts return
+errors with no relevance decision. The default application deadline is 35 seconds;
+a timeout does not stop an already running local inference thread.
+
+This replaces the v1 cosine report: relevance reports/tool definitions are v2,
+`similarity` becomes `decision`, and embedding dimensions/usage are removed.
+Injected callers now use `decision_provider_factory` and
+`relevance_timeout_seconds`. The cutoff comes from a small chemistry pilot;
+Python accuracy and combined-request behavior remain unvalidated.
 
 Python callers use `domains/code/relevance.py` to render code, exact inputs,
 wording, target and all options while excluding the correct-option designation.

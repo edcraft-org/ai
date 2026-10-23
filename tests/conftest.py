@@ -8,7 +8,7 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     for marker, variable in (
         ("openai_live", "RUN_OPENAI_LIVE_TESTS"),
         ("ollama_live", "RUN_OLLAMA_LIVE_TESTS"),
-        ("embedding_live", "RUN_EMBEDDING_LIVE_TESTS"),
+        ("relevance_live", "RUN_RELEVANCE_LIVE_TESTS"),
     ):
         if os.getenv(variable) != "1":
             for item in items:
