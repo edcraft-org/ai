@@ -1,12 +1,12 @@
 """Intermediate values shared by the ordered code-domain checks."""
 
-import itertools
 from dataclasses import dataclass, field
 from typing import Any
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.code_types import ParameterValue
 from edcraft_validator.domains.code.safe_expressions import SafeExpression
+from edcraft_validator.mcp.code_checks.property_checks import boundary_examples
 from edcraft_validator.tools.python_execution import ExecutionResult
 
 
@@ -23,7 +23,7 @@ class CodeValidationContext:
     template: CodeTemplateCandidate
     num_distractors: int | None = None
     names: tuple[str, ...] = field(init=False)
-    inputs_cases: list[dict[str, ParameterValue]] = field(init=False)
+    inputs_cases: list[dict[str, ParameterValue]] = field(default_factory=list)
     proposed_answer: SafeExpression | None = None
     candidates: list[DistractorCandidate] = field(default_factory=list)
     proposed_answers: list[Any] = field(default_factory=list)
@@ -35,12 +35,7 @@ class CodeValidationContext:
         # Checks may replace recipes; caller-owned candidates remain untouched.
         self.template = self.template.model_copy(deep=True)
         self.names = tuple(parameter.name for parameter in self.template.parameters)
-        self.inputs_cases = [
-            dict(zip(self.names, values, strict=True))
-            for values in itertools.product(
-                *(parameter.values for parameter in self.template.parameters)
-            )
-        ]
+        self.inputs_cases = boundary_examples(self.template)
         self.eligible_indices = list(range(len(self.inputs_cases)))
 
     @property

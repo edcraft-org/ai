@@ -1,8 +1,5 @@
 """Code-domain implementation of the generic domain contract."""
 
-import itertools
-import json
-
 from pydantic import BaseModel
 
 from edcraft_validator.domains.code.candidate_builder import build_code_candidate
@@ -14,7 +11,6 @@ from edcraft_validator.domains.code.code_schemas import (
     DistractorRecipe,
     TemplateValidationSummary,
     ValidatedCodeTemplate,
-    ValidatedTemplateCase,
 )
 from edcraft_validator.domains.code.prompt_builder import (
     build_code_generation_request,
@@ -107,41 +103,47 @@ class CodeDomain:
             raise ValueError(
                 "Missing execution-derived canonical answers and distractors"
             )
-        cases = [
-            ValidatedTemplateCase(inputs=item["inputs"], answer=item["answer"])
-            for item in semantic.details["canonical_answers"]
+        saved_evidence = [
+            ValidationEvidence(
+                check=item.tool,
+                status="passed",
+                duration_ms=item.duration_ms,
+                issues=[finding.model_dump() for finding in item.findings],
+                details={
+                    "tool_version": item.version,
+                    **(item.details if item.tool == TEMPLATE_DIFFICULTY_TOOL else {}),
+                },
+            )
+            for item in evidence
         ]
+        summary = TemplateValidationSummary.model_validate(
+            {
+                **{
+                    key: semantic.details[key]
+                    for key in (
+                        "checking_mode",
+                        "examples_checked",
+                        "execution_calls",
+                        "max_examples",
+                        "max_execution_calls",
+                        "timeout_seconds",
+                        "seed",
+                    )
+                },
+                "evidence": saved_evidence,
+            }
+        )
         selected = [
             DistractorRecipe.model_validate(item)
             for item in semantic.details["selected_distractors"]
         ]
-        expected_inputs = [
-            dict(
-                zip(
-                    (parameter.name for parameter in template.parameters),
-                    values,
-                    strict=True,
-                )
-            )
-            for values in itertools.product(*(p.values for p in template.parameters))
-        ]
-
-        def case_key(inputs):
-            return json.dumps(inputs, sort_keys=True)
-
-        if len(cases) != len(expected_inputs) or {
-            case_key(case.inputs) for case in cases
-        } != {case_key(inputs) for inputs in expected_inputs}:
-            raise ValueError("Canonical answers do not cover the complete input domain")
         if len(selected) < 2 or any(
             recipe not in template.distractors for recipe in selected
         ):
             raise ValueError("Selected distractors are not checked proposal recipes")
         reusable = template.model_copy(
             update={
-                "answer_expression": None,
                 "distractors": selected,
-                "eligible_inputs": semantic.details.get("eligible_inputs"),
             },
             deep=True,
         )
@@ -155,36 +157,7 @@ class CodeDomain:
             raise ValueError("Difficulty evidence belongs to a different template")
         return ValidatedCodeTemplate(
             template=reusable,
-            validation=TemplateValidationSummary(
-                validator_version="mcp-code-template-v1",
-                cases_validated=len(cases),
-                validated_cases=cases,
-                evidence=[
-                    ValidationEvidence(
-                        check=item.tool,
-                        status="passed",
-                        duration_ms=item.duration_ms,
-                        issues=[finding.model_dump() for finding in item.findings],
-                        details={
-                            "tool_version": item.version,
-                            **(
-                                item.details
-                                if item.tool == TEMPLATE_DIFFICULTY_TOOL
-                                else {
-                                    key: item.details[key]
-                                    for key in (
-                                        "eligible_case_count",
-                                        "excluded_case_count",
-                                        "sampling_policy",
-                                    )
-                                    if key in item.details
-                                }
-                            ),
-                        },
-                    )
-                    for item in evidence
-                ],
-            ),
+            validation=summary,
         )
 
     def checked_tool_bindings(self, request, candidate, tool_name, evidence):

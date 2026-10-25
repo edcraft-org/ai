@@ -25,27 +25,18 @@ def test_checking_operations_produce_reusable_values_without_mutating_candidate(
     candidate,
 ):
     original = candidate.model_copy(deep=True)
-    assert verify_template_structure(candidate)["cases"] == 8
+    assert 1 <= verify_template_structure(candidate)["cases"] <= 5
     assert require_features(candidate, ["arithmetic"])["observed"] == ["arithmetic"]
 
     details = validate_answers_and_distractors(
         candidate, 3, execution_tool=LocalPythonTool(), timeout_seconds=2
     )
 
-    assert [case["answer"] for case in details["canonical_answers"]] == [
-        6,
-        4,
-        9,
-        7,
-        8,
-        6,
-        11,
-        9,
-    ]
+    assert details["checking_mode"] == "property_based"
+    assert details["examples_checked"] > 0
     assert len(details["selected_distractors"]) == 3
     # Result ownership must not expose mutable candidate state to callers.
     details["selected_distractors"][0]["expression"] = "0"
-    details["canonical_answers"][0]["inputs"]["a"] = 99
     assert candidate == original
 
 
@@ -56,7 +47,8 @@ def test_checking_rejects_wrong_answers_without_repair(candidate):
             candidate, 3, execution_tool=LocalPythonTool(), timeout_seconds=2
         )
     assert caught.value.code == "PROPOSED_ANSWER_MISMATCH"
-    assert len(caught.value.context["mismatches"]) == 8
+    assert caught.value.context["proposed"] != caught.value.context["actual"]
+    assert caught.value.context["failing_inputs"]
     assert candidate.answer_expression == "a + b + c"
 
 

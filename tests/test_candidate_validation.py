@@ -98,12 +98,12 @@ def test_model_selects_checks_for_exact_candidate_and_finalizes(candidate):
     }
     assert result.artifact.template.template_id == original.template_id
     assert result.artifact.authoring.domain == "code"
-    assert result.artifact.validation.cases_validated == 8
+    assert result.artifact.validation.examples_checked == 8
     assert candidate == original
-    assert executor.calls == 1
+    assert executor.calls == result.artifact.validation.execution_calls
     first = app.generate_question(result.artifact, domain=CodeDomain(), seed=42)
     assert first == app.generate_question(result.artifact, domain=CodeDomain(), seed=42)
-    assert executor.calls == 1
+    assert executor.calls == result.artifact.validation.execution_calls
     assert len(provider.requests) == 1
 
 
@@ -132,7 +132,10 @@ def test_failed_candidate_is_not_rewritten_and_remaining_checks_run(candidate):
     assert result.artifact is None
     assert len(result.attempts) == 1
     assert len(provider.requests) == 1
-    assert executor.calls == 1
+    assert (
+        executor.calls
+        == result.attempts[0].executions[0].evidence.details["execution_calls"]
+    )
     assert result.attempts[0].candidate == original.model_dump(mode="json")
     assert candidate == original
     executions = result.attempts[0].executions

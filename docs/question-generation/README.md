@@ -21,19 +21,21 @@ For commands, see the [README](../../README.md).
 
 There are at most four attempts: the initial proposal plus three template revisions.
 Selected template difficulty checks run after correctness passes and use SocLaas
-to estimate the typical instance across the eligible parameter combinations. A
+to estimate the typical instance across the declared parameter distribution. A
 high-confidence mismatch feeds back to the authoring model for revision; a judge failure ends the job without retrying the check.
 Each attempt runs the whole selected plan, even if one check fails. Checks must all
 pass on the same candidate in the same attempt.
 
-New code proposals contain no suggested answer expression. Execution supplies the
-canonical answer for every input. Legacy candidates with an explicit answer
-expression still have it checked; an incorrect supplied expression is never ignored.
-The distractor check selects a fixed recipe subset that maximizes collision-free
-coverage. At least two combinations and half the original domain must remain.
-Only collisions are filtered; code failures and invalid expression/value types
-remain errors. The saved `eligible_inputs` set drives deterministic sampling with
-no repeated reseeding, model calls or execution during question expansion.
+New code proposals include an `answer_expression` recipe. Bounded property-based
+checking compares it with execution on sampled inputs, including explicit boundary
+examples. Hypothesis searches for counterexamples and shrinks generated failures.
+One fixed distractor subset must pass all checked samples. There is no excluded
+input pool, whole-domain coverage requirement or exhaustive fallback.
+Generation evaluates the recipes for independently sampled allowed inputs. It
+retries obvious recipe/option collisions up to 32 times and returns a draft for
+manual review; it makes no model call and does not execute every generated question.
+The new saved format records sample/call counts and checking budgets rather than
+an answer table. Old saved artifacts are unsupported; generate new artifacts.
 A low-confidence difficulty mismatch returns a checked template with visible
 warnings and both requested and estimated labels, without silently relabelling it.
 The threshold of 0.80 is provisional; confidence is not measured accuracy.
@@ -59,9 +61,8 @@ its fixed check plan from that catalogue.
 The model sees check names and purposes when choosing its plan. During checking,
 it receives only the arguments it must supply; the application supplies the current
 template and request settings. The same contract is used by every provider.
-Feedback includes verdicts and actionable failure details. Execution records and
-canonical answers stay in the report rather than being repeated in model context
-after successful checks. Full tool definitions are kept in memory for dispatch and
+Feedback includes verdicts and actionable failure details. Successful checks record compact counts and settings. Failures include a
+counterexample; sampled answer tables are not persisted. Full tool definitions are kept in memory for dispatch and
 can be exported separately with `--tool-schemas`; the report contains a compact
 catalogue of names, versions and descriptions.
 Each revision receives the original request, latest proposal, and explicit check
@@ -85,17 +86,17 @@ so the model can distinguish its own requirements from the author's request.
 | Tool | What it checks |
 | --- | --- |
 | `code_verify_template_structure` | Supported Python, parameters, expressions, and question rendering. |
-| `code_validate_answers_and_distractors` | Executes all declared combinations, derives answers, and selects distractors plus eligible collision-free combinations. |
+| `code_validate_answers_and_distractors` | Checks answer and distractor recipes on bounded Hypothesis samples; reports counterexamples and budgets. |
 | `code_require_features` | Requested features such as loops or helper functions occur in reachable code. |
 
-The answer check must supply execution-derived answers and checked distractors before
+The answer check must supply passing sampled evidence and checked distractors before
 an artifact can be saved. A structure-only plan therefore returns `needs_review`,
 even if its selected check passes. The application does not add omitted checks.
 Check-selection mistakes are measured during evaluation.
 
-These tools establish technical properties within the supported input domain.
-Recursive code is supported when every allowed input completes within the execution
-limits. Checking does not prove termination for inputs outside that finite domain.
+These tools test technical properties on sampled inputs; passing does not prove
+correctness or termination for all allowed inputs. Execution and total checking
+budgets remain enforced. Generated questions are manually reviewed.
 Feature presence does not establish that a question teaches the intended concept
 well or has the right difficulty.
 

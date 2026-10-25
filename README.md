@@ -1,7 +1,8 @@
 # EdCraft AI Question Templates
 
 EdCraft uses AI to create a reusable Python multiple-choice question template.
-It checks every allowed input combination, then generates questions locally.
+It checks sampled variants with Hypothesis, then generates draft questions locally.
+Generated questions require manual review; sampled checks are not a correctness proof.
 The same saved template and seed produce the same question without another AI call.
 
 ## What works now
@@ -68,7 +69,7 @@ The application executes each returned call, collects its evidence, and requests
 only checks still pending if the batch is incomplete. Corrections start after the
 stage finishes. Owned arguments and every returned call are validated.
 The template difficulty check runs after correctness passes, using the selected
-distractors and the effective collision-free parameter combinations. SocLaas
+distractors and the declared parameter distribution. SocLaas
 estimates the typical instance. A mismatch at confidence 0.80 or higher feeds
 back to the authoring model for up to three template revisions; a lower-confidence
 mismatch returns a warning with both labels. Confidence is a provisional self-estimate. A failed judge response ends the job without
@@ -166,21 +167,34 @@ uv run python -m edcraft_validator.cli validate \
 ```
 
 `validate` checks the supplied candidate once. It does not rewrite it. If you change
-code or parameter values, update distractor expressions as needed. New proposals
-use execution-derived answers; a supplied legacy answer expression is still checked.
+code or parameter values, update the answer and distractor recipes as needed.
+Answer recipes are required and compared with execution on sampled cases.
 Generate questions from the new artifact after checking succeeds.
 
 ## Supported questions
 
 - Python execution questions about return values, branches, loops, and function calls.
 - Basic expressions, assignments, `if`, bounded `for` loops, helper functions, and
-  recursion that completes within the execution limits for every allowed input.
+  recursion with bounded inputs suitable for manual tracing.
 - One to three parameters containing finite sets of integers, booleans, strings,
-  or integer lists. Each parameter has two to four values, with at most 64 total
-  combinations.
+  or integer lists. Each parameter has two to 32 values; there is no 64-combination
+  enumeration limit.
 - Two or three wrong-answer options, distinct from the correct answer and each other
-  across every eligible input combination. Collision filtering must retain at least
-  two combinations and half the original domain.
+  on all checked samples. Generation cheaply evaluates recipes and retries up to
+  32 times for option collisions, without executing each generated question.
+
+Template checking uses 32 generated examples by default, plus a few explicit axis
+boundaries (including declared zero values). Replay and shrinking share a hard
+budget of 128 execution calls and 30 seconds. Configure these through
+`PropertyCheckSettings` and `create_validation_server(template_property_settings=...)`.
+A failed property requests revision; an exhausted budget returns an error.
+The report records actual sample/call counts and limits, not a confidence percentage.
+
+Saved template format 2 stores the tested answer recipe and sampled-check summary,
+not a complete answer table. Generated instances set `requires_manual_review=true`.
+The old artifact format and exhaustive checker are removed; regenerate saved
+artifacts. There is no migration or legacy generation path. The example candidates
+already include general recipes and are checked using the new format.
 
 Imports, file access, networking, and other unsupported Python features
 are rejected. The template retains its requested difficulty label. When selected,

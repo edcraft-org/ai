@@ -131,9 +131,9 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert client.listings == 1
     assert instance.seed == 7
     assert instance == application.generate_question(validated, domain=domain, seed=7)
-    assert len(execution_calls) == 1
+    assert len(execution_calls) == validated.validation.execution_calls
     assert len(provider_calls) == 1
-    assert validated.validation.cases_validated == 4
+    assert validated.validation.examples_checked == 4
     assert validated.template.topic is None
     assert validated.template.difficulty == "easy"
     assert validated.template.answer_target == "return_value"
@@ -146,7 +146,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring.model == "stub-model"
     assert (
         validated.authoring.base_prompt_version
-        == "code-template-v20-execution-eligible+response-v5"
+        == "code-template-v21-property-based+response-v6"
     )
     assert validated.authoring.domain == "code"
     assert provider_calls[0].tool_catalogue.names == (

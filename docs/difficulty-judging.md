@@ -15,9 +15,9 @@ replace the application-owned candidate. If correctness fails, difficulty stays
 pending and no judge call is spent on that attempt.
 
 SocLaas assesses the **typical instance** under the effective sampling policy.
-When `eligible_inputs` is supplied, only those collision-free combinations are
-possible, each equally likely; parameters can be correlated. Otherwise the full
-Cartesian product uses independent uniform parameter values. The checker reports
+Parameter values are sampled independently and uniformly; generation may resample
+recipe/option collisions. Property-based checks do not prove correctness for every
+variant. The checker reports
 variation in `domain_variation` and `quality_concerns`. One estimate does not
 establish uniform difficulty. The original dimensions, level descriptions and
 three worked anchors are reused; no evaluation examples are added. Closed keys

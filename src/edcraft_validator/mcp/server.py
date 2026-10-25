@@ -12,6 +12,7 @@ from edcraft_validator.llm.judging import (
     DEFAULT_JUDGE_TIMEOUT_SECONDS,
     JudgeProviderFactory,
 )
+from edcraft_validator.mcp.code_checks.property_checks import PropertyCheckSettings
 from edcraft_validator.mcp.code_question_tools import register_code_question_tools
 from edcraft_validator.mcp.code_tools import register_code_validation_tools
 from edcraft_validator.mcp.difficulty_tools import (
@@ -33,6 +34,7 @@ def create_validation_server(
     difficulty_judge_timeout_seconds: float = DEFAULT_JUDGE_TIMEOUT_SECONDS,
     decision_provider_factory: DecisionProviderFactory | None = None,
     relevance_timeout_seconds: float = 35.0,
+    template_property_settings: PropertyCheckSettings | None = None,
 ) -> FastMCP:
     """Build the centralized server with injectable code-domain dependencies."""
     for timeout in (
@@ -52,6 +54,7 @@ def create_validation_server(
         server,
         execution_tool=execution_tool,
         timeout_seconds=code_execution_timeout_seconds,
+        property_settings=template_property_settings,
     )
     register_difficulty_tools(
         server,

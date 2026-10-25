@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import itertools
-import json
 
 from edcraft_validator.domains.code.code_schemas import (
     CodeQuestionInstance,
     GeneratedQuestion,
+    TemplateValidationError,
     ValidatedCodeTemplate,
-    _case_count,
 )
-from edcraft_validator.domains.code.code_types import ParameterValue
+from edcraft_validator.domains.code.question_values import (
+    _validate_distractors,
+    validate_supported_answer,
+)
 from edcraft_validator.domains.code.safe_expressions import SafeExpression
 from edcraft_validator.domains.code.text_rendering import render_template
 
@@ -21,47 +22,40 @@ from edcraft_validator.domains.code.text_rendering import render_template
 def generate_code_question(
     validated: ValidatedCodeTemplate, seed: int
 ) -> CodeQuestionInstance:
-    """Expand a validated template without AI calls or per-instance validation."""
+    """Expand a validated template without AI calls or per-instance code execution."""
     template = validated.template
-    if validated.validation.cases_validated != _case_count(template):
-        raise ValueError("validated template does not cover its complete input domain")
-    cases = validated.validation.validated_cases
-    expected_inputs = [
-        dict(
-            zip(
-                (parameter.name for parameter in template.parameters),
-                values,
-                strict=True,
-            )
-        )
-        for values in itertools.product(
-            *(parameter.values for parameter in template.parameters)
-        )
+    names = tuple(p.name for p in template.parameters)
+    answer_recipe = SafeExpression(template.answer_expression, names)
+    distractor_recipes = [
+        SafeExpression(r.expression, names) for r in template.distractors
     ]
-    answers_by_inputs = {_case_key(case.inputs): case.answer for case in cases}
-    if len(answers_by_inputs) != len(cases) or set(answers_by_inputs) != {
-        _case_key(inputs) for inputs in expected_inputs
-    }:
-        raise ValueError("validated template does not cover its complete input domain")
-
-    inputs = {
-        parameter.name: copy.deepcopy(
-            _seeded_choice(parameter.values, template.template_id, seed, parameter.name)
-        )
-        for parameter in template.parameters
-    }
-    if template.eligible_inputs is not None:
-        inputs = copy.deepcopy(
-            _seeded_choice(
-                template.eligible_inputs, template.template_id, seed, "eligible"
+    # Cheap recipe/rendering checks only: no execution or model calls. Failed
+    # variants are resampled with a fixed bound, never repaired with invented options.
+    for attempt in range(32):
+        inputs = {
+            p.name: copy.deepcopy(
+                _seeded_choice(
+                    p.values, template.template_id, seed, f"{p.name}:{attempt}"
+                )
             )
+            for p in template.parameters
+        }
+        try:
+            answer = answer_recipe.evaluate(inputs)
+            validate_supported_answer(inputs, answer)
+            distractors = [r.evaluate(inputs) for r in distractor_recipes]
+            _validate_distractors(inputs, answer, distractors)
+            question_text = render_template(
+                template.question_template, inputs, require_all=True
+            )
+            break
+        except TemplateValidationError:
+            continue
+    else:
+        raise TemplateValidationError(
+            "Could not produce a usable draft within 32 recipe attempts",
+            code="GENERATION_ATTEMPTS_EXHAUSTED",
         )
-    names = tuple(inputs)
-    answer = copy.deepcopy(answers_by_inputs[_case_key(inputs)])
-    distractors = [
-        SafeExpression(recipe.expression, names).evaluate(inputs)
-        for recipe in template.distractors
-    ]
     distractor_reasons = [
         render_template(recipe.reason_template, inputs)
         for recipe in template.distractors
@@ -70,7 +64,7 @@ def generate_code_question(
         code=template.code,
         entry_function=template.entry_function,
         inputs=inputs,
-        question=render_template(template.question_template, inputs, require_all=True),
+        question=question_text,
         proposed_answer=answer,
         distractors=distractors,
         distractor_reasons=distractor_reasons,
@@ -84,10 +78,6 @@ def generate_code_question(
         parameters=inputs,
         question=question,
     )
-
-
-def _case_key(inputs: dict[str, ParameterValue]) -> str:
-    return json.dumps(inputs, sort_keys=True, separators=(",", ":"))
 
 
 def _seeded_choice[ValueT](

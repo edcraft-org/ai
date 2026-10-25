@@ -14,7 +14,7 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v20-execution-eligible"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v21-property-based"
 
 
 def build_template_prompt(
@@ -29,7 +29,8 @@ Required usable distractors: {request.num_distractors}
 Checks available for recommendation are in the supplied MCP catalogue.
 
 Choose the entry function, finite parameters, learner-facing question template, and
-one supported answer_target. The question_template must name the entry function and
+one supported answer_target and an answer_expression recipe. The question_template
+must name the entry function and
 use every parameter exactly as a plain placeholder such as `{{n}}`. Its wording must
 unambiguously ask for the selected answer_target. The exact entry_function identifier
 must appear verbatim in question_template as a function call. For example, if
@@ -39,7 +40,7 @@ description of the arithmetic expression.
 
 Return at least {request.num_distractors} distractor candidates that model real
 misconceptions and remain type-compatible, distinct from the answer, and mutually
-distinct for as much of the Cartesian product as possible. In reason_template,
+distinct across the declared domain. In reason_template,
 use only plain
 parameter placeholders such as `{{n}}`; never put expressions inside braces.
 Choose parameter values that keep the proposed misconceptions distinct. Values
@@ -54,7 +55,7 @@ arguments and execution are handled in later model turns. The application suppli
 the current candidate and required distractor count. Select tools that obtain
 execution-derived answers and checked distractors necessary for a reusable template.
 Also select the available template difficulty check to assess the requested level
-for the typical instance across the application-derived collision-free combinations.
+for the typical instance across the declared parameter distribution.
 Difficulty feedback concerns the reusable template: revise its code, finite domains,
 question pattern and distractor rules coherently while preserving the request.
 Only selected checks will run. Later calls must supply any remaining required
@@ -67,11 +68,14 @@ Generate one complete reusable Python execution-trace MCQ proposal and recommend
 fixed validation checks in the same structured response. Do not generate one concrete
 question. The local application derives identity, difficulty, version, and question
 type; you author the question template, code, entry function, answer target,
-finite parameters, and distractors. Do not supply a correct answer or answer expression;
-the application derives canonical answers by executing the program.
+finite parameters, an answer_expression recipe, and distractors. The application
+compares the recipe with isolated execution on sampled inputs. Generation evaluates
+the recipe for new inputs without executing every generated question; drafts are
+manually reviewed. Supply a general recipe, not one concrete answer.
 
-The proposal must use a finite Cartesian product of typed finite parameter values so
-the local application can exhaustively validate every possible question once.
+Declare bounded typed parameter values. The application uses property-based
+sampling with boundary examples and shrinking, not exhaustive enumeration. Passing
+samples does not prove every possible variant correct.
 
 Rules:
 - `code` is the learner-facing Python program that the question asks about. It must
@@ -83,17 +87,18 @@ Rules:
   parameter names and order. Use every parameter in executed learner-facing behavior.
   Define called helper functions at module level, not inside another function.
   Recursion is allowed. Recursive code must have a base case
-  and terminate within the execution limits for every parameter combination.
+  and use bounded inputs suitable for manual tracing.
 - Use only expressions, assignments, if statements, and for loops. Do not use imports,
   attributes, classes, decorators, comprehensions, while loops, lambdas,
   exceptions, file access, networking, input, eval, or exec.
-- Every parameter declares a kind and two to four distinct finite values. Supported
+- Every parameter declares a kind and two to 32 distinct finite values. Supported
   kinds are integer (-100 through 100), boolean, string (non-empty short printable
   text), and
   integer_list (at most eight integers from -100 through 100). Encode parameter
   values according to the response schema and the user prompt's format guidance.
 - Select exactly one supported answer_target: return_value, loop_iterations,
-  loop_executions, branch_executions, or function_calls. Distractor expressions use
+  loop_executions, branch_executions, or function_calls. Answer and distractor
+  expressions use
   parameter names,
   numeric constants, arithmetic, comparisons, boolean operators, or a conditional
   expression. String constants, list literals, indexing, and the one-argument functions
@@ -102,17 +107,12 @@ Rules:
   Placeholder braces belong only in question_template and reason_template.
 - question_template must name the entry function and use plain placeholders for every
   declared parameter. Its wording must match answer_target.
-- Each distractor candidate must represent a specific misconception. The local
-  MCP tool selects candidates that are unique, type-compatible, and different from
-  the answer for at least two combinations and at least half the declared domain.
-  It selects a fixed recipe subset maximizing eligible coverage and excludes only
-  combinations with answer/option collisions. Invalid expressions or value types
-  are still failures. Supply enough usable candidates.
-  No fallback distractors are inserted. Failed checks return
-  evidence so you can revise the proposal; check membership stays fixed.
-  A revision may change distractor recipes and finite parameter values while
-  preserving the author request. Check the entire Cartesian product, not only the
-  failing example reported by a tool.
+- Each distractor candidate must represent a specific misconception. The MCP tool
+  selects one fixed subset that is unique, type-compatible and different from
+  the answer on all checked samples. It does not exclude bad inputs or insert
+  fallback options. Supply enough usable candidates. A failed property returns
+  a counterexample so you can revise the answer recipe, code, or distractors.
+  Fix the general rule, not just the reported sample. Check membership stays fixed.
 - reason_template explains its misconception and may use only a bare parameter
   placeholder such as `{n}`. Do not place arithmetic or any other expression inside
   braces.
@@ -133,6 +133,7 @@ Use native JSON values matching each parameter's `kind`: integers use JSON numbe
 booleans use JSON booleans; strings use JSON strings; integer_list values use nested
 JSON arrays of numbers. Do not encode numbers, booleans, or arrays as strings.
 
+An answer recipe example is "answer_expression": "a + b".
 A distractor expression example is "expression": "a - b". Only text templates use
 placeholders, for example
 "question_template": "What does add({a}, {b}) return?". Expressions are evaluated
@@ -159,7 +160,7 @@ def build_code_generation_request(
             },
         ],
         response_model=PlannedGenerationResponse[CodeProposalResponse],
-        prompt_version=f"{CODE_TEMPLATE_PROMPT_VERSION}+response-v5",
+        prompt_version=f"{CODE_TEMPLATE_PROMPT_VERSION}+response-v6",
         schema_name="template_proposal_and_check_plan",
     )
 

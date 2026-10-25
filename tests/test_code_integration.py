@@ -115,9 +115,7 @@ def test_recursive_templates_are_checked_and_replayed(
     )
 
     assert result.status == "checked", result.reason
-    assert [
-        case.answer for case in result.artifact.validation.validated_cases
-    ] == expected
+    assert result.artifact.validation.examples_checked > 0
     saved = ValidatedCodeTemplate.model_validate_json(result.artifact.model_dump_json())
     for seed in (0, 42):
         preview = application.generate_question(saved, domain=domain, seed=seed)
@@ -157,7 +155,7 @@ def test_nonterminating_recursion_cannot_produce_a_checked_artifact() -> None:
 
 
 @pytest.mark.parametrize("template_path", TEMPLATE_PATHS, ids=lambda path: path.stem)
-def test_template_is_exhaustively_validated(template_path: Path) -> None:
+def test_template_passes_sampled_checks_and_replays(template_path: Path) -> None:
     template = CodeTemplateCandidate.model_validate_json(template_path.read_text())
 
     application = TemplateApplication()
@@ -173,10 +171,8 @@ def test_template_is_exhaustively_validated(template_path: Path) -> None:
         assert question == generate_code_question(validated, seed)
         assert question.question.answer_target == template.answer_target
 
-    expected_cases = 1
-    for parameter in template.parameters:
-        expected_cases *= len(parameter.values)
-    assert validated.validation.cases_validated == expected_cases
+    assert validated.validation.checking_mode == "property_based"
+    assert validated.validation.examples_checked > 0
 
 
 def test_model_proposal_is_built_then_validated() -> None:
@@ -221,10 +217,8 @@ def test_model_proposal_is_built_then_validated() -> None:
     assert validated.template.question_template == (
         "What does calculate({a}, {b}, {c}) return?"
     )
-    expected_cases = 1
-    for parameter in proposal.parameters:
-        expected_cases *= len(parameter.values)
-    assert validated.validation.cases_validated == expected_cases
+    assert validated.validation.checking_mode == "property_based"
+    assert validated.validation.examples_checked > 0
 
     report = TemplateEvaluator(
         provider_factory=lambda selection: StubProvider()
