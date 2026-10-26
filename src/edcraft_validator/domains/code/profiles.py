@@ -119,7 +119,7 @@ _PROFILES = (
         (_shape("integer", names=("n",)),),
         frozenset({"loop"}),
         "Use exactly one positive integer parameter named n to control reachable "
-        "loop behavior. Keep every exhaustive case small enough to trace by hand.",
+        "loop behavior. Keep each instance small enough to trace by hand.",
         "integer",
         require_positive_integers=True,
     ),

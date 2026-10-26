@@ -102,7 +102,7 @@ async def test_template_tool_gets_full_domain_without_correctness_execution():
         )
     }
     assert "inputs" not in payload["template"]
-    assert "equally likely" in judge.requests[0].messages[0]["content"]
+    assert "independently and uniformly" in judge.requests[0].messages[0]["content"]
     other = original.model_copy(update={"difficulty": "hard", "template_id": "hard"})
     assert (
         build_template_difficulty_request(other, load_code_difficulty_rubric())

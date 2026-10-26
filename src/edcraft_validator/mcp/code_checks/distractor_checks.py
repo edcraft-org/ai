@@ -1,7 +1,6 @@
 """Checks and selection helpers for template distractors."""
 
 import itertools
-import math
 from typing import Any
 
 from edcraft_validator.domains.code.code_schemas import (
@@ -9,16 +8,17 @@ from edcraft_validator.domains.code.code_schemas import (
     TemplateValidationError,
 )
 from edcraft_validator.domains.code.code_types import ParameterValue
+from edcraft_validator.domains.code.question_values import (
+    _validate_distractor_type,
+    _validate_distractor_value,
+    _validate_distractors,
+)
 from edcraft_validator.domains.code.text_rendering import render_template
-from edcraft_validator.mcp.code_checks.answer_checks import require_json_value
 from edcraft_validator.mcp.code_checks.validation_context import (
     CodeValidationContext,
     DistractorCandidate,
 )
-from edcraft_validator.value_comparison import equivalent, same_value_shape
-
-MIN_ELIGIBLE_CASES = 2
-MIN_ELIGIBLE_FRACTION = 0.5
+from edcraft_validator.value_comparison import equivalent
 
 
 def eligible_case_indices(candidates, answers):
@@ -119,7 +119,7 @@ def _failure_diagnostics(context: CodeValidationContext) -> list[dict[str, Any]]
 
 
 def check_distractors(context: CodeValidationContext) -> None:
-    """Validate every selected distractor over the complete input domain."""
+    """Validate every selected distractor across the checked samples."""
     for candidate in context.candidates:
         if candidate.values is not None:
             continue
@@ -152,9 +152,7 @@ def _select_distractors(
     _precompute_candidate_vectors(template, inputs_cases, expected_answers, candidates)
     failures: list[str] = []
     best = None
-    minimum = max(
-        MIN_ELIGIBLE_CASES, math.ceil(len(inputs_cases) * MIN_ELIGIBLE_FRACTION)
-    )
+    minimum = len(inputs_cases)
 
     for candidate_indexes in itertools.combinations(
         range(len(template.distractors)), num_distractors
@@ -184,7 +182,7 @@ def _select_distractors(
 
     detail = "; ".join(failures[:3]) or "not enough candidates"
     raise TemplateValidationError(
-        f"no set of {num_distractors} distractors has enough collision-free cases "
+        f"no set of {num_distractors} distractors passes all sampled cases "
         f"(need {minimum}/{len(inputs_cases)}, best "
         f"{len(best[2]) if best else 0}): {detail}",
         code="DISTRACTOR_SELECTION_FAILED",
@@ -225,44 +223,3 @@ def _precompute_candidate_vectors(
             candidate.rejection = f"candidate {candidate.index}: {exc}"
         else:
             candidate.values = values
-
-
-def _validate_distractors(
-    inputs: dict[str, ParameterValue], answer: Any, distractors: list[Any]
-) -> None:
-    for index, distractor in enumerate(distractors):
-        _validate_distractor_value(inputs, answer, distractor, index)
-        if any(equivalent(distractor, previous) for previous in distractors[:index]):
-            raise TemplateValidationError(
-                f"distractor {index} is duplicated for inputs {inputs}",
-                code="DISTRACTOR_DUPLICATE",
-                field=f"distractors.{index}",
-                inputs=inputs,
-            )
-
-
-def _validate_distractor_value(
-    inputs: dict[str, ParameterValue],
-    answer: Any,
-    distractor: Any,
-    index: int,
-) -> None:
-    _validate_distractor_type(inputs, answer, distractor, index)
-    if equivalent(distractor, answer):
-        raise TemplateValidationError(
-            f"distractor {index} equals the answer for inputs {inputs}",
-            code="DISTRACTOR_EQUALS_ANSWER",
-            field=f"distractors.{index}",
-            inputs=inputs,
-        )
-
-
-def _validate_distractor_type(inputs, answer, distractor, index):
-    require_json_value(distractor, f"distractor {index}")
-    if not same_value_shape(distractor, answer):
-        raise TemplateValidationError(
-            f"distractor {index} has the wrong type for inputs {inputs}",
-            code="DISTRACTOR_TYPE_MISMATCH",
-            field=f"distractors.{index}",
-            inputs=inputs,
-        )

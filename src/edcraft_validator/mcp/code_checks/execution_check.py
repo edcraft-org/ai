@@ -11,7 +11,7 @@ from edcraft_validator.tools.python_execution import PythonExecutionTool
 
 @dataclass(frozen=True)
 class ExecutionCheck:
-    """Run all finite cases using an injected, timeout-bound execution tool."""
+    """Run sampled cases using an injected, timeout-bound execution tool."""
 
     execution_tool: PythonExecutionTool
     timeout_seconds: float = 2.0

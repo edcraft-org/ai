@@ -60,6 +60,7 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
                 {"name": "b", "kind": "integer", "values": [3, 4]},
             ],
             "answer_target": "return_value",
+            "answer_expression": "a + b",
             "distractors": [
                 {"expression": "a - b", "reason_template": "Subtracts b."},
                 {"expression": "a * b", "reason_template": "Multiplies."},
@@ -111,7 +112,7 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     assert payload["options"]["num_predict"] == 2048
     assert payload["think"] is False
     messages = payload["messages"]
-    assert "finite Cartesian product" in messages[0]["content"]
+    assert "property-based" in messages[0]["content"]
     assert "Create an arithmetic question" in messages[1]["content"]
     assert "at least 3 distractor candidates" in messages[1]["content"]
     assert "Use native JSON values" in messages[1]["content"]
@@ -157,6 +158,7 @@ def test_ollama_receives_check_purposes_without_internal_mcp_schemas(
                     "entry_function": "f",
                     "parameters": [{"name": "a", "kind": "integer", "values": [1, 2]}],
                     "answer_target": "return_value",
+                    "answer_expression": "a",
                     "distractors": [
                         {"expression": "a + 1", "reason_template": "Adds one."},
                         {"expression": "a - 1", "reason_template": "Subtracts one."},

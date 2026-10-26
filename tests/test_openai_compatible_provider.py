@@ -45,6 +45,7 @@ def code_response() -> dict[str, object]:
                 {"name": "b", "kind": "integer", "values": [3, 4]},
             ],
             "answer_target": "return_value",
+            "answer_expression": "a + b",
             "distractors": [
                 {"expression": "a - b", "reason_template": "Subtracts b."},
                 {"expression": "a * b", "reason_template": "Multiplies."},
@@ -146,7 +147,7 @@ def test_generates_template_using_strict_structured_outputs(
     assert arguments_schema["additionalProperties"] is False
     assert arguments_schema["properties"] == {}
     messages = client.chat.completions.arguments["messages"]
-    assert "finite Cartesian product" in messages[0]["content"]
+    assert "property-based" in messages[0]["content"]
     assert "Create an arithmetic question" in messages[1]["content"]
     assert "at least 3 distractor candidates" in messages[1]["content"]
     assert "Use native JSON values" in messages[1]["content"]

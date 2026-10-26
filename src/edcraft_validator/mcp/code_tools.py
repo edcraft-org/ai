@@ -12,7 +12,6 @@ from fastmcp import FastMCP
 from pydantic import Field
 
 from edcraft_validator.domains.code.code_schemas import (
-    MAX_TEMPLATE_CASES,
     CodeTemplateCandidate,
 )
 from edcraft_validator.domains.code.code_types import CodeFeature
@@ -27,19 +26,25 @@ from edcraft_validator.mcp.code_checks.distractor_checks import (
     check_proposed_distractor_selection,
 )
 from edcraft_validator.mcp.code_checks.execution_check import ExecutionCheck
+from edcraft_validator.mcp.code_checks.property_checks import (
+    PropertyCheckRun,
+    PropertyCheckSettings,
+    boundary_examples,
+)
 from edcraft_validator.mcp.code_checks.structure_checks import (
     check_rendering,
     check_structure,
 )
 from edcraft_validator.mcp.code_checks.validation_context import (
     CodeValidationContext,
+    DistractorCandidate,
 )
 from edcraft_validator.mcp.evidence import ToolEvidence, ToolFinding
 from edcraft_validator.tools.python_execution import PythonExecutionTool
 from edcraft_validator.validation.validation_contracts import ValidationFailure
-from edcraft_validator.value_comparison import equivalent
+from edcraft_validator.value_comparison import equivalent, same_value_shape
 
-CODE_TOOL_VERSION = "1.1.0"
+CODE_TOOL_VERSION = "2.0.0"
 STATIC_TOOL_TIMEOUT_SECONDS = 5.0
 
 
@@ -51,6 +56,7 @@ _EXECUTION_ERROR_CODES = {
     "RESOURCE_LIMIT_EXCEEDED",
     "TOOL_FAILURE",
     "TRACE_LIMIT_EXCEEDED",
+    "PROPERTY_CHECK_BUDGET_EXCEEDED",
 }
 
 
@@ -70,9 +76,11 @@ def register_code_validation_tools(
     *,
     execution_tool: PythonExecutionTool,
     timeout_seconds: float,
+    property_settings: PropertyCheckSettings | None = None,
 ) -> None:
     """Register the authoritative code-validation catalogue on ``server``."""
-    execution_timeout = timeout_seconds * MAX_TEMPLATE_CASES + 2
+    property_settings = property_settings or PropertyCheckSettings()
+    execution_timeout = property_settings.timeout_seconds + 2
 
     @server.tool(
         name="code_verify_template_structure",
@@ -88,7 +96,7 @@ def register_code_validation_tools(
             "Select this tool to establish that a Python template uses the supported "
             "safe subset, declares a matching entry function and finite parameter "
             "domain, contains valid answer and distractor expressions, and renders "
-            "for every input. It performs bounded static and expression checks only; "
+            "for boundary examples. It performs static and expression checks only; "
             "it does not execute the program or establish that answers are correct."
         ),
     )
@@ -112,21 +120,17 @@ def register_code_validation_tools(
             "openWorldHint": False,
         },
         description=(
-            "Select this tool when canonical answers and usable MCQ distractors must "
-            "be established. It checks the template, executes every finite parameter "
-            f"case in an isolated worker with a {timeout_seconds:g}-second per-case "
-            "timeout and derives answers from execution. Legacy supplied answer "
-            "expressions are compared with execution. It selects model-proposed "
-            "distractors maximizing collision-free input coverage, requiring at "
-            "least two combinations and half the domain. Collisions are excluded "
-            "from the eligible sampling set; invalid code, expressions and answer "
-            "types still fail. No correction or fallback distractor is inserted. "
-            "Evidence is exhaustive only over the declared finite parameter domain. "
-            "Recursion is supported when every finite input case completes within "
-            "the execution limits. Execution uses the supported Python subset and "
-            "a bounded trace; "
-            "timeout, trace-limit, or resource-limit termination produces error "
-            "evidence rather than validation failure."
+            "Check answer and distractor recipes with bounded property-based "
+            "sampling using Hypothesis, explicit boundary examples and shrunk "
+            "counterexamples. Execute sampled inputs in isolated workers with a "
+            f"{timeout_seconds:g}-second per-case timeout. Compare the answer "
+            "recipe with execution and select a fixed set of proposed distractors "
+            "that passes every checked sample. Known failures require revision; "
+            "there are no fallback recipes or excluded-input tables. This is "
+            "sampled evidence, not exhaustive verification. Unseen generated "
+            "questions remain drafts for manual review. Execution, trace and "
+            "sampling-budget limits return explicit error evidence. Only the "
+            "supported Python subset is executed."
         ),
     )
     async def code_validate_answers_and_distractors(
@@ -147,6 +151,7 @@ def register_code_validation_tools(
                 required_distractors,
                 execution_tool=execution_tool,
                 timeout_seconds=timeout_seconds,
+                property_settings=property_settings,
             ),
             timeout_seconds=execution_timeout,
         )
@@ -272,6 +277,7 @@ def _elapsed_ms(started: float) -> float:
 
 def verify_template_structure(candidate: CodeTemplateCandidate) -> dict[str, Any]:
     context = CodeValidationContext(candidate)
+    context.inputs_cases = boundary_examples(candidate)
     check_structure(context)
     check_expressions(context)
     check_proposed_answers(context)
@@ -292,70 +298,81 @@ def validate_answers_and_distractors(
     *,
     execution_tool: PythonExecutionTool,
     timeout_seconds: float,
+    property_settings: PropertyCheckSettings | None = None,
 ) -> dict[str, Any]:
+    # Revalidate mutable Python caller objects as well as MCP boundary inputs.
+    candidate = CodeTemplateCandidate.model_validate(candidate.model_dump())
     context = CodeValidationContext(candidate, num_distractors=required_distractors)
     check_structure(context)
     check_expressions(context)
-    check_proposed_answers(context)
-    ExecutionCheck(execution_tool, timeout_seconds).run(context)
-    check_canonical_answers(context)
+    config = property_settings or PropertyCheckSettings()
+    run = PropertyCheckRun(config)
+    baseline_inputs = boundary_examples(candidate)[0]
+    baseline = context.proposed_answer.evaluate(baseline_inputs)
 
-    mismatches = []
-    if context.proposed_answer is not None:
-        mismatches = [
-            {
-                "inputs": copy.deepcopy(inputs),
-                "proposed": copy.deepcopy(proposed),
-                "actual": copy.deepcopy(actual),
-                "trace_summary": copy.deepcopy(execution.trace_summary),
-            }
-            for inputs, proposed, actual, execution in zip(
-                context.inputs_cases,
-                context.proposed_answers,
-                context.canonical_answers,
-                context.executions,
-                strict=True,
+    def check_case(inputs, budget):
+        single = CodeValidationContext(candidate, num_distractors=required_distractors)
+        single.inputs_cases = [inputs]
+        single.eligible_indices = [0]
+        single.proposed_answer = context.proposed_answer
+        single.candidates = [
+            DistractorCandidate(
+                index=c.index, expression=c.expression, rejection=c.rejection
             )
-            if not equivalent(proposed, actual)
+            for c in context.candidates
         ]
-    if mismatches:
-        raise ValidationFailure(
-            "The proposed answer disagrees with traced execution for "
-            f"{len(mismatches)} of {len(context.inputs_cases)} cases",
-            code="PROPOSED_ANSWER_MISMATCH",
-            field="answer_expression",
-            context={
-                "cases": len(context.inputs_cases),
-                "mismatches": mismatches,
-            },
-        )
-
-    check_proposed_distractor_selection(context)
-    check_distractors(context)
-    return {
-        **context.case_details,
-        "eligible_inputs": (
-            [copy.deepcopy(context.inputs_cases[i]) for i in context.eligible_indices]
-            if len(context.eligible_indices) != len(context.inputs_cases)
-            else None
-        ),
-        "eligible_case_count": len(context.eligible_indices),
-        "excluded_case_count": len(context.inputs_cases)
-        - len(context.eligible_indices),
-        "sampling_policy": "uniform_eligible_combinations-v1",
-        "canonical_answers": [
-            {
-                "inputs": copy.deepcopy(inputs),
-                "answer": copy.deepcopy(answer),
-                "trace_summary": copy.deepcopy(execution.trace_summary),
-            }
-            for inputs, answer, execution in zip(
-                context.inputs_cases,
-                context.canonical_answers,
-                context.executions,
-                strict=True,
+        check_rendering(single)
+        if inputs == baseline_inputs:
+            single.proposed_answers = [baseline]
+        else:
+            check_proposed_answers(single)
+        budget.reserve_execution()
+        ExecutionCheck(
+            execution_tool, min(timeout_seconds, budget.remaining_seconds)
+        ).run(single)
+        check_canonical_answers(single)
+        proposed, actual = single.proposed_answers[0], single.canonical_answers[0]
+        if not equivalent(proposed, actual):
+            raise ValidationFailure(
+                "The answer recipe disagrees with sampled execution",
+                code="PROPOSED_ANSWER_MISMATCH",
+                field="answer_expression",
+                context={
+                    "failing_inputs": copy.deepcopy(inputs),
+                    "proposed": proposed,
+                    "actual": actual,
+                },
             )
-        ],
+        if not same_value_shape(actual, baseline):
+            raise ValidationFailure(
+                "Answer type changes across sampled cases",
+                code="ANSWER_TYPE_INCONSISTENT",
+                field="answer_expression",
+                context={"failing_inputs": copy.deepcopy(inputs)},
+            )
+        all_candidates = single.candidates
+        check_proposed_distractor_selection(single)
+        check_distractors(single)
+        return (inputs, actual, all_candidates)
+
+    rows = run.check(candidate, check_case)
+    context.inputs_cases = [row[0] for row in rows]
+    context.canonical_answers = [row[1] for row in rows]
+    context.eligible_indices = list(range(len(rows)))
+    for c in context.candidates:
+        samples = [row[2][c.index] for row in rows]
+        c.rejection = next((s.rejection for s in samples if s.rejection), None)
+        if c.rejection is None:
+            c.values = [s.values[0] for s in samples]
+    # One recipe subset must work across all samples, not a new subset per case.
+    try:
+        check_proposed_distractor_selection(context)
+        check_distractors(context)
+    except ValidationFailure as exc:
+        exc.context.update(run.details())
+        raise
+    return {
+        **run.details(),
         "selected_distractors": [
             recipe.model_dump(mode="json") for recipe in context.template.distractors
         ],

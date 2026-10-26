@@ -6,9 +6,7 @@ from typing import Any
 import pytest
 from code_validation_helpers import validate_code
 
-from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.domains.code.candidate_builder import build_code_candidate
-from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
     CodeTemplateProposal,
@@ -149,40 +147,25 @@ class TrustedBatchExecutor:
         return results
 
 
-def test_validates_every_case_once_then_generates_without_executor() -> None:
+def test_samples_recipes_then_generates_without_executor() -> None:
     executor = ArithmeticExecutor()
-    application = TemplateApplication()
-    domain = CodeDomain()
     validated = validate_code(template(), execution_tool=executor)
-
-    assert validated.validation.cases_validated == 8
-    assert validated.validation.validator_version == "mcp-code-template-v1"
-    assert validated.template.answer_expression is None
-    assert "version" not in validated.template.model_dump()
-    assert "template_sha256" not in validated.validation.model_dump()
-    assert "validated_cases_sha256" not in validated.validation.model_dump()
-    assert len(validated.validation.validated_cases) == 8
-    assert [item.check for item in validated.validation.evidence] == [
-        "code_validate_answers_and_distractors"
-    ]
-    assert all(item.status == "passed" for item in validated.validation.evidence)
-    assert "assurance" not in validated.validation.evidence[0].model_dump()
-    assert validated.validation.cases_validated == 8
-    assert "cases" not in validated.validation.evidence[0].details
-    assert executor.batch_calls == 1
-    assert len(executor.calls) == 8
-
-    first = application.generate_question(validated, domain=domain, seed=42)
-    second = application.generate_question(validated, domain=domain, seed=42)
-
-    assert first == second
-    assert len(executor.calls) == 8
-    assert "template_version" not in first.model_dump()
-    assert "template_sha256" not in first.model_dump()
-    assert first.question.proposed_answer == (
-        first.parameters["a"] + first.parameters["b"] - first.parameters["c"]
+    summary = validated.validation
+    assert summary.checking_mode == "property_based"
+    assert summary.validator_version == "mcp-code-template-v2"
+    assert validated.template.answer_expression == template().answer_expression
+    assert "validated_cases" not in summary.model_dump()
+    assert summary.execution_calls == summary.examples_checked == len(executor.calls)
+    assert summary.execution_calls <= summary.max_execution_calls
+    before = len(executor.calls)
+    first = generate_code_question(validated, seed=42)
+    assert first == generate_code_question(validated, seed=42)
+    assert len(executor.calls) == before
+    assert first.requires_manual_review
+    assert (
+        first.question.proposed_answer
+        == first.parameters["a"] + first.parameters["b"] - first.parameters["c"]
     )
-    assert first.question.question.startswith("What does calculate(")
 
 
 def test_supports_loop_iteration_questions() -> None:
@@ -228,7 +211,7 @@ def test_supports_loop_iteration_questions() -> None:
     validated = validate_code(loop_template, execution_tool=LoopExecutor())
     instance = generate_code_question(validated, seed=3)
 
-    assert validated.validation.cases_validated == 2
+    assert validated.validation.examples_checked == 2
     assert instance.question.answer_target == "loop_iterations"
     assert instance.question.proposed_answer == instance.parameters["n"]
 
@@ -478,9 +461,12 @@ def test_unsupported_code_is_rejected_before_execution() -> None:
 def test_inconsistent_answer_types_precede_distractor_selection() -> None:
     value = template(
         answer_expression="a if a == 2 else 'four'",
+        code=(
+            "def calculate(a, b, c):\n    return a + 0 * (b + c) if a == 2 else 'four'"
+        ),
     )
 
-    with pytest.raises(TemplateValidationError) as error:
+    with pytest.raises(ValidationFailure) as error:
         validate_code(value, execution_tool=TrustedBatchExecutor(), num_distractors=3)
 
     assert error.value.code == "ANSWER_TYPE_INCONSISTENT"
@@ -505,7 +491,7 @@ def test_profile_features_are_not_required_for_free_form_questions() -> None:
 
     validated = validate_code(value, execution_tool=TrustedBatchExecutor())
 
-    assert validated.validation.cases_validated > 0
+    assert validated.validation.examples_checked > 0
 
 
 def test_rejects_an_unused_entry_parameter_before_execution() -> None:
@@ -668,12 +654,8 @@ def test_profiles_accept_alternative_programs_and_answer_formulas(
 ) -> None:
     validated = validate_code(value, execution_tool=TrustedBatchExecutor())
 
-    expected_cases = 1
-    for parameter in value.parameters:
-        expected_cases *= len(parameter.values)
-    assert validated.validation.cases_validated == expected_cases
-    instance = generate_code_question(validated, seed=11)
-    assert instance.question.answer_target == value.answer_target
+    assert validated.validation.checking_mode == "property_based"
+    assert validated.validation.examples_checked > 0
 
 
 def test_template_building_preserves_model_authored_target_and_wording() -> None:
@@ -903,7 +885,7 @@ def test_rejects_a_distractor_that_is_correct_for_any_case() -> None:
     value["distractors"][0]["expression"] = "a + b - c"
 
     with pytest.raises(
-        TemplateValidationError, match="enough collision-free cases"
+        TemplateValidationError, match="passes all sampled cases"
     ) as error:
         validate_code(
             CodeTemplateCandidate.model_validate(value),
@@ -982,7 +964,7 @@ def test_authoring_plan_evaluates_each_candidate_once_per_case(monkeypatch) -> N
     assert set(evaluation_counts.values()) == {1}
 
 
-def test_selection_filters_partial_collisions_without_fallbacks() -> None:
+def test_sampled_collision_requires_revision_without_exclusions() -> None:
     value = template().model_dump(mode="json")
     value["distractors"] = [
         {"expression": "0", "reason_template": "Uses zero."},
@@ -995,15 +977,10 @@ def test_selection_filters_partial_collisions_without_fallbacks() -> None:
     item = CodeTemplateCandidate.model_validate(value)
 
     original = item.model_copy(deep=True)
-    validated = validate_code(
-        item, execution_tool=ArithmeticExecutor(), num_distractors=2
-    )
+    with pytest.raises(ValidationFailure) as error:
+        validate_code(item, execution_tool=ArithmeticExecutor(), num_distractors=2)
+    assert error.value.code == "DISTRACTOR_SELECTION_FAILED"
     assert item == original
-    assert len(validated.template.eligible_inputs) == 6
-    for seed in range(100):
-        question = generate_code_question(validated, seed).question
-        assert len(set(question.distractors)) == 2
-        assert question.proposed_answer not in question.distractors
 
 
 def test_selection_rejects_invalid_model_distractors_without_fallbacks() -> None:
@@ -1078,7 +1055,8 @@ def test_wrong_answer_is_rejected_without_promotion_or_repair() -> None:
     with pytest.raises(ValidationFailure) as error:
         validate_code(item, execution_tool=ArithmeticExecutor())
     assert error.value.code == "PROPOSED_ANSWER_MISMATCH"
-    assert len(error.value.context["mismatches"]) == 8
+    assert error.value.context["failing_inputs"]
+    assert error.value.context["proposed"] != error.value.context["actual"]
     assert item == original
 
 
@@ -1128,9 +1106,13 @@ def test_validated_template_rejects_failed_validation_evidence() -> None:
         type(validated).model_validate(payload)
 
 
-def test_refuses_incomplete_validation_evidence() -> None:
-    validated = validate_code(template(), execution_tool=ArithmeticExecutor())
-    validated.validation.cases_validated = 7
-
-    with pytest.raises(ValueError, match="complete input domain"):
-        generate_code_question(validated, seed=1)
+def test_old_answer_table_artifacts_are_rejected() -> None:
+    checked = validate_code(template(), execution_tool=ArithmeticExecutor())
+    payload = checked.model_dump()
+    payload["validation"] = {
+        "cases_validated": 8,
+        "validated_cases": [],
+        "evidence": [],
+    }
+    with pytest.raises(ValueError):
+        type(checked).model_validate(payload)

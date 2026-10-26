@@ -242,3 +242,22 @@ failed question checks, and generation time includes unsuccessful correction cal
 See the [workflow guide](question-generation/README.md#saving-editing-and-reuse)
 for saving and replaying questions, and [evaluation results](evaluation-history.md)
 for the recorded baseline and historical evidence.
+
+
+## Property-based checking: issue 91 (26 October 2026)
+
+The sole template checker now uses bounded Hypothesis samples, explicit boundaries
+and shrinking. Defaults: 32 generated examples, 128 total execution calls including
+replay/shrinking, and 30 seconds. Passing samples is not a correctness guarantee;
+generated drafts require manual review. Old exhaustive artifacts are unsupported.
+
+A local automated smoke study passed all 15 repository example templates using
+57 sampled executions in total (median 246 ms per template). All 30 injected
+faults were detected: 15 wrong answer recipes and 15 colliding distractor pools.
+A separate 32,768-combination arithmetic domain used 36 sampled executions in
+3.60 seconds. Thirty generated drafts all used inputs outside those samples;
+a separate evaluation executed those 30 drafts and found 30/30 answer agreement.
+Normal generation made no execution or model calls. These are known fixtures,
+synthetic faults and an automated spot-check, not human-reviewed accuracy or a
+statistical confidence estimate. Small domains may happen to be fully covered by
+Hypothesis; no enumeration path or full-domain coverage requirement remains.

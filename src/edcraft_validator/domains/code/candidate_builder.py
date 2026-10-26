@@ -33,7 +33,7 @@ def build_code_candidate(
         parameters=proposal.parameters,
         question_template=proposal.question_template,
         answer_target=proposal.answer_target,
-        answer_expression=getattr(proposal, "answer_expression", None),
+        answer_expression=proposal.answer_expression,
         distractors=proposal.distractors,
         question_type="mcq",
     )

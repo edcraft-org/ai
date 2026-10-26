@@ -93,17 +93,8 @@ def test_finalization_preserves_checked_content_and_deterministic_questions():
     domain = CodeDomain()
     original = candidate()
     actual = validate_code(original, execution_tool=ArithmeticExecutor())
-    assert actual.template == original.model_copy(update={"answer_expression": None})
-    assert [case.answer for case in actual.validation.validated_cases] == [
-        6,
-        4,
-        9,
-        7,
-        8,
-        6,
-        11,
-        9,
-    ]
+    assert actual.template == original
+    assert actual.validation.checking_mode == "property_based"
     reloaded = ValidatedCodeTemplate.model_validate_json(actual.model_dump_json())
     assert domain.generate_question(actual, seed=42) == domain.generate_question(
         reloaded, seed=42

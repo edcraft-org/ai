@@ -74,7 +74,7 @@ def test_saved_report_records_one_candidate_per_attempt_without_schema_copies():
             assert arguments["candidate"] == attempt["candidate"]
             assert execution["evidence"] is not None
     semantic = result.attempts[-1].executions[0].evidence
-    assert semantic.details["canonical_answers"]
+    assert semantic.details["examples_checked"] > 0
     assert all(
         "canonical_answers" not in e.details
         for e in result.artifact.validation.evidence
@@ -145,11 +145,8 @@ def test_finalization_only_packages_checked_content_and_evidence(monkeypatch):
     semantic = next(
         e for e in evidence if e.tool == "code_validate_answers_and_distractors"
     )
-    assert finalized.template.answer_expression is None
-    assert [c.model_dump() for c in finalized.validation.validated_cases] == [
-        {"inputs": case["inputs"], "answer": case["answer"]}
-        for case in semantic.details["canonical_answers"]
-    ]
+    assert finalized.template.answer_expression == candidate.answer_expression
+    assert finalized.validation.examples_checked == semantic.details["examples_checked"]
     assert [r.model_dump() for r in finalized.template.distractors] == semantic.details[
         "selected_distractors"
     ]

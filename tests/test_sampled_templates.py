@@ -1,4 +1,4 @@
-"""Execution-derived answers and deterministic collision-free template sampling."""
+"""Sampled recipe contracts and independent template difficulty policy."""
 
 import json
 
@@ -12,12 +12,10 @@ from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
     DistractorRecipe,
     TemplateValidationError,
-    ValidatedCodeTemplate,
     parse_code_template_proposal,
 )
 from edcraft_validator.domains.code.difficulty import load_code_difficulty_rubric
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
-from edcraft_validator.domains.code.question_generator import generate_code_question
 from edcraft_validator.domains.code.template_difficulty import (
     build_template_difficulty_request,
     template_assessment_model,
@@ -35,61 +33,38 @@ def candidate():
         ],
         question_template="What does add({a}, {b}) return?",
         answer_target="return_value",
+        answer_expression="a + b",
         distractors=[
             {"expression": expression, "reason_template": "A proposed misconception."}
-            for expression in ("a * b", "a + b + 1", "a - b")
+            for expression in ("a + b - 1", "a + b + 1", "a - b")
         ],
         question_type="mcq",
     )
 
 
-def test_author_schema_has_no_answer_or_application_owned_domain():
+def test_author_schema_requires_answer_recipe_and_has_no_eligible_table():
     schema = CodeProposalResponse.model_json_schema()
-    assert "answer_expression" not in schema["properties"]
+    assert "answer_expression" in schema["required"]
     assert "eligible_inputs" not in schema["properties"]
     value = candidate().model_dump(
-        exclude={
-            "template_id",
-            "topic",
-            "difficulty",
-            "question_type",
-            "answer_expression",
-            "eligible_inputs",
-        }
+        exclude={"template_id", "topic", "difficulty", "question_type"}
     )
     proposal = CodeProposalResponse.model_validate(value)
-    assert "answer_expression" not in proposal.model_dump()
     canonical = parse_code_template_proposal(json.dumps(proposal.model_dump()))
-    assert canonical.answer_expression is None
+    assert canonical.answer_expression == "a + b"
     assert canonical.code == proposal.code
-    with pytest.raises(ValidationError, match="Extra inputs"):
-        CodeProposalResponse.model_validate(value | {"answer_expression": "a + b"})
+    del value["answer_expression"]
+    with pytest.raises(ValidationError, match="Field required"):
+        CodeProposalResponse.model_validate(value)
 
 
-def test_partial_collisions_preserve_execution_answers_and_replay_offline():
-    original = candidate()
-    validated = validate_code(original, execution_tool=TrustedBatchExecutor())
-    assert original.eligible_inputs is None  # No mutation of caller input.
-    assert validated.validation.cases_validated == 4
-    assert validated.template.eligible_inputs == [
-        {"a": 1, "b": 1},
-        {"a": 1, "b": 2},
-        {"a": 2, "b": 1},
-    ]
-    evidence = validated.validation.evidence[0].details
-    assert evidence["eligible_case_count"] == 3
-    assert evidence["excluded_case_count"] == 1
-    reloaded = ValidatedCodeTemplate.model_validate_json(validated.model_dump_json())
-    seen = set()
-    for seed in range(-100, 100):
-        result = generate_code_question(reloaded, seed)
-        assert result == generate_code_question(validated, seed)
-        inputs, question = result.parameters, result.question
-        seen.add(tuple(inputs.values()))
-        assert question.proposed_answer == inputs["a"] + inputs["b"]
-        assert len(set(question.distractors)) == 3
-        assert question.proposed_answer not in question.distractors
-    assert seen == {(1, 1), (1, 2), (2, 1)}
+def test_partial_collisions_are_reported_without_an_exclusion_table():
+    value = candidate()
+    value.distractors[0].expression = "a * b"
+    with pytest.raises(TemplateValidationError) as error:
+        validate_code(value, execution_tool=TrustedBatchExecutor())
+    assert error.value.code == "DISTRACTOR_SELECTION_FAILED"
+    assert "eligible_inputs" not in value.model_dump()
 
 
 @pytest.mark.parametrize("expression", ["a + b", "a + b if a == 1 or b == 1 else -9"])
@@ -99,7 +74,7 @@ def test_zero_or_insufficient_valid_combinations_fail(expression):
     with pytest.raises(TemplateValidationError) as exc:
         validate_code(value, execution_tool=TrustedBatchExecutor())
     assert exc.value.code == "DISTRACTOR_SELECTION_FAILED"
-    assert "need 2/4" in str(exc.value)
+    assert "passes all sampled cases" in str(exc.value)
 
 
 def test_selection_maximizes_coverage_before_sampling():
@@ -109,7 +84,7 @@ def test_selection_maximizes_coverage_before_sampling():
     )
     value = CodeTemplateCandidate.model_validate_json(value.model_dump_json())
     validated = validate_code(value, execution_tool=TrustedBatchExecutor())
-    assert validated.template.eligible_inputs is None
+    assert "eligible_inputs" not in validated.template.model_dump()
     assert len(validated.template.distractors) == 3
     assert all(r.expression != "a * b" for r in validated.template.distractors)
 
@@ -141,14 +116,14 @@ def test_execution_errors_are_not_hidden_by_collision_filtering():
     assert exc.value.inputs["b"] == 1
 
 
-def test_judge_receives_exact_effective_domain():
+def test_judge_receives_declared_sampled_domain_and_recipe():
     value = validate_code(candidate(), execution_tool=TrustedBatchExecutor()).template
     request = build_template_difficulty_request(value, load_code_difficulty_rubric())
     payload = json.loads(request.messages[1]["content"])["template"]
-    assert payload["eligible_inputs"] == value.eligible_inputs
-    assert "difficulty" not in payload
-    assert "parameters may be correlated" in request.messages[0]["content"]
-    assert "ONLY those combinations" in request.messages[0]["content"]
+    assert payload["parameters"] == [p.model_dump() for p in value.parameters]
+    assert payload["answer_expression"] == "a + b"
+    assert "eligible_inputs" not in payload and "difficulty" not in payload
+    assert "independently and uniformly" in request.messages[0]["content"]
 
 
 def test_low_confidence_mismatch_returns_warning_without_revision_or_relabelling():

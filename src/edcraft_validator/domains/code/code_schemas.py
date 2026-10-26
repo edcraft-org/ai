@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import copy
 import json
-import math
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -70,9 +69,6 @@ class CodeTemplateRequest(BaseModel):
         return value
 
 
-MAX_TEMPLATE_CASES = 64
-
-
 MAX_STRING_LENGTH = 40
 
 
@@ -80,13 +76,13 @@ MAX_LIST_LENGTH = 8
 
 
 class FiniteParameter(BaseModel):
-    """A finite parameter domain that can be validated exhaustively."""
+    """A bounded set of allowed values sampled during property-based checking."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
     name: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     kind: Literal["integer", "boolean", "string", "integer_list"]
-    values: list[ParameterValue] = Field(min_length=2, max_length=4)
+    values: list[ParameterValue] = Field(min_length=2, max_length=32)
 
     @model_validator(mode="after")
     def validate_values(self) -> FiniteParameter:
@@ -160,9 +156,10 @@ class CodeTemplateContent(BaseModel):
     entry_function: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     parameters: list[FiniteParameter] = Field(min_length=1, max_length=3)
     answer_target: AnswerTarget
+    answer_expression: str = Field(min_length=1)
     distractors: list[DistractorRecipe] = Field(min_length=2, max_length=5)
 
-    @field_validator("question_template", "code")
+    @field_validator("question_template", "code", "answer_expression")
     @classmethod
     def reject_blank_text(cls, value: str) -> str:
         if not value.strip():
@@ -174,25 +171,11 @@ class CodeTemplateContent(BaseModel):
         names = [parameter.name for parameter in self.parameters]
         if len(names) != len(set(names)):
             raise ValueError("parameter names must be unique")
-        combinations = math.prod(len(parameter.values) for parameter in self.parameters)
-        if combinations > MAX_TEMPLATE_CASES:
-            raise ValueError(
-                f"template has {combinations} cases; maximum is {MAX_TEMPLATE_CASES}"
-            )
         return self
 
 
 class CodeTemplateProposal(CodeTemplateContent):
-    """Compatibility proposal: an explicit answer expression is still checked."""
-
-    answer_expression: str | None = Field(default=None, min_length=1)
-
-    @field_validator("answer_expression")
-    @classmethod
-    def reject_blank_answer(cls, value: str | None) -> str | None:
-        if value is not None and not value.strip():
-            raise ValueError("must not be blank")
-        return value
+    """Canonical model-authored proposal, including its sampled answer recipe."""
 
 
 class CodeTemplateCandidate(BaseModel):
@@ -208,15 +191,9 @@ class CodeTemplateCandidate(BaseModel):
     parameters: list[FiniteParameter] = Field(min_length=1, max_length=3)
     question_template: str = Field(min_length=1)
     answer_target: AnswerTarget
-    answer_expression: str | None = Field(default=None, min_length=1)
+    answer_expression: str = Field(min_length=1)
     distractors: list[DistractorRecipe] = Field(min_length=2, max_length=8)
     question_type: Literal["mcq"]
-    eligible_inputs: list[dict[str, ParameterValue]] | None = Field(
-        default=None,
-        min_length=2,
-        max_length=MAX_TEMPLATE_CASES,
-        description="Application-derived collision-free combinations; null means all.",
-    )
 
     @field_validator("code", "question_template")
     @classmethod
@@ -227,8 +204,8 @@ class CodeTemplateCandidate(BaseModel):
 
     @field_validator("answer_expression")
     @classmethod
-    def reject_blank_answer_expression(cls, value: str | None) -> str | None:
-        if value is not None and not value.strip():
+    def reject_blank_answer_expression(cls, value: str) -> str:
+        if not value.strip():
             raise ValueError("must not be blank")
         return value
 
@@ -237,57 +214,22 @@ class CodeTemplateCandidate(BaseModel):
         names = [parameter.name for parameter in self.parameters]
         if len(names) != len(set(names)):
             raise ValueError("parameter names must be unique")
-        combinations = _case_count(self)
-        if combinations > MAX_TEMPLATE_CASES:
-            raise ValueError(
-                f"template has {combinations} cases; maximum is {MAX_TEMPLATE_CASES}"
-            )
-        if self.eligible_inputs is not None:
-            keys = set()
-            for inputs in self.eligible_inputs:
-                if set(inputs) != set(names) or any(
-                    not any(
-                        type(inputs[p.name]) is type(value) and inputs[p.name] == value
-                        for value in p.values
-                    )
-                    for p in self.parameters
-                ):
-                    raise ValueError(
-                        "eligible inputs must belong to the declared domain"
-                    )
-                key = json.dumps(inputs, sort_keys=True)
-                if key in keys:
-                    raise ValueError("eligible inputs must be unique")
-                keys.add(key)
-            if len(keys) * 2 < combinations:
-                raise ValueError("eligible inputs must cover at least half the domain")
         return self
 
 
-class ValidatedTemplateCase(BaseModel):
-    """One executor-derived answer from the template's finite input domain."""
-
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    inputs: dict[str, ParameterValue]
-    answer: Any
-
-    @field_validator("answer")
-    @classmethod
-    def require_finite_json_answer(cls, value: Any) -> Any:
-        try:
-            json.dumps(value, allow_nan=False)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("answer must be a finite JSON value") from exc
-        return value
-
-
 class TemplateValidationSummary(BaseModel):
+    """Sampled evidence, without a complete-domain answer table."""
+
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    validator_version: str = Field(min_length=1)
-    cases_validated: int = Field(ge=1)
-    validated_cases: list[ValidatedTemplateCase] = Field(min_length=1)
+    validator_version: Literal["mcp-code-template-v2"] = "mcp-code-template-v2"
+    checking_mode: Literal["property_based"]
+    examples_checked: int = Field(ge=1)
+    execution_calls: int = Field(ge=1)
+    max_examples: int = Field(ge=1)
+    max_execution_calls: int = Field(ge=1)
+    timeout_seconds: float = Field(gt=0, allow_inf_nan=False)
+    seed: int
     evidence: list[ValidationEvidence] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -296,25 +238,24 @@ class TemplateValidationSummary(BaseModel):
         if len(checks) != len(set(checks)):
             raise ValueError("validation evidence checks must be unique")
         if any(item.status != "passed" for item in self.evidence):
-            raise ValueError("validated templates require passing validation evidence")
-        if self.cases_validated != len(self.validated_cases):
-            raise ValueError("cases_validated must match validated_cases")
+            raise ValueError("checked templates require passing validation evidence")
+        if (
+            not self.examples_checked
+            <= self.execution_calls
+            <= self.max_execution_calls
+        ):
+            raise ValueError("sample and execution counts exceed the checking budget")
         return self
 
 
 class ValidatedCodeTemplate(ValidatedTemplateArtifact):
-    """A template plus evidence that its complete finite domain was checked."""
+    """A template whose recipes passed sampled checks; manual review is required."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
+    format_version: Literal["2.0.0"] = "2.0.0"
     template: CodeTemplateCandidate
     validation: TemplateValidationSummary
-
-    @model_validator(mode="after")
-    def require_canonical_answers(self) -> ValidatedCodeTemplate:
-        if self.template.answer_expression is not None:
-            raise ValueError("validated templates must use validator-derived answers")
-        return self
 
 
 class CodeQuestionInstance(BaseModel):
@@ -327,10 +268,11 @@ class CodeQuestionInstance(BaseModel):
     seed: int
     parameters: dict[str, ParameterValue]
     question: GeneratedQuestion
+    requires_manual_review: Literal[True] = True
 
 
 class TemplateValidationError(ValidationFailure):
-    """Raised when any possible instance fails template validation."""
+    """Raised when a static check or sampled property fails."""
 
     def __init__(
         self,
@@ -359,13 +301,6 @@ class TemplateValidationError(ValidationFailure):
             "inputs": self.inputs,
             "evidence": [item.model_dump(mode="json") for item in self.evidence],
         }
-
-
-def _case_count(template: CodeTemplateCandidate) -> int:
-    combinations = 1
-    for parameter in template.parameters:
-        combinations *= len(parameter.values)
-    return combinations
 
 
 def parse_code_template_candidate(content: str) -> CodeTemplateCandidate:

@@ -9,6 +9,7 @@ venv/
 
 # Test, coverage, and type-checker caches
 .pytest_cache/
+.hypothesis/
 .coverage
 htmlcov/
 .mypy_cache/

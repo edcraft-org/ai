@@ -1,7 +1,6 @@
 """Checks for proposed and execution-derived template answers."""
 
 import copy
-import json
 from typing import Any
 
 from edcraft_validator.domains.code.code_schemas import (
@@ -9,6 +8,10 @@ from edcraft_validator.domains.code.code_schemas import (
     TemplateValidationError,
 )
 from edcraft_validator.domains.code.code_types import AnswerTarget, ParameterValue
+from edcraft_validator.domains.code.question_values import (
+    require_json_value,
+    validate_supported_answer,
+)
 from edcraft_validator.domains.code.safe_expressions import SafeExpression
 from edcraft_validator.mcp.code_checks.validation_context import (
     CodeValidationContext,
@@ -28,7 +31,7 @@ def check_expressions(context: CodeValidationContext) -> None:
 
 
 def check_proposed_answers(context: CodeValidationContext) -> None:
-    """Evaluate the proposed answer over the complete finite input domain."""
+    """Evaluate the proposed answer on the supplied examples."""
     if context.proposed_answer is None:
         return
     answers = []
@@ -53,20 +56,6 @@ def check_canonical_answers(context: CodeValidationContext) -> None:
     context.canonical_answers = answers
 
 
-def validate_supported_answer(inputs: dict[str, ParameterValue], answer: Any) -> None:
-    valid = type(answer) in {int, float, str} or (
-        type(answer) is list and all(type(item) is int for item in answer)
-    )
-    if not valid:
-        raise TemplateValidationError(
-            "answers must be numbers, strings, or integer lists; "
-            f"received {type(answer).__name__} for inputs {inputs}",
-            code="ANSWER_TYPE_UNSUPPORTED",
-            field="answer_expression",
-            inputs=inputs,
-        )
-
-
 def _require_consistent_answer_shapes(
     inputs_cases: list[dict[str, ParameterValue]], answers: list[Any]
 ) -> None:
@@ -83,24 +72,13 @@ def _require_consistent_answer_shapes(
             )
 
 
-def require_json_value(value: Any, label: str) -> None:
-    try:
-        json.dumps(value, allow_nan=False)
-    except (TypeError, ValueError) as exc:
-        raise TemplateValidationError(f"{label} is not a finite JSON value") from exc
-
-
 def _parse_expressions(
     template: CodeTemplateCandidate,
     names: tuple[str, ...],
     *,
     allow_candidate_rejections: bool,
 ) -> tuple[SafeExpression | None, list[DistractorCandidate]]:
-    answer = (
-        _parse_expression(template.answer_expression, names, "answer_expression")
-        if template.answer_expression is not None
-        else None
-    )
+    answer = _parse_expression(template.answer_expression, names, "answer_expression")
     candidates: list[DistractorCandidate] = []
     for index, recipe in enumerate(template.distractors):
         try:

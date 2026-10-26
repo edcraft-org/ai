@@ -15,28 +15,28 @@ class IntegerParameterResponse(FiniteParameter):
     """Integer parameter represented with native JSON numbers."""
 
     kind: Literal["integer"]
-    values: list[int] = Field(min_length=2, max_length=4)
+    values: list[int] = Field(min_length=2, max_length=32)
 
 
 class BooleanParameterResponse(FiniteParameter):
     """Boolean parameter represented with native JSON booleans."""
 
     kind: Literal["boolean"]
-    values: list[bool] = Field(min_length=2, max_length=4)
+    values: list[bool] = Field(min_length=2, max_length=32)
 
 
 class StringParameterResponse(FiniteParameter):
     """String parameter represented with native JSON strings."""
 
     kind: Literal["string"]
-    values: list[str] = Field(min_length=2, max_length=4)
+    values: list[str] = Field(min_length=2, max_length=32)
 
 
 class IntegerListParameterResponse(FiniteParameter):
     """Integer-list parameter represented with native nested JSON arrays."""
 
     kind: Literal["integer_list"]
-    values: list[list[int]] = Field(min_length=2, max_length=4)
+    values: list[list[int]] = Field(min_length=2, max_length=32)
 
 
 CodeParameterResponse = (

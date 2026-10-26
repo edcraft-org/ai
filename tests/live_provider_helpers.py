@@ -29,7 +29,7 @@ def check_live_workflow(provider, *, reviewed_inputs=False):
     )
     assert result.artifact is not None, result.model_dump_json()
     validated = result.artifact
-    assert validated.validation.cases_validated >= 4
+    assert validated.validation.examples_checked >= 4
     if reviewed_inputs:
         assert {p.name: p.values for p in validated.template.parameters} == {
             "a": [2, 3],
@@ -58,7 +58,7 @@ def check_live_workflow(provider, *, reviewed_inputs=False):
     assert edited.artifact.template.question_template == candidate.question_template
     assert edited.artifact.template.code == candidate.code
     assert (
-        edited.artifact.validation.validated_cases == saved.validation.validated_cases
+        edited.artifact.validation.examples_checked == saved.validation.examples_checked
     )
     assert app.generate_question(
         edited.artifact, domain=domain, seed=42
