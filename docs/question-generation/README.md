@@ -126,9 +126,10 @@ The final results are also sent to the model for acknowledgement. If that call f
 
 ## Saving, editing, and reuse
 
-The finalizer packages checked answers and selected distractors. It does not change
-the code or question wording. Later question generation reads the saved answers and
-uses the seed to select inputs; it makes no model, MCP, or tracing calls.
+The finalizer packages the answer recipe, selected distractor recipes and sampled
+checking statistics. It does not change the code or question wording. Later
+question generation uses the seed to select allowed inputs and evaluates the saved
+recipes; it makes no model, MCP, or tracing calls.
 
 Every job produces one report with all its attempts. Each attempt stores its
 candidate once. Tool records contain model-requested arguments, additional
@@ -136,7 +137,8 @@ application arguments, and full evidence; the tools still receive the complete
 candidate when running. Failed attempts remain available for evaluation.
 
 Every successful checking job gets a new artifact ID. The reusable artifact stores
-the template, checked answers, the eligible combination set, and check summaries including difficulty warnings. Its small origin
+the template, answer and distractor recipes, and check summaries including sampled
+checking statistics and difficulty warnings. Its small origin
 record (called provenance in the code) contains the provider/model settings, domain,
 prompt version and generation time. Detailed history belongs in the report, which
 includes the artifact once. Use `--template-output` to save the artifact directly

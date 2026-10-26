@@ -20,7 +20,7 @@ All paths below are under `src/edcraft_validator/`.
 | Code domain | `domains/code/code_domain.py`, schemas, prompts, and candidate builder | Code-specific authoring and finalization. |
 | Template checking algorithms | `mcp/code_tools.py`, `mcp/code_checks/` | Structure, execution, answers and distractors for reusable templates. |
 | Concrete Python checks | `domains/code/question_checks.py`, `domains/code/features.py`, `application/code_checks.py`, `mcp/code_question_tools.py` | Independent correctness and explicit requirements, without embedding or judge calls. |
-| Question generation | `domains/code/question_generator.py`, expressions and rendering | Local expansion from saved answers and recipes. |
+| Question generation | `domains/code/question_generator.py`, expressions and rendering | Local expansion from saved answer and distractor recipes. |
 | Python tools | `tools/python_analysis.py`, `tools/python_execution.py`, `tools/python_worker.py` | Supported syntax and batched tracing. |
 | Advisory difficulty | `mcp/difficulty_tools.py`, `application/code_difficulty.py`, `domains/code/difficulty.py`, `llm/judging.py` | Template difficulty and standalone concrete-MCQ judging, independent of correctness. |
 | Shared relevance | `relevance_contracts.py`, `application/relevance.py`, `mcp/relevance_tools.py`, `llm/decision.py` | Domain-independent local alignment decision; no correctness, requirements or difficulty dependency. |

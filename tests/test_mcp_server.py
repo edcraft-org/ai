@@ -9,7 +9,10 @@ from fastmcp.exceptions import ToolError
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.mcp import code_tools
-from edcraft_validator.mcp.code_checks.property_checks import PropertyCheckSettings
+from edcraft_validator.mcp.code_checks.property_checks import (
+    PropertyCheckRun,
+    PropertyCheckSettings,
+)
 from edcraft_validator.mcp.code_tools import CODE_TOOL_VERSION
 from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.tools.python_execution import ExecutionResult
@@ -209,32 +212,21 @@ async def test_mcp_deadline_returns_error_without_waiting_for_synchronous_work(
     release = threading.Event()
     finished = threading.Event()
 
-    def block():
+    def blocked_operation(*args, **kwargs):
         started.set()
         try:
             release.wait(timeout=10)
+            return {}
         finally:
             finished.set()
 
-    class SlowExecutor(ArithmeticExecutor):
-        def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
-            block()
-            return super().execute_batch(
-                code, entry_function, inputs, timeout_seconds=timeout_seconds
-            )
-
-    if tool_name != "code_validate_answers_and_distractors":
-        original_check = code_tools.check_structure
-
-        def slow_structure(context):
-            block()
-            return original_check(context)
-
-        monkeypatch.setattr(code_tools, "check_structure", slow_structure)
-        monkeypatch.setattr(code_tools, "STATIC_TOOL_TIMEOUT_SECONDS", 0.1)
+    # Isolate the MCP deadline from sampling's own budget, which can expire
+    # during Hypothesis setup before an executor is ever called.
+    monkeypatch.setattr(code_tools, tool_name.removeprefix("code_"), blocked_operation)
+    monkeypatch.setattr(code_tools, "STATIC_TOOL_TIMEOUT_SECONDS", 0.1)
 
     server = create_validation_server(
-        code_execution_tool=SlowExecutor(),
+        code_execution_tool=ArithmeticExecutor(),
         code_execution_timeout_seconds=0.001,
         template_property_settings=PropertyCheckSettings(timeout_seconds=0.1),
     )
@@ -257,6 +249,28 @@ async def test_mcp_deadline_returns_error_without_waiting_for_synchronous_work(
         release.set()
         if started.is_set():
             assert await asyncio.to_thread(finished.wait, 2)
+
+
+async def test_semantic_budget_can_expire_before_executor_starts(monkeypatch):
+    original_check = PropertyCheckRun.check
+
+    def check_after_slow_setup(self, *args, **kwargs):
+        # Simulate setup consuming the budget without depending on runner speed.
+        self.started -= self.config.timeout_seconds
+        return original_check(self, *args, **kwargs)
+
+    monkeypatch.setattr(PropertyCheckRun, "check", check_after_slow_setup)
+    executor = ArithmeticExecutor()
+    result = await call_tool(
+        create_validation_server(code_execution_tool=executor),
+        "code_validate_answers_and_distractors",
+        {"candidate": candidate().model_dump(mode="json"), "required_distractors": 3},
+    )
+
+    assert result["status"] == "error"
+    assert result["findings"][0]["code"] == "PROPERTY_CHECK_BUDGET_EXCEEDED"
+    assert result["details"]["execution_calls"] == executor.calls == 0
+    assert result["details"]["examples_checked"] == 0
 
 
 async def test_semantic_tool_executes_once_and_returns_canonical_results():

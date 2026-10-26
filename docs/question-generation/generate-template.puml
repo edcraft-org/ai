@@ -13,7 +13,7 @@ App -> MCP: Get tools tagged for this domain once
 App -> Model: Request proposal and selected checks
 Model --> App: Proposal and check plan
 
-loop Until success, at most 3 attempts
+loop Until success, initial proposal plus at most 3 revisions
     App -> Domain: Build candidate
     loop Selected checks
         App -> Model: Request tool calls
@@ -25,13 +25,13 @@ loop Until success, at most 3 attempts
     end
     alt All checks passed
         App -> Model: Final results; acknowledgement only
-        App -> Domain: Package checked answers and distractors
+        App -> Domain: Package recipes and sampled checking statistics
         Domain --> App: Artifact, or missing required data
         App -> App: checked, or needs_review if data is missing
     else Failed and attempts remain
         App -> Model: Request revision using all results
         Model --> App: Revised proposal, same selected checks
-    else Third attempt failed
+    else Final attempt failed
         App -> Model: Final results; acknowledgement only
         App -> App: needs_review
     end
@@ -40,7 +40,7 @@ App --> User: One report with all attempts; small artifact if available
 
 note over App, User
 Saved artifacts get a new ID.
-Reports keep history; artifacts keep content and checked answers.
+Reports keep history; artifacts keep content, recipes and checking statistics.
 Existing-candidate validation checks once without revisions.
 Interrupted conversations return error.
 Human approval is future product work.
@@ -48,6 +48,6 @@ end note
 
 User -> App: Saved artifact and seed
 App -> Domain: Generate question locally
-Domain --> App: Question
-App --> User: Question; no model or MCP calls
+Domain --> App: Draft question requiring manual review
+App --> User: Draft question; no model or MCP calls
 @enduml
