@@ -101,7 +101,9 @@ class OpenAICompatibleProvider:
         try:
             wire_model = (
                 constrained_check_plan(
-                    request.response_model, request.offered_tool_names
+                    request.response_model,
+                    request.offered_tool_names,
+                    request.check_argument_models,
                 )
                 if request.offered_tool_names
                 else request.response_model

@@ -19,8 +19,10 @@ fail, revisions contain recipes and parameter values; the application preserves
 the program, question wording and function interface. Difficulty mismatches allow
 a coherent full revision. Author generation/revision calls allow one additional
 attempt for connection failures or transient HTTP errors; invalid content and
-timeouts are not retried. Difficulty checks remain single-pass. OpenAI/SocLaas check plans constrain names
-to the available catalogue instead of allowing invented names.
+timeouts are not retried. Difficulty checks remain single-pass. All providers receive
+check plans constrained to the catalogue, with typed model-owned arguments. The
+application freezes the plan and executes it directly through MCP, without native
+tool requests or a final acknowledgement call.
 
 You can also edit a template candidate, check it again, and generate questions from
 the saved result. This works through the library and command line. The new AI
@@ -44,8 +46,8 @@ Edit `.env` for the provider you want to use. For OpenAI, set `OPENAI_API_KEY` a
 `OPENAI_MODEL`. For Ollama, run the local server and set `OLLAMA_MODEL`.
 The remaining settings are listed in [.env.example](.env.example).
 
-Ollama thinking defaults to off so its output budget goes to proposals and tool
-calls. Set `OLLAMA_THINK=true` to enable it, `default` to use the model's setting,
+Ollama thinking defaults to off so its output budget goes to proposals and
+revisions. Set `OLLAMA_THINK=true` to enable it, `default` to use the model's setting,
 or a supported level such as `low` for models that require a named thinking level.
 Enabled thinking may require a larger `OLLAMA_NUM_PREDICT` budget.
 
@@ -61,13 +63,14 @@ Local schema validation and all template checks still apply.
 for endpoints without strict-schema support; its schema is supplied in the prompt.
 `SOCLAAS_REASONING_EFFORT=default` leaves reasoning to the model; an explicit value
 such as `none` or `medium` is sent when configured. The default request timeout is
-300 seconds. Generation and tool/acknowledgement output budgets are 16384 and 4096
-tokens; adjust `SOCLAAS_GENERATION_MAX_TOKENS` and `SOCLAAS_TOOL_MAX_TOKENS` as needed.
-These budgets must cover reasoning and the final response.
-Every provider is asked to batch the current stage's checks in one native-tool response.
-The application executes each returned call, collects its evidence, and requests
-only checks still pending if the batch is incomplete. Corrections start after the
-stage finishes. Owned arguments and every returned call are validated.
+300 seconds. The generation/revision output budget is 16384 tokens; adjust
+`SOCLAAS_GENERATION_MAX_TOKENS` as needed. This budget covers reasoning and the final
+response. `SOCLAAS_TOOL_MAX_TOKENS` remains available for optional native-tool API
+users but is unused by template authoring. The application runs every selected
+ordinary check once per candidate, validates owned arguments and evidence, and
+collects results before requesting a revision. The initial plan includes a nonempty
+`required` feature list when `code_require_features` is selected; other code checks
+use empty model-owned arguments.
 The template difficulty check runs after correctness passes, using the selected
 distractors and the declared parameter distribution. SocLaas
 estimates the typical instance. A mismatch at confidence 0.80 or higher feeds

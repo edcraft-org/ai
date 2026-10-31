@@ -9,13 +9,12 @@ For commands, see the [README](../../README.md).
 1. The user supplies a domain, prompt, and `easy`, `medium`, or `hard` difficulty.
 2. The application gets tools tagged for the selected domain from MCP. For example,
    code tools have the tag `domain:code`. MCP lists the tools and runs their checks.
-3. The model returns a template proposal and the checks it wants to run.
-4. The model is asked to request all pending checks together using native tool
-   calls. The application supplies the current candidate, calls MCP, and collects
-   every result from the batch before the next model request. If the model requests
-   only part of the plan, the remaining checks are offered on the next turn.
-5. If a check fails, the model can revise the proposal and try again. The selected
-   check names stay the same throughout the job.
+3. The model returns a template proposal and a check plan, including each check's
+   model-owned arguments. The application validates and freezes names and arguments.
+4. The application runs selected checks sequentially through MCP, binding the current
+   candidate and request-owned values. No model call is needed to request execution.
+5. If a check fails, the model can revise the proposal and try again. Check names
+   and model-owned arguments remain fixed throughout the job.
 6. If all checks pass and the domain has the answers it needs, the application saves
    a reusable artifact. Otherwise, it returns the checked candidates and history.
 
@@ -23,7 +22,9 @@ There are at most four attempts: the initial proposal plus three template revisi
 Selected template difficulty checks run after correctness passes and use SocLaas
 to estimate the typical instance across the declared parameter distribution. A
 high-confidence mismatch feeds back to the authoring model for revision; a judge failure ends the job without retrying the check.
-Each attempt runs the whole selected plan, even if one check fails. Checks must all
+Each attempt runs every ordinary selected check, even if one fails. Dependent
+difficulty checks remain pending with an explicit skip reason when prerequisites
+fail. Checks must all
 pass on the same candidate in the same attempt.
 
 New code proposals include an `answer_expression` recipe. Bounded property-based
@@ -44,7 +45,7 @@ The threshold of 0.80 is provisional; confidence is not measured accuracy.
 
 | Component | Responsibility |
 | --- | --- |
-| Model | Propose the template, select and request checks, and revise failures. |
+| Model | Propose the template, select checks and their planning arguments, and revise failures. |
 | Application | Coordinate model and tool calls, limit attempts, and save results. |
 | Domain | Define the question format, prompts, template construction, finalization, and question generation. |
 | MCP | Own tool definitions, domain tags, checking algorithms, and checking results. |
@@ -58,9 +59,12 @@ carry multiple domain tags. There is no separate tool-name list in the domain.
 The application saves the discovered catalogue once per job, and the model chooses
 its fixed check plan from that catalogue.
 
-The model sees check names and purposes when choosing its plan. During checking,
-it receives only the arguments it must supply; the application supplies the current
-template and request settings. The same contract is used by every provider.
+The model sees check names, purposes and schemas for model-owned planning arguments.
+For `code_require_features`, it supplies a nonempty `required` list of supported
+features explicitly requested by the educator. Other code checks use `{}`. The
+application supplies the current template and request settings. The same contract
+is used by every provider; the authoring model needs structured generation support
+but no native-tool capability.
 Feedback includes verdicts and actionable failure details. Successful checks record compact counts and settings. Failures include a
 counterexample; sampled answer tables are not persisted. Full tool definitions are kept in memory for dispatch and
 can be exported separately with `--tool-schemas`; the report contains a compact
@@ -75,11 +79,10 @@ distractor recipes. The application preserves the valid program and wording and
 rejects parameter name/kind/order changes. Code responses use an array of indented
 lines; saved templates contain ordinary source text. Authors receive the same
 original level definitions as the checker, without more worked examples.
-The model can correct its own tool arguments. If they imposed requirements the
-author did not request, corrections should fix those arguments rather than add
-irrelevant code; the requested scope and difficulty must be preserved.
+The initial plan cannot be weakened during revision. A mistaken feature requirement
+therefore needs a new authoring job; revisions cannot silently remove it.
 Correction feedback includes `model_arguments` separately from tool observations
-so the model can distinguish its own requirements from the author's request.
+so the model can distinguish its own requirements from the educator's request.
 
 ## Available code checks
 
@@ -106,7 +109,7 @@ well or has the right difficulty.
 | --- | --- |
 | `checked` | Selected checks passed and a reusable artifact was saved. |
 | `needs_review` | The revision limit was reached, a selected check failed, or required answer data is missing. |
-| `error` | The workflow was interrupted or could not complete the tool conversation. |
+| `error` | The workflow was interrupted or could not obtain a valid structured response. |
 
 MCP setup and initial generation failures return an `error` report with zero
 attempts, available usage, and timing. Invalid CLI inputs or provider-creation
@@ -121,8 +124,10 @@ If the workflow is interrupted after a proposal exists, `failure` identifies the
 terminal stage and error code. Earlier check failures remain in the attempts and do
 not replace the final error. Timings include failed correction requests.
 
-The final results are also sent to the model for acknowledgement. If that call fails,
-`feedback_error` records it; the completed checking outcome is preserved.
+Final outcomes are determined locally from check evidence; no acknowledgement call
+is made. `feedback_error` remains readable for historical reports. New reports add
+`check_plan` with frozen arguments alongside the historical `fixed_plan` name list.
+Execution IDs are application-generated, not provider tool-call IDs.
 
 ## Saving, editing, and reuse
 
@@ -132,7 +137,7 @@ question generation uses the seed to select allowed inputs and evaluates the sav
 recipes; it makes no model, MCP, or tracing calls.
 
 Every job produces one report with all its attempts. Each attempt stores its
-candidate once. Tool records contain model-requested arguments, additional
+candidate once. Tool records contain frozen model-owned planning arguments, additional
 application arguments, and full evidence; the tools still receive the complete
 candidate when running. Failed attempts remain available for evaluation.
 

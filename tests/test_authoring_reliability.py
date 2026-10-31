@@ -203,7 +203,7 @@ def test_recovered_author_call_is_counted_without_using_a_template_revision():
     assert result.status == "checked" and len(result.attempts) == 1
     assert [call.operation for call in result.model_calls[:2]] == ["generation"] * 2
     assert result.model_calls[0].error == "transport"
-    assert result.usage.model_call_count == 4
+    assert result.usage.model_call_count == 2
 
 
 @pytest.mark.parametrize("status", [400, 401, 403])

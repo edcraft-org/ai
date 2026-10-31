@@ -1,6 +1,5 @@
 """The existing-candidate entry point uses the same MCP execution boundary."""
 
-import json
 from pathlib import Path
 
 import pytest
@@ -142,10 +141,10 @@ def test_failed_candidate_is_not_rewritten_and_remaining_checks_run(candidate):
     assert [x.tool for x in executions] == [SEMANTIC, STRUCTURE]
     assert [x.evidence.status for x in executions] == ["failed", "passed"]
     assert executions[0].evidence.findings[0].code == "PROPOSED_ANSWER_MISMATCH"
-    tool_messages = [x for x in provider.transcripts[-1] if x["role"] == "tool"]
-    assert len(tool_messages) == 2
+    assert provider.transcripts == []
+    assert result.usage.model_call_count == 1
     assert (
-        json.loads(tool_messages[0]["content"])["evidence"]["findings"][0]["code"]
+        executions[0].model_feedback()["evidence"]["findings"][0]["code"]
         == "PROPOSED_ANSWER_MISMATCH"
     )
 

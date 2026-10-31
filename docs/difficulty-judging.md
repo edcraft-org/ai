@@ -10,9 +10,10 @@ asks the model to select it alongside the independent correctness checks; inspec
 After the selected correctness checks pass, the application binds the exact
 reusable template: code, full finite parameter domains, question pattern, answer
 target and checked distractor recipes. The proposed answer expression is cleared,
-just as in the saved artifact. The model requests the native tool call; it cannot
-replace the application-owned candidate. If correctness fails, difficulty stays
-pending and no judge call is spent on that attempt.
+just as in the saved artifact. The application invokes the selected MCP check
+directly, without asking the authoring model for a native tool call. If correctness
+fails, difficulty stays pending with a skip reason and no judge call is spent on
+that attempt.
 
 SocLaas assesses the **typical instance** under the effective sampling policy.
 Parameter values are sampled independently and uniformly; generation may resample

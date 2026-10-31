@@ -20,7 +20,10 @@ from edcraft_validator.llm.llm_errors import (
     GenerationTimeoutError,
     GenerationTransportError,
 )
-from edcraft_validator.llm.tool_context import generation_messages
+from edcraft_validator.llm.tool_context import (
+    constrained_check_plan,
+    generation_messages,
+)
 from edcraft_validator.llm.usage import TokenUsage
 
 
@@ -47,13 +50,23 @@ class OllamaProvider:
     ) -> ProposalT:
         self.last_usage = TokenUsage()
         try:
+            wire_model = (
+                constrained_check_plan(
+                    request.response_model,
+                    request.offered_tool_names,
+                    request.check_argument_models,
+                )
+                if request.offered_tool_names
+                else request.response_model
+            )
             content = self._ollama_request(
                 generation_messages(request),
-                request.response_model.model_json_schema(),
+                wire_model.model_json_schema(),
             )
             if not content:
                 raise GenerationResponseError("Ollama returned an empty response")
-            return request.response_model.model_validate_json(content)
+            result = wire_model.model_validate_json(content)
+            return request.response_model.model_validate_json(result.model_dump_json())
         except GenerationError:
             raise
         except ValidationError as exc:

@@ -6,6 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, SerializeAsAny
 
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
+from edcraft_validator.llm.llm_contracts import RecommendedCheck
 from edcraft_validator.llm.usage import ModelCallRecord, ModelUsageSummary
 from edcraft_validator.mcp.evidence import ToolEvidence, ToolFinding
 
@@ -28,6 +29,7 @@ class AuthoringError(BaseModel):
 
 
 class CheckExecution(BaseModel):
+    # Application-generated execution ID; historical records retain provider IDs.
     call_id: str
     tool: str
     # The enclosing attempt stores the candidate supplied to this call.
@@ -35,6 +37,7 @@ class CheckExecution(BaseModel):
     application_arguments: dict[str, Any] | None = None
     evidence: ToolEvidence | None = None
     error: str | None = None
+    skip_reason: str | None = None
 
     def model_feedback(self) -> dict[str, Any]:
         """Send verdicts and repair context; retain full records in the application."""
@@ -45,7 +48,10 @@ class CheckExecution(BaseModel):
             )
             if self.evidence.status == "passed" and not self.evidence.findings:
                 evidence.pop("details")
-        return {"tool": self.tool, "error": self.error, "evidence": evidence}
+        feedback = {"tool": self.tool, "error": self.error, "evidence": evidence}
+        if self.skip_reason:
+            feedback["skip_reason"] = self.skip_reason
+        return feedback
 
     @property
     def passed(self) -> bool:
@@ -81,6 +87,7 @@ class AuthoringResult(BaseModel):
     feedback_error: str | None = None
     failure: AuthoringError | None = None
     fixed_plan: list[str]
+    check_plan: list[RecommendedCheck] = Field(default_factory=list)
     tool_catalogue: list[dict[str, Any]]
     attempts: list[GenerationAttempt] = Field(default_factory=list)
     artifact: SerializeAsAny[ValidatedTemplateArtifact] | None = None

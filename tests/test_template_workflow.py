@@ -146,7 +146,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring.model == "stub-model"
     assert (
         validated.authoring.base_prompt_version
-        == "code-template-v21-property-based+response-v6"
+        == "code-template-v21-property-based+response-v7-direct-checks"
     )
     assert validated.authoring.domain == "code"
     assert provider_calls[0].tool_catalogue.names == (
@@ -364,3 +364,61 @@ def test_unknown_recommended_check_stops_before_candidate_validation() -> None:
         )
     assert failure.value.result.failure.code == "schema_validation"
     assert failure.value.result.usage.model_call_count == 1
+
+
+def test_non_code_domain_can_plan_typed_arguments_without_shared_tool_names():
+    from pydantic import ConfigDict, Field
+
+    from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
+
+    class Bounds(BaseModel):
+        model_config = ConfigDict(extra="forbid", strict=True)
+        minimum: int = Field(ge=0)
+
+    server = FastMCP("Example typed plan")
+
+    @server.tool(
+        description="Check a chosen bound", version="1", tags={"domain:example"}
+    )
+    def meets_bound(value: int, minimum: int) -> ToolEvidence:
+        assert value == 12 and minimum == 5
+        return ToolEvidence(tool="meets_bound", version="1", status="passed")
+
+    class Domain:
+        name = "example"
+
+        def generation_request(self, request):
+            return StructuredGenerationRequest(
+                messages=[{"role": "user", "content": request.topic}],
+                response_model=PlannedGenerationResponse[ExampleProposal],
+                prompt_version="example-v2",
+                check_argument_models=(("meets_bound", Bounds),),
+            )
+
+        def build_candidate(self, request, proposal):
+            return ExampleTemplate(value=proposal.value)
+
+        def tool_bindings(self, request, candidate, name):
+            return {"value": candidate.value}
+
+        def finalize_checked_template(self, candidate, evidence):
+            return ExampleValidated(value=candidate.value)
+
+    class Provider:
+        provider, model = "stub", "structured-only"
+
+        def generate(self, request):
+            return request.response_model.model_validate(
+                {
+                    "proposal": {"value": 12},
+                    "checks": [{"name": "meets_bound", "arguments": {"minimum": 5}}],
+                }
+            )
+
+    result = TemplateApplication(tool_client=FastMcpToolClient(server)).author_template(
+        ExampleRequest(topic="bounds"), domain=Domain(), provider=Provider()
+    )
+    assert result.status == "checked"
+    assert result.check_plan[0].arguments == {"minimum": 5}
+    assert result.attempts[0].executions[0].application_arguments == {"value": 12}
+    assert result.usage.model_call_count == 1

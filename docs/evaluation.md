@@ -50,17 +50,23 @@ SocLaas defaults to `SOCLAAS_RESPONSE_FORMAT=json_object`, with the response sch
 included in the prompt and validated locally. `json_schema` remains configurable.
 `SOCLAAS_REASONING_EFFORT=default` omits the API parameter and retains the model's
 default reasoning; explicit values are passed through. Both settings are recorded.
-SocLaas defaults to a 300-second request timeout, with generation and tool/receipt
-budgets of 16384 and 4096 tokens (`SOCLAAS_GENERATION_MAX_TOKENS` and
-`SOCLAAS_TOOL_MAX_TOKENS`). Reasoning uses the same output budget. Truncated
-generation and tool responses are recorded as errors, with available usage preserved.
-All providers are asked to batch the pending native tool calls. OpenAI-compatible
-requests use `tool_choice=required` and `parallel_tool_calls=true`. The application
-executes the calls against the same candidate and collects every result before
-requesting a correction. Incomplete batches request only the remaining checks;
-they cannot skip validation. Call records retain the requested function names and
-arguments. Compare actual multi-call turns, success rates, and total job usage:
-allowing batching does not guarantee the model returns multiple calls.
+SocLaas defaults to a 300-second request timeout and a generation/revision budget
+of 16384 tokens (`SOCLAAS_GENERATION_MAX_TOKENS`). Reasoning uses the same output
+budget. Truncated generations are recorded as errors with available usage preserved.
+The application executes the initial frozen check plan directly through MCP; no
+native-tool request or acknowledgement calls are needed. Report author generation
+and revision calls separately from judge calls inside checks. Judge usage is
+retained in MCP evidence, outside the top-level author usage totals.
+
+Pre-#93 experiments used native-tool requests and acknowledgements, including a
+4096-token tool budget. Preserve those records as results of that workflow version;
+new runs must identify their source revision and prompt version separately. Direct
+dispatch removes those authoring calls but does not change sampling algorithms,
+initial-generation retry rules or the difficulty acceptance policy. A deterministic
+fixture comparison against `28489b8` produced the same artifacts and check dispatches:
+first-pass author calls fell from 3 to 1; a one-revision repair fell from 5 to 2.
+These traces omit model-backed checks and do not establish live yield or latency gains.
+
 Record settings when comparing runs: earlier SocLaas experiments used strict schema
 mode, disabled reasoning, a 60-second timeout, and a 1024-token tool budget.
 Other providers retain their request formats and defaults. Set the primary provider's
@@ -72,7 +78,7 @@ working-tree status, and preview seeds; `.summary.json` records outcomes, first
 attempt and correction rates, attempts per job, failure categories, median/range
 latency, model calls, and token usage. Until all requested jobs are recorded, the
 remaining jobs are counted as unresolved. `--jobs` controls total jobs; additional
-jobs cycle through the same cases. A job can contain up to three checking attempts.
+jobs cycle through the same cases. A job can contain up to four checking attempts.
 
 The directory with the output file's stem contains full catalogue snapshots,
 successful template files, and previews at seeds 0, 1, and 42. The script reloads

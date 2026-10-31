@@ -123,7 +123,15 @@ def test_each_distractor_recipe_has_a_required_closed_evidence_key(count):
         template_assessment_model(count).model_validate({})
 
 
-def run(estimates, failure=None, *, validation=False, proposals=None, confidence=0.95):
+def run(
+    estimates,
+    failure=None,
+    *,
+    validation=False,
+    proposals=None,
+    confidence=0.95,
+    plan=None,
+):
     judges = []
     pending = iter(estimates)
 
@@ -142,7 +150,8 @@ def run(estimates, failure=None, *, validation=False, proposals=None, confidence
             return super().generate(request)
 
     author = Author(
-        proposals=proposals, plan=(SEMANTIC, STRUCTURE, TEMPLATE_DIFFICULTY_TOOL)
+        proposals=proposals,
+        plan=plan or (SEMANTIC, STRUCTURE, TEMPLATE_DIFFICULTY_TOOL),
     )
     server = create_validation_server(
         difficulty_provider_factory=factory, code_execution_tool=Executor()
@@ -163,7 +172,7 @@ def run(estimates, failure=None, *, validation=False, proposals=None, confidence
     return result, author, judges
 
 
-def test_native_template_tool_feedback_reaches_author_and_third_revision_can_pass():
+def test_direct_template_tool_feedback_reaches_author_and_third_revision_can_pass():
     result, author, judges = run(["hard", "medium", "medium", "easy"])
     assert result.status == "checked" and len(result.attempts) == 4
     assert len(judges) == 4 and all(len(j.requests) == 1 for j in judges)
@@ -217,7 +226,9 @@ def test_correctness_failure_defers_difficulty_without_spending_a_judge_call():
     assert len(author.generations) == 4 and judges == []
     assert all(a.pending == [TEMPLATE_DIFFICULTY_TOOL] for a in result.attempts)
     assert all(
-        not any(e.tool == TEMPLATE_DIFFICULTY_TOOL for e in a.executions)
+        a.executions[-1].tool == TEMPLATE_DIFFICULTY_TOOL
+        and a.executions[-1].skip_reason == "Prerequisite checks did not pass"
+        and a.executions[-1].evidence is None
         for a in result.attempts
     )
 
@@ -283,3 +294,19 @@ def test_mcp_client_allows_the_glm_judge_deadline_plus_overhead(monkeypatch):
     with FastMcpToolClient(server=object()) as client:
         assert client.call_tool(TEMPLATE_DIFFICULTY_TOOL, {}) == {"status": "passed"}
     assert timeouts == [330, 330]
+
+
+def test_application_stages_difficulty_even_if_model_lists_it_first():
+    plan = (TEMPLATE_DIFFICULTY_TOOL, SEMANTIC, STRUCTURE)
+    result, author, judges = run(["easy"], plan=plan)
+    assert result.status == "checked"
+    assert result.fixed_plan == list(plan)
+    assert [entry.tool for entry in result.attempts[0].executions] == [
+        SEMANTIC,
+        STRUCTURE,
+        TEMPLATE_DIFFICULTY_TOOL,
+    ]
+    assert len(judges) == 1 and len(judges[0].requests) == 1
+    assert len(author.generations) == result.usage.model_call_count == 1
+    judge_usage = result.attempts[0].executions[-1].evidence.details["usage"]
+    assert judge_usage["model_call_count"] == 1

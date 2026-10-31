@@ -2,7 +2,6 @@
 
 import copy
 import json
-import uuid
 
 import pytest
 from test_template_evaluator import proposal
@@ -12,9 +11,7 @@ from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
 from edcraft_validator.llm.llm_contracts import (
     CheckPlanResponse,
-    ModelTurn,
     PlannedGenerationResponse,
-    ToolCall,
 )
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.server import create_validation_server
@@ -59,12 +56,12 @@ class Provider:
     def generation_settings(self):
         return {"mode": "scripted"}
 
-    def __init__(self, proposals=None, plan=(SEMANTIC, STRUCTURE), call_factory=None):
+    def __init__(self, proposals=None, plan=(SEMANTIC, STRUCTURE), plan_arguments=None):
         self.proposals = proposals or [proposal()]
         self.plan = plan
         self.generations = []
         self.turns = []
-        self.call_factory = call_factory
+        self.plan_arguments = plan_arguments or {}
 
     def generate(self, request):
         self.generations.append(copy.deepcopy(request.messages))
@@ -75,34 +72,14 @@ class Provider:
             return request.response_model.model_validate(current.model_dump())
         return PlannedGenerationResponse(
             proposal=current,
-            checks=[{"name": name, "arguments": {}} for name in self.plan],
+            checks=[
+                {"name": name, "arguments": self.plan_arguments.get(name, {})}
+                for name in self.plan
+            ],
         )
 
     def tool_turn(self, messages, tools):
-        self.turns.append(copy.deepcopy((messages, tools)))
-        if not tools:
-            # Evidence is actually delivered even after the last successful/failed call.
-            assert any(message["role"] == "tool" for message in messages)
-            return ModelTurn(content="Evidence received")
-        names = [tool["function"]["name"] for tool in tools]
-        for tool in tools:
-            assert "candidate" not in tool["function"]["parameters"]["properties"]
-            assert (
-                "required_distractors"
-                not in tool["function"]["parameters"]["properties"]
-            )
-        if self.call_factory:
-            return self.call_factory(names)
-        return calls(*names)
-
-
-def calls(*names, arguments="{}"):
-    return ModelTurn(
-        calls=[
-            ToolCall(id=str(uuid.uuid4()), name=name, arguments_json=arguments)
-            for name in names
-        ]
-    )
+        pytest.fail("Direct dispatch must not request native tools or acknowledgement")
 
 
 def run(provider, client=None):
@@ -118,64 +95,48 @@ def wrong_answer():
 
 
 @pytest.mark.parametrize("provider_name", ["openai", "soclaas", "ollama"])
-def test_three_tool_batches_deliver_all_evidence_before_self_correction(provider_name):
-    def request_all(names):
-        return ModelTurn(
-            calls=[
-                calls(
-                    name,
-                    arguments='{"required":["arithmetic"]}'
-                    if name == FEATURES
-                    else "{}",
-                ).calls[0]
-                for name in names
-            ]
-        )
-
+def test_direct_checks_deliver_all_evidence_before_self_correction(provider_name):
     plan = (SEMANTIC, STRUCTURE, FEATURES)
-    provider = Provider([wrong_answer(), proposal()], plan, request_all)
+    arguments = {FEATURES: {"required": ["arithmetic"]}}
+    provider = Provider([wrong_answer(), proposal()], plan, arguments)
     provider.provider = provider_name
     result, client = run(provider)
-
     assert result.status == "checked"
     assert [name for name, _ in client.dispatches] == list(plan) * 2
     assert len(result.attempts) == 2
     assert all(attempt.complete for attempt in result.attempts)
     assert not result.attempts[0].passed and result.attempts[1].passed
-    checking_turns = [(messages, tools) for messages, tools in provider.turns if tools]
-    assert len(checking_turns) == 2  # One tool-request turn per full attempt.
-    assert all(len(tools) == 3 for _, tools in checking_turns)
-    assert "Batch the native tool calls together" in checking_turns[0][0][-1]["content"]
+    assert [call.operation for call in result.model_calls] == ["generation", "revision"]
     revision = json.loads(provider.generations[1][-1]["content"])
-    assert "tool arguments imposed unrequested requirements" in revision["instruction"]
-    assert "Only check names are fixed" in revision["instruction"]
-    assert "An unchanged proposal is allowed" in revision["instruction"]
+    assert "Check names and model-owned arguments are fixed" in revision["instruction"]
+    assert "next tool turn" not in revision["instruction"]
     assert revision["check_results"] == [
-        {
-            **execution.model_feedback(),
-            "model_arguments": execution.requested_arguments,
-        }
+        {**execution.model_feedback(), "model_arguments": execution.requested_arguments}
         for execution in result.attempts[0].executions
     ]
     assert revision["fixed_plan"] == list(plan)
-    assert len([m for m in provider.turns[-1][0] if m["role"] == "tool"]) == 3
+    assert revision["check_plan"] == [check.model_dump() for check in result.check_plan]
+    assert [
+        args["required"] for name, args in client.dispatches if name == FEATURES
+    ] == [["arithmetic"], ["arithmetic"]]
 
 
-def test_partial_batch_requests_only_remaining_checks_and_cannot_skip_them():
-    def request_subset(names):
-        return calls(names[0])
+def test_application_runs_each_selected_check_once_without_provider_tool_support():
+    class StructuredOnly:
+        provider, model = "scripted", "structured-only"
+        generate = Provider.generate
 
-    provider = Provider(call_factory=request_subset)
-    result, client = run(provider)
+        def __init__(self):
+            self.generations = []
+            self.proposals = [proposal()]
+            self.plan = (SEMANTIC, STRUCTURE)
+            self.plan_arguments = {}
 
+    result, client = run(StructuredOnly())
     assert result.status == "checked"
     assert [name for name, _ in client.dispatches] == [SEMANTIC, STRUCTURE]
-    first, second, receipt = provider.turns
-    assert [tool["function"]["name"] for tool in first[1]] == [SEMANTIC, STRUCTURE]
-    assert [tool["function"]["name"] for tool in second[1]] == [STRUCTURE]
-    assert len([m for m in second[0] if m["role"] == "tool"]) == 1
-    assert receipt[1] == []
-    assert len([m for m in receipt[0] if m["role"] == "tool"]) == 2
+    assert result.usage.model_call_count == 1
+    assert result.feedback_error is None
 
 
 def test_failure_runs_whole_plan_then_corrects_with_same_catalogue_and_fresh_evidence():
@@ -227,7 +188,7 @@ def test_fourth_failure_retains_full_history_without_attempt_five():
     assert len(client.dispatches) == 8
     assert all(attempt.complete and not attempt.passed for attempt in result.attempts)
     assert result.attempts[-1].candidate["answer_expression"] == "a - b"
-    assert provider.turns[-1][1] == []
+    assert result.usage.model_call_count == 4
     assert len(provider.generations[1]) == len(provider.generations[2])
     assert provider.generations[2][-2]["role"] == "assistant"
     feedback = json.loads(provider.generations[2][-1]["content"])["check_results"]
@@ -243,57 +204,43 @@ def test_fourth_failure_retains_full_history_without_attempt_five():
 @pytest.mark.parametrize(
     "arguments",
     [
-        '{"candidate": {"code": "different program"}}',
-        '{"required_distractors": 2}',
-        "[]",
-        '{"unknown": true}',
+        {"candidate": {"code": "different program"}},
+        {"required_distractors": 2},
+        {"unknown": True},
+        [],
         "{invalid",
     ],
 )
-def test_invalid_or_overridden_arguments_never_dispatch_or_pass(arguments):
-    result, client = run(
-        Provider(
-            plan=(SEMANTIC,),
-            call_factory=lambda names: calls(SEMANTIC, arguments=arguments),
-        )
-    )
-    assert result.status == "needs_review"
-    assert client.dispatches == []
-    assert len(result.attempts) == 4
-    assert all(attempt.executions[0].error for attempt in result.attempts)
-
-
-@pytest.mark.parametrize("tool", ["invented_tool", FEATURES])
-def test_unknown_or_allowed_but_unselected_tool_never_dispatches(tool):
-    result, client = run(
-        Provider(plan=(SEMANTIC,), call_factory=lambda names: calls(tool))
-    )
+def test_invalid_or_overridden_plan_arguments_stop_before_any_dispatch(arguments):
+    result, client = run(Provider(plan_arguments={SEMANTIC: arguments}))
     assert result.status == "error"
-    assert "conversation limit" in result.reason
-    assert client.dispatches == []
-    assert result.attempts[0].pending == [SEMANTIC]
-    assert not result.attempts[0].complete
-
-
-def test_duplicate_name_runs_once_and_cannot_pass():
-    def repeat(names):
-        return calls(SEMANTIC, SEMANTIC) if SEMANTIC in names else calls(STRUCTURE)
-
-    result, client = run(Provider(call_factory=repeat))
-    assert result.status == "needs_review"
-    assert [name for name, _ in client.dispatches] == [SEMANTIC, STRUCTURE] * 4
-    assert all(attempt.executions[1].error for attempt in result.attempts)
-
-
-def test_missing_tool_calls_terminate_with_pending_checks():
-    provider = Provider(
-        call_factory=lambda names: ModelTurn(content="Everything passed")
-    )
-    result, client = run(provider)
-    assert result.status == "error"
-    assert len(provider.turns) == 6
-    assert not result.attempts[0].complete
+    assert result.failure.code in {"schema_validation", "ValidationError"}
+    assert not result.attempts
     assert not client.dispatches
+    assert result.usage.model_call_count == 1
+
+
+@pytest.mark.parametrize("tool", ["invented_tool", "another_domain_tool"])
+def test_unknown_planned_tool_never_dispatches(tool):
+    result, client = run(Provider(plan=(SEMANTIC, tool)))
+    assert result.status == "error"
+    assert "not offered" in result.reason
+    assert client.dispatches == []
+    assert not result.attempts
+
+
+def test_duplicate_plan_names_fail_before_any_dispatch():
+    result, client = run(Provider(plan=(SEMANTIC, SEMANTIC)))
+    assert result.status == "error"
+    assert "unique" in result.reason
+    assert not result.attempts and not client.dispatches
+
+
+def test_unselected_checks_are_not_added_by_application():
+    result, client = run(Provider(plan=(SEMANTIC,)))
+    assert result.status == "checked"
+    assert [name for name, _ in client.dispatches] == [SEMANTIC]
+    assert result.fixed_plan == [SEMANTIC]
 
 
 def test_revision_schema_cannot_change_plan_after_failed_attempt():
@@ -375,22 +322,17 @@ def test_application_injects_exact_candidate_and_original_request_count():
     assert result.status == "checked"
 
 
-def test_callable_schemas_do_not_expose_hidden_candidate_definitions():
-    provider = Provider()
-    result, _ = run(provider)
+def test_execution_records_keep_model_arguments_separate_from_owned_bindings():
+    result, _ = run(Provider())
     assert result.status == "checked"
-    for tool in provider.turns[0][1]:
-        assert tool["function"]["parameters"] == {
-            "type": "object",
-            "properties": {},
-            "required": [],
-            "additionalProperties": False,
-        }
-    # Full execution records and canonical answers remain available locally.
     execution = result.attempts[0].executions[0]
     assert execution.application_arguments == {"required_distractors": 3}
     assert execution.requested_arguments == {}
     assert execution.evidence.details["examples_checked"] > 0
+    assert [check.model_dump() for check in result.check_plan] == [
+        {"name": SEMANTIC, "arguments": {}},
+        {"name": STRUCTURE, "arguments": {}},
+    ]
 
 
 def test_live_workflow_assertions_cover_authoring_editing_and_replay():
@@ -408,57 +350,48 @@ def test_live_workflow_assertions_cover_authoring_editing_and_replay():
     check_live_workflow(WorkflowProvider([fixture]), reviewed_inputs=True)
 
 
-def test_model_argument_revision_keeps_membership_and_reruns_semantic_check():
-    number = 0
+def test_revision_cannot_mutate_frozen_feature_arguments():
+    class ChangingProvider(Provider):
+        def generate(self, request):
+            if self.generations:
+                self.plan_arguments[FEATURES]["required"][:] = ["loop"]
+            return super().generate(request)
 
-    def request(names):
-        nonlocal number
-        number += 1
-        # First attempt incorrectly requires a loop. Revision requests arithmetic.
-        return ModelTurn(
-            calls=[
-                *calls(SEMANTIC).calls,
-                *calls(
-                    FEATURES,
-                    arguments=json.dumps(
-                        {"required": ["loop" if number == 1 else "arithmetic"]}
-                    ),
-                ).calls,
-            ]
-        )
-
-    result, client = run(Provider(plan=(SEMANTIC, FEATURES), call_factory=request))
+    provider = ChangingProvider(
+        [wrong_answer(), proposal()],
+        plan=(SEMANTIC, FEATURES),
+        plan_arguments={FEATURES: {"required": ["arithmetic"]}},
+    )
+    result, client = run(provider)
     assert result.status == "checked"
     assert len(result.attempts) == 2
-    assert result.fixed_plan == [SEMANTIC, FEATURES]
-    assert [name for name, _ in client.dispatches] == [SEMANTIC, FEATURES] * 2
+    assert [
+        args["required"] for name, args in client.dispatches if name == FEATURES
+    ] == [["arithmetic"], ["arithmetic"]]
+    assert result.check_plan[-1].arguments == {"required": ["arithmetic"]}
 
 
-def test_failed_final_feedback_preserves_fourth_failure_history():
-    class NoReceipt(Provider):
-        def tool_turn(self, messages, tools):
-            if not tools:
-                raise TimeoutError("Model unavailable for acknowledgement")
-            return super().tool_turn(messages, tools)
-
-    result, _ = run(NoReceipt([wrong_answer()]))
+def test_fourth_failure_needs_no_acknowledgement():
+    result, _ = run(Provider([wrong_answer()]))
     assert result.status == "needs_review"
     assert len(result.attempts) == 4
-    assert (
-        result.feedback_error == "TimeoutError: Model unavailable for acknowledgement"
-    )
+    assert result.feedback_error is None
+    assert [call.operation for call in result.model_calls] == ["generation"] + [
+        "revision"
+    ] * 3
 
 
-def test_duplicate_call_ids_stop_before_dispatch():
-    def duplicates(names):
-        turn = calls(*names)
-        turn.calls[1].id = turn.calls[0].id
-        return turn
-
-    result, client = run(Provider(call_factory=duplicates))
-    assert result.status == "error"
-    assert "Duplicate tool call ID" in result.reason
-    assert not client.dispatches
+def test_execution_ids_are_application_owned_and_unique_across_attempts():
+    result, _ = run(Provider([wrong_answer(), proposal()]))
+    ids = [
+        execution.call_id
+        for attempt in result.attempts
+        for execution in attempt.executions
+    ]
+    assert len(ids) == len(set(ids)) == 4
+    assert ids == [
+        f"attempt-{n}:{name}" for n in (1, 2) for name in (SEMANTIC, STRUCTURE)
+    ]
 
 
 def test_passing_checks_from_different_attempts_cannot_be_combined():
@@ -542,3 +475,23 @@ def test_generation_timing_includes_successful_and_failed_corrections(
         assert result.failure.code == (
             "timeout" if revision == "timeout" else "schema_validation"
         )
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {},
+        {"required": []},
+        {"required": ["invented"]},
+        {"required": [123]},
+        {"required": ["loop"], "candidate": {}},
+        {"required": ["loop"], "extra": True},
+    ],
+)
+def test_invalid_feature_arguments_stop_before_checking(arguments):
+    result, client = run(
+        Provider(plan=(FEATURES,), plan_arguments={FEATURES: arguments})
+    )
+    assert result.status == "error"
+    assert result.failure.code == "schema_validation"
+    assert not result.attempts and not client.dispatches

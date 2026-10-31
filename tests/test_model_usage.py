@@ -114,36 +114,23 @@ def test_ollama_usage_survives_parse_and_output_budget_failures(monkeypatch, bod
     assert provider.last_usage == TokenUsage()
 
 
-def test_usage_counts_revisions_checking_and_failed_acknowledgement_per_job():
+def test_usage_counts_only_generation_and_revision_during_authoring():
     class Metered(Provider):
         def generate(self, request):
             self.last_usage = TokenUsage(input_tokens=100, output_tokens=20)
             return super().generate(request)
 
-        def tool_turn(self, messages, tools):
-            self.last_usage = TokenUsage(input_tokens=30, output_tokens=5)
-            if not tools:
-                raise GenerationResponseError("invalid acknowledgement")
-            return super().tool_turn(messages, tools)
-
     result, _ = run(Metered([wrong_answer(), Provider().proposals[0]]))
     assert result.status == "checked"
-    assert [call.operation for call in result.model_calls] == [
-        "generation",
-        "checking",
-        "revision",
-        "checking",
-        "acknowledgement",
-    ]
-    assert result.model_calls[-1].error == "invalid_response"
-    assert result.usage.model_call_count == 5
-    assert result.usage.input_tokens == 290
-    assert result.usage.output_tokens == 55
+    assert [call.operation for call in result.model_calls] == ["generation", "revision"]
+    assert result.usage.model_call_count == 2
+    assert result.usage.input_tokens == 200
+    assert result.usage.output_tokens == 40
     assert result.usage.unavailable_call_count == 0
     provider = Metered()
     first, _ = run(provider)
     second, _ = run(provider)
-    assert first.usage.model_call_count == second.usage.model_call_count == 3
+    assert first.usage.model_call_count == second.usage.model_call_count == 1
 
 
 def test_initial_generation_failure_retains_usage_settings_and_zero_attempts():
@@ -168,7 +155,7 @@ def test_initial_generation_failure_retains_usage_settings_and_zero_attempts():
 def test_providers_without_usage_remain_supported_and_totals_are_not_zero():
     result, _ = run(Provider())
     assert result.status == "checked"
-    assert result.usage.model_call_count == result.usage.unavailable_call_count == 3
+    assert result.usage.model_call_count == result.usage.unavailable_call_count == 1
     assert result.usage.input_tokens is None
     assert result.usage.output_tokens is None
     assert all(call.usage_unavailable_reason for call in result.model_calls)

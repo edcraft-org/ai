@@ -176,9 +176,11 @@ def test_ollama_receives_check_purposes_without_internal_mcp_schemas(
         )
     )
 
-    assert json.loads(captured["messages"][1]["content"].split("\n", 1)[1]) == [
-        {"name": tool["name"], "description": tool["description"]}
-    ]
+    context = json.loads(captured["messages"][1]["content"].split("\n", 1)[1])
+    assert context[0]["name"] == tool["name"]
+    assert context[0]["description"] == tool["description"]
+    assert set(context[0]["arguments_schema"]["properties"]) == {"required"}
+    assert "candidate" not in json.dumps(context[0]["arguments_schema"])
 
 
 def test_ollama_reports_common_response_schema_failures(monkeypatch) -> None:
@@ -435,3 +437,39 @@ def test_ollama_malformed_tool_call_fails_closed(monkeypatch):
     )
     with pytest.raises(GenerationResponseError, match="invalid tool turn"):
         OllamaProvider().tool_turn([], [])
+
+
+def test_ollama_validates_initial_feature_plan_without_native_tools(monkeypatch):
+    payload = {
+        "proposal": {
+            "question_template": "What does f({a}) return?",
+            "code": ["def f(a):", "    return a"],
+            "entry_function": "f",
+            "parameters": [{"name": "a", "kind": "integer", "values": [1, 2]}],
+            "answer_target": "return_value",
+            "answer_expression": "a",
+            "distractors": [
+                {"expression": "a + 1", "reason_template": "Adds one."},
+                {"expression": "a - 1", "reason_template": "Subtracts one."},
+            ],
+        },
+        "checks": [
+            {"name": "code_require_features", "arguments": {"required": ["loop"]}}
+        ],
+    }
+    schemas = []
+
+    def fake_request(self, messages, schema):
+        schemas.append(schema)
+        return json.dumps(payload)
+
+    monkeypatch.setattr(OllamaProvider, "_ollama_request", fake_request)
+    request = replace(
+        generation_request(), offered_tool_names=("code_require_features",)
+    )
+    provider = OllamaProvider(model="test")
+    assert provider.generate(request).checks[0].arguments == {"required": ["loop"]}
+    assert "RequiredFeaturesArguments" in schemas[0]["$defs"]
+    payload["checks"][0]["arguments"] = {"required": ["invented"]}
+    with pytest.raises(GenerationSchemaError):
+        provider.generate(request)
