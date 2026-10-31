@@ -75,9 +75,10 @@ revision prompt.
 Revisions contain only template fields. The application retains the original check
 plan, so the model does not select the checks again while fixing a template.
 For a distractor-only failure, typed code authors return only parameters and
-distractor recipes. The application preserves the valid program and wording and
-rejects parameter name/kind/order changes. Code responses use an array of indented
-lines; saved templates contain ordinary source text. Authors receive the same
+distractor recipes. Skipped dependent checks remain in the history and feedback,
+but do not widen the revision scope. The application preserves the valid program
+and wording and rejects parameter name/kind/order changes. Code responses use an
+array of indented lines; saved templates contain ordinary source text. Authors receive the same
 original level definitions as the checker, without more worked examples.
 The initial plan cannot be weakened during revision. A mistaken feature requirement
 therefore needs a new authoring job; revisions cannot silently remove it.

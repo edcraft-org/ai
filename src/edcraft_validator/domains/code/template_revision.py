@@ -27,7 +27,12 @@ def author_difficulty_guidance() -> str:
 
 
 def revision_contract(proposal, attempt):
-    failed = [item for item in attempt.executions if not item.passed]
+    # Skips explain pending checks; only executed failures determine repair scope.
+    failed = [
+        item
+        for item in attempt.executions
+        if not item.passed and item.skip_reason is None
+    ]
     findings = [
         finding
         for item in failed
