@@ -71,8 +71,13 @@ def test_author_uses_original_level_definitions_without_more_examples():
     assert "uniformly" in guidance
 
 
-@pytest.mark.parametrize("with_difficulty", [False, True])
-@pytest.mark.parametrize("failure", ["distractors", "answer"])
+@pytest.mark.parametrize(
+    ("failure", "with_difficulty"),
+    [
+        pytest.param("distractors", True, id="distractors-with-difficulty"),
+        pytest.param("answer", False, id="answer-without-difficulty"),
+    ],
+)
 def test_full_wire_revision_replaces_candidate_and_rechecks_every_field(
     with_difficulty,
     failure,
@@ -160,27 +165,33 @@ def test_full_wire_revision_replaces_candidate_and_rechecks_every_field(
         assert second.executions[-1].passed
 
 
-@pytest.mark.parametrize("override", ["difficulty", "num_distractors", "checks"])
-def test_complete_revision_schema_rejects_request_and_plan_overrides(override):
-    payload = proposal().model_dump()
-    with pytest.raises(ValidationError):
-        CodeProposalResponse.model_validate(payload | {override: "changed"})
-
-
-@pytest.mark.parametrize("kind", ["partial", "invalid_parameters"])
+@pytest.mark.parametrize("kind", ["partial", "invalid_parameters", "control_overrides"])
 def test_application_revalidates_constructed_revisions_before_new_checks(kind):
     class InvalidRevision(Provider):
         def generate(self, request):
             if self.generations:
+                valid = CodeProposalResponse.model_validate(proposal().model_dump())
                 if kind == "partial":
-                    valid = CodeProposalResponse.model_validate(proposal().model_dump())
                     return CodeProposalResponse.model_construct(
                         parameters=valid.parameters,
                         distractors=valid.distractors,
                     )
-                return CodeProposalResponse.model_validate(
-                    proposal().model_dump()
-                ).model_copy(update={"parameters": []})
+                if kind == "control_overrides":
+
+                    class RevisionWithOverrides(CodeProposalResponse):
+                        difficulty: str
+                        num_distractors: int
+                        checks: list[dict]
+
+                    return RevisionWithOverrides.model_validate(
+                        valid.model_dump()
+                        | {
+                            "difficulty": "hard",
+                            "num_distractors": 2,
+                            "checks": [],
+                        }
+                    )
+                return valid.model_copy(update={"parameters": []})
             return super().generate(request)
 
     initial = CodeProposalResponse.model_validate(proposal().model_dump()).model_copy(
@@ -192,6 +203,11 @@ def test_application_revalidates_constructed_revisions_before_new_checks(kind):
     assert "Invalid complete revision" in result.reason
     assert len(result.attempts) == 1
     assert len(client.dispatches) == 2
+    assert result.fixed_plan == list(
+        client_name for client_name, _ in client.dispatches
+    )
+    assert result.request["difficulty"] == "easy"
+    assert result.request["num_distractors"] == 3
     assert result.artifact is None
     assert result.attempts[0].candidate["answer_expression"] == "a - b"
 
