@@ -190,7 +190,12 @@ def test_fourth_failure_retains_full_history_without_attempt_five():
     assert result.attempts[-1].candidate["answer_expression"] == "a - b"
     assert result.usage.model_call_count == 4
     assert len(provider.generations[1]) == len(provider.generations[2])
-    assert provider.generations[2][-2]["role"] == "assistant"
+    assert not any(m["role"] == "assistant" for m in provider.generations[2])
+    for number, messages in enumerate(provider.generations[1:], 1):
+        revision = json.loads(messages[-1]["content"])
+        assert revision["latest_candidate"] == result.attempts[number - 1].candidate
+        assert revision["failed_attempt"] == number
+        assert revision["remaining_revisions"] == 4 - number
     feedback = json.loads(provider.generations[2][-1]["content"])["check_results"]
     assert feedback == [
         {
@@ -495,3 +500,39 @@ def test_invalid_feature_arguments_stop_before_checking(arguments):
     assert result.status == "error"
     assert result.failure.code == "schema_validation"
     assert not result.attempts and not client.dispatches
+
+
+def test_revision_keeps_original_request_when_caller_mutates_its_request():
+    request = CodeTemplateRequest(
+        prompt="Create an addition question", difficulty="easy", num_distractors=3
+    )
+    original = request.model_dump(mode="json")
+    author = Provider([wrong_answer(), proposal()])
+    client = RecordingClient(Executor())
+
+    def change_caller_request(snapshot):
+        request.prompt = "A different request"
+        request.difficulty = "hard"
+        request.num_distractors = 2
+
+    result = TemplateApplication(tool_client=client).author_template(
+        request,
+        domain=CodeDomain(),
+        provider=author,
+        on_catalogue_resolved=change_caller_request,
+    )
+    assert result.status == "checked"
+    assert result.request == original
+    assert request.model_dump() != original
+    assert all(attempt.candidate["difficulty"] == "easy" for attempt in result.attempts)
+    assert result.artifact.template.difficulty == "easy"
+    assert len(result.artifact.template.distractors) == 3
+    assert [
+        args["required_distractors"]
+        for name, args in client.dispatches
+        if name == SEMANTIC
+    ] == [3, 3]
+    feedback = json.loads(author.generations[-1][-1]["content"])
+    assert feedback["author_request"] == original
+    assert feedback["latest_candidate"] == result.attempts[0].candidate
+    assert result.revision_policy == feedback["revision_policy"] == "full-candidate-v1"

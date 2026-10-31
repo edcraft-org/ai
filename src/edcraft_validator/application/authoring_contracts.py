@@ -80,6 +80,8 @@ class AuthoringResult(BaseModel):
     generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     request: dict[str, Any]
     prompt_version: str
+    # Absent in historical records and existing-candidate validation jobs.
+    revision_policy: str | None = None
     duration_ms: float = 0
     generation_duration_ms: float = 0
     model_calls: list[ModelCallRecord] = Field(default_factory=list)

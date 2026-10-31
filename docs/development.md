@@ -86,20 +86,47 @@ error with `retryable: false` ends the job without another check call or revisio
 Revision feedback includes the frozen plan and recorded check evidence; proposals
 can change, while names and arguments cannot.
 
-The code finalizer stores execution-derived answers, clears the proposed answer
-expression, and retains selected supplied distractors. It leaves code and wording
-unchanged and does not execute the template again.
+The code finalizer retains the answer recipe and selected supplied distractors.
+It leaves the checked code and wording unchanged and does not execute the template
+again.
 
-`CodeProposalResponse` omits the correct answer and answer expression, and advertises
-`code` as an array of individual indented lines
-and normalizes it to canonical source text. JSON serialization uses lines again;
-saved templates keep source strings. `domains/code/template_revision.py` supplies
-the author's original rubric level definitions and revision scope. The code domain
-can return a partial `CodeDistractorRevision` after distractor-only failures; the
-application merges its recipes/values into the previous proposal and rejects any
-parameter name/kind/order change. Other domains retain full proposal revisions.
-The generic application supports optional `revision_contract` and `merge_revision`
-domain hooks. Check membership and the original author request remain fixed.
+## Full-candidate revision contract
+
+All authoring revisions return the complete domain proposal schema, including every
+required field even when unchanged. There are no failure-specific patch schemas or
+revision/merge hooks. `CodeProposalResponse` contains the program, parameters,
+wording, answer target, answer recipe and distractors. Its wire format advertises
+`code` as an array of individual indented lines and normalizes it to source text;
+JSON serialization uses lines again. `domains/code/template_revision.py` now only
+supplies the original rubric definitions to authors.
+
+Each revision receives the original prompt/context plus `author_request`, the
+`latest_candidate`, frozen `check_plan`, `check_results`, `failed_attempt` and
+`remaining_revisions`. Feedback identifies skipped checks by `skip_reason`; these
+are not observed defects. It includes observations from passed checks and errors,
+without treating earlier evidence as validation of the replacement. Each ordinary
+check runs again; difficulty remains staged behind successful technical checks.
+
+The application revalidates full revision responses locally even when a provider
+returns a preconstructed model. A partial response or request/plan override is not
+merged into old data. The domain builds a new candidate under the original request
+and enforces its supported constraints before MCP execution. In code, difficulty
+is assigned from the request, question type and identity are derived locally, and
+required distractor count is supplied by the application at every attempt.
+The original caller request is copied for the job. Check names and model-owned
+arguments remain frozen. Program, entry function, parameter names/order/values,
+wording, answer target, answer expression and distractors may all change, subject
+to the domain schema and checks. The function signature, placeholders and recipes
+must remain coherent. Parameter domains or feature intent written only in a
+free-form prompt have no general compliance guarantee; the author instructions
+and sampled technical checks do not establish that guarantee.
+
+The policy is recorded as `revision_policy=full-candidate-v1`. Code authoring uses
+`response-v8-full-candidate`; revision requests append `+full-candidate-v1` to their
+prompt version. Historical reports without `revision_policy` remain readable and
+are not reclassified as results of this workflow. Full responses can increase
+output tokens and permit request drift; neither lower cost nor higher yield is
+established by this refactor.
 
 Failed distractor selection adds one counterexample per bad recipe or colliding
 pair, capped at 16 rows. It uses local expressions and existing canonical answers,

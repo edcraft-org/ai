@@ -146,7 +146,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring.model == "stub-model"
     assert (
         validated.authoring.base_prompt_version
-        == "code-template-v21-property-based+response-v7-direct-checks"
+        == "code-template-v21-property-based+response-v8-full-candidate"
     )
     assert validated.authoring.domain == "code"
     assert provider_calls[0].tool_catalogue.names == (
@@ -422,3 +422,93 @@ def test_non_code_domain_can_plan_typed_arguments_without_shared_tool_names():
     assert result.check_plan[0].arguments == {"minimum": 5}
     assert result.attempts[0].executions[0].application_arguments == {"value": 12}
     assert result.usage.model_call_count == 1
+
+
+@pytest.mark.parametrize("replacement", [4, 11])
+def test_non_code_full_revision_enforces_domain_constraints_before_checking(
+    replacement,
+):
+    from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
+
+    class Request(BaseModel):
+        topic: str
+        maximum: int
+
+    checked_values = []
+    server = FastMCP("Example full revision")
+
+    @server.tool(description="Check positivity", version="1", tags={"domain:example"})
+    def positive(value: int) -> ToolEvidence:
+        checked_values.append(value)
+        return ToolEvidence(
+            tool="positive",
+            version="1",
+            status="passed" if value > 0 else "failed",
+            findings=[]
+            if value > 0
+            else [{"code": "NONPOSITIVE", "message": "Use a positive value"}],
+            details={"value": value},
+        )
+
+    class Domain:
+        name = "example"
+
+        def generation_request(self, request):
+            return StructuredGenerationRequest(
+                messages=[{"role": "user", "content": request.topic}],
+                response_model=PlannedGenerationResponse[ExampleProposal],
+                prompt_version="example-full-revision-v1",
+            )
+
+        def build_candidate(self, request, proposal):
+            if proposal.value > request.maximum:
+                raise ValueError("Candidate exceeds the original request maximum")
+            return ExampleTemplate(value=proposal.value)
+
+        def tool_bindings(self, request, candidate, name):
+            return {"value": candidate.value}
+
+        def finalize_checked_template(self, candidate, evidence):
+            assert evidence[0].details["value"] == candidate.value
+            return ExampleValidated(value=candidate.value)
+
+    class Author:
+        provider, model = "stub", "full-revision"
+        requests = []
+
+        def generate(self, request):
+            self.requests.append(request)
+            if request.schema_name == "template_revision":
+                assert request.response_model is ExampleProposal
+                feedback = json.loads(request.messages[-1]["content"])
+                assert feedback["latest_candidate"] == {"value": -1}
+                assert feedback["author_request"]["maximum"] == 10
+                assert feedback["check_results"][0]["evidence"]["status"] == "failed"
+                assert feedback["remaining_revisions"] == 3
+                return request.response_model(value=replacement)
+            return request.response_model.model_validate(
+                {
+                    "proposal": {"value": -1},
+                    "checks": [{"name": "positive", "arguments": {}}],
+                }
+            )
+
+    author = Author()
+    result = TemplateApplication(tool_client=FastMcpToolClient(server)).author_template(
+        Request(topic="A positive value no greater than ten", maximum=10),
+        domain=Domain(),
+        provider=author,
+    )
+    assert len(author.requests) == 2
+    assert result.check_plan[0].model_dump() == {"name": "positive", "arguments": {}}
+    if replacement == 4:
+        assert result.status == "checked"
+        assert checked_values == [-1, 4]
+        assert result.artifact.value == 4
+        assert len(result.attempts) == 2
+    else:
+        assert result.status == "error"
+        assert result.failure.stage == "template_building"
+        assert "original request maximum" in result.reason
+        assert checked_values == [-1]
+        assert len(result.attempts) == 1 and result.artifact is None

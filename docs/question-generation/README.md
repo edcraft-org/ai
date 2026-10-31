@@ -69,17 +69,22 @@ Feedback includes verdicts and actionable failure details. Successful checks rec
 counterexample; sampled answer tables are not persisted. Full tool definitions are kept in memory for dispatch and
 can be exported separately with `--tool-schemas`; the report contains a compact
 catalogue of names, versions and descriptions.
-Each revision receives the original request, latest proposal, and explicit check
-feedback. Earlier attempts remain in the saved history without accumulating in the
-revision prompt.
-Revisions contain only template fields. The application retains the original check
-plan, so the model does not select the checks again while fixing a template.
-For a distractor-only failure, typed code authors return only parameters and
-distractor recipes. Skipped dependent checks remain in the history and feedback,
-but do not widen the revision scope. The application preserves the valid program
-and wording and rejects parameter name/kind/order changes. Code responses use an
-array of indented lines; saved templates contain ordinary source text. Authors receive the same
-original level definitions as the checker, without more worked examples.
+Each revision receives the original request, latest failed candidate, frozen plan,
+remaining revision allowance and check evidence. Earlier attempts remain in the
+saved history without accumulating in the revision prompt. Every revision returns
+one complete proposal matching the domain's normal schema, including unchanged
+fields. Partial patches are rejected. The application validates the response,
+builds a fresh candidate and reruns the selected checks.
+
+This deliberately replaces the previous distractor-only patch policy. Code,
+function interface, parameter domains, question wording, answer recipe and
+distractors may now change together, even after a distractor-only failure.
+The application retains the original requested difficulty, distractor count and
+frozen check plan. Requirements stated only in free text still need review.
+Skipped dependent checks stay in the history and feedback and do not represent
+observed defects. Difficulty runs only after the replacement passes technical
+checks. Code responses use indented line arrays; saved templates contain source
+text. The same original rubric definitions remain in the author context.
 The initial plan cannot be weakened during revision. A mistaken feature requirement
 therefore needs a new authoring job; revisions cannot silently remove it.
 Correction feedback includes `model_arguments` separately from tool observations

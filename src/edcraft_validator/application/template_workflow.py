@@ -47,6 +47,8 @@ from edcraft_validator.mcp.catalogue import (
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.evidence import ToolEvidence
 
+REVISION_POLICY = "full-candidate-v1"
+
 
 def _generate_author(provider, request):
     """One bounded transport retry for author calls, never for judge assessments."""
@@ -144,6 +146,8 @@ class TemplateApplication:
         """
         started = time.perf_counter()
         validating = initial_candidate is not None
+        # Caller-owned mutable requests must not change the job's author constraints.
+        request = None if validating else request.model_copy(deep=True)
         max_attempts = 1 if validating else self.max_correction_attempts + 1
         request_payload = (
             {"operation": "validate"} if validating else request.model_dump(mode="json")
@@ -157,6 +161,7 @@ class TemplateApplication:
             domain=domain.name,
             request=copy.deepcopy(request_payload),
             prompt_version="",
+            revision_policy=None if validating else REVISION_POLICY,
             fixed_plan=[],
             tool_catalogue=[],
         )
@@ -246,7 +251,8 @@ class TemplateApplication:
                                 attempt,
                                 plan,
                                 provider,
-                                domain=domain,
+                                author_request=request_payload,
+                                remaining_revisions=max_attempts - number,
                             )
                         finally:
                             generation_duration_ms += (
@@ -298,19 +304,20 @@ class TemplateApplication:
 
     @staticmethod
     def _revise_proposal(
-        generation_request, response, attempt, plan, provider, *, domain=None
+        generation_request,
+        response,
+        attempt,
+        plan,
+        provider,
+        *,
+        author_request,
+        remaining_revisions,
     ):
-        """Request a corrected proposal while retaining the original check plan."""
+        """Request a complete replacement proposal under the original constraints."""
         # Use the latest proposal and explicit feedback, rather than a growing
         # native-tool conversation.
         response_model = type(response.proposal)
-        guidance = {}
-        if domain is not None and hasattr(domain, "revision_contract"):
-            response_model, guidance = domain.revision_contract(
-                response.proposal, attempt
-            )
         messages = generation_messages(generation_request) + [
-            {"role": "assistant", "content": response.model_dump_json()},
             {
                 "role": "user",
                 "content": json.dumps(
@@ -326,20 +333,27 @@ class TemplateApplication:
                             "The model_arguments below were selected in the initial "
                             "plan, not supplied by the educator. Do not change or "
                             "weaken the plan. Preserve the request's scope and "
-                            "difficulty. Revise authored fields when they are wrong. "
-                            "Return only the "
-                            "proposal fields matching the supplied schema. "
-                            "Follow revision_guidance and return exactly the supplied "
-                            "response schema, including a partial revision "
-                            "when requested. "
+                            "difficulty. Return one complete replacement proposal "
+                            "matching the supplied schema, including every required "
+                            "field even when unchanged. Prefer targeted corrections "
+                            "while returning the full proposal. Keep related fields "
+                            "coherent when changing them. Previously passing checks "
+                            "describe the previous candidate; the application will "
+                            "recheck your replacement. A check with skip_reason "
+                            "was not run "
+                            "and is not an observed defect. "
                             "Do not return checks; the application keeps "
                             "the original check plan."
                         ),
+                        "revision_policy": REVISION_POLICY,
+                        "author_request": author_request,
+                        "latest_candidate": attempt.candidate,
+                        "failed_attempt": attempt.number,
+                        "remaining_revisions": remaining_revisions,
                         "fixed_plan": list(plan),
                         "check_plan": [
                             check.model_dump(mode="json") for check in response.checks
                         ],
-                        "revision_guidance": guidance,
                         "check_results": [
                             {
                                 **execution.model_feedback(),
@@ -357,16 +371,20 @@ class TemplateApplication:
                 generation_request,
                 response_model=response_model,
                 schema_name="template_revision",
+                prompt_version=f"{generation_request.prompt_version}+{REVISION_POLICY}",
                 messages=copy.deepcopy(messages),
                 tool_catalogue=None,
             ),
         )
-        if domain is not None and hasattr(domain, "merge_revision"):
-            revised_proposal = domain.merge_revision(
-                response.proposal, revised_proposal
-            )
-        elif not isinstance(revised_proposal, type(response.proposal)):
+        if not isinstance(revised_proposal, response_model):
             raise GenerationSchemaError("Revision must return only the proposal")
+        # Revalidate even for adapters that return an existing/constructed model.
+        try:
+            revised_proposal = response_model.model_validate_json(
+                revised_proposal.model_dump_json()
+            )
+        except (ValidationError, ValueError) as exc:
+            raise GenerationSchemaError(f"Invalid complete revision: {exc}") from exc
         response = response.model_copy(update={"proposal": revised_proposal})
         return response
 
