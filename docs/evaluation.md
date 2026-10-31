@@ -67,6 +67,15 @@ fixture comparison against `28489b8` produced the same artifacts and check dispa
 first-pass author calls fell from 3 to 1; a one-revision repair fell from 5 to 2.
 These traces omit model-backed checks and do not establish live yield or latency gains.
 
+Issue #95 replaces restricted distractor patches with full-proposal revision.
+New authoring reports record `revision_policy=full-candidate-v1`, and code prompts
+use `response-v8-full-candidate`. Preserve earlier results under their original
+revision policy. A replacement may change previously valid program/wording fields;
+all selected checks must run again. Record repair outcomes, request drift, tokens
+and latency separately when comparing policies. This implementation change does
+not establish improved yield or lower inference cost. Live benchmarks remain
+separate from the deterministic verification and PR smoke tests.
+
 Record settings when comparing runs: earlier SocLaas experiments used strict schema
 mode, disabled reasoning, a 60-second timeout, and a 1024-token tool budget.
 Other providers retain their request formats and defaults. Set the primary provider's

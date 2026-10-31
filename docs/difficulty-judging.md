@@ -56,11 +56,14 @@ revision; every difficulty assessment uses SocLaas.
 
 The author receives the original level definitions and a short description of the
 four dimensions, without added worked examples. Its wire format uses individual
-indented Python lines. Full revisions must keep the function signature, parameter
-domains, placeholders and expressions consistent. When the only failure is
-distractor selection, a partial response can change recipes and parameter values;
-the application preserves code, wording, answer target and ordered parameter
-names/kinds. Correctness still checks the entire domain again. Collision evidence
+indented Python lines. Every revision returns a complete proposal, including after
+a distractor-only failure. Code, function interface, parameter domains, wording,
+answer recipe and distractors may change together while staying consistent with
+the original request. The application rebuilds and samples the replacement again
+before judging difficulty. The requested label and required distractor count are
+application-owned; free-text constraints are not generally enforced. Skipped
+checks remain explicit in feedback and do not represent observed defects.
+Collision evidence
 includes up to 16 counterexamples, covering bad recipes and duplicate recipe pairs.
 
 Author generation/revision calls have one bounded retry for connection failures

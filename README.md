@@ -14,10 +14,13 @@ revisions.
 
 Code proposals use an array of indented Python lines in model responses, then
 normalize to ordinary source text for checking and reuse. Authors receive the
-checker's level definitions without extra worked examples. When only distractors
-fail, revisions contain recipes and parameter values; the application preserves
-the program, question wording and function interface. Difficulty mismatches allow
-a coherent full revision. Author generation/revision calls allow one additional
+checker's level definitions without extra worked examples. Every revision returns
+one complete proposal, including unchanged fields. The model may replace code,
+wording, parameters, answer and distractors coherently; the application rechecks
+the entire replacement under the original request and frozen check plan. Requested
+difficulty and distractor count remain application-owned. Free-text requirements
+still need review; sampled checks do not establish complete request compliance.
+Author generation/revision calls allow one additional
 attempt for connection failures or transient HTTP errors; invalid content and
 timeouts are not retried. Difficulty checks remain single-pass. All providers receive
 check plans constrained to the catalogue, with typed model-owned arguments. The

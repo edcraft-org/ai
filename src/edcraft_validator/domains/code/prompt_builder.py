@@ -125,7 +125,10 @@ Rules:
   line; do not put newline characters inside an array entry. Use at most 160 lines
   and one to three parameters, with no extra/default entry-function arguments.
   During revision, return only proposal fields matching the supplied schema; the
-  application keeps the original check plan. Do not include locally derived fields.
+  application keeps the original check plan. Return every model-authored field,
+  including unchanged fields, rather than a partial patch. Keep code, function
+  signature, parameters, wording, answer and distractors coherent. Do not include
+  locally derived fields.
   Select any model-owned check arguments in the initial plan. Select only features
   explicitly required by the educator. The application freezes names and arguments
   and runs checks directly; no native tool calls or acknowledgement are needed.
@@ -164,7 +167,7 @@ def build_code_generation_request(
             },
         ],
         response_model=PlannedGenerationResponse[CodeProposalResponse],
-        prompt_version=f"{CODE_TEMPLATE_PROMPT_VERSION}+response-v7-direct-checks",
+        prompt_version=f"{CODE_TEMPLATE_PROMPT_VERSION}+response-v8-full-candidate",
         schema_name="template_proposal_and_check_plan",
         check_argument_models=CODE_CHECK_ARGUMENT_MODELS,
     )

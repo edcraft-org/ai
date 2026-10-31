@@ -1,4 +1,4 @@
-"""Wire formatting, bounded author recovery and coherent scoped revisions."""
+"""Wire formatting, bounded author recovery and complete feedback-guided revisions."""
 
 import ast
 import json
@@ -10,20 +10,16 @@ from test_authoring_loop import Executor, Provider, RecordingClient, run
 from test_template_difficulty import TemplateJudge
 from test_template_evaluator import proposal
 
-from edcraft_validator.application.authoring_contracts import CheckExecution
 from edcraft_validator.application.template_workflow import _generate_author
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
 from edcraft_validator.domains.code.difficulty import load_code_difficulty_rubric
 from edcraft_validator.domains.code.proposal_response import (
-    CodeDistractorRevision,
     CodeProposalResponse,
 )
 from edcraft_validator.domains.code.template_difficulty import TEMPLATE_DIFFICULTY_TOOL
 from edcraft_validator.domains.code.template_revision import (
     author_difficulty_guidance,
-    merge_revision,
-    revision_contract,
 )
 from edcraft_validator.llm.llm_errors import (
     GenerationResponseError,
@@ -32,7 +28,6 @@ from edcraft_validator.llm.llm_errors import (
     GenerationTransportError,
 )
 from edcraft_validator.mcp.client import FastMcpToolClient
-from edcraft_validator.mcp.evidence import ToolEvidence, ToolFinding
 from edcraft_validator.mcp.server import create_validation_server
 
 
@@ -76,10 +71,33 @@ def test_author_uses_original_level_definitions_without_more_examples():
     assert "uniformly" in guidance
 
 
-@pytest.mark.parametrize("with_difficulty", [False, True])
-def test_real_wire_workflow_uses_partial_revision_and_preserves_valid_program(
+@pytest.mark.parametrize(
+    ("failure", "with_difficulty"),
+    [
+        pytest.param("distractors", True, id="distractors-with-difficulty"),
+        pytest.param("answer", False, id="answer-without-difficulty"),
+    ],
+)
+def test_full_wire_revision_replaces_candidate_and_rechecks_every_field(
     with_difficulty,
+    failure,
 ):
+    replacement = {
+        "code": ["def combine(x, y):", "    total = x + y", "    return total"],
+        "entry_function": "combine",
+        "parameters": [
+            {"name": "x", "kind": "integer", "values": [2, 3]},
+            {"name": "y", "kind": "integer", "values": [5, 6]},
+        ],
+        "question_template": "Trace the code: what does combine({x}, {y}) return?",
+        "answer_target": "return_value",
+        "answer_expression": "x + y",
+        "distractors": [
+            {"expression": expr, "reason_template": "Makes an arithmetic error."}
+            for expr in ["x + y + 1", "x + y - 1", "x + y + 2"]
+        ],
+    }
+
     class WireAuthor(Provider):
         def __init__(self):
             super().__init__()
@@ -87,13 +105,15 @@ def test_real_wire_workflow_uses_partial_revision_and_preserves_valid_program(
 
         def generate(self, request):
             self.requests.append(request)
-            payload = proposal().model_dump()
             if request.schema_name == "template_revision":
-                assert request.response_model is CodeDistractorRevision
-                return request.response_model.model_validate(
-                    {key: payload[key] for key in ("parameters", "distractors")}
-                )
-            payload["distractors"] = [payload["distractors"][0]] * 3
+                assert request.response_model is CodeProposalResponse
+                assert request.prompt_version.endswith("+full-candidate-v1")
+                return request.response_model.model_validate(replacement)
+            payload = proposal().model_dump()
+            if failure == "distractors":
+                payload["distractors"] = [payload["distractors"][0]] * 3
+            else:
+                payload["answer_expression"] = "a - b"
             return request.response_model.model_validate(
                 {
                     "proposal": payload,
@@ -105,30 +125,39 @@ def test_real_wire_workflow_uses_partial_revision_and_preserves_valid_program(
     if with_difficulty:
         author.plan += (TEMPLATE_DIFFICULTY_TOOL,)
     judge = TemplateJudge()
+    # Use the real isolated executor to check the changed program and parameters.
     client = FastMcpToolClient(
-        create_validation_server(
-            code_execution_tool=Executor(), difficulty_provider_factory=lambda: judge
-        )
+        create_validation_server(difficulty_provider_factory=lambda: judge)
     )
     result, _ = run(author, client)
     assert result.status == "checked", result.reason
     assert len(result.attempts) == 2
     first, second = result.attempts
-    for field in (
+    for field in [
         "code",
         "entry_function",
+        "parameters",
         "question_template",
-        "answer_target",
         "answer_expression",
-    ):
-        assert first.candidate[field] == second.candidate[field]
-    assert first.candidate["distractors"] != second.candidate["distractors"]
+    ]:
+        assert first.candidate[field] != second.candidate[field]
+    assert second.candidate["entry_function"] == "combine"
+    assert first.candidate["difficulty"] == second.candidate["difficulty"] == "easy"
+    assert result.artifact.template.entry_function == "combine"
+    assert result.artifact.template.answer_expression == "x + y"
+    assert len(result.artifact.template.distractors) == 3
+    assert all(e.passed for e in second.executions)
+    assert second.executions[0].evidence.details["examples_checked"] == 4
+    assert result.revision_policy == "full-candidate-v1"
+    assert result.usage.model_call_count == 2
     feedback = json.loads(author.requests[-1].messages[-1]["content"])
-    assert feedback["revision_guidance"]["scope"] == "distractors_and_parameter_values"
+    assert feedback["latest_candidate"] == first.candidate
+    assert feedback["author_request"] == result.request
+    assert feedback["remaining_revisions"] == 3
+    assert feedback["failed_attempt"] == 1
     assert len(judge.requests) == int(with_difficulty)
     if with_difficulty:
         skipped = first.executions[-1]
-        assert skipped.tool == TEMPLATE_DIFFICULTY_TOOL
         assert skipped.skip_reason == "Prerequisite checks did not pass"
         assert skipped.evidence is None
         assert first.pending == [TEMPLATE_DIFFICULTY_TOOL]
@@ -136,81 +165,51 @@ def test_real_wire_workflow_uses_partial_revision_and_preserves_valid_program(
         assert second.executions[-1].passed
 
 
-def attempt_for(code):
-    evidence = ToolEvidence(
-        tool="code_validate_answers_and_distractors",
-        version="test",
-        status="failed",
-        findings=[ToolFinding(code=code, message="Failure")],
+@pytest.mark.parametrize("kind", ["partial", "invalid_parameters", "control_overrides"])
+def test_application_revalidates_constructed_revisions_before_new_checks(kind):
+    class InvalidRevision(Provider):
+        def generate(self, request):
+            if self.generations:
+                valid = CodeProposalResponse.model_validate(proposal().model_dump())
+                if kind == "partial":
+                    return CodeProposalResponse.model_construct(
+                        parameters=valid.parameters,
+                        distractors=valid.distractors,
+                    )
+                if kind == "control_overrides":
+
+                    class RevisionWithOverrides(CodeProposalResponse):
+                        difficulty: str
+                        num_distractors: int
+                        checks: list[dict]
+
+                    return RevisionWithOverrides.model_validate(
+                        valid.model_dump()
+                        | {
+                            "difficulty": "hard",
+                            "num_distractors": 2,
+                            "checks": [],
+                        }
+                    )
+                return valid.model_copy(update={"parameters": []})
+            return super().generate(request)
+
+    initial = CodeProposalResponse.model_validate(proposal().model_dump()).model_copy(
+        update={"answer_expression": "a - b"}
     )
-    return SimpleNamespace(
-        executions=[
-            CheckExecution(
-                call_id="answers",
-                tool=evidence.tool,
-                requested_arguments={},
-                evidence=evidence,
-            )
-        ]
+    result, client = run(InvalidRevision([initial]))
+    assert result.status == "error"
+    assert result.failure.code == "schema_validation"
+    assert "Invalid complete revision" in result.reason
+    assert len(result.attempts) == 1
+    assert len(client.dispatches) == 2
+    assert result.fixed_plan == list(
+        client_name for client_name, _ in client.dispatches
     )
-
-
-def test_distractor_patch_cannot_modify_code_interface_or_wording():
-    current = CodeProposalResponse.model_validate(proposal().model_dump())
-    model, guidance = revision_contract(
-        current, attempt_for("DISTRACTOR_SELECTION_FAILED")
-    )
-    assert model is CodeDistractorRevision
-    assert guidance["scope"] == "distractors_and_parameter_values"
-    assert set(model.model_fields) == {"parameters", "distractors"}
-    payload = {name: current.model_dump()[name] for name in model.model_fields}
-    payload["parameters"][0]["values"] = [5, 6]
-    revised = merge_revision(current, model.model_validate(payload))
-    assert revised.code == current.code
-    assert revised.question_template == current.question_template
-    assert revised.entry_function == current.entry_function
-    assert revised.parameters[0].values == [5, 6]
-    assert current.parameters[0].values == [1, 2]
-    payload["parameters"][0]["name"] = "unexpected"
-    with pytest.raises(GenerationSchemaError, match="names, kinds and order"):
-        merge_revision(current, model.model_validate(payload))
-    with pytest.raises(ValidationError):
-        model.model_validate(payload | {"code": "different program"})
-
-
-def test_difficulty_revision_retains_full_proposal_schema():
-    current = CodeProposalResponse.model_validate(proposal().model_dump())
-    model, guidance = revision_contract(current, attempt_for("DIFFICULTY_MISMATCH"))
-    assert model is CodeProposalResponse and guidance["scope"] == "proposal"
-    assert "increasing repetition alone" in guidance["instructions"]
-
-
-@pytest.mark.parametrize("other_failure", ["answer", "tool_error"])
-def test_skipped_difficulty_does_not_hide_other_executed_failures(other_failure):
-    current = CodeProposalResponse.model_validate(proposal().model_dump())
-    attempt = attempt_for("DISTRACTOR_SELECTION_FAILED")
-    if other_failure == "answer":
-        attempt.executions.extend(attempt_for("PROPOSED_ANSWER_MISMATCH").executions)
-    else:
-        attempt.executions.append(
-            CheckExecution(
-                call_id="structure",
-                tool="code_verify_template_structure",
-                requested_arguments={},
-                error="TimeoutError: check unavailable",
-            )
-        )
-    attempt.executions.append(
-        CheckExecution(
-            call_id="difficulty",
-            tool=TEMPLATE_DIFFICULTY_TOOL,
-            requested_arguments={},
-            skip_reason="Prerequisite checks did not pass",
-        )
-    )
-    model, guidance = revision_contract(current, attempt)
-    assert model is CodeProposalResponse
-    assert guidance["scope"] == "proposal"
+    assert result.request["difficulty"] == "easy"
+    assert result.request["num_distractors"] == 3
+    assert result.artifact is None
+    assert result.attempts[0].candidate["answer_expression"] == "a - b"
 
 
 @pytest.mark.parametrize(

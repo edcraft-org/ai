@@ -15,7 +15,7 @@ Model --> App: Proposal, names and model-owned arguments
 App -> App: Validate and freeze plan
 
 loop Until success, initial proposal plus at most 3 revisions
-    App -> Domain: Build candidate
+    App -> Domain: Build candidate under original request
     loop Selected technical checks
         App -> MCP: Call with frozen arguments and current candidate
         MCP -> MCP: Run checking operation
@@ -31,8 +31,9 @@ loop Until success, initial proposal plus at most 3 revisions
         Domain --> App: Artifact, or missing required data
         App -> App: checked, or needs_review if data is missing
     else Failed and revisions remain and no terminal judge error
-        App -> Model: Request proposal revision with check evidence
-        Model --> App: Revised proposal; original plan retained
+        App -> Model: Original request, latest candidate, plan, evidence and budget
+        Model --> App: Complete replacement proposal
+        App -> App: Validate full response; retain original plan
     else Final failure or terminal judge error
         App -> App: needs_review with history and skipped checks
     end
@@ -45,6 +46,7 @@ Reports keep history; artifacts keep content, recipes and checking statistics.
 Existing-candidate validation checks once without revisions.
 Interrupted generation returns error.
 No native tool-request or acknowledgement calls are needed.
+Every replacement is checked afresh; skipped checks stay explicit.
 Human approval is future product work.
 end note
 

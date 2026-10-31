@@ -2,11 +2,10 @@
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
+from pydantic import Field, field_serializer, field_validator
 
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateContent,
-    DistractorRecipe,
     FiniteParameter,
 )
 
@@ -74,12 +73,3 @@ class CodeProposalResponse(CodeTemplateContent):
     @field_serializer("code", when_used="json")
     def serialize_code_lines(self, value: str) -> list[str]:
         return value.split("\n")
-
-
-class CodeDistractorRevision(BaseModel):
-    """Only recipes and parameter values may change after a distractor failure."""
-
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    parameters: list[CodeParameterResponse] = Field(min_length=1, max_length=3)
-    distractors: list[DistractorRecipe] = Field(min_length=2, max_length=5)

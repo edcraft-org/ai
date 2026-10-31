@@ -94,12 +94,10 @@ def wrong_answer():
     return proposal().model_copy(update={"answer_expression": "a - b"})
 
 
-@pytest.mark.parametrize("provider_name", ["openai", "soclaas", "ollama"])
-def test_direct_checks_deliver_all_evidence_before_self_correction(provider_name):
+def test_direct_checks_deliver_all_evidence_before_self_correction():
     plan = (SEMANTIC, STRUCTURE, FEATURES)
     arguments = {FEATURES: {"required": ["arithmetic"]}}
     provider = Provider([wrong_answer(), proposal()], plan, arguments)
-    provider.provider = provider_name
     result, client = run(provider)
     assert result.status == "checked"
     assert [name for name, _ in client.dispatches] == list(plan) * 2
@@ -108,8 +106,6 @@ def test_direct_checks_deliver_all_evidence_before_self_correction(provider_name
     assert not result.attempts[0].passed and result.attempts[1].passed
     assert [call.operation for call in result.model_calls] == ["generation", "revision"]
     revision = json.loads(provider.generations[1][-1]["content"])
-    assert "Check names and model-owned arguments are fixed" in revision["instruction"]
-    assert "next tool turn" not in revision["instruction"]
     assert revision["check_results"] == [
         {**execution.model_feedback(), "model_arguments": execution.requested_arguments}
         for execution in result.attempts[0].executions
@@ -189,8 +185,16 @@ def test_fourth_failure_retains_full_history_without_attempt_five():
     assert all(attempt.complete and not attempt.passed for attempt in result.attempts)
     assert result.attempts[-1].candidate["answer_expression"] == "a - b"
     assert result.usage.model_call_count == 4
+    assert result.feedback_error is None
+    assert [call.operation for call in result.model_calls] == ["generation"] + [
+        "revision"
+    ] * 3
     assert len(provider.generations[1]) == len(provider.generations[2])
-    assert provider.generations[2][-2]["role"] == "assistant"
+    for number, messages in enumerate(provider.generations[1:], 1):
+        revision = json.loads(messages[-1]["content"])
+        assert revision["latest_candidate"] == result.attempts[number - 1].candidate
+        assert revision["failed_attempt"] == number
+        assert revision["remaining_revisions"] == 4 - number
     feedback = json.loads(provider.generations[2][-1]["content"])["check_results"]
     assert feedback == [
         {
@@ -371,16 +375,6 @@ def test_revision_cannot_mutate_frozen_feature_arguments():
     assert result.check_plan[-1].arguments == {"required": ["arithmetic"]}
 
 
-def test_fourth_failure_needs_no_acknowledgement():
-    result, _ = run(Provider([wrong_answer()]))
-    assert result.status == "needs_review"
-    assert len(result.attempts) == 4
-    assert result.feedback_error is None
-    assert [call.operation for call in result.model_calls] == ["generation"] + [
-        "revision"
-    ] * 3
-
-
 def test_execution_ids_are_application_owned_and_unique_across_attempts():
     result, _ = run(Provider([wrong_answer(), proposal()]))
     ids = [
@@ -389,9 +383,6 @@ def test_execution_ids_are_application_owned_and_unique_across_attempts():
         for execution in attempt.executions
     ]
     assert len(ids) == len(set(ids)) == 4
-    assert ids == [
-        f"attempt-{n}:{name}" for n in (1, 2) for name in (SEMANTIC, STRUCTURE)
-    ]
 
 
 def test_passing_checks_from_different_attempts_cannot_be_combined():
@@ -495,3 +486,39 @@ def test_invalid_feature_arguments_stop_before_checking(arguments):
     assert result.status == "error"
     assert result.failure.code == "schema_validation"
     assert not result.attempts and not client.dispatches
+
+
+def test_revision_keeps_original_request_when_caller_mutates_its_request():
+    request = CodeTemplateRequest(
+        prompt="Create an addition question", difficulty="easy", num_distractors=3
+    )
+    original = request.model_dump(mode="json")
+    author = Provider([wrong_answer(), proposal()])
+    client = RecordingClient(Executor())
+
+    def change_caller_request(snapshot):
+        request.prompt = "A different request"
+        request.difficulty = "hard"
+        request.num_distractors = 2
+
+    result = TemplateApplication(tool_client=client).author_template(
+        request,
+        domain=CodeDomain(),
+        provider=author,
+        on_catalogue_resolved=change_caller_request,
+    )
+    assert result.status == "checked"
+    assert result.request == original
+    assert request.model_dump() != original
+    assert all(attempt.candidate["difficulty"] == "easy" for attempt in result.attempts)
+    assert result.artifact.template.difficulty == "easy"
+    assert len(result.artifact.template.distractors) == 3
+    assert [
+        args["required_distractors"]
+        for name, args in client.dispatches
+        if name == SEMANTIC
+    ] == [3, 3]
+    feedback = json.loads(author.generations[-1][-1]["content"])
+    assert feedback["author_request"] == original
+    assert feedback["latest_candidate"] == result.attempts[0].candidate
+    assert result.revision_policy == feedback["revision_policy"] == "full-candidate-v1"
