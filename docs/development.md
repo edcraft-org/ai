@@ -62,22 +62,29 @@ shared `assess_relevance` decision plus the two Python checks above; see the
 The application lists MCP tools once, selects those tagged `domain:<domain name>`,
 and keeps their definitions for the whole job. Tools with multiple domain tags can
 be shared; untagged tools are not offered. There is no domain-owned tool-name list.
-The first model response contains a proposal and nonempty check plan. Planning
-arguments are empty; later tool calls supply check-specific arguments, such as the
-features to require. The application supplies the candidate and distractor count.
+The first model response contains a proposal and nonempty check plan. Domains can
+supply closed Pydantic argument models through
+`StructuredGenerationRequest.check_argument_models`. Checks without such a model
+accept only `{}`. The code domain defines a nonempty supported-feature list for
+`code_require_features.required`; candidate and distractor count remain
+application-owned. Providers project each offered name and its argument model into
+the wire schema. The application independently validates the plan before building
+a candidate or executing MCP calls.
 
-Only selected checks run. The model can change proposal fields and tool arguments
-between attempts, but check membership stays fixed. Invalid arguments fail that
-check's slot; they can be corrected on the next attempt. Each selected check runs at
-most once per attempt. Checks tagged `stage:after-validation` wait for the other selected checks to pass.
+Only selected checks run. Both check membership and model-owned arguments are
+frozen before checking. The application dispatches each check at most once per
+attempt through MCP, validates the full bound input, output schema and evidence
+identity/version, and records an application-generated execution ID. No native tool
+requests or final acknowledgement calls are made. Bad MCP results remain explicit
+errors and do not prevent other ordinary checks from running.
+
+Checks tagged `stage:after-validation` wait for the other selected checks to pass.
 The domain supplies `checked_tool_bindings` for the exact reusable content. If a
-prerequisite fails, deferred checks stay pending without a fabricated tool result.
-Authoring permits up to three template revisions. An assessment error with
-`retryable: false` ends the job without another check call or revision.
-
-The tool conversation is limited to `2 * plan_size + 2` turns per attempt. Unfinished
-plans return `error` with the available history. Tool replies are checked against
-the saved schemas and versions. Final acknowledgement failures are recorded separately.
+prerequisite fails, deferred checks stay pending with `skip_reason` and no invented
+MCP evidence. Authoring permits up to three template revisions. An assessment
+error with `retryable: false` ends the job without another check call or revision.
+Revision feedback includes the frozen plan and recorded check evidence; proposals
+can change, while names and arguments cannot.
 
 The code finalizer stores execution-derived answers, clears the proposed answer
 expression, and retains selected supplied distractors. It leaves code and wording
@@ -99,16 +106,17 @@ pair, capped at 16 rows. It uses local expressions and existing canonical answer
 without another execution or model call. Code tools use evidence version 1.1.0.
 The author generation helper permits one additional transport attempt for a
 connection error or HTTP 408/409/429/5xx. It does not retry timeouts, response/schema
-errors, other HTTP failures, native tool turns or judge calls. Measured author
+errors, other HTTP failures or judge calls. Measured author
 usage retains both attempts; disable SDK retries to avoid stacking retry policies.
 
 ## Saved output
 
 `AuthoringResult` is one report per job. It stores the request, provider settings,
 compact tool catalogue, selected plan, timings and all attempts. Each attempt owns
-one candidate; its executions store requested arguments, additional application
-arguments and full `ToolEvidence`. Valid argument JSON is saved as an object;
-malformed argument JSON is retained as text so failures remain explainable.
+one candidate; its executions store frozen planning arguments, additional application
+arguments, skip reasons and full `ToolEvidence`. `check_plan` retains names and
+arguments; `fixed_plan` retains the name list for compatibility. Historical records
+with provider-generated call IDs or malformed argument text remain readable.
 
 The shared report envelope preserves domain-specific artifact fields on reload.
 Before using a reloaded artifact, parse its JSON through the selected domain's
@@ -120,8 +128,11 @@ requests that time out or return invalid responses. Initial generation and MCP
 setup failures also return reports, with zero checking attempts. The compatibility
 `create_validated_template` wrapper raises `AuthoringFailure` with that report.
 
-`model_calls` records generation, revision, checking, and acknowledgement calls;
-`usage` summarizes their input/output tokens and application call count. Missing
+`model_calls` records author generation and revision calls; no model call is used
+for direct dispatch or acknowledgement. `usage` summarizes authoring input/output
+tokens and application call count. Model-backed checks still perform inference:
+difficulty judge calls and usage are recorded separately in their MCP evidence.
+Historical checking/acknowledgement call records remain readable. Missing
 usage is `null`, with an explicit reason per call. Complete totals are `null` if a
 call is missing the corresponding count; reported subtotals retain known counts.
 The count describes application calls, not transport retries inside an SDK.
@@ -192,9 +203,10 @@ See the example domain in `tests/test_template_workflow.py` and request handling
 
 ## Adding a provider or check
 
-A provider implements `generate`, `tool_turn`, and `generation_settings`, then
-registers its factory. Parse responses against the supplied schema, normalize tool
-calls, and report non-secret settings. Test the adapter with a mocked client before
+A provider implements `generate` and `generation_settings`, then registers its
+factory. Parse responses against the supplied schema and report non-secret settings.
+Existing adapters retain optional native-tool methods for other callers; the shared
+authoring protocol does not require them. Test the adapter with a mocked client before
 live verification. To use another model from an existing provider, pass `--model`.
 To report tokens, expose `last_usage` as `TokenUsage`, reset it before each
 `generate` or `tool_turn`, and fill it from response metadata before parsing. Providers
@@ -204,8 +216,11 @@ A check keeps its operation and MCP tool definition together, with a description
 input and output schemas, version, domain tags, deadline, and `ToolEvidence` result.
 For code, add it to `mcp/code_tools.py` with `tags={"domain:code"}`; checking-only
 helpers belong in `mcp/code_checks/`. Test success, invalid inputs, and failures.
-Any prerequisite checks belong inside the operation; the application does not
-construct another plan.
+Declare any model-owned planning arguments using a closed Pydantic model in the
+domain request's `check_argument_models`; never expose candidate or request-owned
+fields. The default is an empty closed argument object. The application does not
+add checks to the selected plan. Use `stage:after-validation` for checks that must
+wait for ordinary checks; operation-specific prerequisites remain inside the check.
 
 The 15 historical topic/difficulty fixtures remain regression tests and evaluation
 examples. They do not restrict free-form authoring or select its checks.
@@ -230,7 +245,7 @@ revisions; a failed assessment ends the job immediately. See the
 | `function_calls` | Traced calls, including the entry call and safe built-ins. |
 
 `code_assess_template_difficulty` has `domain:code`, `quality:code` and
-`stage:after-validation` tags. The normal author selects and calls it after
+`stage:after-validation` tags. The author selects it; the application calls it after
 correctness checks pass. `application/template_difficulty.py` owns its single
 SocLaas call; `domains/code/template_difficulty.py` owns the template prompt and
 required per-recipe evidence schema. It judges the typical instance across the

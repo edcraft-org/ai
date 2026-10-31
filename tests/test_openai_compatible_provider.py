@@ -24,13 +24,17 @@ from edcraft_validator.llm.openai_compatible_provider import (
     _model,
     _timeout_seconds,
 )
+from edcraft_validator.llm.tool_context import constrained_check_plan
 
 
 def generation_request(
     prompt: str = "Create an arithmetic question", difficulty: str = "easy"
 ):
-    return build_code_generation_request(
-        CodeTemplateRequest(prompt=prompt, difficulty=difficulty)
+    return replace(
+        build_code_generation_request(
+            CodeTemplateRequest(prompt=prompt, difficulty=difficulty)
+        ),
+        offered_tool_names=("code_execution", "code_structure"),
     )
 
 
@@ -100,10 +104,14 @@ def test_catalogue_names_are_wire_schema_choices_and_checked_locally(provider_na
     schema = client.chat.completions.arguments["response_format"]["json_schema"][
         "schema"
     ]
-    assert schema["$defs"]["CatalogueCheck"]["properties"]["name"]["enum"] == [
-        "code_execution",
-        "code_structure",
-    ]
+    assert (
+        schema["$defs"]["CatalogueCheck_code_execution"]["properties"]["name"]["const"]
+        == "code_execution"
+    )
+    assert (
+        schema["$defs"]["CatalogueCheck_code_structure"]["properties"]["name"]["const"]
+        == "code_structure"
+    )
     assert "CatalogueCheck" not in request.response_model.model_json_schema()["$defs"]
     response["checks"][0]["name"] = "invented_tool"
     client.chat.completions.content = json.dumps(response)
@@ -141,7 +149,7 @@ def test_generates_template_using_strict_structured_outputs(
     assert len(parameter_items["anyOf"]) == 4
     integer_schema = schema["$defs"]["IntegerParameterResponse"]
     assert integer_schema["properties"]["values"]["items"] == {"type": "integer"}
-    check_schema = schema["$defs"]["RecommendedCheck"]
+    check_schema = schema["$defs"]["CatalogueCheck_code_execution"]
     assert set(check_schema["required"]) == set(check_schema["properties"])
     arguments_schema = schema["$defs"]["RecommendedCheckArguments"]
     assert arguments_schema["additionalProperties"] is False
@@ -181,9 +189,11 @@ def test_openai_receives_check_purposes_without_internal_mcp_schemas(
     )
 
     messages = client.chat.completions.arguments["messages"]
-    assert json.loads(messages[1]["content"].split("\n", 1)[1]) == [
-        {"name": tool["name"], "description": tool["description"]}
-    ]
+    context = json.loads(messages[1]["content"].split("\n", 1)[1])
+    assert context[0]["name"] == tool["name"]
+    assert context[0]["description"] == tool["description"]
+    assert context[0]["arguments_schema"]["properties"] == {}
+    assert "inputSchema" not in context[0] and "outputSchema" not in context[0]
     assert messages[1]["role"] == "system"
 
 
@@ -585,7 +595,12 @@ def test_soclaas_json_mode_shows_current_schema_and_preserves_code(
     instruction = arguments["messages"][-1]["content"]
     assert "line breaks and indentation" in instruction
     supplied_schema = json.loads(instruction.split("\n", 1)[1])
-    assert supplied_schema == request.response_model.model_json_schema()
+    expected_model = constrained_check_plan(
+        request.response_model,
+        request.offered_tool_names,
+        request.check_argument_models,
+    )
+    assert supplied_schema == expected_model.model_json_schema()
     assert ("checks" in supplied_schema["properties"]) is not revision
     assert provider.generation_settings()["strict"] is False
     assert json.dumps(request.messages) == original_messages
@@ -678,3 +693,31 @@ def test_truncated_generation_retains_usage_before_json_parsing(provider_name):
         provider.generate(generation_request())
     assert provider.last_usage.input_tokens == 20
     assert provider.last_usage.output_tokens == 8
+
+
+@pytest.mark.parametrize("provider_name", ["openai", "soclaas"])
+def test_provider_validates_feature_arguments_in_initial_structured_plan(provider_name):
+    response = code_response()
+    response["checks"] = [
+        {"name": "code_require_features", "arguments": {"required": ["loop"]}}
+    ]
+    client = client_with(response)
+    provider = OpenAICompatibleProvider(provider_name, client, model="test")
+    request = replace(
+        generation_request(), offered_tool_names=("code_require_features",)
+    )
+    result = provider.generate(request)
+    assert result.checks[0].arguments == {"required": ["loop"]}
+    schema = client.chat.completions.arguments["response_format"]["json_schema"][
+        "schema"
+    ]
+    assert (
+        schema["$defs"]["RequiredFeaturesArguments"]["properties"]["required"][
+            "minItems"
+        ]
+        == 1
+    )
+    response["checks"][0]["arguments"] = {"required": []}
+    client.chat.completions.content = json.dumps(response)
+    with pytest.raises(GenerationSchemaError):
+        provider.generate(request)

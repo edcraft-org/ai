@@ -7,8 +7,10 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 from test_authoring_loop import Executor, Provider, RecordingClient, run
+from test_template_difficulty import TemplateJudge
 from test_template_evaluator import proposal
 
+from edcraft_validator.application.authoring_contracts import CheckExecution
 from edcraft_validator.application.template_workflow import _generate_author
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
@@ -17,6 +19,7 @@ from edcraft_validator.domains.code.proposal_response import (
     CodeDistractorRevision,
     CodeProposalResponse,
 )
+from edcraft_validator.domains.code.template_difficulty import TEMPLATE_DIFFICULTY_TOOL
 from edcraft_validator.domains.code.template_revision import (
     author_difficulty_guidance,
     merge_revision,
@@ -28,7 +31,9 @@ from edcraft_validator.llm.llm_errors import (
     GenerationTimeoutError,
     GenerationTransportError,
 )
+from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.evidence import ToolEvidence, ToolFinding
+from edcraft_validator.mcp.server import create_validation_server
 
 
 def test_wire_lines_preserve_indentation_and_canonical_python_round_trip():
@@ -71,7 +76,10 @@ def test_author_uses_original_level_definitions_without_more_examples():
     assert "uniformly" in guidance
 
 
-def test_real_wire_workflow_uses_partial_revision_and_preserves_valid_program():
+@pytest.mark.parametrize("with_difficulty", [False, True])
+def test_real_wire_workflow_uses_partial_revision_and_preserves_valid_program(
+    with_difficulty,
+):
     class WireAuthor(Provider):
         def __init__(self):
             super().__init__()
@@ -94,8 +102,17 @@ def test_real_wire_workflow_uses_partial_revision_and_preserves_valid_program():
             )
 
     author = WireAuthor()
-    result, _ = run(author)
-    assert result.status == "checked" and len(result.attempts) == 2
+    if with_difficulty:
+        author.plan += (TEMPLATE_DIFFICULTY_TOOL,)
+    judge = TemplateJudge()
+    client = FastMcpToolClient(
+        create_validation_server(
+            code_execution_tool=Executor(), difficulty_provider_factory=lambda: judge
+        )
+    )
+    result, _ = run(author, client)
+    assert result.status == "checked", result.reason
+    assert len(result.attempts) == 2
     first, second = result.attempts
     for field in (
         "code",
@@ -108,6 +125,15 @@ def test_real_wire_workflow_uses_partial_revision_and_preserves_valid_program():
     assert first.candidate["distractors"] != second.candidate["distractors"]
     feedback = json.loads(author.requests[-1].messages[-1]["content"])
     assert feedback["revision_guidance"]["scope"] == "distractors_and_parameter_values"
+    assert len(judge.requests) == int(with_difficulty)
+    if with_difficulty:
+        skipped = first.executions[-1]
+        assert skipped.tool == TEMPLATE_DIFFICULTY_TOOL
+        assert skipped.skip_reason == "Prerequisite checks did not pass"
+        assert skipped.evidence is None
+        assert first.pending == [TEMPLATE_DIFFICULTY_TOOL]
+        assert feedback["check_results"][-1]["skip_reason"] == skipped.skip_reason
+        assert second.executions[-1].passed
 
 
 def attempt_for(code):
@@ -118,7 +144,14 @@ def attempt_for(code):
         findings=[ToolFinding(code=code, message="Failure")],
     )
     return SimpleNamespace(
-        executions=[SimpleNamespace(passed=False, error=None, evidence=evidence)]
+        executions=[
+            CheckExecution(
+                call_id="answers",
+                tool=evidence.tool,
+                requested_arguments={},
+                evidence=evidence,
+            )
+        ]
     )
 
 
@@ -150,6 +183,34 @@ def test_difficulty_revision_retains_full_proposal_schema():
     model, guidance = revision_contract(current, attempt_for("DIFFICULTY_MISMATCH"))
     assert model is CodeProposalResponse and guidance["scope"] == "proposal"
     assert "increasing repetition alone" in guidance["instructions"]
+
+
+@pytest.mark.parametrize("other_failure", ["answer", "tool_error"])
+def test_skipped_difficulty_does_not_hide_other_executed_failures(other_failure):
+    current = CodeProposalResponse.model_validate(proposal().model_dump())
+    attempt = attempt_for("DISTRACTOR_SELECTION_FAILED")
+    if other_failure == "answer":
+        attempt.executions.extend(attempt_for("PROPOSED_ANSWER_MISMATCH").executions)
+    else:
+        attempt.executions.append(
+            CheckExecution(
+                call_id="structure",
+                tool="code_verify_template_structure",
+                requested_arguments={},
+                error="TimeoutError: check unavailable",
+            )
+        )
+    attempt.executions.append(
+        CheckExecution(
+            call_id="difficulty",
+            tool=TEMPLATE_DIFFICULTY_TOOL,
+            requested_arguments={},
+            skip_reason="Prerequisite checks did not pass",
+        )
+    )
+    model, guidance = revision_contract(current, attempt)
+    assert model is CodeProposalResponse
+    assert guidance["scope"] == "proposal"
 
 
 @pytest.mark.parametrize(
@@ -203,7 +264,7 @@ def test_recovered_author_call_is_counted_without_using_a_template_revision():
     assert result.status == "checked" and len(result.attempts) == 1
     assert [call.operation for call in result.model_calls[:2]] == ["generation"] * 2
     assert result.model_calls[0].error == "transport"
-    assert result.usage.model_call_count == 4
+    assert result.usage.model_call_count == 2
 
 
 @pytest.mark.parametrize("status", [400, 401, 403])

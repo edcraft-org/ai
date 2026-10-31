@@ -6,11 +6,10 @@ import time
 import uuid
 from collections.abc import Callable
 from dataclasses import replace
-from functools import partial
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as JsonSchemaError
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from edcraft_validator.application.authoring_contracts import (
     AuthoringError,
@@ -36,7 +35,7 @@ from edcraft_validator.llm.llm_errors import (
     GenerationTransportError,
 )
 from edcraft_validator.llm.tool_context import (
-    callable_tool,
+    constrained_check_plan,
     generation_messages,
 )
 from edcraft_validator.llm.usage import MeasuredProvider, summarize_usage
@@ -192,16 +191,21 @@ class TemplateApplication:
                     generation_duration_ms += (
                         time.perf_counter() - generation_started
                     ) * 1000
-                self._validate_response(response, snapshot.names, plan_only=validating)
+                self._validate_response(
+                    response, generation_request, plan_only=validating
+                )
+                response = response.model_copy(deep=True)
                 # Corrections cannot avoid checks that previously failed.
                 plan = tuple(check.name for check in response.checks)
                 result.fixed_plan = list(plan)
-                messages = generation_messages(generation_request)
-                messages.append(
-                    {"role": "assistant", "content": response.model_dump_json()}
-                )
+                result.check_plan = [
+                    check.model_copy(deep=True) for check in response.checks
+                ]
+                # Keep dispatch arguments private and independent of mutable model data.
+                planned_arguments = {
+                    check.name: json.dumps(check.arguments) for check in response.checks
+                }
                 definitions = {tool["name"]: tool for tool in snapshot.definitions()}
-                seen_call_ids: set[str] = set()
                 for number in range(1, max_attempts + 1):
                     stage = "template_building"
                     candidate = (
@@ -211,43 +215,16 @@ class TemplateApplication:
                     )
                     attempt = self._build_attempt(number, candidate, plan)
                     result.attempts.append(attempt)
-                    # Supply the exact candidate and request-owned arguments directly,
-                    # rather than asking the model to reproduce them.
-                    bindings = {
-                        name: domain.tool_bindings(request, candidate, name)
-                        for name in plan
-                    }
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": (
-                                f"Attempt {number}/{max_attempts}. "
-                                "Request every planned tool exactly once in one "
-                                "response: "
-                                + json.dumps(plan)
-                                + ". Batch the native tool calls together. "
-                                "Do not revise the "
-                                "proposal until all checks finish. Candidate and "
-                                "request-owned "
-                                "arguments are supplied by the application. "
-                                "Supply required arguments from each callable schema. "
-                                "Empty planning arguments do not apply to calls. "
-                            ),
-                        }
-                    )
                     stage = "checking"
                     self._run_checks(
                         attempt,
                         plan,
                         definitions,
-                        bindings,
-                        messages,
-                        provider,
+                        planned_arguments,
                         client,
-                        seen_call_ids,
-                        checked_bindings=partial(
-                            self._checked_bindings, domain, request, candidate, attempt
-                        ),
+                        domain=domain,
+                        request=request,
+                        candidate=candidate,
                     )
                     terminal_check_error = any(
                         execution.evidence is not None
@@ -263,7 +240,7 @@ class TemplateApplication:
                         stage = "generation"
                         revision_started = time.perf_counter()
                         try:
-                            response, messages = self._revise_proposal(
+                            response = self._revise_proposal(
                                 generation_request,
                                 response,
                                 attempt,
@@ -275,9 +252,6 @@ class TemplateApplication:
                             generation_duration_ms += (
                                 time.perf_counter() - revision_started
                             ) * 1000
-                        messages.append(
-                            {"role": "assistant", "content": response.model_dump_json()}
-                        )
                         continue
                     stage = "finalization"
                     return self._finish_attempt(
@@ -286,7 +260,6 @@ class TemplateApplication:
                         candidate,
                         domain=domain,
                         provider=provider,
-                        messages=messages,
                         validating=validating,
                         provider_settings=provider_settings,
                         generation_duration_ms=generation_duration_ms,
@@ -349,18 +322,12 @@ class TemplateApplication:
                             "Difficulty estimates are advisory rubric judgments, "
                             "not correctness evidence or measured learner outcomes. "
                             "Distinguish observations from requirements you supplied. "
-                            "Only check names are fixed; your tool arguments "
-                            "can change. "
-                            "The model_arguments below were supplied by you, "
-                            "not by the author. Reconsider any mistaken "
-                            "requirements in them. "
-                            "If your tool arguments imposed unrequested "
-                            "requirements, correct those arguments on the next "
-                            "tool turn instead of adding irrelevant code. "
-                            "Preserve the request's scope and difficulty. "
-                            "Revise authored fields when they are wrong. "
-                            "An unchanged proposal is allowed when only your "
-                            "tool calls were wrong. Return only the "
+                            "Check names and model-owned arguments are fixed. "
+                            "The model_arguments below were selected in the initial "
+                            "plan, not supplied by the educator. Do not change or "
+                            "weaken the plan. Preserve the request's scope and "
+                            "difficulty. Revise authored fields when they are wrong. "
+                            "Return only the "
                             "proposal fields matching the supplied schema. "
                             "Follow revision_guidance and return exactly the supplied "
                             "response schema, including a partial revision "
@@ -369,6 +336,9 @@ class TemplateApplication:
                             "the original check plan."
                         ),
                         "fixed_plan": list(plan),
+                        "check_plan": [
+                            check.model_dump(mode="json") for check in response.checks
+                        ],
                         "revision_guidance": guidance,
                         "check_results": [
                             {
@@ -398,7 +368,7 @@ class TemplateApplication:
         elif not isinstance(revised_proposal, type(response.proposal)):
             raise GenerationSchemaError("Revision must return only the proposal")
         response = response.model_copy(update={"proposal": revised_proposal})
-        return response, messages
+        return response
 
     @staticmethod
     def _finish_attempt(
@@ -408,31 +378,12 @@ class TemplateApplication:
         *,
         domain,
         provider,
-        messages,
         validating,
         provider_settings,
         generation_duration_ms,
     ) -> AuthoringResult:
         """Return the final verdict and package a reusable artifact when possible."""
-        # Deliver final evidence; model prose cannot change verdicts.
-        messages.append(
-            {
-                "role": "user",
-                "content": (
-                    "Checking is finished. Acknowledge the evidence "
-                    "briefly. "
-                    "Do not revise the proposal or request more tools."
-                ),
-            }
-        )
-        try:
-            receipt = provider.tool_turn(copy.deepcopy(messages), [])
-            if receipt.calls:
-                raise ValueError("Model requested tools after checking")
-        except Exception as exc:
-            # A failed acknowledgement cannot erase completed evidence.
-            result.feedback_error = f"{type(exc).__name__}: {exc}"
-
+        # Evidence determines the verdict; no acknowledgement inference is needed.
         if not attempt.passed:
             result.status = "needs_review"
             result.reason = (
@@ -481,7 +432,7 @@ class TemplateApplication:
         return result
 
     @classmethod
-    def _validate_response(cls, response, offered, *, plan_only=False):
+    def _validate_response(cls, response, request, *, plan_only=False):
         expected = CheckPlanResponse if plan_only else PlannedGenerationResponse
         if not isinstance(response, expected) or (
             plan_only and isinstance(response, PlannedGenerationResponse)
@@ -491,7 +442,17 @@ class TemplateApplication:
                 if plan_only
                 else "generation must return a proposal and recommended checks"
             )
-        cls._validate_recommended_checks(response, offered_tool_names=offered)
+        cls._validate_recommended_checks(
+            response, offered_tool_names=request.offered_tool_names
+        )
+        # Do not rely on the provider's wire-format support or its parser.
+        wire_model = constrained_check_plan(
+            type(response), request.offered_tool_names, request.check_argument_models
+        )
+        try:
+            wire_model.model_validate_json(response.model_dump_json())
+        except ValidationError as exc:
+            raise GenerationSchemaError(f"Invalid check plan arguments: {exc}") from exc
 
     @staticmethod
     def _checked_bindings(domain, request, candidate, attempt, name):
@@ -511,137 +472,82 @@ class TemplateApplication:
         attempt,
         plan,
         definitions,
-        bindings,
-        messages,
-        provider,
+        planned_arguments,
         client,
-        seen_call_ids,
         *,
-        checked_bindings,
+        domain,
+        request,
+        candidate,
     ):
+        """Execute the frozen plan once per candidate, without provider tool turns."""
         deferred = {
             name
             for name in plan
             if "stage:after-validation"
             in definitions[name].get("_meta", {}).get("fastmcp", {}).get("tags", [])
         }
-        for _ in range(2 * len(plan) + 2):
-            if not attempt.pending:
-                attempt.complete = True
-                attempt.passed = all(item.passed for item in attempt.executions)
-                return
-            ordinary = [name for name in attempt.pending if name not in deferred]
-            available = ordinary or list(attempt.pending)
-            if not ordinary and deferred:
-                if any(not item.passed for item in attempt.executions):
-                    # Leave deferred checks pending; their prerequisite failed.
-                    # Never invent an MCP output or spend a judge call on it.
-                    return
-                for name in available:
-                    bindings[name] = checked_bindings(name)
-            callable_tools = [
-                callable_tool(definitions[name], bindings[name]) for name in available
-            ]
-            if deferred:
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": (
-                            "Request only the checks available in this stage: "
-                            + json.dumps(available)
-                            + ". Template difficulty runs after correctness checks "
-                            "pass, on the reusable template with checked distractors."
-                        ),
-                    }
-                )
-            turn = provider.tool_turn(copy.deepcopy(messages), callable_tools)
-            if len(turn.calls) > len(plan):
-                raise ValueError("Too many tool calls in one turn")
-            if any(call.id in seen_call_ids for call in turn.calls) or len(
-                {call.id for call in turn.calls}
-            ) != len(turn.calls):
-                raise ValueError("Duplicate tool call ID")
-            seen_call_ids.update(call.id for call in turn.calls)
-            messages.append(turn.message())
-            for call in turn.calls:
-                execution = CheckExecution(
-                    call_id=call.id,
-                    tool=call.name,
-                    requested_arguments=call.arguments_json,
-                )
+        ordered = [name for name in plan if name not in deferred] + [
+            name for name in plan if name in deferred
+        ]
+        for name in ordered:
+            execution = CheckExecution(
+                call_id=f"attempt-{attempt.number}:{name}",
+                tool=name,
+                requested_arguments=json.loads(planned_arguments[name]),
+            )
+            if name in deferred and any(
+                not item.passed
+                for item in attempt.executions
+                if item.tool not in deferred
+            ):
+                # Keep dependent checks pending and record why they were not called.
+                execution.skip_reason = "Prerequisite checks did not pass"
                 attempt.executions.append(execution)
-                try:
-                    if call.name not in attempt.pending:
-                        raise ValueError("Tool is outside the pending frozen plan")
-                    if call.name not in available:
-                        raise ValueError("Tool is not available in this checking stage")
-                    attempt.pending.remove(call.name)
-                    definition = definitions[call.name]
-                    arguments = json.loads(call.arguments_json)
-                    if not isinstance(arguments, dict):
-                        raise ValueError("Tool arguments must be a JSON object")
-                    execution.requested_arguments = arguments
-                    owned = set(arguments) & set(bindings[call.name])
-                    if owned:
-                        raise ValueError(
-                            "Do not supply application-owned arguments: "
-                            + ", ".join(sorted(owned))
-                            + ". Use only the callable schema; "
-                            "use {} if it has no arguments."
-                        )
-                    effective = {**arguments, **copy.deepcopy(bindings[call.name])}
-                    execution.application_arguments = {
-                        key: copy.deepcopy(value)
-                        for key, value in bindings[call.name].items()
-                        if key != "candidate" or call.name in deferred
-                    }
-                    Draft202012Validator(definition["inputSchema"]).validate(effective)
-                    output_schema = definition.get("outputSchema")
-                    if not isinstance(output_schema, dict):
-                        raise ValueError("Tool has no output schema")
-                    version = (
-                        definition.get("_meta", {}).get("fastmcp", {}).get("version")
+                continue
+            attempt.executions.append(execution)
+            attempt.pending.remove(name)
+            try:
+                bindings = (
+                    TemplateApplication._checked_bindings(
+                        domain, request, candidate, attempt, name
                     )
-                    raw = client.call_tool(
-                        call.name, copy.deepcopy(effective), version=version
-                    )
-                    Draft202012Validator(output_schema).validate(raw)
-                    evidence = ToolEvidence.model_validate(raw)
-                    if evidence.tool != call.name or (
-                        version and evidence.version != version
-                    ):
-                        raise ValueError("MCP evidence tool identity/version mismatch")
-                    execution.evidence = evidence
-                except JsonSchemaError as exc:
-                    path = (
-                        ".".join(str(part) for part in exc.absolute_path) or "arguments"
-                    )
-                    execution.error = f"Schema validation at {path}: {exc.message}"
-                except Exception as exc:
-                    execution.error = f"{type(exc).__name__}: {exc}"
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": call.id,
-                        "name": call.name,
-                        "content": json.dumps(execution.model_feedback()),
-                    }
+                    if name in deferred
+                    else domain.tool_bindings(request, candidate, name)
                 )
-            if not turn.calls:
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": (
-                            "Request all remaining tools together using native "
-                            "tool calls: " + json.dumps(attempt.pending)
-                        ),
-                    }
-                )
-        if not attempt.pending:
-            attempt.complete = True
-            attempt.passed = all(item.passed for item in attempt.executions)
-            return
-        raise ValueError("Tool conversation limit reached with checks still pending")
+                arguments = execution.requested_arguments
+                owned = set(arguments) & set(bindings)
+                if owned:
+                    raise ValueError(
+                        "Do not supply application-owned arguments: "
+                        + ", ".join(sorted(owned))
+                    )
+                effective = {**arguments, **copy.deepcopy(bindings)}
+                execution.application_arguments = {
+                    key: copy.deepcopy(value)
+                    for key, value in bindings.items()
+                    if key != "candidate" or name in deferred
+                }
+                definition = definitions[name]
+                Draft202012Validator(definition["inputSchema"]).validate(effective)
+                output_schema = definition.get("outputSchema")
+                if not isinstance(output_schema, dict):
+                    raise ValueError("Tool has no output schema")
+                version = definition.get("_meta", {}).get("fastmcp", {}).get("version")
+                raw = client.call_tool(name, copy.deepcopy(effective), version=version)
+                Draft202012Validator(output_schema).validate(raw)
+                evidence = ToolEvidence.model_validate(raw)
+                if evidence.tool != name or (version and evidence.version != version):
+                    raise ValueError("MCP evidence tool identity/version mismatch")
+                execution.evidence = evidence
+            except JsonSchemaError as exc:
+                path = ".".join(str(part) for part in exc.absolute_path) or "arguments"
+                execution.error = f"Schema validation at {path}: {exc.message}"
+            except Exception as exc:
+                execution.error = f"{type(exc).__name__}: {exc}"
+        attempt.complete = not attempt.pending
+        attempt.passed = attempt.complete and all(
+            item.passed for item in attempt.executions
+        )
 
     @staticmethod
     def _validate_recommended_checks(

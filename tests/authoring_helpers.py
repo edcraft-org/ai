@@ -1,8 +1,6 @@
-"""Scripted native tool turns used by authoring integration tests."""
+"""Structured-only providers used by authoring integration tests."""
 
-import uuid
-
-from edcraft_validator.llm.llm_contracts import CheckPlanResponse, ModelTurn, ToolCall
+from edcraft_validator.llm.llm_contracts import CheckPlanResponse
 
 
 class RequestPendingTools:
@@ -10,16 +8,7 @@ class RequestPendingTools:
         return {"mode": "scripted"}
 
     def tool_turn(self, messages, tools):
-        return ModelTurn(
-            calls=[
-                ToolCall(
-                    id=str(uuid.uuid4()),
-                    name=tool["function"]["name"],
-                    arguments_json="{}",
-                )
-                for tool in tools
-            ]
-        )
+        raise AssertionError("Workflow must dispatch checks without native tool turns")
 
 
 class SelectSemanticCheck(RequestPendingTools):

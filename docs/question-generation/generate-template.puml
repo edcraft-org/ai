@@ -10,30 +10,31 @@ participant MCP
 User -> App: Prompt and easy/medium/hard difficulty
 App -> Domain: Get instructions and schema
 App -> MCP: Get tools tagged for this domain once
-App -> Model: Request proposal and selected checks
-Model --> App: Proposal and check plan
+App -> Model: Request proposal and check plan with arguments
+Model --> App: Proposal, names and model-owned arguments
+App -> App: Validate and freeze plan
 
 loop Until success, initial proposal plus at most 3 revisions
     App -> Domain: Build candidate
-    loop Selected checks
-        App -> Model: Request tool calls
-        Model --> App: Tool names and arguments
-        App -> MCP: Call with current candidate
+    loop Selected technical checks
+        App -> MCP: Call with frozen arguments and current candidate
         MCP -> MCP: Run checking operation
-        MCP --> App: Results
-        App -> Model: Return results
+        MCP --> App: Evidence or explicit error
     end
-    alt All checks passed
-        App -> Model: Final results; acknowledgement only
+    opt Selected difficulty check and technical prerequisites passed
+        App -> Domain: Bind checked template and distractors
+        App -> MCP: Assess template difficulty
+        MCP --> App: Judge evidence or error
+    end
+    alt All selected checks passed
         App -> Domain: Package recipes and sampled checking statistics
         Domain --> App: Artifact, or missing required data
         App -> App: checked, or needs_review if data is missing
-    else Failed and attempts remain
-        App -> Model: Request revision using all results
-        Model --> App: Revised proposal, same selected checks
-    else Final attempt failed
-        App -> Model: Final results; acknowledgement only
-        App -> App: needs_review
+    else Failed and revisions remain and no terminal judge error
+        App -> Model: Request proposal revision with check evidence
+        Model --> App: Revised proposal; original plan retained
+    else Final failure or terminal judge error
+        App -> App: needs_review with history and skipped checks
     end
 end
 App --> User: One report with all attempts; small artifact if available
@@ -42,7 +43,8 @@ note over App, User
 Saved artifacts get a new ID.
 Reports keep history; artifacts keep content, recipes and checking statistics.
 Existing-candidate validation checks once without revisions.
-Interrupted conversations return error.
+Interrupted generation returns error.
+No native tool-request or acknowledgement calls are needed.
 Human approval is future product work.
 end note
 

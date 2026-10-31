@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 class RecommendedCheckArguments(BaseModel):
-    """Reserved closed argument object until checks are exposed as typed tools."""
+    """Closed default for checks without model-owned planning arguments."""
 
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
@@ -21,7 +21,9 @@ class RecommendedCheck(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     name: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
-    arguments: RecommendedCheckArguments
+    # Provider wire schemas and the application validate these against the
+    # domain's per-tool argument models before the plan can execute.
+    arguments: dict[str, Any]
 
 
 class CheckPlanResponse(BaseModel):
@@ -89,6 +91,7 @@ class StructuredGenerationRequest[ProposalT: BaseModel]:
     schema_name: str = "template_proposal"
     offered_tool_names: tuple[str, ...] = ()
     tool_catalogue: ToolCatalogueSnapshot | None = None
+    check_argument_models: tuple[tuple[str, type[BaseModel]], ...] = ()
 
 
 class ModelProvider(Protocol):
@@ -104,10 +107,6 @@ class ModelProvider(Protocol):
     def generate[ProposalT: BaseModel](
         self, request: StructuredGenerationRequest[ProposalT]
     ) -> ProposalT: ...
-
-    def tool_turn(
-        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
-    ) -> ModelTurn: ...
 
 
 class ToolCall(BaseModel):

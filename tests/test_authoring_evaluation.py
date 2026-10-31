@@ -9,7 +9,6 @@ from test_authoring_loop import (
     Executor,
     Provider,
     RecordingClient,
-    calls,
     run,
     wrong_answer,
 )
@@ -133,18 +132,13 @@ def test_initial_failure_has_a_summary_without_checking_attempts():
     assert summary["failure_counts"] == {"generation:generation_error": 1}
 
 
-@pytest.mark.parametrize("arguments", ['{"unexpected":true}', "{invalid"])
-def test_terminal_argument_errors_are_categorized_once_per_job(arguments):
-    result, _ = run(
-        Provider(
-            plan=(SEMANTIC,),
-            call_factory=lambda names: calls(SEMANTIC, arguments=arguments),
-        )
-    )
+@pytest.mark.parametrize("arguments", [{"unexpected": True}, "{invalid"])
+def test_initial_plan_argument_errors_are_categorized_without_check_findings(arguments):
+    result, _ = run(Provider(plan=(SEMANTIC,), plan_arguments={SEMANTIC: arguments}))
     summary = evaluation.summarize_records([record(result)], 1)
-    assert result.status == "needs_review"
-    assert summary["failure_counts"] == {"TOOL_CALL_ERROR": 1}
-    assert summary["check_finding_counts"] == {"TOOL_CALL_ERROR": 4}
+    assert result.status == "error"
+    assert summary["failure_counts"] == {f"generation:{result.failure.code}": 1}
+    assert summary["check_finding_counts"] == {}
 
 
 def test_terminal_tool_error_preserves_other_check_failure_categories():
