@@ -1,0 +1,141 @@
+\section{Evaluation}\label{sec:evaluation}
+
+\subsection{Evaluation design and evidence versions}\label{sec:evaluation-design}
+
+The evaluation covers component tests, authoring comparisons, generation and reuse costs, difficulty assessment and relevance assessment. Each study records its own model, dataset and rubric version, so results from different configurations are reported separately.
+
+The main authoring study compares one-shot generation with the application using OpenAI gpt-5-mini. It uses 15 requests covering five Python concepts at three difficulty levels. Each request is repeated twice per method, giving 30 jobs per method.
+
+Both methods receive the same initial messages, response schema and tool catalogue. One-shot generation makes one model call and receives no checking feedback. The application runs its checks and allows bounded revision. Both methods’ outputs are then evaluated using the same offline technical checks. Offline evaluation used 64 generated examples, a maximum of 192 execution calls, a 30-second budget and seed 6701. Three fixed preview seeds (67001, 67002 and 67003) were also used.
+
+The original comparison measured delivered templates passing offline technical checks. After inspecting those results, a later analysis examined each job’s final available candidate, including candidates withheld from delivery, to assess technical repair separately from workflow completion. This later analysis is the focus of the technical comparison below. It does not establish full request compliance or educational alignment.
+
+\subsection{Technical validity and repair}\label{sec:technical-results}
+
+An additional Qwen3.6 authoring trial encountered frequent transport errors, invalid structured responses and tool-call failures. It is excluded from the authoring results reported here. The main comparison therefore focuses on GPT-5-mini, and its conclusions apply to that configuration. The separate Qwen3.6 difficulty comparison and Qwen3-Reranker relevance evaluation are retained in Sections~\ref{sec:difficulty-results} and~\ref{sec:relevance-results}.
+
+\begin{table}[!htbp]
+\centering
+\setstretch{1}
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.17}
+\caption{GPT-5-mini one-shot and application authoring outcomes}\label{tab:authoring}
+\begin{tabular}{@{}P{0.54\linewidth}P{0.2\linewidth}P{0.2\linewidth}@{}}
+\toprule
+\textbf{Measure} & \textbf{One-shot} & \textbf{Application} \\
+\midrule
+Initial candidates passing technical checks & 18 & 19 \\
+\addlinespace[3pt]
+Final candidates passing technical checks & 18/30 (60.0\%) & 27/30 (90.0\%) \\
+\addlinespace[3pt]
+Initially faulty candidates repaired & — & 8/11 \\
+\addlinespace[3pt]
+Median job latency (seconds) & 38.18 & 270.77 \\
+\addlinespace[3pt]
+Total model calls, including judge calls & 30 & 196 \\
+\addlinespace[3pt]
+\bottomrule
+\end{tabular}
+\end{table}
+Each method had thirty requested jobs. A final candidate is the last proposal available for offline evaluation, whether delivered or withheld. Jobs without a candidate count as unsuccessful.
+
+The application increased final technical passes from eighteen to twenty-seven. Within its own run, nineteen initial candidates passed, and eight of the eleven faulty candidates were repaired. Furthermore, no initially passing candidate became a final technical failure.
+
+\subsection{Benefits and limitations}\label{sec:benefits}
+
+The results support checking and bounded revision to improve sampled technical validity. However, the application required more model calls and longer latency. Since it also provided retries and additional generation opportunities, this comparison does not isolate the benefit of feedback or show an advantage over regeneration with an equal inference budget.
+
+Technical validity also did not guarantee that the template followed every instruction. Four delivered templates changed the allowed input values specified in the request. Therefore, the results support improved technical validity, but not complete request compliance or improved educational alignment. Furthermore, the small benchmark also limits generalization.
+
+\subsection{Technical passes and delivery}\label{sec:delivery}
+
+The application delivered twenty-two checked templates. However, five additional final candidates passed the offline technical checks but were withheld because difficulty assessment failed: three encountered timeouts and two received invalid judge responses.
+
+Thus, twenty-seven final candidates passed technical checks, but only twenty-two completed the application workflow. The five withheld candidates support the technical comparison, but their difficulty assessment remained incomplete.
+
+\subsection{Template reuse}\label{sec:reuse}
+
+The reuse study generated batches of one, five and ten drafts from saved templates. Upfront authoring costs included unsuccessful jobs before a usable template was obtained. For example, the first functions authoring job encountered a difficulty-assessment timeout, while the second succeeded.
+
+Once saved, the template generated drafts without further model calls. However, different seeds could repeat the same inputs. Although the functions template allowed four input values, its ten generated drafts contained only three distinct variations.
+
+Separate execution checks evaluated generated answers. Nevertheless, passing tested instances does not guarantee correctness for every possible expansion. Appendix~\ref{app:comparisons}, Table~\ref{tab:reuse} contains the detailed reuse results.
+
+\subsection{Difficulty assessment}\label{sec:difficulty-results}
+
+Difficulty assessment was evaluated separately from technical correctness. The historical v0.2 rubric considered tracing effort, changing state, interaction between concepts and answer discrimination. Its selected prompt matched 23/30 reference labels, compared with 19/30 for the earlier control. However, medium-difficulty questions remained harder to classify. Appendix~\ref{app:history} provides the historical development details.
+
+The later v0.3 rubric separated option quality from difficulty. All thirty reference questions contributed to development, and each was assessed twice.
+
+\begin{table}[!htbp]
+\centering
+\setstretch{1}
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.17}
+\caption{v0.3 difficulty agreement and observed availability}\label{tab:difficulty}
+\begin{tabular}{@{}P{0.54\linewidth}P{0.2\linewidth}P{0.2\linewidth}@{}}
+\toprule
+\textbf{Measure} & \textbf{Qwen 3.6} & \textbf{GLM5.3 Flash} \\
+\midrule
+Reference matches on identical scored slots & 43/54 & 51/54 \\
+\addlinespace[3pt]
+Scored slots out of planned slots & 60/60 & 54/60 \\
+\addlinespace[3pt]
+All scored overall matches & 47/60 & 51/54 \\
+\addlinespace[3pt]
+Overall and all three dimensions match & 36/60 & 48/54 \\
+\addlinespace[3pt]
+Median successful response seconds & 9.45 & 31.97 \\
+\addlinespace[3pt]
+Successful response p95 seconds & 30.87 & 177.60 \\
+\addlinespace[3pt]
+\bottomrule
+\end{tabular}
+\end{table}
+GLM gained 14.8 percentage points on the 54 shared scored slots, providing provisional support for its judge role. Six final GLM slots were excluded for transport failure while recovery encountered 63 transport failures across 117 returned attempts. Different deadlines and recovery conditions limit a clean model comparison. These are descriptive agreement results on a development reference, not unseen accuracy or learner calibration.
+
+\subsection{Difficulty policy used during authoring}\label{sec:difficulty-policy}
+
+Production judging still uses rubric v0.2 with SoCLaaS x-test-1, observed as GLM5.3 Flash. A matching difficulty estimate passes. A mismatch with self-reported confidence of at least 0.80 requests revision, while a lower-confidence mismatch may pass with a warning.
+
+However, this threshold is provisional and uncalibrated. The v0.3 research results do not validate the production v0.2 policy. Requested difficulty, estimated difficulty and actual learner difficulty must therefore remain distinct.
+
+\subsection{Relevance assessment}\label{sec:relevance-results}
+
+The original chemistry pilot compared embeddings with Qwen3-Reranker on identical objective–question pairs. Thresholds were selected using eighteen development pairs, followed by evaluation on fifty-four test pairs.
+
+\begin{table}[!htbp]
+\centering
+\setstretch{1}
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.17}
+\caption{Original paired relevance test on 54 pairs}\label{tab:relevance}
+\begin{tabular}{@{}P{0.46\linewidth}P{0.23\linewidth}P{0.25\linewidth}@{}}
+\toprule
+\textbf{Measure} & \textbf{Embedding baseline} & \textbf{Original Qwen reranker} \\
+\midrule
+Correct decisions & 39/54 & 47/54 \\
+\addlinespace[3pt]
+Balanced accuracy & 73.6\% & 81.9\% \\
+\addlinespace[3pt]
+False acceptance / false rejection & 11 / 4 & 1 / 6 \\
+\addlinespace[3pt]
+\bottomrule
+\end{tabular}
+\end{table}
+The reranker accepted fewer mismatched pairs, but it also rejected more aligned pairs. This tradeoff supported further development of the decision-based approach.
+
+After revision, all earlier pairs became development data. On thirty-six fresh test pairs, the adopted configuration achieved 28/36 correct decisions, with three false acceptances and five false rejections. These fresh results describe the adopted configuration and the earlier 47/54 score belongs to the original configuration. Embeddings were not rerun on the fresh set.
+
+The adopted cutoff is approximately 0.00203, not a calibrated probability of alignment. Furthermore, the chemistry results do not establish accuracy for Python questions or other domains.
+
+\subsection{Checker verification (Code Domain)}\label{sec:checker-results}
+
+The property checker passed fifteen known-good fixtures and detected all fifteen injected wrong-answer recipes and fifteen injected colliding distractor pools.
+
+A wide-domain arithmetic fixture allowed 32,768 input combinations but used thirty-six sampled executions during checking. Thirty later drafts used previously unchecked inputs, and separate execution checks agreed with all thirty answer recipes. However, this does not establish correctness across the entire domain.
+
+These results support the implementation, but do not measure educational quality or the detection rate for naturally occurring model errors.

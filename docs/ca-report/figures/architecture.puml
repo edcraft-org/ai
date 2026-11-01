@@ -1,0 +1,20 @@
+@startuml EdCraftArchitecture
+!pragma layout smetana
+skinparam monochrome true
+skinparam defaultFontSize 16
+skinparam componentStyle rectangle
+component "Provider adapters\nStructured proposals and revisions" as Providers
+component "Application\nFrozen plans, attempts and outcomes" as App
+component "Python domain\nSchemas, recipes and expansion" as Domain
+component "MCP check server\nTechnical checks and difficulty" as MCP
+artifact "Saved template and evidence\nSeeded local generation" as Saved
+Providers <--> App
+Domain <--> App
+App <--> MCP
+App --> Saved
+note bottom of Saved
+Relevance is a separate advisory service.
+Human review is required before educational use.
+The enforced approval interface is planned.
+end note
+@enduml

@@ -1,0 +1,11 @@
+\clearpage
+\setcounter{table}{0}
+\renewcommand{\thetable}{B\arabic{table}}
+\renewcommand{\theHtable}{B\arabic{table}}
+\section{Historical development evidence}\label{app:history}
+
+The original v0.2 rubric describes tracing effort, changing state, conceptual interaction and answer discrimination. It treats easy, medium and hard as qualitative judgments rather than a summed score. The 30-question reference contains six questions per topic, originally split into 18 development and 12 reserved items. Thirteen programs originate from CRUXEval, three are adaptations and fourteen questions were newly authored, MCQ options and difficulty labels are project curation \parencite{cruxeval}.
+
+The historical selected prompt combined a compact runtime rubric with exact option keys. It matched 14/18 development and 9/12 reserved labels, or 23/30 overall, with valid estimates for all questions. The earlier control matched 19/30 and produced 27/30 valid estimates. Selection used development macro recall; equal exact-match totals did not imply equal behavior across levels. Medium recall remained weaker, and the historical alias default did not pin immutable model weights.
+
+Reproducibility records: the evaluated implementation corresponds to merged revision \nolinkurl{28489b87a274cc08615dbf3f277436bc3969b0f0} (PR 92), matching local source \nolinkurl{d89830a676fdc1605e379c6ed9eee49620f92f1b}. The OpenAI authoring records are retained under \path{outputs/issue67/run-v3-openai-glm}, with the later technical-pass analysis under \path{outputs/issue67/technical-pass-reanalysis-2026-10-27.} Difficulty, relevance and checker records are described in \path{docs/evaluation.md}, \path{docs/difficulty-glm-comparison-v0.3.md} and \path{docs/evaluation-history.md.} Historical project logs were also consulted. Source and evaluation documentation are available at \url{https://github.com/edcraft-org/ai/tree/28489b87a274cc08615dbf3f277436bc3969b0f0;} the authoring experiment is tracked in \url{https://github.com/edcraft-org/ai/issues/67.}

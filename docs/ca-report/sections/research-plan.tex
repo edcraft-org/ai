@@ -1,0 +1,41 @@
+\section{Research plan}\label{sec:plan}
+
+\subsection{Roadmap and completion criteria}\label{sec:roadmap}
+
+Table~\ref{tab:roadmap} groups the planned work by milestone but the dates remain subject to revision. Additional domains are planned bounded pilots, not completed capabilities.
+
+\begin{table}[!htbp]
+\centering
+\setstretch{1}
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.17}
+\caption{Planned technical work from issues and milestones}\label{tab:roadmap}
+\begin{tabular}{@{}P{0.29\linewidth}P{0.67\linewidth}@{}}
+\toprule
+\textbf{Milestone and target} & \textbf{Planned work and issues} \\
+\midrule
+M4 Authoring, approval and reuse\newline 22 November 2026 & Build the UI, display evidence, support approval, generate/export drafts and address walkthrough findings. \\
+\addlinespace[3pt]
+M5a Mathematics pilot\newline 29 November 2026 & Support bounded linear equations, exact answers, distractor checks, reuse and evaluation before UI enablement. (Math domain) \\
+\addlinespace[3pt]
+M5b Physics pilot\newline 6 December 2026 & Support one-dimensional net-force questions, with explicit assumptions, unit checks and evaluation. (Physics domain) \\
+\addlinespace[3pt]
+M5c Chemistry pilot\newline 13 December 2026 & Balance supplied reactions using element conservation. (Chemistry domain) \\
+\addlinespace[3pt]
+M5d Biology pilot\newline 20 December 2026 & Support bounded monohybrid inheritance questions with exact probabilities. (Biology domain) \\
+\addlinespace[3pt]
+M7 Evaluation and demonstration\newline 3 January 2027 & Evaluate implemented domains, conduct formative user testing, fix important defects and prepare documentation/demo. \\
+\addlinespace[3pt]
+M6 Source-grounding pilot\newline Undated & Ingest sources, retrieve passages, generate with citations and evaluate grounding. Currently deferred. (RAG) \\
+\addlinespace[3pt]
+\bottomrule
+\end{tabular}
+\end{table}
+\subsection{Final evaluation, documentation and demonstration}\label{sec:final-evaluation}
+
+The final stage will evaluate the implemented domains, document their limitations and prepare a reproducible demonstration. Evaluation will cover answer and distractor correctness, request compliance, repair outcomes, model usage and latency. Where feasible, one-shot generation, repeated regeneration and feedback-guided revision will be compared under matched inference budgets. Service failures will be reported separately from content faults.
+
+Furthermore, formative author walkthroughs (\#57) will examine whether users understand the checking evidence and can make informed approval or rejection decisions. The findings will record participant numbers, assistance required, confusing information and important defects. Independent review of relevance and difficulty judgments will be sought where feasible while learner-based calibration remains further work.
+
+Documentation will describe installation, supported domains and models, checking assumptions, known limitations and steps for reproducing the evaluation. Finally, the demonstration will cover authoring, checking, revision, manual approval and question generation from saved templates. Fixed examples, seeds and software versions will allow the demonstrated results to be reproduced.

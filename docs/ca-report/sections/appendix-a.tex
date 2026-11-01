@@ -1,0 +1,73 @@
+\clearpage
+\setcounter{table}{0}
+\renewcommand{\thetable}{A\arabic{table}}
+\renewcommand{\theHtable}{A\arabic{table}}
+\section{Supporting comparison tables}\label{app:comparisons}
+
+These tables provide supplementary material for the comparisons described in Sections~\ref{sec:evaluation-design}--\ref{sec:reuse}. Quality ratings are conditional model judgments. Upfront authoring costs include unsuccessful jobs, while generated batches may contain duplicate drafts.
+
+Direct question generation produces individual questions and is used in the reuse study. The main authoring comparison instead uses one-shot template generation as its baseline.
+
+\begin{table}[!htbp]
+\centering
+\setstretch{1}
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.17}
+\caption{Positioning the authoring approaches}\label{tab:positioning}
+\begin{tabular}{@{}P{0.24\linewidth}P{0.36\linewidth}P{0.34\linewidth}@{}}
+\toprule
+\textbf{Approach} & \textbf{Artifact and evidence} & \textbf{Relevant limitation} \\
+\midrule
+Direct question generation & One concrete question per model response & Repeated inference, each response needs review \\
+\addlinespace[3pt]
+One-shot template authoring & Reusable template from one model call without checking feedback & Template faults can recur across generated instances \\
+\addlinespace[3pt]
+PrairieLearn AI authoring & Reusable files, preview and testing workflow & Custom content checks and instructor review remain relevant \\
+\addlinespace[3pt]
+EdCraft authoring & Structured tracing template, fixed plan and check history & Bounded Python scope, sampled evidence and manual review \\
+\addlinespace[3pt]
+\bottomrule
+\end{tabular}
+\end{table}
+\begin{table}[!htbp]
+\centering
+\setstretch{1}
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.17}
+\caption{OpenAI ten-draft reuse checks and direct technical passes}\label{tab:reuse}
+\begin{tabular}{@{}P{0.32\linewidth}P{0.13\linewidth}P{0.16\linewidth}P{0.15\linewidth}P{0.14\linewidth}@{}}
+\toprule
+\textbf{Study and task} & \textbf{Direct passes} & \textbf{Reuse checked} & \textbf{Distinct reuse} & \textbf{Upfront calls} \\
+\midrule
+OpenAI arithmetic easy & 10/10 & 10/10 & 8 & 7 \\
+\addlinespace[3pt]
+OpenAI functions hard & 7/10 & 10/10 & 3 & 12 \\
+\addlinespace[3pt]
+OpenAI loops medium & 10/10 & No artifact & 0 & 18 \\
+\addlinespace[3pt]
+\bottomrule
+\end{tabular}
+\end{table}
+All successful reuse expansions made zero additional model calls. Correctness counts come from separate offline execution checks. The OpenAI arithmetic artifact changed the requested domain, and functions had four possible combinations. These are finite demonstrations rather than overall cost-saving estimates.
+
+\begin{table}[!htbp]
+\centering
+\setstretch{1}
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.17}
+\caption{OpenAI conditional heuristic quality review}\label{tab:quality}
+\begin{tabular}{@{}P{0.28\linewidth}P{0.14\linewidth}P{0.14\linewidth}P{0.19\linewidth}P{0.15\linewidth}@{}}
+\toprule
+\textbf{Study and method} & \textbf{Assessed /30} & \textbf{Aligned} & \textbf{Plausibility good} & \textbf{Target level fit} \\
+\midrule
+OpenAI one shot & 18 & 17/18 & 16/18 & 16/18 \\
+\addlinespace[3pt]
+OpenAI application & 27 & 26/27 & 22/27 & 20/27 \\
+\addlinespace[3pt]
+\bottomrule
+\end{tabular}
+\end{table}
+The reviewer saw one representative question per assessable final candidate, with method and requested level hidden. Unequal coverage and OpenAI self-evaluation bias prevent a claim of unconditional educational superiority.

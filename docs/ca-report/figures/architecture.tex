@@ -1,0 +1,22 @@
+% Editable, vector architecture diagram. No external diagram compiler is needed.
+\begin{figure}[tbp]
+\centering
+\begin{tikzpicture}[
+  box/.style={draw,rounded corners=2pt,align=center,font=\small,
+    minimum height=1.05cm,text width=4.0cm,inner sep=7pt},
+  flow/.style={-{Stealth[length=2mm]},semithick},
+  note/.style={font=\footnotesize,align=center}
+]
+\node[box] (app) {Application\\Plan, attempts and outcomes};
+\node[box,above=1.05cm of app] (adapter) {Provider adapters\\Proposals and revisions};
+\node[box,left=1.05cm of app] (domain) {Python domain\\Schemas, recipes and expansion};
+\node[box,right=1.05cm of app] (mcp) {MCP check server\\Technical checks and difficulty};
+\node[box,below=1.05cm of app] (artifact) {Saved artifact\\Template and evidence\\Seeded local generation};
+\draw[flow,<->] (app) -- (adapter);
+\draw[flow,<->] (app) -- (domain);
+\draw[flow,<->] (app) -- (mcp);
+\draw[flow] (app) -- (artifact);
+\node[note,below=.5cm of artifact,text width=13.5cm] {Relevance assessment is a separate advisory service.\\Human review precedes educational use; an enforced approval interface is planned.};
+\end{tikzpicture}
+\caption{Architecture and responsibility boundaries}\label{fig:architecture}
+\end{figure}

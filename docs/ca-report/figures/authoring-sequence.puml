@@ -1,0 +1,38 @@
+@startuml EdCraftAuthoring
+skinparam monochrome true
+skinparam defaultFontSize 16
+hide footbox
+participant "Authoring model" as Model
+participant Application as App
+participant "MCP checks" as Checks
+App -> Checks: Discover domain tool catalogue
+Checks --> App: Names, schemas, versions
+App -> Model: Request, proposal schema and catalogue
+Model --> App: Proposal and selected check plan
+App -> App: Validate and freeze plan names and arguments
+loop Initial candidate plus at most three revisions
+  App -> Checks: Run selected technical checks on current candidate
+  Checks --> App: Current-candidate evidence
+  alt Technical prerequisites pass
+    opt Difficulty selected
+      App -> Checks: Assess checked template difficulty
+      Checks --> App: Assessment, warning, failure or error
+    end
+  else Technical prerequisites fail
+    App -> App: Record dependent difficulty check as skipped
+  end
+  alt All selected policies pass and answer evidence is available
+    App -> App: Save artifact; checked; stop
+  else Repairable failure with revision allowance
+    App -> Model: Original request, candidate, frozen plan,\ncheck evidence and revision allowance
+    Model --> App: Complete replacement proposal
+    App -> App: Validate and rebuild candidate
+  else No allowance, missing evidence or terminal error
+    App -> App: Retain history; needs_review or error; stop
+  end
+end
+note over App,Checks
+Every replacement is checked afresh.
+No author native tool call or final acknowledgement is required.
+end note
+@enduml

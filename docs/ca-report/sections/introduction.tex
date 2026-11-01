@@ -1,0 +1,7 @@
+\section{Introduction}\label{sec:introduction}
+
+Large language models (LLMs) can support education by generating practice questions for educators and learners. However, generated questions need to be checked before use, as plausible content can still contain errors. For Python tracing questions, these errors may include answer recipes that disagree with program execution or distractors that produce identical options for some inputs. Furthermore, generating each question independently requires additional model calls and review. This project therefore investigates an authoring workflow that combines targeted checks, feedback-guided revision and reusable templates. The checks provide evidence about specific properties of a proposed template, while template reuse allows question variations to be generated locally without further model calls.
+
+\subsection{Objectives and scope}\label{sec:introduction-1-1}
+
+This project aims to detect and repair technical faults during template authoring and enable reproducible question variants to be generated without further model inference. Difficulty and relevance assessments provide additional advisory feedback to support human review. The current implementation focuses on Python tracing questions, with additional domains and integration into the EdCraft website planned as future work.

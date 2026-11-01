@@ -1,0 +1,20 @@
+# LaTeX build products
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.lof
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*-SAVE-ERROR
+
+# Generated report and source bundles
+/main.pdf
+/EdCraft_CA_Report.pdf
+/*.zip

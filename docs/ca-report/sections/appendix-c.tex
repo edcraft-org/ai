@@ -1,0 +1,53 @@
+\clearpage
+\setcounter{table}{0}
+\renewcommand{\thetable}{C\arabic{table}}
+\renewcommand{\theHtable}{C\arabic{table}}
+\begin{landscape}
+\section{User stories and acceptance criteria}\label{app:user-stories}
+
+Backend denotes implemented command-line or programmatic behavior; Planned denotes a future product workflow. Priorities express project needs rather than completion status.
+
+{
+\setstretch{1}
+\fontsize{9.5}{11}\selectfont
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.05}
+\begin{longtable}{@{}P{0.12\linewidth}P{0.27\linewidth}P{0.42\linewidth}P{0.07\linewidth}P{0.06\linewidth}@{}}
+\caption{User stories and acceptance criteria}\label{tab:user-stories}\\
+\toprule
+\textbf{Story} & \textbf{User story} & \textbf{Acceptance criteria} & \textbf{Priority} & \textbf{Scope} \\
+\midrule
+\endfirsthead
+\multicolumn{5}{l}{\small\itshape Table~\thetable\ continued}\\
+\toprule
+\textbf{Story} & \textbf{User story} & \textbf{Acceptance criteria} & \textbf{Priority} & \textbf{Scope} \\
+\midrule
+\endhead
+\midrule
+\multicolumn{5}{r}{\small\itshape Continued on next page}\\
+\endfoot
+\bottomrule
+\endlastfoot
+US1\newline Configure generation & As an educator, I want to set the domain, objective and target difficulty so templates meet my teaching needs. & 1. Choose the code domain and an allowed difficulty.\newline 2. State the topic or objective in the prompt.\newline 3. Reject invalid structured requests before inference. & High & Backend \\
+\addlinespace[2pt]
+US2\newline Generate variations & As an educator, I want reusable templates so further drafts require no additional model calls. & 1. Reproduce a draft from the same artifact and seed.\newline 2. Expand locally without additional model calls.\newline 3. Include answers, distractors and a review flag. & High & Backend \\
+\addlinespace[2pt]
+US3\newline Inspect results & As an educator, I want authoring and checking records so I can understand failures and revise my request. & 1. Record domain, provider, model and settings.\newline 2. Retain check results, evidence and final status.\newline 3. Support rerunning authoring with a revised request. & Medium & Backend \\
+\addlinespace[2pt]
+US4\newline Check templates & As an educator, I want template checks so the risk of incorrect answers and distractors is reduced. & 1. Complete every check required by the selected plan.\newline 2. Bind check evidence to the current candidate.\newline 3. Block finalization if a required check fails. & High & Backend \\
+\addlinespace[2pt]
+US5\newline Repair faults & As an educator, I want feedback-guided revision so the system can repair detected template faults. & 1. Send failed-check findings to the authoring model.\newline 2. Allow at most three revisions after the first proposal.\newline 3. Recheck revised candidates before finalization. & High & Backend \\
+\addlinespace[2pt]
+US6\newline Distinguish evidence & As an educator, I want technical evidence separated from model judgments so I can assess the results. & 1. Test recipes against execution on sampled inputs.\newline 2. Record seeds, checking budgets and outcomes.\newline 3. Label model-based relevance and difficulty estimates. & Medium & Backend \\
+\addlinespace[2pt]
+US7\newline Review and approve & As an educator, I want to review checked templates so I can approve their wording and suitability. & 1. Show templates, evidence and representative drafts.\newline 2. Record approval or rejection after technical checks.\newline 3. Release learner-facing questions only after approval. & Medium & Planned \\
+\addlinespace[2pt]
+US8\newline Select a model & As an educator, I want to select a provider and model so I can balance quality, speed and inference cost. & 1. Accept a supported provider and model configuration.\newline 2. Retain shared orchestration when providers change.\newline 3. Report provider and model failures explicitly. & Medium & Backend \\
+\addlinespace[2pt]
+US9\newline Support self-study & As a student, I want practice questions at a chosen difficulty so I can study a supported topic independently. & 1. Let students request templates and practice questions.\newline 2. Show answers, review status and checking limitations.\newline 3. Distinguish requested and estimated difficulty. & High & Planned \\
+\addlinespace[2pt]
+US10\newline Use samples & As an educator, I want to provide example questions so authoring can draw on relevant source material. & 1. Ingest samples into an educator knowledge base.\newline 2. Retrieve relevant samples during template authoring.\newline 3. Record the source samples used for review. & Medium & Planned \\
+\addlinespace[2pt]
+\end{longtable}
+}
+\end{landscape}

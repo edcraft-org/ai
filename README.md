@@ -268,6 +268,7 @@ For live model calls and workflow evaluation, see the [evaluation guide](docs/ev
 
 ## More information
 
+- [CA report LaTeX source](docs/ca-report/README.md)
 - [How the workflow works](docs/question-generation/README.md)
 - [Goals and milestones](GOALS.md)
 - [Evaluation guide](docs/evaluation.md)

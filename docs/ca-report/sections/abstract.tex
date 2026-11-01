@@ -1,0 +1,15 @@
+\section*{Abstract}\phantomsection\addcontentsline{toc}{section}{Abstract}
+
+With the rise of large language models (LLM) capabilities, both educators and students alike have been using them to generate questions. However, LLM can generate plausible assessment questions containing incorrect answers or faulty distractors. This project investigates a structured authoring workflow intended to support assessment across subject domains, with reusable Python tracing questions as the initial implementation. A model proposes a template and selects relevant checks. The application freezes the checking plan, runs relevant checks with the candidate, and provides feedback for revision. These checks are exposed using MCP tools and covers a wide scope. Property-based checking compares proposed answers with program execution and tests distractors over sampled inputs while difficulty and relevance assessment capabilities provide provisional educational judgments. [Insert some results here]
+
+\medskip\noindent\textbf{Subject Descriptors}\par\smallskip
+K.3.1 Computer Uses in Education\par
+I.2.7 Natural Language Processing\par
+D.2.4 Software/Program Verification\par
+D.2.5 Testing and Debugging\par
+
+\medskip\noindent\textbf{Keywords}\par\smallskip
+Assessment authoring, large language models, program tracing, property-based testing, reusable templates
+
+\medskip\noindent\textbf{Implementation Software}\par\smallskip
+Python 3.12, Pydantic, FastMCP, Hypothesis, Step Tracer, OpenAI, SoCLaaS and Ollama

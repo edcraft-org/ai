@@ -1,0 +1,29 @@
+% A compact sequence view of the current application-owned dispatch workflow.
+\begin{figure}[tbp]
+\centering
+\begin{tikzpicture}[
+  actor/.style={draw,rounded corners=2pt,align=center,font=\small,
+    minimum height=.7cm,minimum width=3.5cm,inner sep=5pt},
+  message/.style={-{Stealth[length=1.8mm]},semithick},
+  reply/.style={message,dashed},
+  msg/.style={font=\footnotesize,align=center,fill=white,inner sep=2pt},
+  note/.style={draw,rounded corners=2pt,font=\footnotesize,align=center,fill=white,inner sep=6pt}
+]
+\node[actor] (model) at (0,0) {Authoring model};
+\node[actor] (app) at (5.3,0) {Application};
+\node[actor] (checks) at (10.6,0) {MCP checks};
+\foreach \x in {0,5.3,10.6} \draw[densely dashed,gray] (\x,-.4) -- (\x,-11.1);
+\draw[message] (5.3,-1.2) -- node[msg,above]{Request, schema, catalogue} (0,-1.2);
+\draw[reply] (0,-1.95) -- node[msg,above]{Proposal and check plan} (5.3,-1.95);
+\node[note,text width=4.1cm] at (5.3,-2.85) {Validate candidate\\Freeze plan and arguments};
+\draw[message] (5.3,-4.15) -- node[msg,above]{Run technical checks} (10.6,-4.15);
+\draw[reply] (10.6,-4.9) -- node[msg,above]{Evidence or failure details} (5.3,-4.9);
+\draw[message] (5.3,-5.65) -- node[msg,above]{Candidate and failure feedback} (0,-5.65);
+\draw[reply] (0,-6.4) -- node[msg,above]{Complete replacement} (5.3,-6.4);
+\node[note,text width=12.7cm] at (5.3,-7.35) {Recheck every replacement. Initial proposal plus at most three revisions.\\Skip selected difficulty checks until technical prerequisites pass.};
+\draw[message] (5.3,-8.8) -- node[msg,above]{Assess difficulty if eligible} (10.6,-8.8);
+\draw[reply] (10.6,-9.55) -- node[msg,above]{Difficulty result} (5.3,-9.55);
+\node[note,text width=8.2cm] at (5.3,-10.5) {Save eligible artifact; otherwise retain history\\Final status: checked, needs\_review or error};
+\end{tikzpicture}
+\caption{Authoring, checking, revision and finalisation sequence. Difficulty mismatch can also trigger revision within the same limit.}\label{fig:authoring}
+\end{figure}

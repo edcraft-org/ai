@@ -1,0 +1,23 @@
+\section{Discussion and limitations}\label{sec:discussion}
+
+\subsection{Contribution supported by the evidence}\label{sec:contribution}
+
+This project links reusable templates to checks, repair feedback and inspectable history. The OpenAI application run repaired eight initially faulty proposals without recorded technical regressions. However, distractor validity remains a separate problem even when the answer matches execution.
+
+Adapters and domain contracts permit replacement, but schema and tool-call compatibility remains empirical. MCP standardizes access while the checking algorithms and acceptance conditions provide substantive evidence.
+
+\subsection{Reliability and experimental limitations}\label{sec:limitations}
+
+The application increased final candidates passing sampled technical checks, but the evaluation covered only thirty jobs per method across fifteen related requests. This limits generalisation. Furthermore, the application used more inference than one-shot generation. Equal-budget comparisons are needed to determine whether feedback provides greater benefit than repeated generation. One useful baseline would generate replacement candidates and use the same checks for selection, without providing failure feedback to the authoring model.
+
+Some OpenAI revisions changed the requested parameter domains. Stronger checks are therefore needed to preserve the educator’s instructions throughout revision. Similarly, detecting a programming feature does not establish that understanding it is necessary to answer the question. Any corrections to the evaluator should be versioned and applied consistently to both methods.
+
+Finally, sampling limits checking effort but does not prove correctness or termination for every possible input. Rejecting inputs that produce colliding options may also change which questions are generated most often. “Verifiable” in the project title refers to explicit, checkable properties and recorded evidence and does not imply formal verification or validated educational quality.
+
+\subsection{Educational quality and cost claims}\label{sec:educational-cost}
+
+GPT-5-mini reviewed final candidates without being told which method produced them. However, only assessable candidates were reviewed, and coverage differed between methods. The ratings in Appendix~\ref{app:comparisons}, Table~\ref{tab:quality} therefore describe the reviewed candidates rather than all requested jobs. They are AI judgments, not independent educator validation, and using the same model for authoring and review may introduce bias.
+
+Although technical pass rates improved, the ratings did not show consistent improvement in distractor plausibility or matching the requested difficulty. Educational quality therefore requires further evaluation.
+
+Both methods produced reusable templates that could generate further drafts without additional model calls. However, the application required more upfront inference and latency. Some usage information was unavailable, and human review effort was not measured. Overall monetary savings have therefore not been established. Any future cost comparison should also account for duplicate drafts and unsuccessful authoring jobs.
