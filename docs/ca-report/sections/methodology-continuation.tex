@@ -62,9 +62,7 @@ The production rubric considers execution and reasoning burden, changing state, 
 
 The implemented workflow uses a structured judge, with GLM5.3 Flash provisionally selected from difficulty experiments. The selection was based on agreement with the difficulty references. Authoring was evaluated separately. The judge assesses the checked template and selected distractors, while the requested difficulty is withheld during estimation and compared afterwards.
 
-A high-confidence mismatch triggers revision. Under the current policy, a mismatch with self-reported confidence below 0.80 can pass with an advisory warning. A template may therefore complete this policy with a warning even when its estimated level differs from the request.
-
-A planned extension uses a fast decision model first and refers uncertain cases to a structured reasoning judge. Section~\ref{sec:cascade-results} reports its evaluation.
+I chose 0.80 as the self-reported confidence threshold for triggering revision after a difficulty mismatch. Below this threshold, the workflow allows the template to proceed with a warning because the judge is less certain about its estimate. I also plan to move towards a decision-first cascade to reduce reliance on the reasoning judge. Confident decisions would be accepted directly, while uncertain cases would receive further assessment. Section~\ref{sec:cascade-results} reports its evaluation.
 
 Learner-performance data are still needed to test how these estimates relate to a particular student population. The authoring policy and separate difficulty evaluations are described in Section~\ref{sec:difficulty-policy} and Section~\ref{sec:difficulty-results}.
 
@@ -72,7 +70,7 @@ Learner-performance data are still needed to test how these estimates relate to 
 
 Relevance assessment asks whether answering a question requires the knowledge or skill requested by the user. This differs from finding shared vocabulary. A question may contain a sorting algorithm while asking only for a list's length.
 
-The project compared embedding similarity with joint decision methods on the same labelled question--objective pairs. Thresholds were selected using development examples. The earlier comparison favoured the reranker's lower false acceptance, while also showing the trade-off of rejecting more aligned pairs. The project selected Qwen3-Reranker-0.6B for advisory relevance because this comparison prioritised avoiding false acceptance.
+The project compared embedding similarity with joint decision methods on the same labelled question--objective pairs. Thresholds were selected using development examples. I initially selected Qwen3-Reranker-0.6B because it produced fewer false acceptances than the embedding baseline. My priority was to reduce the chance of accepting a question that did not satisfy the requested objective.
 
 The current relevance service uses the local reranker to process the user's request and complete rendered question together under an alignment instruction. It returns a decision and score using the configured threshold. The score represents the model's preference between yes and no, rather than a calibrated probability of educational alignment.
 

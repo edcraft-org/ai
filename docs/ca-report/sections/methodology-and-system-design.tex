@@ -50,7 +50,7 @@ Independent generation can produce a new question on each call, with the cost of
 
 A Python tracing template contains a program, ordered finite parameter domains, question wording, an answer target, an answer recipe and distractor recipes. A recipe is an expression evaluated using the selected inputs. For example, a template whose program adds two inputs might use \code{a + b} as its answer recipe.
 
-The earlier implementation stored execution-derived answers for every input combination within small domains. As parameters or values were added, the number of combinations grew rapidly. The current design stores executable recipes instead and checks them over sampled inputs. It can use larger declared domains, while accepting that some inputs remain unchecked during authoring.
+The earlier implementation stored execution-derived answers for every input combination within small domains. As parameters or values were added, the number of combinations grew rapidly. I chose executable answer recipes to support larger parameter domains while keeping the saved template compact. The recipes are checked over sampled inputs.
 
 Expansion loads the saved artifact, selects allowed inputs using a seed, evaluates the recipes and renders the question. It makes no model, MCP or program-execution call. Recipe failures or option collisions trigger resampling, with at most 32 attempts.
 
