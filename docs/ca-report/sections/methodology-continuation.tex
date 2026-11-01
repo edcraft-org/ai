@@ -32,11 +32,11 @@ The model returns a template proposal and a checking plan, including any model-o
 
 \input{figures/authoring-sequence}
 
-The application executes ordinary selected checks sequentially. When selected in the checking plan, difficulty assessment runs after the template passes the required technical checks. If those checks fail, difficulty assessment is skipped for that attempt. It can run on a revised template once the technical checks pass. This is because difficulty assessment uses a model as a judge so we want to save costs by not running it when it is not necessary.
+The application runs the selected technical checks sequentially. If these pass, it runs any selected difficulty assessment. This avoids spending judge calls on templates that already need technical revision.
 
 When a check finds a repairable fault, the application sends the model the current proposal and failure evidence for revision. The model returns the entire revised proposal and the application then validates the proposal and reruns the selected checks on the revised content.
 
-Returning a complete proposal allows the model to update related parts together, such as changing the program and its answer recipe. The application keeps the requested difficulty, distractor count and checking plan fixed. Other instructions in the educator’s prompt may not be checked automatically, so the revised template still needs review to confirm that it follows the request.
+Returning a complete proposal allows the model to update related parts together, such as changing the program and its answer recipe. The application keeps the requested difficulty, distractor count and checking plan fixed. Other instructions in the user's prompt may not be checked automatically, so the revised template still needs review to confirm that it follows the request.
 
 The default limit is one initial proposal and at most three revisions. Final outcomes are determined locally from checking evidence:
 
@@ -48,13 +48,11 @@ The default limit is one initial proposal and at most three revisions. Final out
 
 \subsubsection{Sampled correctness evidence}\label{sec:sampled-evidence}
 
-For each sampled input, the checker runs the program and compares the specified output or variable value with the answer calculated by the answer recipe. These values must match. It also checks that each selected distractor differs from the correct answer and from every other selected distractor. The same set of distractor recipes must satisfy these conditions across all checked inputs. Passing confirms these properties for the tested samples, but faults may still occur at untested inputs.
-
-The checker selects one distractor subset that satisfies these conditions across all checked samples. This gives the saved template a fixed set of recipes to reuse, rather than a different selection for each sample.
+For each sampled input, the checker runs the program and compares the specified output or variable value with the answer calculated by the answer recipe. These values must match. It selects one fixed set of distractor recipes whose values differ from the correct answer and from each other across all checked inputs. Passing confirms these properties for the tested samples.
 
 Checking uses budgets of 32 generated examples, 128 execution calls and 30 seconds. Custom Hypothesis strategies draw from the declared finite parameter domains \parencite{hypothesisdocs}, alongside explicit boundary examples. When a generated input exposes a failure, Hypothesis attempts to simplify it into a smaller counterexample \parencite{maciver2019}.
 
-Failure evidence can identify incorrect answer expressions, unsupported recipes, option collisions or the absence of a suitable distractor subset. Budget exhaustion is recorded as unsuccessful checking, rather than a pass. A passing result covers the checked inputs. Inputs outside that sample can still expose faults or non-termination.
+Failure evidence can identify incorrect answer expressions, unsupported recipes, option collisions or the absence of a suitable distractor subset. Exhausting the time or execution budget makes the check unsuccessful.
 
 \subsection{Difficulty assessment}\label{sec:difficulty-design}
 
@@ -66,18 +64,18 @@ The implemented workflow uses a structured judge, with GLM5.3 Flash provisionall
 
 A high-confidence mismatch triggers revision. Under the current policy, a mismatch with self-reported confidence below 0.80 can pass with an advisory warning. A template may therefore complete this policy with a warning even when its estimated level differs from the request.
 
-A separately evaluated extension uses a decision model first and refers uncertain cases to a structured reasoning judge. In the live test, the decision model handled sixteen of thirty questions without referral, and all sixteen matched the reference labels. The project plans to move towards this cascade to reduce reliance on the reasoning judge. Its accuracy advantage over judge-only assessment has not been established, and total cost and latency still need a direct comparison. The cascade has not yet been integrated into the authoring workflow and Section~\ref{sec:cascade-results} reports its evaluation.
+A planned extension uses a fast decision model first and refers uncertain cases to a structured reasoning judge. Section~\ref{sec:cascade-results} reports its evaluation.
 
 Learner-performance data are still needed to test how these estimates relate to a particular student population. The authoring policy and separate difficulty evaluations are described in Section~\ref{sec:difficulty-policy} and Section~\ref{sec:difficulty-results}.
 
 \subsection{Relevance assessment}\label{sec:relevance-design}
 
-Relevance assessment asks whether answering a question requires the knowledge or skill requested by the author. This differs from finding shared vocabulary. A question may contain a sorting algorithm while asking only for a list's length.
+Relevance assessment asks whether answering a question requires the knowledge or skill requested by the user. This differs from finding shared vocabulary. A question may contain a sorting algorithm while asking only for a list's length.
 
 The project compared embedding similarity with joint decision methods on the same labelled question--objective pairs. Thresholds were selected using development examples. The earlier comparison favoured the reranker's lower false acceptance, while also showing the trade-off of rejecting more aligned pairs. The project selected Qwen3-Reranker-0.6B for advisory relevance because this comparison prioritised avoiding false acceptance.
 
-The current relevance service uses the local reranker to process the author's request and complete learner-facing question together under an alignment instruction. It returns a decision and score using the configured threshold. The score represents the model's preference between yes and no, rather than a calibrated probability of educational alignment.
+The current relevance service uses the local reranker to process the user's request and complete rendered question together under an alignment instruction. It returns a decision and score using the configured threshold. The score represents the model's preference between yes and no, rather than a calibrated probability of educational alignment.
 
 The project also explored using general-purpose LLMs in a constrained decision mode, with reasoning disabled and a yes/no response requested. Their first-token yes/no scores were converted into decisions using thresholds selected on development examples. Both evaluated Qwen3.8 configurations achieved higher accuracy than the local reranker on the test set, as reported in Section~\ref{sec:relevance-results}. Based on these results, the project plans to move towards Qwen3.8 for relevance assessment. This change has not yet been integrated into the application.
 
-Relevance remains separate from the required authoring checks in the reported comparisons. It does not execute code, verify answers or determine difficulty. Changing the model, instructions or threshold requires another evaluation. Section~\ref{sec:relevance-results} reports the latest comparison, while Appendix~\ref{app:history} retains the original and adopted-configuration results.
+Relevance remains separate from the required authoring checks in the reported comparisons. Changing the model, instructions or threshold requires another evaluation. Section~\ref{sec:relevance-results} reports the latest comparison, while Appendix~\ref{app:history} retains the original and adopted-configuration results.

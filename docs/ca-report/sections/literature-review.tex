@@ -4,9 +4,8 @@
 
 A useful question assesses the intended knowledge or skill and gives learners enough information to answer it. Multiple-choice questions also need a defensible answer key and plausible wrong options. The NBME item-writing guide recommends focused questions with answer options that address the same task. It describes how ambiguous wording, irrelevant difficulty and unintended clues can weaken an item. Although written for health-sciences examinations, its guidance provides a starting point for reviewing generated questions \parencite{nbme2024}.
 
-For program tracing, a plausible distractor can represent a mistake in following execution. \textcite{thomas2019} generate distractors from alternative execution paths, connecting the wrong answers to possible tracing errors instead of arbitrary values. However, whether learners actually make those errors would need to be examined through their responses. The project can test whether distractors are wrong and distinct but their educational usefulness needs a different form of assessment.
+For program tracing, a plausible distractor can represent a mistake in following execution. \textcite{thomas2019} generate distractors from alternative execution paths, connecting the wrong answers to possible tracing errors instead of arbitrary values.
 
-A correct answer alone does not make a question useful for assessment. The wording must also be clear, and the distractors should reflect plausible mistakes. Technical checks can verify answers and identify duplicate options, while further review is needed to judge whether the question assesses the intended skill.
 \subsection{Reusable templates and question variation}\label{sec:literature-2-2}
 
 A reusable template defines the content shared by several questions and the rules for varying it. In program tracing, input values can change while the code structure stays fixed. This gives learners further practice with the same reasoning pattern without requiring a new question to be generated each time.
@@ -45,7 +44,7 @@ Relevance asks whether a question requires the skill specified by a learning obj
 
 Keyword matching offers a simple baseline. Embeddings represent meaning more flexibly and allow texts to be compared through cosine similarity. Sentence-BERT demonstrates an efficient approach in which the two representations can be computed independently \parencite{reimers2019}. Similarity alone leaves a gap between being about a topic and assessing its intended skill. For example, a question containing sorting code may ask only for the list's length.
 
-Joint scoring examines the question and objective together. Qwen3 rerankers take an instruction, query and document and use yes/no token scores to rank relevance \parencite{zhang2025}. The instruction can describe the intended relation, which makes this a candidate mechanism for objective matching. The Qwen3 work also supports instruction-conditioned embeddings, so the choice is not simply between an instructed model and embeddings that ignore instructions. Published retrieval benchmarks motivate these mechanisms but a paired educational evaluation is needed to choose between them for this project.
+Joint scoring examines the question and objective together. Qwen3 rerankers take an instruction, query and document and use yes/no token scores to rank relevance \parencite{zhang2025}. The instruction can describe the intended relation, which makes this a candidate mechanism for objective matching. Qwen3 supports instructions for both embedding and reranking models.
 
 \subsection{Research gap and project positioning}\label{sec:literature-2-6}
 

@@ -61,7 +61,6 @@ Difficulty studies used thirty manually reviewed Python tracing questions: fifte
 
 Five configurations each assessed the thirty questions twice under a shared rubric, with reference labels hidden, giving 300 assessments. Table~\ref{tab:difficulty} reports individual results followed by the overall aggregate. Appendix~\ref{app:history} records the serving identifiers and reference development.
 
-\clearpage
 \begin{table}[!htbp]
 \centering\setstretch{1}\small
 \setlength{\tabcolsep}{5pt}\renewcommand{\arraystretch}{1.15}
@@ -143,7 +142,7 @@ Overall (six configurations) & 202/216 (93.5\%) & 8 & 6\\
 \end{tabularx}
 \end{table}
 
-A false acceptance means a non-relevant pair was accepted, while a false rejection means a relevant pair was rejected. Across the six configurations, 202/216 decisions matched the reference (93.5\%), with eight false acceptances and six false rejections. The total counts six evaluations of the same 36 pairs, not 216 distinct pairs. It is a descriptive panel summary, not the accuracy of one deployed model or a combined voting system. Neither similarity nor normalised yes/no preference is a calibrated probability of alignment.
+A false acceptance means a non-relevant pair was accepted, while a false rejection means a relevant pair was rejected. Across six configurations evaluated on the same 36 pairs, 202 of 216 decisions matched the reference labels (93.5\%), with eight false acceptances and six false rejections. Neither similarity nor normalised yes/no preference is a calibrated probability of alignment.
 
 The source links questions to textbook-subsection objectives rather than individually verifying the skills needed to solve each question. Negative pairs use other objectives, often from the same chapter. The results measure agreement with these chemistry labels. Python learning-objective alignment has not yet been evaluated.
 
@@ -151,4 +150,4 @@ The application still uses an earlier local reranker configuration, whose result
 
 \subsection{Verification of the technical checker}\label{sec:checker-results}
 
-The checker accepted all fifteen known-good fixtures and detected all thirty injected faults: fifteen wrong-answer recipes and fifteen colliding distractor pools. A wide-domain template allowed 32,768 input combinations but used thirty-six sampled executions during checking. Separate execution checks agreed with the answers for thirty later drafts at previously unchecked inputs. These tests verify the selected behaviours, while correctness across every allowed input remains unproven.
+The checker accepted all fifteen known-good fixtures and detected all thirty injected faults: fifteen wrong-answer recipes and fifteen colliding distractor pools. A wide-domain template allowed 32,768 input combinations but used thirty-six sampled executions during checking. Separate execution checks agreed with the answers for thirty later drafts at previously unchecked inputs.
