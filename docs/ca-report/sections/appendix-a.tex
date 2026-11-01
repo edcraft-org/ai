@@ -4,70 +4,93 @@
 \renewcommand{\theHtable}{A\arabic{table}}
 \section{Supporting comparison tables}\label{app:comparisons}
 
-These tables provide supplementary material for the comparisons described in Sections~\ref{sec:evaluation-design}--\ref{sec:reuse}. Quality ratings are conditional model judgments. Upfront authoring costs include unsuccessful jobs, while generated batches may contain duplicate drafts.
-
-Direct question generation produces individual questions and is used in the reuse study. The main authoring comparison instead uses one-shot template generation as its baseline.
+Tables~\ref{tab:panel-models} and~\ref{tab:repair-models} expand the latest authoring results. Later tables retain historical studies with their original requests and settings. Direct-question generation in the reuse study produces individual questions; one-shot authoring in the main comparison produces a reusable template.
 
 \begin{table}[!htbp]
-\centering
-\setstretch{1}
-\small
-\setlength{\tabcolsep}{5pt}
-\renewcommand{\arraystretch}{1.17}
-\caption{Positioning the authoring approaches}\label{tab:positioning}
-\begin{tabular}{@{}P{0.24\linewidth}P{0.36\linewidth}P{0.34\linewidth}@{}}
+\centering\setstretch{1}\small
+\setlength{\tabcolsep}{5pt}\renewcommand{\arraystretch}{1.15}
+\caption{Latest authoring technical passes by requested configuration}\label{tab:panel-models}
+\begin{tabularx}{\linewidth}{@{}X r r r@{}}
 \toprule
-\textbf{Approach} & \textbf{Artifact and evidence} & \textbf{Relevant limitation} \\
+\textbf{OpenAI configuration} & \textbf{One-shot} & \textbf{Regenerate} & \textbf{Revise}\\
 \midrule
-Direct question generation & One concrete question per model response & Repeated inference, each response needs review \\
-\addlinespace[3pt]
-One-shot template authoring & Reusable template from one model call without checking feedback & Template faults can recur across generated instances \\
-\addlinespace[3pt]
-PrairieLearn AI authoring & Reusable files, preview and testing workflow & Custom content checks and instructor review remain relevant \\
-\addlinespace[3pt]
-EdCraft authoring & Structured tracing template, fixed plan and check history & Bounded Python scope, sampled evidence and manual review \\
-\addlinespace[3pt]
+\code{gpt-5-mini} & 1/15 & 5/15 & 10/15\\
+\code{gpt-5.4-mini} & 1/15 & 3/15 & 5/15\\
+\code{gpt-6-luna} & 12/15 & 14/15 & 15/15\\
+\textbf{Total} & \textbf{14/45} & \textbf{22/45} & \textbf{30/45}\\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
-\begin{table}[!htbp]
-\centering
-\setstretch{1}
-\small
-\setlength{\tabcolsep}{5pt}
-\renewcommand{\arraystretch}{1.17}
-\caption{OpenAI ten-draft reuse checks and direct technical passes}\label{tab:reuse}
-\begin{tabular}{@{}P{0.32\linewidth}P{0.13\linewidth}P{0.16\linewidth}P{0.15\linewidth}P{0.14\linewidth}@{}}
-\toprule
-\textbf{Study and task} & \textbf{Direct passes} & \textbf{Reuse checked} & \textbf{Distinct reuse} & \textbf{Upfront calls} \\
-\midrule
-OpenAI arithmetic easy & 10/10 & 10/10 & 8 & 7 \\
-\addlinespace[3pt]
-OpenAI functions hard & 7/10 & 10/10 & 3 & 12 \\
-\addlinespace[3pt]
-OpenAI loops medium & 10/10 & No artifact & 0 & 18 \\
-\addlinespace[3pt]
-\bottomrule
-\end{tabular}
-\end{table}
-All successful reuse expansions made zero additional model calls. Correctness counts come from separate offline execution checks. The OpenAI arithmetic artifact changed the requested domain, and functions had four possible combinations. These are finite demonstrations rather than overall cost-saving estimates.
+
+The same fifteen requests were used for each configuration. Returned model identifiers are retained with the call records; these names identify the requested serving configurations rather than proving three independent model families.
 
 \begin{table}[!htbp]
-\centering
-\setstretch{1}
-\small
-\setlength{\tabcolsep}{5pt}
-\renewcommand{\arraystretch}{1.17}
-\caption{OpenAI conditional heuristic quality review}\label{tab:quality}
-\begin{tabular}{@{}P{0.28\linewidth}P{0.14\linewidth}P{0.14\linewidth}P{0.19\linewidth}P{0.15\linewidth}@{}}
+\centering\setstretch{1}\small
+\setlength{\tabcolsep}{5pt}\renewcommand{\arraystretch}{1.15}
+\caption{Partial controlled-repair panel: technical pass and recorded constraints preserved}\label{tab:repair-models}
+\begin{tabularx}{\linewidth}{@{}X r r r@{}}
 \toprule
-\textbf{Study and method} & \textbf{Assessed /30} & \textbf{Aligned} & \textbf{Plausibility good} & \textbf{Target level fit} \\
+\textbf{Configuration} & \textbf{Completed/planned} & \textbf{Regenerate} & \textbf{Revise}\\
 \midrule
-OpenAI one shot & 18 & 17/18 & 16/18 & 16/18 \\
-\addlinespace[3pt]
-OpenAI application & 27 & 26/27 & 22/27 & 20/27 \\
-\addlinespace[3pt]
+\code{gpt-5-mini} & 20/40 & 17/20 & 19/20\\
+\code{gpt-5.4-mini} & 40/40 & 24/40 & 39/40\\
+\code{gpt-6-luna} & 37/40 & 35/37 & 37/37\\
+\textbf{Total} & \textbf{97/120} & \textbf{76/97} & \textbf{95/97}\\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
-The reviewer saw one representative question per assessable final candidate, with method and requested level hidden. Unequal coverage and OpenAI self-evaluation bias prevent a claim of unconditional educational superiority.
+
+The completed fixtures comprised twenty-four wrong-answer cases, twenty-five colliding-distractor cases, twenty-two cases containing a correct distractor and twenty-six missing-feature cases. Revision succeeded in 24, 24, 21 and 26 respectively; regeneration succeeded in 20, 17, 18 and 21. Cases not reached before the time limit remain unrun. This is a controlled fault study with three correction opportunities after the injected candidate, not another forty-five-job authoring panel.
+
+\begin{table}[!htbp]
+\centering\setstretch{1}\small
+\setlength{\tabcolsep}{5pt}\renewcommand{\arraystretch}{1.15}
+\caption{Historical GPT-5-mini authoring comparison, 30 jobs per method}\label{tab:historical-authoring}
+\begin{tabularx}{\linewidth}{@{}X r r@{}}
+\toprule
+\textbf{Measure} & \textbf{One-shot} & \textbf{Application}\\
+\midrule
+Initial technical passes & 18 & 19\\
+Final technical passes, including withheld & 18 & 27\\
+Delivered technical passes & 18 & 22\\
+Initially faulty candidates repaired & --- & 8/11\\
+Median job latency (seconds) & 38.18 & 270.77\\
+Total model calls, including judges & 30 & 196\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+This earlier study used native tool calling and a different request set. Its later final-candidate reanalysis included five technical passes withheld after judge errors: three timeouts and two invalid responses. Four delivered application templates changed requested parameter domains. These outcomes are historical evidence, not additional observations for the latest direct-dispatch comparison. The Qwen3.6 authoring trial is omitted from this comparison after frequent response and service failures; its exclusion does not apply to the separate relevance experiments.
+
+\begin{table}[!htbp]
+\centering\setstretch{1}\small
+\setlength{\tabcolsep}{5pt}\renewcommand{\arraystretch}{1.15}
+\caption{Historical OpenAI ten-draft reuse demonstrations}\label{tab:reuse}
+\begin{tabularx}{\linewidth}{@{}X P{.13\linewidth}P{.16\linewidth}P{.15\linewidth}P{.14\linewidth}@{}}
+\toprule
+\textbf{Task} & \textbf{Direct passes} & \textbf{Reuse checked} & \textbf{Distinct reuse} & \textbf{Upfront calls}\\
+\midrule
+Arithmetic easy & 10/10 & 10/10 & 8 & 7\\
+Functions hard & 7/10 & 10/10 & 3 & 12\\
+Loops medium & 10/10 & No artifact & 0 & 18\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Successful reuse expansions made no further model calls. Correctness counts came from separate offline execution checks. The arithmetic artifact changed the requested domain, and the functions artifact had four possible input combinations. Upfront counts include unsuccessful jobs. These demonstrations do not establish overall cost savings.
+
+\begin{table}[!htbp]
+\centering\setstretch{1}\small
+\setlength{\tabcolsep}{5pt}\renewcommand{\arraystretch}{1.15}
+\caption{Historical conditional GPT-5-mini quality review}\label{tab:quality}
+\begin{tabularx}{\linewidth}{@{}X r r r r@{}}
+\toprule
+\textbf{Method} & \textbf{Assessed/30} & \textbf{Aligned} & \textbf{Plausibility good} & \textbf{Level fit}\\
+\midrule
+One-shot & 18 & 17/18 & 16/18 & 16/18\\
+Application & 27 & 26/27 & 22/27 & 20/27\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The reviewer saw one representative question per assessable final candidate, with method and requested level hidden. Coverage differed between methods, and the reviewer belonged to the same model family as the author. These ratings are supporting model judgments, not independent educator validation of the latest panel.

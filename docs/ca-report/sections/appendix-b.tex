@@ -2,10 +2,49 @@
 \setcounter{table}{0}
 \renewcommand{\thetable}{B\arabic{table}}
 \renewcommand{\theHtable}{B\arabic{table}}
-\section{Historical development evidence}\label{app:history}
+\section{Development evidence and reproducibility}\label{app:history}
 
-The original v0.2 rubric describes tracing effort, changing state, conceptual interaction and answer discrimination. It treats easy, medium and hard as qualitative judgments rather than a summed score. The 30-question reference contains six questions per topic, originally split into 18 development and 12 reserved items. Thirteen programs originate from CRUXEval, three are adaptations and fourteen questions were newly authored, MCQ options and difficulty labels are project curation \parencite{cruxeval}.
+\subsection{Difficulty reference and full panel}
 
-The historical selected prompt combined a compact runtime rubric with exact option keys. It matched 14/18 development and 9/12 reserved labels, or 23/30 overall, with valid estimates for all questions. The earlier control matched 19/30 and produced 27/30 valid estimates. Selection used development macro recall; equal exact-match totals did not imply equal behavior across levels. Medium recall remained weaker, and the historical alias default did not pin immutable model weights.
+The thirty-question reference contains thirteen original CRUXEval programs, three adaptations and fourteen newly authored questions. MCQ options and difficulty labels are project curation \parencite{cruxeval}. The labels were reviewed manually. The original eighteen-development/twelve-reserved split supported early prompt selection; all thirty questions later informed rubric development, so the later studies are not unseen evaluations.
 
-Reproducibility records: the evaluated implementation corresponds to merged revision \nolinkurl{28489b87a274cc08615dbf3f277436bc3969b0f0} (PR 92), matching local source \nolinkurl{d89830a676fdc1605e379c6ed9eee49620f92f1b}. The OpenAI authoring records are retained under \path{outputs/issue67/run-v3-openai-glm}, with the later technical-pass analysis under \path{outputs/issue67/technical-pass-reanalysis-2026-10-27.} Difficulty, relevance and checker records are described in \path{docs/evaluation.md}, \path{docs/difficulty-glm-comparison-v0.3.md} and \path{docs/evaluation-history.md.} Historical project logs were also consulted. Source and evaluation documentation are available at \url{https://github.com/edcraft-org/ai/tree/28489b87a274cc08615dbf3f277436bc3969b0f0;} the authoring experiment is tracked in \url{https://github.com/edcraft-org/ai/issues/67.}
+The selected historical v0.2 prompt matched 14/18 development labels and 9/12 reserved labels, or 23/30 overall, compared with 19/30 for the earlier control. The v0.3 rubric separated option quality from difficulty. In the earlier two-configuration comparison, GLM matched 51/54 shared scored slots and Qwen matched 43/54. Six final GLM assessments were excluded for transport failure, and serving deadlines and recovery conditions differed. These historical figures are distinct from Table~\ref{tab:full-difficulty}.
+
+\begin{table}[!htbp]
+\centering\setstretch{1}\small
+\setlength{\tabcolsep}{5pt}\renewcommand{\arraystretch}{1.15}
+\caption{All five structured difficulty configurations, 60 assessments each}\label{tab:full-difficulty}
+\begin{tabularx}{\linewidth}{@{}X r r r@{}}
+\toprule
+\textbf{Configuration} & \textbf{Usable labels} & \textbf{Matches/usable} & \textbf{Matches/all}\\
+\midrule
+GLM, \code{x-test-1} & 54/60 & 54/54 & 54/60\\
+DeepSeek, \code{x-test-2} & 49/60 & 49/49 & 49/60\\
+Ornith, \code{ornith1.5:35b} & 48/60 & 47/48 & 47/60\\
+MiniMax, \code{x-test-4} & 59/60 & 50/59 & 50/60\\
+Qwen, \code{qwen3.6:35b} & 60/60 & 44/60 & 44/60\\
+\textbf{Selected four, excluding Qwen} & \textbf{210/240} & \textbf{200/210} & \textbf{200/240}\\
+\textbf{All five} & \textbf{270/300} & \textbf{244/270} & \textbf{244/300}\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The selected four-configuration subset is the main summary; it is not the complete evaluated panel. Across all five, agreement among usable labels was 90.4\%, and 81.3\% of requested assessments returned a matching label. There were no easy--hard confusions in either set. Returned identifiers in this panel were \code{glm-5.3-flash}, \code{deepseek-v4.1-flash-1017}, \code{ornith1.5:35b}, \code{minimax-m3.1-flash} and \code{qwen3.6:35b}. Provider aliases do not guarantee immutable weights or independent model families.
+
+\subsection{Historical relevance configurations}
+
+The original chemistry pilot fitted cutoffs on eighteen development pairs and evaluated fifty-four test pairs. Embeddings returned 39/54 correct decisions, with eleven false acceptances and four false rejections. The original local reranker returned 47/54, with one false acceptance and six false rejections. Fewer false acceptances, at the cost of more false rejections, supported its adoption for advisory assessment.
+
+After instruction and cutoff changes, the earlier pairs became development data. The adopted local configuration obtained 28/36 on a fresh test set, with three false acceptances and five false rejections, using cutoff approximately 0.00203. Embeddings were not rerun in that historical study. The rebuilt-pair comparison in Section~\ref{sec:relevance-results} did rerun embeddings and fitted a separate reranker cutoff, approximately 0.48829. These configurations and scores are not interchangeable.
+
+\subsection{Source revisions and retained records}
+
+The latest authoring studies record base revision \nolinkurl{09a956d44fc2f8c1f1c76455be1fe949dc94f1ac}, after application-controlled dispatch (PR~94) and complete-candidate revision (PR~96). Each study also saves its experimental wrapper, source hashes, protocol, actual requests and responses, usage and checkpoints. The base commit alone does not identify the uncommitted experimental scripts.
+
+The OpenAI records are under \path{.artifacts/authoring-study-2026-11-01-v4-openai-low/}; the partial SoCLaaS records are under \path{.artifacts/authoring-study-2026-11-01-v3-soclaas-low/}. Their \path{protocol.json} files fix cases, settings and analysis choices. Request selection used seed 20261104; scheduling, offline checking and statistical analysis used 20261101, 20261102 and 20261103 respectively. Source snapshots accompany the records. These are local research paths; they are not a claim that private artifacts have been published.
+
+Difficulty records are under \path{.artifacts/difficulty-panel/}, \path{.artifacts/difficulty-decision-designs/}, \path{.artifacts/difficulty-decision-full/}, \path{.artifacts/difficulty-cascade/} and \path{.artifacts/difficulty-cascade-live/}. The replay reuses saved judge assessments across decision configurations; its slots are not independent judge calls. Its recorded latency formula omits the first-stage cost on escalated cases, so this report uses the live cascade timings rather than those replay estimates.
+
+Relevance records and the split manifest are under \path{.artifacts/relevance-eval/}. The manifest pins the source hash and question-level split seed 20261030. The supporting scripts include \path{evaluate_difficulty.py}, \path{aggregate_difficulty_panel.py}, \path{evaluate_difficulty_decision_full.py}, \path{evaluate_difficulty_cascade_live.py}, \path{build_relevance_pairs.py} and \path{evaluate_relevance_decision_models.py}. Authoring uses \path{run_authoring_study.py} with \path{authoring_study_runtime.py}.
+
+The historical issue~67 comparison used revision \nolinkurl{28489b87a274cc08615dbf3f277436bc3969b0f0} (PR~92). Records are retained under \path{outputs/issue67/run-v3-openai-glm} and \path{outputs/issue67/technical-pass-reanalysis-2026-10-27}. The source is available at \url{https://github.com/edcraft-org/ai/tree/28489b87a274cc08615dbf3f277436bc3969b0f0}. Internal evidence is identified here rather than entered as an EdCraft-authored literature reference.

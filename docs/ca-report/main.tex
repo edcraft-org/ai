@@ -17,7 +17,7 @@
 \usetikzlibrary{arrows.meta,positioning,fit,calc}
 \usepackage{xurl}
 \usepackage[backend=biber,style=authoryear,sorting=nyt,maxcitenames=2,
-  maxbibnames=99,giveninits=true,uniquename=false,uniquelist=false,
+  maxbibnames=99,giveninits=true,uniquename=false,uniquelist=false,citetracker=true,
   doi=true,isbn=false,url=true]{biblatex}
 \addbibresource{references.bib}
 \DefineBibliographyStrings{english}{nodate={n\adddot d\adddot}}
@@ -25,6 +25,11 @@
 \DeclareLabeldate{\field{date}\field{year}\literal{nodate}}
 \DeclareFieldFormat{extradate}{\iffieldnums{labelyear}{\mknumalph{#1}}{-\mknumalph{#1}}}
 \DeclareDelimFormat[parencite]{nameyeardelim}{\addcomma\space}
+% The supplied report format lists 3--5 authors at first mention, then uses et al.
+\AtEveryCitekey{%
+  \ifciteseen{\defcounter{maxnames}{2}}{\defcounter{maxnames}{5}}%
+  \defcounter{minnames}{1}%
+}
 \setcounter{biburlnumpenalty}{100}
 \setcounter{biburllcpenalty}{100}
 \setcounter{biburlucpenalty}{100}
@@ -84,7 +89,6 @@
 
 \clearpage
 \singlespacing
-\nocite{*}
 \defbibheading{reportreferences}[References]{\section*{#1}\phantomsection\addcontentsline{toc}{section}{#1}}
 \printbibliography[heading=reportreferences,title={References}]
 

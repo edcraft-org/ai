@@ -1,141 +1,140 @@
 \section{Evaluation}\label{sec:evaluation}
 
-\subsection{Evaluation design and evidence versions}\label{sec:evaluation-design}
+\subsection{Study design and recorded versions}\label{sec:evaluation-design}
 
-The evaluation covers component tests, authoring comparisons, generation and reuse costs, difficulty assessment and relevance assessment. Each study records its own model, dataset and rubric version, so results from different configurations are reported separately.
+The evaluation asks whether checking feedback helps author usable templates, what template reuse costs, and how closely the educational assessments match their references. The latest authoring comparison is reported first. Earlier studies used different requests or implementation versions and remain supporting evidence in Appendix~\ref{app:comparisons}.
 
-The main authoring study compares one-shot generation with the application using OpenAI gpt-5-mini. It uses 15 requests covering five Python concepts at three difficulty levels. Each request is repeated twice per method, giving 30 jobs per method.
+Each study records its model, provider, prompts and settings. Aggregation is limited to the configurations within a stated study; results from earlier runs are not added to the latest totals. Appendix~\ref{app:history} identifies the source revisions and saved records.
 
-Both methods receive the same initial messages, response schema and tool catalogue. One-shot generation makes one model call and receives no checking feedback. The application runs its checks and allows bounded revision. Both methods’ outputs are then evaluated using the same offline technical checks. Offline evaluation used 64 generated examples, a maximum of 192 execution calls, a 30-second budget and seed 6701. Three fixed preview seeds (67001, 67002 and 67003) were also used.
+The main study used fifteen distinct requests: five Python concepts at three requested difficulty levels. Each request was evaluated with three OpenAI models, giving forty-five paired model--request comparisons. The three strategies shared the initial proposal. One-shot generation ended there. Check-and-regenerate could request fresh proposals, while feedback-guided revision received the previous candidate and check findings. Both checked strategies retained the initial plan and allowed three candidate opportunities in total, stopping on successful workflow completion. Malformed responses consumed an opportunity. The experimental wrapper could make a fresh attempt when no valid candidate was available; this differs from the production default of one initial proposal plus three revisions.
 
-The original comparison measured delivered templates passing offline technical checks. After inspecting those results, a later analysis examined each job’s final available candidate, including candidates withheld from delivery, to assess technical repair separately from workflow completion. This later analysis is the focus of the technical comparison below. It does not establish full request compliance or educational alignment.
+Both checked strategies used the application's technical checks and difficulty policy. Independent offline evaluation was performed after the branches finished, so its findings were never revision feedback. It used 64 generated examples, a maximum of 192 execution calls, a 30-second checking budget and seed 20261102. Local previews used seeds 7, 19 and 73. The primary outcome was whether each job's final available candidate passed these technical checks, including candidates withheld from delivery. Recorded request constraints and workflow completion were separate outcomes.
 
-\subsection{Technical validity and repair}\label{sec:technical-results}
+Authoring requested low reasoning, a 16,384-token completion allowance and a 300-second HTTP deadline. The common SoCLaaS difficulty judge used provider-default reasoning. Equal candidate allowances did not imply equal token usage or latency. Uncertainty estimates grouped the three model results for each request together, using fifteen request clusters and 20,000 bootstrap resamples. These results describe the tested panel, rather than a random sample of all models or authoring tasks.
 
-An additional Qwen3.6 authoring trial encountered frequent transport errors, invalid structured responses and tool-call failures. It is excluded from the authoring results reported here. The main comparison therefore focuses on GPT-5-mini, and its conclusions apply to that configuration. The separate Qwen3.6 difficulty comparison and Qwen3-Reranker relevance evaluation are retained in Sections~\ref{sec:difficulty-results} and~\ref{sec:relevance-results}.
+\subsection{Technical validity, repair and delivery}\label{sec:technical-results}\label{sec:benefits}\label{sec:delivery}
+
+All forty-five OpenAI comparisons completed. Table~\ref{tab:authoring} separates candidates passing offline checks from those that completed the authoring workflow. All technical passes also met the recorded machine-readable request constraints.
 
 \begin{table}[!htbp]
-\centering
-\setstretch{1}
-\small
-\setlength{\tabcolsep}{5pt}
-\renewcommand{\arraystretch}{1.17}
-\caption{GPT-5-mini one-shot and application authoring outcomes}\label{tab:authoring}
-\begin{tabular}{@{}P{0.54\linewidth}P{0.2\linewidth}P{0.2\linewidth}@{}}
+\centering\setstretch{1}\small
+\setlength{\tabcolsep}{5pt}\renewcommand{\arraystretch}{1.15}
+\caption{Latest OpenAI authoring comparison: 45 jobs per strategy}\label{tab:authoring}
+\begin{tabularx}{\linewidth}{@{}X P{.14\linewidth}P{.19\linewidth}P{.19\linewidth}@{}}
 \toprule
-\textbf{Measure} & \textbf{One-shot} & \textbf{Application} \\
+\textbf{Outcome} & \textbf{One-shot} & \textbf{Regenerate} & \textbf{Revise}\\
 \midrule
-Initial candidates passing technical checks & 18 & 19 \\
-\addlinespace[3pt]
-Final candidates passing technical checks & 18/30 (60.0\%) & 27/30 (90.0\%) \\
-\addlinespace[3pt]
-Initially faulty candidates repaired & — & 8/11 \\
-\addlinespace[3pt]
-Median job latency (seconds) & 38.18 & 270.77 \\
-\addlinespace[3pt]
-Total model calls, including judge calls & 30 & 196 \\
-\addlinespace[3pt]
+Final technical passes & 14 (31.1\%) & 22 (48.9\%) & 30 (66.7\%)\\
+Delivered technical passes & --- & 21 & 29\\
+Technical passes withheld & --- & 1 & 1\\
+Author model calls & 45 & 101 & 100\\
+Difficulty-judge calls & 0 & 25 & 33\\
+Median strategy time (seconds) & 12.02 & 93.54 & 152.05\\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
-Each method had thirty requested jobs. A final candidate is the last proposal available for offline evaluation, whether delivered or withheld. Jobs without a candidate count as unsuccessful.
 
-The application increased final technical passes from eighteen to twenty-seven. Within its own run, nineteen initial candidates passed, and eight of the eleven faulty candidates were repaired. Furthermore, no initially passing candidate became a final technical failure.
+Feedback revision produced sixteen more technical passes than one-shot generation, a gain of 35.6 percentage points (request-cluster 95\% interval: 24.4 to 46.7). No initially passing candidate became a final technical failure in either checked strategy. The difference between revision and regeneration was smaller: eight additional passes, or 17.8 points (interval: 0 to 35.6; request-cluster swap test $p\approx0.117$). Revision performed better descriptively, but this study leaves its advantage over regeneration uncertain. The comparison also changes both access to the previous candidate and detailed failure feedback; it does not isolate feedback alone.
 
-\subsection{Benefits and limitations}\label{sec:benefits}
+Distractor selection was the most frequent offline failure: twenty-three one-shot candidates and twelve final revision candidates failed to provide a common usable distractor set. The remaining revision failures were three invalid templates. No OpenAI author-call errors or main-study runner errors were recorded, so the low one-shot yield in this panel mainly reflects candidate faults rather than unavailable responses. Model-specific outcomes appear in Appendix~\ref{app:comparisons}, Table~\ref{tab:panel-models}.
 
-The results support checking and bounded revision to improve sampled technical validity. However, the application required more model calls and longer latency. Since it also provided retries and additional generation opportunities, this comparison does not isolate the benefit of feedback or show an advantage over regeneration with an equal inference budget.
+One technically passing candidate in each checked strategy was withheld after a difficulty mismatch. Thus, revision produced thirty technical passes but twenty-nine delivered passes. One-shot has no delivery gate, so its delivery rows are inapplicable. The recorded request checks covered parameter restrictions and specified programming features; unrestricted wording requirements and whether a feature was central to the solution still require review.
 
-Technical validity also did not guarantee that the template followed every instruction. Four delivered templates changed the allowed input values specified in the request. Therefore, the results support improved technical validity, but not complete request compliance or improved educational alignment. Furthermore, the small benchmark also limits generalization.
+The higher yield required additional work. Standalone strategy accounting charged the shared initial call and checks to each applicable strategy and excluded readiness probes. Recorded total token usage, including judges, was 244,655 for one-shot, 757,425 for regeneration and 906,530 for revision. Revision used more tokens overall than regeneration, although its tokens per technical pass were lower (about 30,218 versus 34,428). Tokens have different prices across models, and these figures are not monetary savings. Shared judge traffic and the observed service window also affect timings.
 
-\subsection{Technical passes and delivery}\label{sec:delivery}
+\subsection{Controlled repair and hosted-service reliability}\label{sec:repair-results}
 
-The application delivered twenty-two checked templates. However, five additional final candidates passed the offline technical checks but were withheld because difficulty assessment failed: three encountered timeouts and two received invalid judge responses.
+A separate experiment started from forty deliberately faulty templates, covering incorrect answer recipes, colliding distractors, correct answers included as distractors and missing requested features. Both strategies started from the same injected candidate and had up to three new candidate opportunities. Revision received the candidate and failure evidence; regeneration produced fresh proposals without that evidence. Difficulty judging was omitted to focus on technical repair. Success required passing the offline checks and preserving the recorded request constraints.
 
-Thus, twenty-seven final candidates passed technical checks, but only twenty-two completed the application workflow. The five withheld candidates support the technical comparison, but their difficulty assessment remained incomplete.
+The time-limited run completed 97 of 120 planned model--fixture comparisons. Revision succeeded in 95/97 (97.9\%), compared with 76/97 (78.4\%) for regeneration. Regeneration had seventy-seven technical passes, but one changed the requested parameter domains. Both failed revisions still had distractor faults. Uneven model coverage and deliberately introduced faults limit how far this result can explain ordinary authoring. The twenty-three unrun comparisons are incomplete observations, not failed repairs. Appendix~\ref{app:comparisons} gives the breakdown.
+
+A concurrent SoCLaaS study used the same fifteen requests per configuration but completed only 21/30 comparisons: all fifteen GLM requests and six Qwen requests. Among completed comparisons, one-shot, regeneration and revision produced seven, twelve and thirteen technical passes respectively. Two revision passes changed recorded constraints, leaving eleven constraint-preserving passes. This partial study is reported separately from the complete OpenAI panel.
+
+Its main-study call records contain ten authoring timeouts, nine empty authoring responses, five output-budget failures and one judge timeout. These are call events, not counts of faulty questions. Authoring requested low reasoning and a locally configured 16,384-token allowance; the judge retained provider-default reasoning. Reaching that allowance means the configured response budget was exhausted, not that a SoCLaaS software defect has been identified. The nine unfinished comparisons and shared judge traffic prevent a clean comparison of provider effectiveness or speed.
 
 \subsection{Template reuse}\label{sec:reuse}
 
-The reuse study generated batches of one, five and ten drafts from saved templates. Upfront authoring costs included unsuccessful jobs before a usable template was obtained. For example, the first functions authoring job encountered a difficulty-assessment timeout, while the second succeeded.
+The earlier reuse study generated batches of one, five and ten drafts from saved templates. Its upfront costs included unsuccessful jobs before a usable artifact was obtained. For example, the first functions authoring job ended with a difficulty-assessment timeout and the next succeeded.
 
-Once saved, the template generated drafts without further model calls. However, different seeds could repeat the same inputs. Although the functions template allowed four input values, its ten generated drafts contained only three distinct variations.
+Saved artifacts generated further drafts without model calls. Variation remained limited by their input domains: the functions template allowed four input combinations, and ten drafts contained only three distinct questions. Separate execution checks assessed the generated answers. Appendix~\ref{app:comparisons}, Table~\ref{tab:reuse} records these demonstrations and their original configuration. Local reuse removes further inference for expansion, but overall cost also depends on authoring failures, duplicates and review effort.
 
-Separate execution checks evaluated generated answers. Nevertheless, passing tested instances does not guarantee correctness for every possible expansion. Appendix~\ref{app:comparisons}, Table~\ref{tab:reuse} contains the detailed reuse results.
+\subsection{Difficulty assessment and authoring policy}\label{sec:difficulty-results}
 
-\subsection{Difficulty assessment}\label{sec:difficulty-results}
+The v0.3 reference contains thirty Python tracing questions: fifteen easy, nine medium and six hard. The labels were reviewed manually, but all questions informed rubric development and no learner-response data were collected. The following figures measure agreement with that project reference. They are not held-out predictions of student performance.
 
-Difficulty assessment was evaluated separately from technical correctness. The historical v0.2 rubric considered tracing effort, changing state, interaction between concepts and answer discrimination. Its selected prompt matched 23/30 reference labels, compared with 19/30 for the earlier control. However, medium-difficulty questions remained harder to classify. Appendix~\ref{app:history} provides the historical development details.
+\subsubsection{Structured judging}\label{sec:structured-difficulty}
 
-The later v0.3 rubric separated option quality from difficulty. All thirty reference questions contributed to development, and each was assessed twice.
-
-\begin{table}[!htbp]
-\centering
-\setstretch{1}
-\small
-\setlength{\tabcolsep}{5pt}
-\renewcommand{\arraystretch}{1.17}
-\caption{v0.3 difficulty agreement and observed availability}\label{tab:difficulty}
-\begin{tabular}{@{}P{0.54\linewidth}P{0.2\linewidth}P{0.2\linewidth}@{}}
-\toprule
-\textbf{Measure} & \textbf{Qwen 3.6} & \textbf{GLM5.3 Flash} \\
-\midrule
-Reference matches on identical scored slots & 43/54 & 51/54 \\
-\addlinespace[3pt]
-Scored slots out of planned slots & 60/60 & 54/60 \\
-\addlinespace[3pt]
-All scored overall matches & 47/60 & 51/54 \\
-\addlinespace[3pt]
-Overall and all three dimensions match & 36/60 & 48/54 \\
-\addlinespace[3pt]
-Median successful response seconds & 9.45 & 31.97 \\
-\addlinespace[3pt]
-Successful response p95 seconds & 30.87 & 177.60 \\
-\addlinespace[3pt]
-\bottomrule
-\end{tabular}
-\end{table}
-GLM gained 14.8 percentage points on the 54 shared scored slots, providing provisional support for its judge role. Six final GLM slots were excluded for transport failure while recovery encountered 63 transport failures across 117 returned attempts. Different deadlines and recovery conditions limit a clean model comparison. These are descriptive agreement results on a development reference, not unseen accuracy or learner calibration.
-
-\subsection{Difficulty policy used during authoring}\label{sec:difficulty-policy}
-
-Production judging still uses rubric v0.2 with SoCLaaS x-test-1, observed as GLM5.3 Flash. A matching difficulty estimate passes. A mismatch with self-reported confidence of at least 0.80 requests revision, while a lower-confidence mismatch may pass with a warning.
-
-However, this threshold is provisional and uncalibrated. The v0.3 research results do not validate the production v0.2 policy. Requested difficulty, estimated difficulty and actual learner difficulty must therefore remain distinct.
-
-\subsection{Relevance assessment}\label{sec:relevance-results}
-
-The original chemistry pilot compared embeddings with Qwen3-Reranker on identical objective–question pairs. Thresholds were selected using eighteen development pairs, followed by evaluation on fifty-four test pairs.
+The main summary covers four selected hosted configurations, each assessing the thirty questions twice, giving 240 recorded assessments. The reference level was hidden, and the models returned dimension ratings, a trace-event count and an overall label. Table~\ref{tab:difficulty} distinguishes agreement among usable labels from successful assessment coverage. The original study also evaluated Qwen; all five configurations are reported in Appendix~\ref{app:history}, Table~\ref{tab:full-difficulty}.
 
 \begin{table}[!htbp]
-\centering
-\setstretch{1}
-\small
-\setlength{\tabcolsep}{5pt}
-\renewcommand{\arraystretch}{1.17}
-\caption{Original paired relevance test on 54 pairs}\label{tab:relevance}
-\begin{tabular}{@{}P{0.46\linewidth}P{0.23\linewidth}P{0.25\linewidth}@{}}
+\centering\setstretch{1}\small
+\setlength{\tabcolsep}{5pt}\renewcommand{\arraystretch}{1.15}
+\caption{Structured difficulty judging across the selected four configurations}\label{tab:difficulty}
+\begin{tabularx}{\linewidth}{@{}X r@{}}
 \toprule
-\textbf{Measure} & \textbf{Embedding baseline} & \textbf{Original Qwen reranker} \\
+\textbf{Measure} & \textbf{Result}\\
 \midrule
-Correct decisions & 39/54 & 47/54 \\
-\addlinespace[3pt]
-Balanced accuracy & 73.6\% & 81.9\% \\
-\addlinespace[3pt]
-False acceptance / false rejection & 11 / 4 & 1 / 6 \\
-\addlinespace[3pt]
+Requested and recorded assessments & 240\\
+Usable difficulty labels & 210/240 (87.5\%)\\
+Labels matching the reference & 200/210 (95.2\%)\\
+Usable, matching labels across all requests & 200/240 (83.3\%)\\
+Wrong usable labels & 10\\
+Missing or invalid labels & 30\\
+Easy--hard confusions among usable labels & 0\\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
-The reranker accepted fewer mismatched pairs, but it also rejected more aligned pairs. This tradeoff supported further development of the decision-based approach.
 
-After revision, all earlier pairs became development data. On thirty-six fresh test pairs, the adopted configuration achieved 28/36 correct decisions, with three false acceptances and five false rejections. These fresh results describe the adopted configuration and the earlier 47/54 score belongs to the original configuration. Embeddings were not rerun on the fresh set.
+Eleven assessments exhausted the 16,384-token output budget before returning a valid response. Eighteen returned no structured difficulty value, although some explanations mentioned a level. One explicitly reported being unable to assess. The experimental schema permitted a null label without requiring a reason, so missing values could pass schema validation. The evaluation retained these as unsuccessful assessments rather than extracting labels retrospectively from prose. These failures occurred under provider-default reasoning, separately from the low-reasoning authoring experiment.
 
-The adopted cutoff is approximately 0.00203, not a calibrated probability of alignment. Furthermore, the chemistry results do not establish accuracy for Python questions or other domains.
+The 95.2\% figure applies only to the selected four configurations and their usable labels. Including the fifth configuration gives 244/270 (90.4\%) agreement among usable labels and 244/300 (81.3\%) across all requested assessments. Appendix~\ref{app:history} retains that full comparison. All thirty missing assessments came from the selected four configurations. The additional configuration returned sixty usable labels, with forty-four reference matches.
 
-\subsection{Checker verification (Code Domain)}\label{sec:checker-results}
+\subsubsection{Fast decisions and a decision-first cascade}\label{sec:cascade-results}
 
-The property checker passed fifteen known-good fixtures and detected all fifteen injected wrong-answer recipes and fifteen injected colliding distractor pools.
+A second design restricted models to a single three-class decision, with reasoning disabled and scores obtained from first-token preferences for easy, medium and hard. On the initial design comparison, this approach matched 92/120 reference labels, compared with 76/120 for three binary one-versus-rest calls. The designs differ in both decision structure and call count.
 
-A wide-domain arithmetic fixture allowed 32,768 input combinations but used thirty-six sampled executions during checking. Thirty later drafts used previously unchecked inputs, and separate execution checks agreed with all thirty answer recipes. However, this does not establish correctness across the entire domain.
+The full four-configuration run returned labels for all 240 assessments and matched 184 (76.7\%; balanced accuracy 69.2\%). Its median call time was 493\,ms. Predictions agreed in 116/120 question--configuration pairs across temperatures 0 and 0.7. All fifty-six mistakes were between adjacent levels, including thirty hard questions labelled medium. This makes the middle boundary a substantial limitation despite the absence of easy--hard confusions.
 
-These results support the implementation, but do not measure educational quality or the detection rate for naturally occurring model errors.
+Higher token-preference confidence was associated with greater agreement. A threshold of 0.80 retained 87/240 decisions, of which 75 matched; 0.90 retained 24, all matching. These thresholds were examined on the same reference and remain exploratory. Token preference is a different signal from a model's self-reported confidence.
+
+A replay study then referred low-confidence decisions to the saved structured GLM judge. Below confidence 0.70, the judge matched 84/95 reference labels, compared with 60/95 for the fast decisions. This motivated a live cascade using x-test-3 first and x-test-1 as the reasoning judge, with threshold 0.70. Of thirty questions, sixteen were accepted at the first stage and all matched the reference. Fourteen were escalated; twelve matched and two produced no usable judge label. Overall agreement was therefore 28/30 (93.3\%), counting the unresolved outcomes as unsuccessful.
+
+The cascade used forty-four calls: thirty first-stage calls and fourteen judge calls. Median final latency was 1.50 seconds and mean latency 36.92 seconds, reflecting slow escalated cases. This was a live test on the existing development reference, not an unseen validation set. It supports further integration work rather than a claim of calibrated difficulty prediction.
+
+\subsubsection{Policy used in the authoring comparison}\label{sec:difficulty-policy}
+
+The reported authoring study used the existing v0.2 structured judge, not the decision-first cascade or the v0.3 research contract. A matching estimate passed. A mismatch with self-reported confidence of at least 0.80 requested revision; a lower-confidence mismatch could pass with a warning. Judge errors prevented workflow completion. The v0.3 agreement figures and token-based confidence experiments therefore do not validate the production threshold. Learner studies would be needed to connect either rubric to experienced difficulty.
+
+\subsection{Learning-objective relevance}\label{sec:relevance-results}
+
+The latest comparison rebuilt chemistry question--objective pairs from the SmartSTEM source used by \textcite{zur2023}. Questions were split before evaluation, with 92 development pairs and 36 test pairs. All pairs for a question stayed in one split. Each method's cutoff was fitted on development accuracy and then applied unchanged to the test set. The test set contained twelve relevant and twenty-four non-relevant pairs.
+
+Embedding similarity was compared with the local Qwen3 reranker and four hosted decision configurations. The hosted models were instructed to answer yes or no without reasoning, and the score used their first-token yes/no preferences. Table~\ref{tab:relevance} keeps the methods separate because an aggregate would hide their differences.
+
+\begin{table}[!htbp]
+\centering\setstretch{1}\small
+\setlength{\tabcolsep}{5pt}\renewcommand{\arraystretch}{1.15}
+\caption{Relevance decisions on 36 test pairs}\label{tab:relevance}
+\begin{tabularx}{\linewidth}{@{}X r r r@{}}
+\toprule
+\textbf{Method/configuration} & \textbf{Correct} & \textbf{False accept} & \textbf{False reject}\\
+\midrule
+Embedding similarity & 32/36 (88.9\%) & 1 & 3\\
+Local Qwen3 reranker, 0.6B & 34/36 (94.4\%) & 1 & 1\\
+Decision: Qwen3.8 27B & 35/36 (97.2\%) & 1 & 0\\
+Decision: Qwen3.8 Flash Next & 35/36 (97.2\%) & 1 & 0\\
+Decision: DeepSeek alias & 34/36 (94.4\%) & 1 & 1\\
+Decision: Ornith alias & 32/36 (88.9\%) & 3 & 1\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The two Qwen decision configurations made one fewer error than the local reranker and three fewer than embeddings. The test is small: those differences support further comparison, rather than a general ranking of relevance methods. The cutoff is fitted to this dataset, and neither cosine similarity nor normalised yes/no preference is a calibrated probability of educational alignment.
+
+The source assigns textbook-subsection objectives to questions, so positive pairs are not individually verified statements that a skill is necessary to solve a question. Negative pairs use other objectives, often from the same chapter. A question-level split avoids reusing the same question across development and test, but it does not create an independent objective taxonomy. The pilot measures agreement on those chemistry pairs; Python learning-objective alignment has not yet been evaluated.
+
+The earlier pilot and adopted local configuration used different instructions and cutoffs. Their 47/54 and 28/36 results remain separate in Appendix~\ref{app:history}. The latest 34/36 reranker result belongs to the rebuilt-pair protocol, not the deployed configuration. Relevance was not a required check in the authoring comparison.
+
+\subsection{Checker verification}\label{sec:checker-results}
+
+The code-domain checker accepted fifteen known-good fixtures and detected all fifteen injected wrong-answer recipes and fifteen injected colliding distractor pools. A wide-domain arithmetic fixture allowed 32,768 input combinations but used thirty-six sampled executions during checking. Thirty later drafts used previously unchecked inputs, and separate execution checks agreed with all thirty answer recipes. This verifies selected implementation behaviours; the rate of detecting naturally occurring model faults and correctness over the full domain remain separate questions.
