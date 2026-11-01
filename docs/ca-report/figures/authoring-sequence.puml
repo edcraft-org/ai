@@ -22,13 +22,13 @@ loop Initial candidate plus at most three revisions
     App -> App: Record dependent difficulty check as skipped
   end
   alt All selected policies pass and answer evidence is available
-    App -> App: Save artifact; checked; stop
+    App -> App: Save artifact and mark checked\nStop
   else Repairable failure with revision allowance
     App -> Model: Original request, candidate, frozen plan,\ncheck evidence and revision allowance
     Model --> App: Complete replacement proposal
     App -> App: Validate and rebuild candidate
   else No allowance, missing evidence or terminal error
-    App -> App: Retain history; needs_review or error; stop
+    App -> App: Retain history and mark needs_review or error\nStop
   end
 end
 note over App,Checks

@@ -25,6 +25,7 @@
 \DeclareLabeldate{\field{date}\field{year}\literal{nodate}}
 \DeclareFieldFormat{extradate}{\iffieldnums{labelyear}{\mknumalph{#1}}{-\mknumalph{#1}}}
 \DeclareDelimFormat[parencite]{nameyeardelim}{\addcomma\space}
+\DeclareDelimFormat{multicitedelim}{\addspace and\space}
 % The supplied report format lists 3--5 authors at first mention, then uses et al.
 \AtEveryCitekey{%
   \ifciteseen{\defcounter{maxnames}{2}}{\defcounter{maxnames}{5}}%

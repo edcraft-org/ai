@@ -9,40 +9,42 @@ This project addresses these problems through reusable templates, execution-back
 The project investigates three research questions:
 
 \begin{itemize}
-\item RQ1: To what extent can technical checks identify faulty templates, and can feedback-guided revision repair them compared with generation without checking feedback?
+\item RQ1: To what extent can technical checks identify faulty templates, and how well can feedback-guided revision repair them compared with generation without checking feedback?
 \item RQ2: How do upfront authoring effort and the additional cost of reuse compare with one-shot template authoring and repeated direct-question generation?
 \item RQ3: How closely do difficulty and relevance assessments agree with their recorded reference labels?
 \end{itemize}
 
-RQ1 concerns technical faults, RQ2 concerns authoring and reuse costs, and RQ3 concerns educational judgments. Their evaluations are kept separate so that an answer-correctness result is not presented as evidence about learning suitability.
+RQ1 concerns technical faults, RQ2 concerns authoring and reuse costs, and RQ3 concerns educational judgments. Their evaluations are kept separate as an answer-correctness result is not equivalent to learning suitability.
 
 \subsection{Requirements and scope}\label{sec:scope}
 
-Appendix~\ref{app:user-stories}, Table~\ref{tab:user-stories} contains the detailed user stories, acceptance criteria and priorities. The project aims to support assessment authoring across subject domains, with Python tracing questions as the only currently implemented domain. The backend supports template authoring, checking, bounded revision and reproducible local expansion.
+Appendix~\ref{app:user-stories}, Table~\ref{tab:user-stories} contains the detailed user stories, acceptance criteria and priorities. The project aims to support assessment authoring across subject domains, with Python tracing questions as the only currently implemented domain. The backend supports template authoring, checking, revision and reproducible local expansion.
 
-The intended workflow allows an educator to specify teaching requirements, obtain a checked template, review its content and supporting evidence, and approve it before generating question variants for learners. The current implementation provides the automated authoring and checking stages, while website integration, an enforced approval workflow, student-facing access, additional domains and source-grounded generation remain planned work.
+The intended workflow allows an educator to specify teaching requirements, obtain a checked template, review its content and supporting evidence, and approve it before generating question variants for learners. The current implementation provides the automated authoring and checking stages, while website integration, an enforced approval workflow, student-facing access, additional domains and generation from given resources remain planned work.
 
 A successful checking result indicates that the template passed the implemented checking policy. It does not replace educator review or approval before educational use.
 
 \subsection{Architecture and separation of responsibilities}\label{sec:architecture}
 
-Provider adapters handle API communication, while the application coordinates authoring and checking. Domain modules supply the content-specific rules. Keeping these responsibilities separate allows a provider to be replaced without rewriting the checking algorithms.
+Provider adapters handle API communication, while the application coordinates authoring and checking. Checking tools use the Model Context Protocol (MCP). Domain modules supply the content-specific rules. Keeping these responsibilities separate allows a provider to be replaced without rewriting the checking algorithms. Table~\ref{tab:components} summarises each component's responsibility.
 
-\begin{center}\setstretch{1}\small\begin{tabularx}{\linewidth}{@{}P{.23\linewidth}X@{}}\toprule
+\begin{table}[!htbp]
+\centering\setstretch{1}\small
+\caption{System components and responsibilities}\label{tab:components}
+\begin{tabularx}{\linewidth}{@{}P{.23\linewidth}X@{}}\toprule
 \textbf{Component} & \textbf{Responsibility}\\
 \midrule
-Application & Coordinates authoring attempts, executes the frozen checking plan, manages revisions and determines the final outcome.\\
-Provider adapter & Translates shared structured-generation requests into provider-specific API requests and normalises responses.\\
-Domain module & Defines request and proposal schemas, builds candidates, binds checking inputs, saves eligible templates and expands them into questions.\\
-MCP server & Exposes checking tools with defined input schemas, versions and evidence formats.\\
-Saved artifact & Contains the reusable template, selected recipes, checking summaries and authoring provenance.\\
-\bottomrule\end{tabularx}\end{center}
-
-\input{figures/architecture}
+Application & Coordinates generation, runs checks, manages revisions and determines the final outcome.\\
+Provider adapter & Handles communication with each model provider and converts responses into a common format.\\
+Domain module & Defines the template format and rules for a subject domain, prepares information for checks, and saves and expands templates into questions.\\
+MCP server & Makes checking tools available through a common interface and returns their results and supporting evidence.\\
+Saved artifact & Stores the reusable template, checking results and details of how it was generated.\\
+\bottomrule\end{tabularx}
+\end{table}
 
 Provider adapters have been exercised with OpenAI, SoCLaaS and locally served models through Ollama. These integrations use different endpoints and response formats, which the adapters translate into the application’s shared structured-generation contract. This allows the same authoring workflow to operate across supported providers. However, compatibility still depends on the selected model’s ability to follow the proposal schema and fit within the available response budget. The models and configurations used in each experiment are reported in the evaluation chapter.
 
-MCP defines tool discovery and invocation with input schemas; the application decides which results permit saving a template \parencite{mcp2025}. The application invokes checks directly through MCP. The authoring model selects checks and supplies their planning arguments in its initial structured response, but does not need to issue native tool calls. Domain-specific checking algorithms remain separate from provider communication. Additional domains would require their own schemas, checking capabilities and expansion logic; only the Python domain is currently implemented.
+MCP defines tool discovery and invocation with input schemas while the application decides which results permit saving a template \parencite{mcp2025}. The application invokes checks directly through MCP. The authoring model selects checks and supplies their planning arguments in its initial structured response, but does not need to issue native tool calls. Domain-specific checking algorithms remain separate from provider communication. Additional domains would require their own schemas, checking capabilities and expansion logic but only the Python domain is currently implemented.
 
 \subsection{Reusable templates and local expansion}\label{sec:templates}
 
@@ -52,8 +54,8 @@ A Python tracing template contains a program, ordered finite parameter domains, 
 
 The earlier implementation stored execution-derived answers for every input combination within small domains. As parameters or values were added, the number of combinations grew rapidly. The current design stores executable recipes instead and checks them over sampled inputs. It can use larger declared domains, while accepting that some inputs remain unchecked during authoring.
 
-Expansion loads the saved artifact, selects allowed inputs using a seed, evaluates the recipes and renders the question. It makes no model, MCP or program-execution call. Recipe failures or option collisions trigger resampling, with at most 32 attempts. Only the saved recipes are evaluated during expansion; the original program is not rerun.
+Expansion loads the saved artifact, selects allowed inputs using a seed, evaluates the recipes and renders the question. It makes no model, MCP or program-execution call. Recipe failures or option collisions trigger resampling, with at most 32 attempts. Only the saved recipes are evaluated during expansion while the original program is not rerun.
 
-The same saved artifact and seed reproduce the same draft. Different seeds can still select the same inputs or produce an identical question. The generated questions vary the input values while keeping the same program structure. They therefore provide repeated practice with the same underlying reasoning pattern, rather than introducing new algorithms or programming concepts.
+The same saved artifact and seed reproduce the same draft. Different seeds can still select the same inputs or produce an identical question. The generated questions vary the input values while keeping the same program structure. They therefore provide repeated practice with the same underlying reasoning pattern, rather than introducing new programming concepts.
 
 \input{sections/methodology-continuation}

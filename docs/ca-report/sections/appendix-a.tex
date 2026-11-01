@@ -4,7 +4,7 @@
 \renewcommand{\theHtable}{A\arabic{table}}
 \section{Supporting comparison tables}\label{app:comparisons}
 
-Tables~\ref{tab:panel-models} and~\ref{tab:repair-models} expand the latest authoring results. Later tables retain historical studies with their original requests and settings. Direct-question generation in the reuse study produces individual questions; one-shot authoring in the main comparison produces a reusable template.
+Tables~\ref{tab:panel-models} and~\ref{tab:repair-models} expand the latest authoring results. Later tables retain historical studies with their original requests and settings. Direct-question generation in the reuse study produces individual questions, while one-shot authoring in the main comparison produces a reusable template.
 
 \begin{table}[!htbp]
 \centering\setstretch{1}\small
@@ -22,7 +22,9 @@ Tables~\ref{tab:panel-models} and~\ref{tab:repair-models} expand the latest auth
 \end{tabularx}
 \end{table}
 
-The same fifteen requests were used for each configuration. Returned model identifiers are retained with the call records; these names identify the requested serving configurations rather than proving three independent model families.
+The same fifteen requests were used for each configuration. Returned model identifiers are retained with the call records. These names identify the requested serving configurations rather than proving three independent model families.
+
+A separate controlled-repair experiment started from forty deliberately faulty templates, covering wrong answers, distractor faults and missing requested features. Each template was tested with three models, giving 120 planned comparisons. Both strategies had up to three new attempts after the faulty candidate. Revision received the candidate and failure evidence, while regeneration requested fresh proposals without that information. Difficulty judging was omitted. Success required a technical pass and preservation of the recorded request constraints.
 
 \begin{table}[!htbp]
 \centering\setstretch{1}\small
@@ -40,8 +42,11 @@ The same fifteen requests were used for each configuration. Returned model ident
 \end{tabularx}
 \end{table}
 
-The completed fixtures comprised twenty-four wrong-answer cases, twenty-five colliding-distractor cases, twenty-two cases containing a correct distractor and twenty-six missing-feature cases. Revision succeeded in 24, 24, 21 and 26 respectively; regeneration succeeded in 20, 17, 18 and 21. Cases not reached before the time limit remain unrun. This is a controlled fault study with three correction opportunities after the injected candidate, not another forty-five-job authoring panel.
+Only 97 of 120 planned comparisons finished before the time limit. Revision passed technical checks and preserved the recorded request constraints in 95/97 cases (97.9\%). Regeneration passed technical checks in 77/97 cases, but one changed the requested parameter domains, leaving 76/97 (78.4\%) that met both requirements. Table~\ref{tab:repair-models} reports this stricter success measure. Both failed revisions retained distractor faults. The twenty-three unrun comparisons are incomplete observations, not failed repairs. Deliberately introduced faults and uneven model coverage limit generalisation to ordinary authoring.
 
+The completed cases comprised twenty-four wrong-answer cases, twenty-five colliding-distractor cases, twenty-two cases containing a correct distractor and twenty-six missing-feature cases. Revision succeeded in 24, 24, 21 and 26 respectively, while regeneration succeeded in 20, 17, 18 and 21. This supporting experiment is separate from the forty-five-job authoring comparison.
+
+\clearpage
 \begin{table}[!htbp]
 \centering\setstretch{1}\small
 \setlength{\tabcolsep}{5pt}\renewcommand{\arraystretch}{1.15}
@@ -51,8 +56,7 @@ The completed fixtures comprised twenty-four wrong-answer cases, twenty-five col
 \textbf{Measure} & \textbf{One-shot} & \textbf{Application}\\
 \midrule
 Initial technical passes & 18 & 19\\
-Final technical passes, including withheld & 18 & 27\\
-Delivered technical passes & 18 & 22\\
+Final technical passes & 18 & 27\\
 Initially faulty candidates repaired & --- & 8/11\\
 Median job latency (seconds) & 38.18 & 270.77\\
 Total model calls, including judges & 30 & 196\\
@@ -60,7 +64,9 @@ Total model calls, including judges & 30 & 196\\
 \end{tabularx}
 \end{table}
 
-This earlier study used native tool calling and a different request set. Its later final-candidate reanalysis included five technical passes withheld after judge errors: three timeouts and two invalid responses. Four delivered application templates changed requested parameter domains. These outcomes are historical evidence, not additional observations for the latest direct-dispatch comparison. The Qwen3.6 authoring trial is omitted from this comparison after frequent response and service failures; its exclusion does not apply to the separate relevance experiments.
+This earlier study used native tool calling and a different request set. Four application templates changed requested parameter domains. These outcomes are historical evidence, not additional observations for the latest direct-dispatch comparison. The Qwen3.6 authoring trial is omitted from this comparison after frequent response and service failures. Its exclusion does not apply to the separate relevance experiments.
+
+The earlier GPT-5-mini one-shot result of 18/30 is not directly comparable with the latest 1/15. The requests, initial prompts and parameter-domain instructions changed. The earlier run used provider-default reasoning, whereas the latest requested low reasoning, and the checking seeds and source revisions also differed. In the latest run, thirteen initial candidates failed distractor checks and one was an invalid template. These records identify the observed faults, but do not isolate why the pass rate changed between studies.
 
 \begin{table}[!htbp]
 \centering\setstretch{1}\small

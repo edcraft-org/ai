@@ -1,27 +1,19 @@
 \section{Discussion and limitations}\label{sec:discussion}
 
-\subsection{What the application contributes}\label{sec:contribution}
+\subsection{Contribution}\label{sec:contribution}
 
-The completed OpenAI panel provides evidence that checking and revision can improve technical yield over one-shot template authoring. The application returns concrete faults to the model, rechecks replacements and retains a history that an educator can inspect. The controlled repair experiment provides a narrower demonstration: models used this feedback to correct deliberately faulty templates while usually preserving the recorded constraints.
+Checking and revision improved technical correctness over one-shot authoring in the evaluated Python tasks. The application gives the model concrete failure evidence, rechecks revised templates and retains a history for inspection. Revision also produced more technical passes than regeneration, although its advantage remains statistically uncertain.
 
-Repeated generation is also useful. With the same candidate allowance, check-and-regenerate produced more technical passes than one-shot. Feedback revision produced more again, but the latest ordinary-authoring comparison does not resolve whether it is reliably better than regeneration. Both checked strategies already produce checking evidence; the difference is whether that evidence is supplied to the authoring model. A future control that shows the previous candidate without detailed feedback would help separate these effects.
+Saved templates generated further drafts without additional model calls. This avoids repeated inference during expansion, but useful variation remains limited by the template's inputs and program structure. The practical benefit depends on how many distinct, suitable questions can be generated before another template is needed.
 
-Reuse addresses a different cost. A saved template generates further drafts without model inference, provided the desired variation fits its declared domains and program structure. Its practical value depends on how many distinct, suitable questions can be obtained before a new template is needed.
+\subsection{Limitations}\label{sec:limitations}
 
-\subsection{Reliability and experimental limits}\label{sec:limitations}
+The main authoring study covered fifteen requests across three model configurations. This small set of Python tasks limits generalisation to other requests and domains. Revision and regeneration had the same candidate allowance, but their token budgets were not matched. In the separate hosted-model study (SoCLaaS), timeouts, empty responses and truncated outputs also affected completion. Workflows requiring several calls have more opportunities to encounter service failures.
 
-The main authoring panel covers fifteen requests repeated across three configurations. Clustering by request accounts for that repetition in the reported uncertainty, but a small set of related Python tasks still limits generalisation. Model-specific outcomes vary considerably. Results from older implementations, prompts and serving windows have therefore been kept separate rather than combined into a larger headline sample.
+Sampled checking can pass without testing every input, so untested variants may still fail or not terminate. Passing technical checks may also leave some educator instructions unchecked. Finding a programming feature in reachable code does not show that understanding it is necessary to answer the question. The title's term verifiable refers to explicit checks and recorded evidence and it does not imply formal verification of every generated variant.
 
-The SoCLaaS run shows that successful integration depends on obtaining usable responses within the configured limits. Timeouts, empty responses and truncation affect an author's ability to complete the workflow, even if no technical fault has been observed. Additional calls also create more opportunities for service failure. The present study records these failures but does not isolate their causes or establish an intrinsic provider ranking.
+\subsection{Educational quality and cost}\label{sec:educational-cost}
 
-Request preservation remains an implementation concern. Earlier revisions changed requested parameter domains, and two technically passing SoCLaaS revisions in the latest study failed the recorded constraints. The complete OpenAI panel had no such violations among its technical passes, which is encouraging for that panel rather than proof that arbitrary instructions are preserved. Feature detection also checks syntax: a helper function can appear without contributing meaningfully to the answer.
+Difficulty and relevance results measure agreement with project references rather than actual learner experience. The difficulty questions informed rubric development, while relevance labels came from textbook objectives. These assessments remain aids to human review. Further independent review and learner data are needed to assess educational suitability. The decision-first cascade reduced reasoning-judge calls, but its accuracy advantage over judge-only assessment remains unproven.
 
-Sampled checks bound authoring work. They can expose faults and produce counterexamples, while untested inputs may still fail or not terminate. Resampling to avoid option collisions can also change the distribution of generated questions. In the title, verifiable refers to explicit properties and recorded checking evidence, not formal verification of all variants.
-
-\subsection{Educational judgments and cost}\label{sec:educational-cost}
-
-Difficulty and relevance assess properties that execution cannot decide. Their current evaluations use a small, development-informed difficulty reference and inherited textbook-objective labels. The decision-first cascade is promising as an evaluated extension, but its threshold and live test reuse the same reference. Independent label review and learner responses would provide stronger evidence about educational suitability.
-
-The earlier blinded GPT-5-mini quality review is retained in Appendix~\ref{app:comparisons}. It assessed only renderable candidates, with unequal coverage, and used the same model family as the historical author. Its ratings did not show consistent improvement in distractor plausibility or requested-level fit. The latest authoring panel has review records prepared, but no completed independent educational review is claimed.
-
-Authoring cost must include failed attempts and judging, not just the call that produced the saved artifact. Revision used more total tokens and time than regeneration in the latest main study, despite fewer tokens per technical pass. Token prices differ across configurations, review effort was not measured, and reuse can produce duplicates. The evidence supports inference-free local expansion; it does not yet establish overall financial savings.
+Checking and revision required additional inference and time during authoring. Their cost includes unsuccessful attempts, while human review effort was not measured. Reuse avoids further model calls, but duplicates reduce the number of useful questions obtained. The study did not demonstrate overall financial savings.

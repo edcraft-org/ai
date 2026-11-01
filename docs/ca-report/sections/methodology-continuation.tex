@@ -1,14 +1,14 @@
-\subsection{Technical checking and bounded revision}\label{sec:technical-checking}
+\subsection{Technical checking and revision}\label{sec:technical-checking}
 
 \subsubsection{Available checks}\label{sec:available-checks}
 
 Technical checking addresses faults that can be assessed through explicit program and recipe properties. Local schema validation first checks that model responses have the required fields and types. This remains necessary even when a provider is asked to return structured JSON.
 
-The Python domain offers three principal technical tools:
+Table~\ref{tab:technical-checks} describes the Python domain's three principal technical tools.
 
-\begin{center}
-\setstretch{1}
-\small
+\begin{table}[!htbp]
+\centering\setstretch{1}\small
+\caption{Technical checks for Python tracing templates}\label{tab:technical-checks}
 \begin{tabularx}{\linewidth}{@{}P{.25\linewidth}X@{}}
 \toprule
 \textbf{Check} & \textbf{Purpose}\\
@@ -18,11 +18,11 @@ Answers and distractors & Compares answer recipes with program execution over sa
 Requested programming features & Checks whether specified constructs, such as loops, conditionals or helper functions, occur in code reachable from the entry function.\\
 \bottomrule
 \end{tabularx}
-\end{center}
+\end{table}
 
 Feature checking finds requested constructs in reachable code. A construct can be present without being necessary to solve the question. Option checks likewise test incorrectness and distinctness, leaving the plausibility of the underlying learner mistake for review.
 
-The initial plan determines which tools run. Saving a reusable artifact also requires passing answer-and-distractor evidence. A plan containing only a structure check therefore ends without a successful reusable result; the application does not add an omitted check on the model's behalf.
+The initial plan determines which tools run. A template can be saved as a checked reusable template only when every check in the frozen plan has completed and passed. Saving a checked reusable template requires passing answer-and-distractor checks, which also check structural validity.
 
 \subsubsection{Proposal checking and revision}\label{sec:authoring-workflow}
 
@@ -32,11 +32,11 @@ The model returns a template proposal and a checking plan, including any model-o
 
 \input{figures/authoring-sequence}
 
-The application executes ordinary selected checks sequentially. Difficulty assessment, when selected, is deferred until the technical prerequisites pass. A deferred check is recorded as skipped, rather than treated as evidence of a difficulty fault.
+The application executes ordinary selected checks sequentially. When selected in the checking plan, difficulty assessment runs after the template passes the required technical checks. If those checks fail, difficulty assessment is skipped for that attempt. It can run on a revised template once the technical checks pass. This is because difficulty assessment uses a model as a judge so we want to save costs by not running it when it is not necessary.
 
-When a check identifies a repairable failure, the application sends the authoring model the original request, latest candidate, frozen plan, checking results and remaining revision allowance. The model returns a complete replacement proposal, including unchanged fields. The application validates the replacement and reruns the selected checks on its changed content.
+When a check finds a repairable fault, the application sends the model the current proposal and failure evidence for revision. The model returns the entire revised proposal and the application then validates the proposal and reruns the selected checks on the revised content.
 
-Complete replacements allow related changes to remain coherent across code, parameter domains, wording, answers and distractors. The application retains the original requested difficulty, distractor count and frozen plan. Requirements expressed only in free text still need review because the application does not generally enforce them.
+Returning a complete proposal allows the model to update related parts together, such as changing the program and its answer recipe. The application keeps the requested difficulty, distractor count and checking plan fixed. Other instructions in the educator’s prompt may not be checked automatically, so the revised template still needs review to confirm that it follows the request.
 
 The default limit is one initial proposal and at most three revisions. Final outcomes are determined locally from checking evidence:
 
@@ -46,21 +46,9 @@ The default limit is one initial proposal and at most three revisions. Final out
 \item \code{error}: The workflow cannot continue, for example because a valid structured response cannot be obtained or a required service fails.
 \end{itemize}
 
-No final model acknowledgement is required. Attempts and failure evidence remain available for inspection.
-
 \subsubsection{Sampled correctness evidence}\label{sec:sampled-evidence}
 
-For each checked input assignment, the answer recipe must agree with execution of the exact program for the specified answer target. If $A$ is the answer recipe, $P$ the program, $t$ the target and $S$ the checked sample set, then:
-\begin{equation}
- A(x)=E(P,x,t), \qquad x\in S.
-\end{equation}
-For the selected distractor recipes, the checker also requires:
-\begin{equation}
-\begin{aligned}
- D_i(x)&\ne A(x), &&x\in S,\\
- D_i(x)&\ne D_j(x), &&i\ne j,\quad x\in S.
-\end{aligned}
-\end{equation}
+For each sampled input, the checker runs the program and compares the specified output or variable value with the answer calculated by the answer recipe. These values must match. It also checks that each selected distractor differs from the correct answer and from every other selected distractor. The same set of distractor recipes must satisfy these conditions across all checked inputs. Passing confirms these properties for the tested samples, but faults may still occur at untested inputs.
 
 The checker selects one distractor subset that satisfies these conditions across all checked samples. This gives the saved template a fixed set of recipes to reuse, rather than a different selection for each sample.
 
@@ -74,13 +62,13 @@ A technically correct question may still be unsuitable for the requested difficu
 
 The production rubric considers execution and reasoning burden, changing state, conceptual interaction and the effort needed to distinguish answer options. The judge explains these dimensions without combining them into a weighted score. Assessment assumes untimed manual tracing with scratch paper and familiarity with the Python semantics involved.
 
-The implemented workflow uses a structured judge, with GLM5.3 Flash provisionally selected from difficulty experiments. The selection was based on agreement with the difficulty references; authoring was evaluated separately. The judge assesses the checked template and selected distractors, while the requested difficulty is withheld during estimation and compared afterwards.
+The implemented workflow uses a structured judge, with GLM5.3 Flash provisionally selected from difficulty experiments. The selection was based on agreement with the difficulty references. Authoring was evaluated separately. The judge assesses the checked template and selected distractors, while the requested difficulty is withheld during estimation and compared afterwards.
 
-A high-confidence mismatch triggers revision. Under the current policy, a mismatch with self-reported confidence below 0.80 can pass with an advisory warning. A template may therefore complete this policy with a warning even when its estimated level differs from the request. The threshold is provisional, and the confidence value is not calibrated accuracy. Judge errors prevent successful completion rather than being interpreted as a difficulty match.
+A high-confidence mismatch triggers revision. Under the current policy, a mismatch with self-reported confidence below 0.80 can pass with an advisory warning. A template may therefore complete this policy with a warning even when its estimated level differs from the request.
 
-A separately evaluated extension uses a decision model first and refers uncertain cases to a structured reasoning judge. This cascade investigates whether inexpensive initial decisions can reduce judging overhead. It remains distinct from the implemented authoring policy.
+A separately evaluated extension uses a decision model first and refers uncertain cases to a structured reasoning judge. In the live test, the decision model handled sixteen of thirty questions without referral, and all sixteen matched the reference labels. The project plans to move towards this cascade to reduce reliance on the reasoning judge. Its accuracy advantage over judge-only assessment has not been established, and total cost and latency still need a direct comparison. The cascade has not yet been integrated into the authoring workflow and Section~\ref{sec:cascade-results} reports its evaluation.
 
-Learner-performance data are still needed to test how these estimates relate to a particular student population. The production policy and experimental reference versions are reported separately in Section~\ref{sec:difficulty-policy} and Section~\ref{sec:difficulty-results}.
+Learner-performance data are still needed to test how these estimates relate to a particular student population. The authoring policy and separate difficulty evaluations are described in Section~\ref{sec:difficulty-policy} and Section~\ref{sec:difficulty-results}.
 
 \subsection{Relevance assessment}\label{sec:relevance-design}
 
@@ -88,6 +76,8 @@ Relevance assessment asks whether answering a question requires the knowledge or
 
 The project compared embedding similarity with joint decision methods on the same labelled question--objective pairs. Thresholds were selected using development examples. The earlier comparison favoured the reranker's lower false acceptance, while also showing the trade-off of rejecting more aligned pairs. The project selected Qwen3-Reranker-0.6B for advisory relevance because this comparison prioritised avoiding false acceptance.
 
-The relevance service processes the author's request and complete learner-facing question together under an alignment instruction. It returns a decision and score using the configured threshold. The score represents the model's preference between yes and no, rather than a calibrated probability of educational alignment.
+The current relevance service uses the local reranker to process the author's request and complete learner-facing question together under an alignment instruction. It returns a decision and score using the configured threshold. The score represents the model's preference between yes and no, rather than a calibrated probability of educational alignment.
+
+The project also explored using general-purpose LLMs in a constrained decision mode, with reasoning disabled and a yes/no response requested. Their first-token yes/no scores were converted into decisions using thresholds selected on development examples. Both evaluated Qwen3.8 configurations achieved higher accuracy than the local reranker on the test set, as reported in Section~\ref{sec:relevance-results}. Based on these results, the project plans to move towards Qwen3.8 for relevance assessment. This change has not yet been integrated into the application.
 
 Relevance remains separate from the required authoring checks in the reported comparisons. It does not execute code, verify answers or determine difficulty. Changing the model, instructions or threshold requires another evaluation. Section~\ref{sec:relevance-results} reports the latest comparison, while Appendix~\ref{app:history} retains the original and adopted-configuration results.
