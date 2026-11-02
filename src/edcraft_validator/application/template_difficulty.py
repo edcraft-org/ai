@@ -5,6 +5,7 @@ import time
 from dataclasses import replace
 
 from edcraft_validator.application.authoring_contracts import DifficultyOutcome
+from edcraft_validator.domains.code.candidate_builder import template_sha256
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.difficulty import load_code_difficulty_rubric
 from edcraft_validator.domains.code.difficulty_matching import compare_difficulty
@@ -12,7 +13,6 @@ from edcraft_validator.domains.code.template_difficulty import (
     TEMPLATE_DIFFICULTY_TOOL,
     build_template_decision_request,
     build_template_difficulty_request,
-    template_sha256,
 )
 from edcraft_validator.llm.forced_decision import (
     ClassDecision,

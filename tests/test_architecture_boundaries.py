@@ -112,7 +112,7 @@ def test_invalid_settings_fail_at_boundary(changes):
         load_judge_settings(changes)
 
 
-async def test_server_freezes_one_model_and_threshold_for_both_checks(monkeypatch):
+async def test_server_freezes_one_model_and_threshold_for_all_assessments(monkeypatch):
     from edcraft_validator.llm import judge_configuration
 
     seen = []
@@ -148,9 +148,18 @@ async def test_server_freezes_one_model_and_threshold_for_both_checks(monkeypatc
             "assess_relevance",
             {"request": {"author_request": "objective", "question_text": "question"}},
         )
+        template_relevance = await client.call_tool(
+            "code_assess_template_relevance",
+            {
+                "candidate": candidate().model_dump(mode="json"),
+                "author_request": "objective",
+            },
+        )
     assert difficulty.structured_content["status"] == "passed"
     assert relevance.structured_content["decision"]["threshold"] == 0.94
-    assert seen == ["original", "original"]
+    assert template_relevance.structured_content["status"] == "passed"
+    assert template_relevance.structured_content["details"]["threshold"] == 0.94
+    assert seen == ["original", "original", "original"]
 
 
 def test_classifier_prompt_is_independent_of_reasoning_wording(monkeypatch):

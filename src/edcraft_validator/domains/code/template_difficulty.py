@@ -1,6 +1,5 @@
 """Single-call difficulty assessment of a reusable template's typical instance."""
 
-import hashlib
 import json
 from functools import lru_cache
 
@@ -43,17 +42,6 @@ class TemplateDifficultyAssessment(Record):
         if self.estimated_difficulty is None and self.unable_to_assess_reason is None:
             raise ValueError("null estimates require an unable-to-assess reason")
         return self
-
-
-def template_sha256(candidate: CodeTemplateCandidate) -> str:
-    return hashlib.sha256(
-        json.dumps(
-            candidate.model_dump(mode="json"),
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
-        ).encode()
-    ).hexdigest()
 
 
 @lru_cache(maxsize=7)

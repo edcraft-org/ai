@@ -18,6 +18,7 @@ metadata. CLI/server/worker boundaries construct dependencies and settings.
 | Code proposal, binding and finalization | `domains/code/code_domain.py`, schemas and candidate builder |
 | Blinded difficulty prompts and rubric components | `domains/code/template_difficulty.py`, `difficulty_request.py` |
 | Difficulty routing, verdict policy and evidence | `application/template_difficulty.py` |
+| Shared relevance, code-template projection and revision gate | `application/relevance.py`, `application/code_relevance.py`, `domains/code/relevance.py` |
 | Model adapters and measured judge execution | `llm/` |
 | Check catalogue decoding and dispatch transport | `mcp/catalogue.py`, `mcp/client.py` |
 | Default dependency construction | `bootstrap.py`, `mcp/server.py`, `cli.py` |
@@ -25,7 +26,7 @@ metadata. CLI/server/worker boundaries construct dependencies and settings.
 Package initializers must not construct servers. Shared evidence can be imported
 without FastMCP or application services. `mcp/evidence.py` retains compatibility
 exports. Application construction and deterministic expansion do not connect tools;
-author/validate obtain a connection when needed. Inject a tool client for tests.
+authoring obtains a connection when needed. Inject a tool client for tests.
 
 The authoring coordinator prepares a frozen plan, executes attempts, and either
 revises or finalizes. Check definitions are decoded once before dispatch; the
@@ -50,6 +51,9 @@ The shared provider/model are independent of the selected authoring provider.
 | Reasoning mismatch below 0.80 | Pass policy with an advisory warning. |
 | Reasoning cannot assess | Fail. |
 | Reasoning error or exhausted deadline | Error; never a pass. |
+| Relevance decision is relevant | Pass. |
+| Relevance decision is irrelevant | Fail and request revision under the unchanged author prompt. |
+| Relevance model, deadline or configuration failure | Error; stop without author revision. |
 
 Token confidence and self-reported confidence are different, uncalibrated measures.
 `details.difficulty_outcome` is the typed final policy result. The explicit key
@@ -71,6 +75,21 @@ probabilities; never substitute self-reported confidence for missing logprobs.
 Relevance providers supply `score(request_text, question_text)` and may expose
 `last_usage`, `generation_settings`, `served_model` and `close`. Accounting applies
 to every injected provider; missing token metadata remains unknown.
+
+`code_assess_template_relevance` adapts the shared text classifier to `ToolEvidence`;
+it does not introduce a separate workflow. Template identity belongs to `candidate_builder.py`, independently of either judge.
+The domain binds the original author prompt and the exact reusable candidate, including the checked distractor subset.
+The classifier receives the actual code, question pattern, answer target and finite
+parameters in readable text, excluding topic labels, requested difficulty,
+answer and distractor recipes, and misconception explanations. Difficulty and relevance do not consume each other's
+results. Their saved evidence binds the exact reusable template hash; relevance
+also retains the request/text input hash, score, threshold and model usage.
+Only selected checks run; the authoring prompt requests both assessments. The
+standalone shared relevance report remains advisory for research callers.
+
+There is no standalone validation workflow. Re-author changes through the existing
+checking/revision loop; deterministic generation expands only checked artifacts.
+Individual MCP checks and the evaluation command remain available for research.
 
 The local Qwen reranker remains an explicit historical adapter. To reproduce local
 runs, install `uv sync --locked --extra relevance` and download

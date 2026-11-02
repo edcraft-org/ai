@@ -1,4 +1,4 @@
-"""CLI for template validation and deterministic question expansion."""
+"""CLI for template authoring and deterministic question expansion."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from edcraft_validator.llm.usage import close_provider
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line interface without executing a command."""
     parser = argparse.ArgumentParser(
-        description="Author, validate, and expand reusable code-question templates"
+        description="Author and expand reusable code-question templates"
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -61,29 +61,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     author.add_argument("--output", type=Path)
 
-    validate = commands.add_parser(
-        "validate",
-        help="model-select MCP checks for an existing candidate (no rewriting)",
+    author.add_argument(
+        "--template-output",
+        type=Path,
+        help="also save the reusable template when checking succeeds",
     )
-    validate.add_argument("--domain", choices=available_domains(), required=True)
-    validate.add_argument(
-        "--provider", choices=available_model_providers(), required=True
+    author.add_argument(
+        "--tool-schemas",
+        type=Path,
+        help="save full MCP tool definitions separately for diagnostics",
     )
-    validate.add_argument("--model")
-    validate.add_argument("template", type=Path)
-    validate.add_argument("--output", type=Path)
-
-    for command in (author, validate):
-        command.add_argument(
-            "--template-output",
-            type=Path,
-            help="also save the reusable template when checking succeeds",
-        )
-        command.add_argument(
-            "--tool-schemas",
-            type=Path,
-            help="save full MCP tool definitions separately for diagnostics",
-        )
 
     generate = commands.add_parser(
         "generate", help="expand a validated template without AI or revalidation"
@@ -119,7 +106,6 @@ def main() -> int:
     try:
         handlers = {
             "author": _handle_author,
-            "validate": _handle_validate,
             "generate": _handle_generate,
             "evaluate": _handle_evaluate,
         }
@@ -158,23 +144,6 @@ def _handle_author(args: argparse.Namespace) -> int:
     try:
         result = TemplateApplication().author_template(
             request, domain=domain, provider=provider, **_catalogue_options(args)
-        )
-    finally:
-        close_provider(provider)
-    _write_authoring_result(result, args)
-    return 0 if result.status == "checked" else 2
-
-
-def _handle_validate(args: argparse.Namespace) -> int:
-    _check_output_paths(args)
-    domain = create_domain(args.domain)
-    candidate = domain.candidate_model.model_validate_json(args.template.read_text())
-    provider = create_model_provider(
-        TemplateProviderSelection(provider=args.provider, model=args.model)
-    )
-    try:
-        result = TemplateApplication().validate_template(
-            candidate, domain=domain, provider=provider, **_catalogue_options(args)
         )
     finally:
         close_provider(provider)

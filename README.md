@@ -3,7 +3,7 @@
 EdCraft authors reusable Python MCQ templates, checks sampled variants with
 Hypothesis and execution tools, then expands saved templates locally using seeds.
 Checks are sampled evidence, not a correctness proof. Generated questions require
-human review. Difficulty and relevance assessments remain advisory.
+human review. Model assessments provide evidence; they do not imply human approval.
 
 ## Setup
 
@@ -61,22 +61,28 @@ Python, malformed responses and incomplete checks cannot become technical passes
 The selected difficulty check runs after correctness checks pass. It first returns
 only a level. A decision at confidence >=0.70 is accepted; otherwise the same model
 runs one structured reasoning assessment. Accepted mismatches request revision.
-Reasoning mismatches use the existing 0.80 self-confidence policy. Relevance is a
-separate yes/no assessment and does not consume correctness or difficulty reports.
+Reasoning mismatches use the existing 0.80 self-confidence policy.
+
+Authoring also selects `code_assess_template_relevance`. It compares the original
+author prompt with the correctness-checked template using the same judge model,
+with reasoning disabled. An irrelevant decision fails the check and triggers a
+revision under the unchanged request and check plan. Both assessments run after
+correctness checks and independently of each other's verdicts. A relevance model
+or configuration error stops checking without spending author revisions; an
+unresolved mismatch exhausts the existing revision limit and produces no reusable
+artifact. Score, threshold, provider and input/template identities are saved with
+the evidence. The standalone `assess_relevance` tool remains advisory for research;
+the concrete-question pilot does not establish accuracy on reusable templates.
 
 Inspect the report's `status`, `fixed_plan`, `attempts`, `warnings` and `artifact`.
 `checked` means the selected checking policy passed; it does not mean human
 approval. `needs_review` and `error` do not produce an ordinary reusable artifact.
 Inspect requested and estimated difficulty separately.
 
-To edit, extract the candidate from `attempts[-1].candidate`, change it, then check
-it again without automatic rewriting:
-
-```bash
-uv run python -m edcraft_validator.cli validate --domain code --provider openai \
-  candidate.json --output .artifacts/rechecked.json \
-  --template-output .artifacts/rechecked-template.json
-```
+The application supports authoring and generation. To change a template, author it
+again with the revised request so the result passes the complete checking loop.
+The standalone `validate` command has been retired; individual MCP checks remain
+independently callable for research and diagnostics.
 
 Save the complete returned artifact. The old exhaustive artifact format is
 unsupported. The same artifact and seed reproduce the same draft without model,
@@ -86,7 +92,7 @@ checks and may reject a seed if usable options cannot be produced.
 ## Integration and development
 
 The library/CLI authoring flow is not yet connected to the product's HTTP routes
-or editing/approval screens. The typed worker boundary and progress events are
+or authoring/approval screens. The typed worker boundary and progress events are
 ready for that integration; see [development](docs/development.md).
 
 ```bash

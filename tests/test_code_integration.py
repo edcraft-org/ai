@@ -1,7 +1,11 @@
 from pathlib import Path
 
 import pytest
-from authoring_helpers import RequestPendingTools, SelectSemanticCheck
+from authoring_helpers import (
+    CandidateProposalProvider,
+    RequestPendingTools,
+    proposal_for,
+)
 
 from edcraft_validator.application.code_evaluation import TemplateEvaluator
 from edcraft_validator.application.template_workflow import TemplateApplication
@@ -107,11 +111,13 @@ def test_recursive_templates_are_checked_and_replayed(
             "question_type": "mcq",
         }
     )
-    application = TemplateApplication()
+    application = TemplateApplication(max_correction_attempts=0)
     domain = CodeDomain()
 
-    result = application.validate_template(
-        candidate, domain=domain, provider=SelectSemanticCheck()
+    result = application.author_template(
+        CodeTemplateRequest(prompt="Check a recursive template", difficulty="medium"),
+        domain=domain,
+        provider=CandidateProposalProvider(proposal_for(candidate)),
     )
 
     assert result.status == "checked", result.reason
@@ -142,8 +148,10 @@ def test_nonterminating_recursion_cannot_produce_a_checked_artifact() -> None:
         }
     )
 
-    result = TemplateApplication().validate_template(
-        candidate, domain=CodeDomain(), provider=SelectSemanticCheck()
+    result = TemplateApplication(max_correction_attempts=0).author_template(
+        CodeTemplateRequest(prompt="Check a recursive template", difficulty="medium"),
+        domain=CodeDomain(),
+        provider=CandidateProposalProvider(proposal_for(candidate)),
     )
 
     assert result.status == "needs_review"
@@ -158,10 +166,14 @@ def test_nonterminating_recursion_cannot_produce_a_checked_artifact() -> None:
 def test_template_passes_sampled_checks_and_replays(template_path: Path) -> None:
     template = CodeTemplateCandidate.model_validate_json(template_path.read_text())
 
-    application = TemplateApplication()
+    application = TemplateApplication(max_correction_attempts=0)
     domain = CodeDomain()
-    result = application.validate_template(
-        template, domain=domain, provider=SelectSemanticCheck()
+    result = application.author_template(
+        CodeTemplateRequest(
+            prompt="Check an example template", difficulty=template.difficulty
+        ),
+        domain=domain,
+        provider=CandidateProposalProvider(proposal_for(template)),
     )
     assert result.status == "checked", result.reason
     validated = result.artifact

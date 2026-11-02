@@ -19,6 +19,7 @@ from edcraft_validator.domains.code.code_schemas import (
 from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     RecommendedCheck,
+    StructuredGenerationRequest,
 )
 from edcraft_validator.llm.llm_errors import (
     GenerationResponseError,
@@ -151,6 +152,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring.domain == "code"
     assert provider_calls[0].tool_catalogue.names == (
         "code_assess_template_difficulty",
+        "code_assess_template_relevance",
         "code_require_features",
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",
@@ -198,7 +200,6 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
         name = "example"
 
         request_model = ExampleRequest
-        candidate_model = ExampleTemplate
         validated_model = ExampleValidated
 
         def generation_request(self, request):
@@ -545,3 +546,58 @@ def test_run_checks_accepts_legacy_raw_catalogue_definitions() -> None:
 
     assert attempt.complete and attempt.passed
     assert attempt.executions[0].evidence.status == "passed"
+
+
+def test_authoring_rejects_a_domain_that_returns_no_shared_artifact():
+    class Request(BaseModel):
+        prompt: str
+
+    class Proposal(BaseModel):
+        value: int
+
+    class Candidate(BaseModel):
+        value: int
+
+    class Domain:
+        name = "example"
+        request_model = Request
+
+        def generation_request(self, request):
+            return StructuredGenerationRequest(
+                messages=[{"role": "user", "content": request.prompt}],
+                response_model=PlannedGenerationResponse[Proposal],
+                prompt_version="example-v1",
+            )
+
+        def build_candidate(self, request, proposal):
+            return Candidate(value=proposal.value)
+
+        def tool_bindings(self, request, candidate, tool_name):
+            return {"value": candidate.value}
+
+        def finalize_checked_template(self, candidate, evidence):
+            return candidate
+
+    class Provider(RequestPendingTools):
+        provider = "stub"
+        model = "stub"
+
+        def generate(self, request):
+            return PlannedGenerationResponse(
+                proposal=Proposal(value=7),
+                checks=[{"name": "positive_value", "arguments": {}}],
+            )
+
+    server = FastMCP("example")
+
+    @server.tool(description="Check a value", version="1", tags={"domain:example"})
+    def positive_value(value: int) -> ToolEvidence:
+        return ToolEvidence(tool="positive_value", version="1", status="passed")
+
+    result = TemplateApplication(
+        tool_client=FastMcpToolClient(server), max_correction_attempts=0
+    ).author_template(Request(prompt="positive"), domain=Domain(), provider=Provider())
+
+    assert result.status == "error"
+    assert "shared validated artifact" in result.reason
+    assert result.artifact is None

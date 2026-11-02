@@ -101,6 +101,7 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
     )
     assert [tool["name"] for tool in report.attempts[1].tool_catalogue] == [
         "code_assess_template_difficulty",
+        "code_assess_template_relevance",
         "code_require_features",
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",
@@ -218,6 +219,7 @@ def test_evaluation_retains_catalogue_when_model_generation_fails() -> None:
     assert attempt.failure_stage == "generation"
     assert [tool["name"] for tool in attempt.tool_catalogue] == [
         "code_assess_template_difficulty",
+        "code_assess_template_relevance",
         "code_require_features",
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",

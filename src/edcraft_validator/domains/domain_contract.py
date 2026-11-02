@@ -14,19 +14,14 @@ class DomainModule(Protocol):
 
     name: str
     request_model: type[BaseModel]
-    candidate_model: type[BaseModel]
     validated_model: type[ValidatedTemplateArtifact]
 
     def generation_request(self, request: BaseModel) -> StructuredGenerationRequest: ...
 
-    def validation_request(
-        self, candidate: BaseModel
-    ) -> StructuredGenerationRequest: ...
-
     def build_candidate(self, request: BaseModel, proposal: BaseModel) -> BaseModel: ...
 
     def tool_bindings(
-        self, request: BaseModel | None, candidate: BaseModel, tool_name: str
+        self, request: BaseModel, candidate: BaseModel, tool_name: str
     ) -> dict[str, Any]: ...
 
     def finalize_checked_template(
@@ -35,7 +30,7 @@ class DomainModule(Protocol):
 
     def checked_tool_bindings(
         self,
-        request: BaseModel | None,
+        request: BaseModel,
         candidate: BaseModel,
         tool_name: str,
         evidence: list[ToolEvidence],

@@ -12,18 +12,23 @@ from edcraft_validator.application.code_checks import (
     check_code_question_requirements,
 )
 from edcraft_validator.application.relevance import assess_relevance
+from edcraft_validator.domains.code.candidate_builder import template_sha256
+from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.difficulty import CodeDifficultyQuestion, Record
 from edcraft_validator.domains.code.question_checks import (
     RequirementCheck,
     TechnicalCheck,
 )
 from edcraft_validator.domains.code.relevance import (
+    TEMPLATE_RELEVANCE_TOOL,
     CodeQuestionRequest,
     relevance_input,
+    template_relevance_input,
 )
 from edcraft_validator.llm.decision import DecisionProviderFactory
 from edcraft_validator.relevance_contracts import RelevanceReport
 from edcraft_validator.tools.python_execution import PythonExecutionTool
+from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
 
 
 class CodeRelevanceReview(Record):
@@ -77,4 +82,62 @@ async def review_code_question_relevance(
         requirements=requirements,
         relevance=relevance,
         duration_ms=(time.perf_counter() - started) * 1000,
+    )
+
+
+async def assess_code_template_relevance(
+    candidate: CodeTemplateCandidate,
+    author_request: str,
+    *,
+    decision_provider_factory: DecisionProviderFactory,
+    relevance_timeout_seconds: float = 35,
+) -> ToolEvidence:
+    """Map the independent relevance decision into the authoring check contract."""
+    candidate = CodeTemplateCandidate.model_validate(candidate.model_dump())
+    report = await assess_relevance(
+        template_relevance_input(candidate, author_request),
+        decision_provider_factory=decision_provider_factory,
+        relevance_timeout_seconds=relevance_timeout_seconds,
+    )
+    status = "passed"
+    findings = []
+    if report.status == "error":
+        status = "error"
+        findings = [
+            ToolFinding(
+                code=report.decision.error_code or "RELEVANCE_FAILED",
+                message="Relevance assessment failed; no check retry was made.",
+            )
+        ]
+    elif not report.decision.relevant:
+        status = "failed"
+        findings = [
+            ToolFinding(
+                code="RELEVANCE_MISMATCH",
+                message=(
+                    "The template does not assess the original author request. "
+                    "Revise the code, question and parameter domain to test that "
+                    "request; related vocabulary or background mentions are "
+                    "insufficient."
+                ),
+            )
+        ]
+    return ToolEvidence(
+        tool=TEMPLATE_RELEVANCE_TOOL,
+        version="1.0.0",
+        status=status,
+        findings=findings,
+        details={
+            "advisory": False,
+            "retryable": False,
+            "template_sha256": template_sha256(candidate),
+            "score": report.decision.score,
+            "threshold": report.decision.threshold,
+            "relevant": report.decision.relevant,
+            "provider": report.decision.provider,
+            "model": report.decision.model,
+            "usage": report.decision.usage.model_dump(mode="json"),
+            "relevance": report.model_dump(mode="json"),
+        },
+        duration_ms=report.duration_ms,
     )

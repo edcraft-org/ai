@@ -15,4 +15,7 @@ def test_real_openai_template_authoring() -> None:
         pytest.skip("OPENAI_API_KEY is not configured")
 
     provider = create_model_provider(TemplateProviderSelection(provider="openai"))
-    check_live_workflow(provider)
+    result = check_live_workflow(provider)
+    assert {"code_assess_template_difficulty", "code_assess_template_relevance"} <= set(
+        result.fixed_plan
+    )

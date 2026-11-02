@@ -2,7 +2,10 @@
 
 from pydantic import BaseModel
 
-from edcraft_validator.domains.code.candidate_builder import build_code_candidate
+from edcraft_validator.domains.code.candidate_builder import (
+    build_code_candidate,
+    template_sha256,
+)
 from edcraft_validator.domains.code.code_schemas import (
     CodeQuestionInstance,
     CodeTemplateCandidate,
@@ -14,13 +17,12 @@ from edcraft_validator.domains.code.code_schemas import (
 )
 from edcraft_validator.domains.code.prompt_builder import (
     build_code_generation_request,
-    build_code_validation_request,
 )
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
 from edcraft_validator.domains.code.question_generator import generate_code_question
+from edcraft_validator.domains.code.relevance import TEMPLATE_RELEVANCE_TOOL
 from edcraft_validator.domains.code.template_difficulty import (
     TEMPLATE_DIFFICULTY_TOOL,
-    template_sha256,
 )
 from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
@@ -35,7 +37,6 @@ class CodeDomain:
 
     name = "code"
     request_model = CodeTemplateRequest
-    candidate_model = CodeTemplateCandidate
     validated_model = ValidatedCodeTemplate
 
     def generation_request(
@@ -43,11 +44,6 @@ class CodeDomain:
     ) -> StructuredGenerationRequest[PlannedGenerationResponse[CodeProposalResponse]]:
         typed_request = _require_type(request, CodeTemplateRequest)
         return build_code_generation_request(typed_request)
-
-    def validation_request(self, candidate: BaseModel) -> StructuredGenerationRequest:
-        return build_code_validation_request(
-            _require_type(candidate, CodeTemplateCandidate)
-        )
 
     def build_candidate(
         self, request: BaseModel, proposal: BaseModel
@@ -64,12 +60,14 @@ class CodeDomain:
                 mode="json"
             )
         }
+        if tool_name == TEMPLATE_RELEVANCE_TOOL:
+            bindings["author_request"] = _require_type(
+                request, CodeTemplateRequest
+            ).prompt
         if tool_name == "code_validate_answers_and_distractors":
-            bindings["required_distractors"] = (
-                min(3, len(candidate.distractors))
-                if request is None
-                else _require_type(request, CodeTemplateRequest).num_distractors
-            )
+            bindings["required_distractors"] = _require_type(
+                request, CodeTemplateRequest
+            ).num_distractors
         return bindings
 
     def finalize_checked_template(
@@ -99,7 +97,12 @@ class CodeDomain:
                 issues=[finding.model_dump() for finding in item.findings],
                 details={
                     "tool_version": item.version,
-                    **(item.details if item.tool == TEMPLATE_DIFFICULTY_TOOL else {}),
+                    **(
+                        item.details
+                        if item.tool
+                        in {TEMPLATE_DIFFICULTY_TOOL, TEMPLATE_RELEVANCE_TOOL}
+                        else {}
+                    ),
                 },
             )
             for item in evidence
@@ -136,13 +139,11 @@ class CodeDomain:
             deep=True,
         )
         reusable = CodeTemplateCandidate.model_validate(reusable.model_dump())
-        difficulty = next(
-            (item for item in evidence if item.tool == TEMPLATE_DIFFICULTY_TOOL), None
-        )
-        if difficulty is not None and difficulty.details.get(
-            "template_sha256"
-        ) != template_sha256(reusable):
-            raise ValueError("Difficulty evidence belongs to a different template")
+        for item in evidence:
+            if item.tool in {TEMPLATE_DIFFICULTY_TOOL, TEMPLATE_RELEVANCE_TOOL} and (
+                item.details.get("template_sha256") != template_sha256(reusable)
+            ):
+                raise ValueError("Assessment evidence belongs to a different template")
         return ValidatedCodeTemplate(
             template=reusable,
             validation=summary,
@@ -150,8 +151,14 @@ class CodeDomain:
 
     def checked_tool_bindings(self, request, candidate, tool_name, evidence):
         """Assess exactly the reusable template produced by correctness checks."""
-        checked = self.finalize_checked_template(candidate, evidence)
-        return {"candidate": checked.template.model_dump(mode="json")}
+        semantic = [
+            item
+            for item in evidence
+            if item.tool == "code_validate_answers_and_distractors"
+            and item.status == "passed"
+        ]
+        checked = self.finalize_checked_template(candidate, semantic)
+        return self.tool_bindings(request, checked.template, tool_name)
 
     def generate_question(
         self, validated: BaseModel, *, seed: int

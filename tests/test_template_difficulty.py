@@ -10,6 +10,7 @@ from test_authoring_loop import SEMANTIC, STRUCTURE, Executor, Provider
 from test_difficulty_tool import ForbiddenExecutor
 
 from edcraft_validator.application.template_workflow import TemplateApplication
+from edcraft_validator.domains.code.candidate_builder import template_sha256
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
 from edcraft_validator.domains.code.difficulty import load_code_difficulty_rubric
@@ -17,9 +18,7 @@ from edcraft_validator.domains.code.template_difficulty import (
     TEMPLATE_DIFFICULTY_TOOL,
     build_template_difficulty_request,
     template_assessment_model,
-    template_sha256,
 )
-from edcraft_validator.llm.llm_contracts import CheckPlanResponse
 from edcraft_validator.llm.llm_errors import (
     GenerationResponseError,
     GenerationTimeoutError,
@@ -79,7 +78,6 @@ def run(
     estimates,
     failure=None,
     *,
-    validation=False,
     proposals=None,
     confidence=0.95,
     plan=None,
@@ -92,16 +90,7 @@ def run(
         judges.append(judge)
         return judge
 
-    class Author(Provider):
-        def generate(self, request):
-            if request.response_model is CheckPlanResponse:
-                self.generations.append(request.messages)
-                return CheckPlanResponse(
-                    checks=[{"name": name, "arguments": {}} for name in self.plan]
-                )
-            return super().generate(request)
-
-    author = Author(
+    author = Provider(
         proposals=proposals,
         plan=plan or (SEMANTIC, STRUCTURE, TEMPLATE_DIFFICULTY_TOOL),
     )
@@ -109,18 +98,11 @@ def run(
         difficulty_provider_factory=factory, code_execution_tool=Executor()
     )
     app = TemplateApplication(tool_client=FastMcpToolClient(server))
-    if validation:
-        result = app.validate_template(
-            candidate(), domain=CodeDomain(), provider=author
-        )
-    else:
-        result = app.author_template(
-            CodeTemplateRequest(
-                prompt="Create an addition question", difficulty="easy"
-            ),
-            domain=CodeDomain(),
-            provider=author,
-        )
+    result = app.author_template(
+        CodeTemplateRequest(prompt="Create an addition question", difficulty="easy"),
+        domain=CodeDomain(),
+        provider=author,
+    )
     return result, author, judges
 
 
@@ -201,12 +183,6 @@ def test_missing_information_can_revise_the_template_without_repairing_the_judge
         result.attempts[0].executions[-1].evidence.findings[0].code
         == "DIFFICULTY_UNABLE_TO_ASSESS"
     )
-
-
-def test_validation_runs_once_without_revising_difficulty_mismatch():
-    result, author, judges = run(["hard"], validation=True)
-    assert result.status == "needs_review" and result.artifact is None
-    assert len(result.attempts) == len(author.generations) == len(judges) == 1
 
 
 def test_unresolved_mismatch_retains_all_four_template_attempts():
