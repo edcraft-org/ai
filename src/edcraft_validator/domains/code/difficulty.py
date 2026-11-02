@@ -29,7 +29,7 @@ class DifficultyOption(Record):
 
 
 class CodeQuestionContent(Record):
-    """Fields shared by MCP questions and closed-schema authoring responses."""
+    """Fields shared by MCP questions and stored concrete-MCQ records."""
 
     code: str = Field(min_length=1, max_length=20_000)
     entry_function: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -62,29 +62,6 @@ class CodeDifficultyQuestion(CodeQuestionContent):
                 allow_nan=False,
             ).encode()
         ).hexdigest()
-
-
-class NamedQuestionInput(Record):
-    name: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
-    value: int | bool | str | list[int]
-
-
-class CodeQuestionDraft(CodeQuestionContent):
-    """Named input entries keep the author response schema closed for OpenAI."""
-
-    inputs: list[NamedQuestionInput]
-
-    @model_validator(mode="after")
-    def unique_input_names(self):
-        names = [item.name for item in self.inputs]
-        if len(names) != len(set(names)):
-            raise ValueError("input names must be unique")
-        return self
-
-    def to_question(self) -> CodeDifficultyQuestion:
-        value = self.model_dump()
-        value["inputs"] = {item.name: item.value for item in self.inputs}
-        return CodeDifficultyQuestion.model_validate(value)
 
 
 class DimensionAssessment(Record):

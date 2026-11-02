@@ -127,35 +127,6 @@ def supports_decisions(provider: ModelProvider) -> TypeGuard[DecisionModelProvid
     return callable(getattr(provider, "decide", None))
 
 
-class ToolCall(BaseModel):
-    """Provider-normalized call; malformed argument JSON is retained for feedback."""
-
-    id: str = Field(min_length=1)
-    name: str = Field(min_length=1)
-    arguments_json: str
-
-
-class ModelTurn(BaseModel):
-    content: str = ""
-    calls: list[ToolCall] = Field(default_factory=list)
-
-    def message(self) -> dict[str, Any]:
-        message: dict[str, Any] = {"role": "assistant", "content": self.content}
-        if self.calls:
-            message["tool_calls"] = [
-                {
-                    "id": call.id,
-                    "type": "function",
-                    "function": {
-                        "name": call.name,
-                        "arguments": call.arguments_json,
-                    },
-                }
-                for call in self.calls
-            ]
-        return message
-
-
 class TemplateProviderSelection(BaseModel):
     """Provider and optional model selected for one authoring request."""
 

@@ -7,9 +7,6 @@ class RequestPendingTools:
     def generation_settings(self):
         return {"mode": "scripted"}
 
-    def tool_turn(self, messages, tools):
-        raise AssertionError("Workflow must dispatch checks without native tool turns")
-
 
 class SelectSemanticCheck(RequestPendingTools):
     """Deterministic model fixture; production selection always uses a provider."""

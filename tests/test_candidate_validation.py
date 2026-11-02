@@ -32,7 +32,6 @@ class Selector(RequestPendingTools):
     def __init__(self, names):
         self.names = names
         self.requests = []
-        self.transcripts = []
 
     def generate(self, request):
         self.requests.append(request)
@@ -40,10 +39,6 @@ class Selector(RequestPendingTools):
         return CheckPlanResponse.model_validate(
             {"checks": [{"name": name, "arguments": {}} for name in self.names]}
         )
-
-    def tool_turn(self, messages, tools):
-        self.transcripts.append(messages)
-        return super().tool_turn(messages, tools)
 
 
 class Executor:
@@ -141,7 +136,6 @@ def test_failed_candidate_is_not_rewritten_and_remaining_checks_run(candidate):
     assert [x.tool for x in executions] == [SEMANTIC, STRUCTURE]
     assert [x.evidence.status for x in executions] == ["failed", "passed"]
     assert executions[0].evidence.findings[0].code == "PROPOSED_ANSWER_MISMATCH"
-    assert provider.transcripts == []
     assert result.usage.model_call_count == 1
     assert (
         executions[0].model_feedback()["evidence"]["findings"][0]["code"]

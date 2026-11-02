@@ -21,6 +21,7 @@ from edcraft_validator.llm.provider_registry import (
     available_model_providers,
     create_model_provider,
 )
+from edcraft_validator.llm.usage import close_provider
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -154,9 +155,12 @@ def _handle_author(args: argparse.Namespace) -> int:
     provider = create_model_provider(
         TemplateProviderSelection(provider=args.provider, model=args.model)
     )
-    result = TemplateApplication().author_template(
-        request, domain=domain, provider=provider, **_catalogue_options(args)
-    )
+    try:
+        result = TemplateApplication().author_template(
+            request, domain=domain, provider=provider, **_catalogue_options(args)
+        )
+    finally:
+        close_provider(provider)
     _write_authoring_result(result, args)
     return 0 if result.status == "checked" else 2
 
@@ -168,9 +172,12 @@ def _handle_validate(args: argparse.Namespace) -> int:
     provider = create_model_provider(
         TemplateProviderSelection(provider=args.provider, model=args.model)
     )
-    result = TemplateApplication().validate_template(
-        candidate, domain=domain, provider=provider, **_catalogue_options(args)
-    )
+    try:
+        result = TemplateApplication().validate_template(
+            candidate, domain=domain, provider=provider, **_catalogue_options(args)
+        )
+    finally:
+        close_provider(provider)
     _write_authoring_result(result, args)
     return 0 if result.status == "checked" else 2
 

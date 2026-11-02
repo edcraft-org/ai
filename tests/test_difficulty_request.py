@@ -17,7 +17,7 @@ from edcraft_validator.domains.code.difficulty_request import (
     runtime_instructions,
     worked_anchors,
 )
-from edcraft_validator.mcp.difficulty_tools import configured_difficulty_provider
+from edcraft_validator.llm.judge_configuration import configured_judge_provider
 from edcraft_validator.mcp.server import create_validation_server
 
 
@@ -130,12 +130,12 @@ def test_judge_provider_and_model_follow_shared_configuration(monkeypatch):
         "create_model_provider",
         lambda s: selected.append(s) or Provider(),
     )
-    configured_difficulty_provider()
+    configured_judge_provider()
     assert selected[0].provider == "soclaas"
     assert selected[0].model == "x-test-3"
     for name in ("openai", "ollama"):
         monkeypatch.setenv("EDCRAFT_JUDGE_PROVIDER", name)
         monkeypatch.setenv("EDCRAFT_JUDGE_MODEL", "configured-model")
-        configured_difficulty_provider()
+        configured_judge_provider()
         assert selected[-1].provider == name
         assert selected[-1].model == "configured-model"

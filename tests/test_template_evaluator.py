@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from authoring_helpers import RequestPendingTools
 from judge_helpers import proposal
 
@@ -41,6 +42,37 @@ class StubProvider(RequestPendingTools):
                 )
             ],
         )
+
+
+@pytest.mark.parametrize(
+    ("make_result", "expected_status"),
+    [
+        (proposal, "validated"),
+        (lambda: proposal(code="def add(a, b):\n    return a"), "failed"),
+    ],
+    ids=["success", "failure"],
+)
+def test_evaluation_closes_factory_provider_on_success_and_failure(
+    make_result, expected_status
+) -> None:
+    closed = []
+
+    class ClosingProvider(StubProvider):
+        def close(self):
+            closed.append(self)
+
+    report = TemplateEvaluator(
+        provider_factory=lambda selection: ClosingProvider(make_result()),
+        execution_tool=SumExecutor(),
+    ).evaluate(
+        provider="stub",
+        model="stub-model",
+        topics=("arithmetic",),
+        difficulties=("easy",),
+        repetitions=1,
+    )
+    assert report.attempts[0].status == expected_status
+    assert len(closed) == 1
 
 
 def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> None:

@@ -75,8 +75,8 @@ to every injected provider; missing token metadata remains unknown.
 The local Qwen reranker remains an explicit historical adapter. To reproduce local
 runs, install `uv sync --locked --extra relevance` and download
 `Qwen/Qwen3-Reranker-0.6B`; set `EDCRAFT_RELEVANCE_MODEL_PATH` if needed. It is not
-the default server provider. The standalone concrete-MCQ judge and older direct
-question helper remain separate from reusable-template authoring.
+the default server provider. The standalone concrete-MCQ judge remains available
+for research evaluation; template authoring owns generation and revision.
 
 ## HTTP and worker boundary
 
@@ -112,14 +112,13 @@ resource budgets, schema checks and rejection of unsupported code.
 
 Register each domain's checking tools explicitly in `mcp/server.py` with
 `domain:<name>` tags. A registry coverage test checks that every selectable domain
-has discoverable tools. Evaluation belongs to the application layer; the former
-`domains/code/template_evaluator.py` path retains compatibility exports only.
+has discoverable tools. Evaluation orchestration belongs to the application layer.
 
 OpenAI-compatible endpoints reuse the `openai` adapter with `OPENAI_BASE_URL` and
-`OPENAI_MODEL`. `OPENAI_RESPONSE_FORMAT`, `OPENAI_GENERATION_MAX_TOKENS`,
-`OPENAI_TOOL_MAX_TOKENS` and `OPENAI_REASONING_EFFORT` configure existing transport
+`OPENAI_MODEL`. `OPENAI_RESPONSE_FORMAT`, `OPENAI_GENERATION_MAX_TOKENS`
+and `OPENAI_REASONING_EFFORT` configure existing transport
 options without adding another provider. These settings do not guarantee support
-for decision logprobs, reasoning controls or native tool calls on that endpoint.
+for decision logprobs or reasoning controls on that endpoint.
 
 Use shared fixture modules rather than importing fixtures from test modules.
 Regression tests cover fresh-process imports, interchangeable provider accounting,

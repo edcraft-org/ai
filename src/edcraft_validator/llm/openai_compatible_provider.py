@@ -7,11 +7,7 @@ from typing import Any
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 from pydantic import BaseModel, ValidationError
 
-from edcraft_validator.llm.llm_contracts import (
-    ModelTurn,
-    StructuredGenerationRequest,
-    ToolCall,
-)
+from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
 from edcraft_validator.llm.llm_errors import (
     GenerationError,
     GenerationResponseError,
@@ -59,9 +55,6 @@ class OpenAICompatibleProvider:
         self._generation_max_tokens = _positive_int_setting(
             provider, "GENERATION_MAX_TOKENS", 16384 if soclaas else None
         )
-        self._tool_max_tokens = _positive_int_setting(
-            provider, "TOOL_MAX_TOKENS", 4096 if soclaas else None
-        )
         self._reasoning_effort = _reasoning_effort(provider)
 
     def generation_settings(self) -> dict[str, Any]:
@@ -74,13 +67,9 @@ class OpenAICompatibleProvider:
             "sampling": "provider_defaults",
             "response_format": self._response_format,
             "strict": self._response_format == "json_schema",
-            "tool_choice": "required",
-            "parallel_tool_calls": True,
             "timeout_seconds": timeout,
             "max_retries": getattr(self.client, "max_retries", None),
         }
-        if self._tool_max_tokens is not None:
-            settings["tool_max_tokens"] = self._tool_max_tokens
         if self._generation_max_tokens is not None:
             settings["generation_max_tokens"] = self._generation_max_tokens
         if self._reasoning_effort is not None:
@@ -133,7 +122,7 @@ class OpenAICompatibleProvider:
                 )
             kwargs = {
                 "model": self.model,
-                "messages": _wire_messages(messages),
+                "messages": copy.deepcopy(messages),
                 "response_format": response_format,
             }
             effort = request.reasoning_effort or self._reasoning_effort
@@ -194,7 +183,7 @@ class OpenAICompatibleProvider:
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=_wire_messages(messages),
+                messages=copy.deepcopy(messages),
                 **DECISION_REQUEST_OPTIONS,
             )
             self._record_usage(response)
@@ -203,56 +192,6 @@ class OpenAICompatibleProvider:
             raise GenerationTimeoutError("Decision request timed out") from exc
         except (APIConnectionError, APIStatusError) as exc:
             raise GenerationTransportError("Decision request failed") from exc
-
-    def tool_turn(self, messages, tools) -> ModelTurn:
-        """Translate native function calls; execution remains application-owned."""
-        self.last_usage = TokenUsage()
-        try:
-            kwargs = {"model": self.model, "messages": _wire_messages(messages)}
-            if self._reasoning_effort is not None:
-                kwargs["reasoning_effort"] = self._reasoning_effort
-            if self._tool_max_tokens is not None:
-                kwargs["max_tokens"] = self._tool_max_tokens
-            if tools:
-                kwargs.update(
-                    tools=_strict_tools(tools),
-                    tool_choice="required",
-                    parallel_tool_calls=True,
-                )
-            response = self.client.chat.completions.create(**kwargs)
-            self._record_usage(response)
-            if getattr(response.choices[0], "finish_reason", None) == "length":
-                raise GenerationResponseError(
-                    f"{self.provider} tool turn exhausted its output budget"
-                )
-            message = response.choices[0].message
-            return ModelTurn(
-                content=message.content or "",
-                calls=[
-                    ToolCall(
-                        id=call.id,
-                        name=call.function.name,
-                        arguments_json=call.function.arguments,
-                    )
-                    for call in (message.tool_calls or [])
-                ],
-            )
-        except GenerationError:
-            raise
-        except APITimeoutError as exc:
-            raise GenerationTimeoutError(
-                f"{self.provider} tool turn timed out"
-            ) from exc
-        except APIConnectionError as exc:
-            raise GenerationTransportError(f"{self.provider} tool turn failed") from exc
-        except APIStatusError as exc:
-            raise GenerationTransportError(
-                f"{self.provider} tool turn failed with status {exc.status_code}"
-            ) from exc
-        except Exception as exc:
-            raise GenerationResponseError(
-                f"{self.provider} returned an invalid tool turn"
-            ) from exc
 
     def _record_usage(self, response):
         usage = getattr(response, "usage", None)
@@ -361,34 +300,3 @@ class SocLaasProvider(OpenAICompatibleProvider):
 
     def __init__(self, client: Any | None = None, *, model: str | None = None) -> None:
         super().__init__("soclaas", client, model=model)
-
-
-def _wire_messages(messages):
-    wire = copy.deepcopy(messages)
-    for message in wire:
-        if message.get("role") == "tool":
-            message.pop("name", None)
-    return wire
-
-
-def _strict_tools(tools):
-    """Use strict arguments when MCP's projected schema already satisfies it."""
-    wire = copy.deepcopy(tools)
-    for tool in wire:
-        schema = tool["function"]["parameters"]
-        if _closed_schema(schema):
-            tool["function"]["strict"] = True
-    return wire
-
-
-def _closed_schema(value):
-    if isinstance(value, list):
-        return all(_closed_schema(item) for item in value)
-    if not isinstance(value, dict):
-        return True
-    if value.get("type") == "object" or "properties" in value:
-        if value.get("additionalProperties") is not False or set(
-            value.get("required", [])
-        ) != set(value.get("properties", {})):
-            return False
-    return all(_closed_schema(item) for item in value.values())

@@ -16,6 +16,7 @@ from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     StructuredGenerationRequest,
 )
+from edcraft_validator.llm.llm_errors import GenerationError
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.evidence import ToolEvidence
 
@@ -372,6 +373,66 @@ def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> N
     assert request.difficulty == "hard"
     assert request.num_distractors == 3
     assert json.loads(capsys.readouterr().out) == {"validated": True}
+
+
+@pytest.mark.parametrize("command", ["author", "validate"])
+@pytest.mark.parametrize("outcome", ["success", "returned_failure", "raised_failure"])
+def test_author_and_validate_close_owned_provider_on_success_and_failure(
+    command, outcome, monkeypatch, capsys
+):
+    class Provider:
+        model = "stub-model"
+
+        def __init__(self):
+            self.closed = 0
+
+        def close(self):
+            self.closed += 1
+
+    provider = Provider()
+
+    class Result:
+        def __init__(self):
+            self.status = "checked" if outcome == "success" else "needs_review"
+            self.artifact = None
+
+        def model_dump(self, *, mode):
+            return {"status": self.status, "artifact": None}
+
+    class Application:
+        def author_template(self, request, *, domain, provider, **kwargs):
+            if outcome == "raised_failure":
+                raise GenerationError("failed")
+            return Result()
+
+        def validate_template(self, candidate, *, domain, provider, **kwargs):
+            if outcome == "raised_failure":
+                raise GenerationError("failed")
+            return Result()
+
+    monkeypatch.setattr(
+        template_cli, "create_model_provider", lambda selection: provider
+    )
+    monkeypatch.setattr(template_cli, "TemplateApplication", Application)
+    monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
+    args = ["edcraft-template", command, "--domain", "code", "--provider", "ollama"]
+    if command == "author":
+        args += ["--prompt", "Addition", "--difficulty", "easy"]
+    else:
+        args.append("examples/templates/arithmetic_linear.json")
+    monkeypatch.setattr("sys.argv", args)
+
+    exit_code = template_cli.main()
+
+    assert (
+        exit_code
+        == {
+            "success": 0,
+            "returned_failure": 2,
+            "raised_failure": 1,
+        }[outcome]
+    )
+    assert provider.closed == 1
 
 
 def test_evaluate_cli_writes_attempts_and_prints_summary(

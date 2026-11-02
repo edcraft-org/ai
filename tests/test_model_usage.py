@@ -28,7 +28,9 @@ def test_openai_compatible_usage_survives_bad_json_and_resets_after_transport_fa
         SimpleNamespace(
             usage=SimpleNamespace(prompt_tokens=20, completion_tokens=0),
             choices=[
-                SimpleNamespace(message=SimpleNamespace(content="Done", tool_calls=[]))
+                SimpleNamespace(
+                    message=SimpleNamespace(content=json.dumps(code_response()))
+                )
             ],
         ),
     ]
@@ -49,7 +51,7 @@ def test_openai_compatible_usage_survives_bad_json_and_resets_after_transport_fa
     with pytest.raises(GenerationError):
         provider.generate(generation_request())
     assert provider.last_usage == TokenUsage()
-    provider.tool_turn([], [])
+    provider.generate(generation_request())
     assert provider.last_usage == TokenUsage(input_tokens=20, output_tokens=0)
 
 
@@ -110,7 +112,7 @@ def test_ollama_usage_survives_parse_and_output_budget_failures(monkeypatch, bod
 
     monkeypatch.setattr("edcraft_validator.llm.ollama_provider.urlopen", unavailable)
     with pytest.raises(GenerationError):
-        provider.tool_turn([], [])
+        provider.generate(generation_request())
     assert provider.last_usage == TokenUsage()
 
 
@@ -209,7 +211,7 @@ def test_partial_usage_keeps_reported_counts_without_claiming_complete_totals():
     assert summary.reported_output_tokens == 10
 
 
-def test_ollama_generation_and_tool_turn_capture_native_usage(monkeypatch):
+def test_ollama_generation_captures_native_usage(monkeypatch):
     class Proposal(BaseModel):
         value: int
 
@@ -220,9 +222,7 @@ def test_ollama_generation_and_tool_turn_capture_native_usage(monkeypatch):
             "eval_count": 4,
         },
         {
-            "message": {
-                "tool_calls": [{"function": {"name": "check", "arguments": {}}}]
-            },
+            "message": {"content": '{"value":8}'},
             "prompt_eval_count": 11,
             "eval_count": 3,
         },
@@ -243,14 +243,10 @@ def test_ollama_generation_and_tool_turn_capture_native_usage(monkeypatch):
         lambda *args, **kwargs: Response(),
     )
     provider = OllamaProvider(model="test")
-    assert (
-        provider.generate(
-            StructuredGenerationRequest(
-                messages=[], response_model=Proposal, prompt_version="test"
-            )
-        ).value
-        == 7
+    request = StructuredGenerationRequest(
+        messages=[], response_model=Proposal, prompt_version="test"
     )
+    assert provider.generate(request).value == 7
     assert provider.last_usage == TokenUsage(input_tokens=9, output_tokens=4)
-    assert provider.tool_turn([], []).calls[0].name == "check"
+    assert provider.generate(request).value == 8
     assert provider.last_usage == TokenUsage(input_tokens=11, output_tokens=3)

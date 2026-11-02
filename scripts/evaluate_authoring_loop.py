@@ -19,7 +19,12 @@ from edcraft_validator.domains.code.code_schemas import (
 )
 from edcraft_validator.llm.llm_contracts import TemplateProviderSelection
 from edcraft_validator.llm.provider_registry import create_model_provider
-from edcraft_validator.llm.usage import ModelCallRecord, TokenUsage, summarize_usage
+from edcraft_validator.llm.usage import (
+    ModelCallRecord,
+    TokenUsage,
+    close_provider,
+    summarize_usage,
+)
 
 CASES_VERSION = "authoring-baseline-v1"
 CASES = (
@@ -93,8 +98,8 @@ class ObservedProvider:
             )
         return response
 
-    def tool_turn(self, messages, tools):
-        return self.delegate.tool_turn(messages, tools)
+    def close(self):
+        close_provider(self.delegate)
 
 
 def summarize_records(records, requested_jobs):
@@ -310,6 +315,8 @@ def main():
                     "stage": "configuration" if provider is None else "unexpected",
                     "code": getattr(exc, "category", type(exc).__name__),
                 }
+            finally:
+                close_provider(provider)
             record["duration_ms"] = (time.perf_counter() - started) * 1000
             if result is not None and result.artifact is not None:
                 try:

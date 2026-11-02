@@ -55,8 +55,3 @@ def configured_judge_provider(settings: JudgeSettings | None = None) -> ModelPro
     return create_model_provider(
         TemplateProviderSelection(provider=selected.provider, model=selected.model)
     )
-
-
-def configured_reasoning_effort() -> str:
-    """Compatibility entry point; applications receive JudgeSettings instead."""
-    return load_judge_settings().reasoning_effort

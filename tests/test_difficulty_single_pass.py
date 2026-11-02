@@ -1,9 +1,8 @@
-"""A check assesses once; question corrections belong to the authoring caller."""
+"""A check assesses once without repairing or retrying the judge."""
 
 import json
 
 import pytest
-from test_difficulty_authoring import run
 from test_difficulty_tool import Provider, assessment, question
 
 from edcraft_validator.application.code_difficulty import (
@@ -100,32 +99,3 @@ async def test_schema_diagnostics_remain_sanitized_without_a_followup():
     assert report.status == "error" and len(providers) == 1
     assert report.judge.validation_errors[0].location == ["concepts_and_dependencies"]
     assert "PRIVATE_VALUE" not in report.model_dump_json()
-
-
-async def test_question_revision_can_match_on_the_third_correction():
-    report, author, judges = await run(
-        [question().model_dump() for _ in range(4)], ["easy", "easy", "easy", "medium"]
-    )
-    assert report.status == "matches" and report.error_code is None
-    assert len(report.attempts) == len(author.requests) == len(judges) == 4
-    assert all(len(j.requests) == 1 for j in judges)
-
-
-async def test_generation_recovers_on_third_correction_with_unchanged_brief_target():
-    report, author, judges = await run(
-        [
-            *[GenerationResponseError("private") for _ in range(3)],
-            question().model_dump(),
-        ],
-        ["easy"],
-        requested="easy",
-    )
-    assert report.status == "matches" and report.error_code is None
-    assert len(report.attempts) == len(author.requests) == 4 and len(judges) == 1
-    first = json.loads(author.requests[0].messages[1]["content"])
-    for request in author.requests[1:]:
-        payload = json.loads(request.messages[1]["content"])
-        assert payload["brief"] == first["brief"]
-        assert payload["requested_difficulty"] == first["requested_difficulty"]
-        assert payload["generation_feedback"]["error_code"] == "AUTHOR_INVALID_RESPONSE"
-    assert "private" not in report.model_dump_json()

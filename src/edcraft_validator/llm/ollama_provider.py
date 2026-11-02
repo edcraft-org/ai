@@ -2,17 +2,12 @@ import copy
 import json
 import math
 import os
-import uuid
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from pydantic import BaseModel, ValidationError
 
-from edcraft_validator.llm.llm_contracts import (
-    ModelTurn,
-    StructuredGenerationRequest,
-    ToolCall,
-)
+from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
 from edcraft_validator.llm.llm_errors import (
     GenerationError,
     GenerationResponseError,
@@ -104,44 +99,14 @@ class OllamaProvider:
         ]
         return self._chat(
             messages, schema=schema, think=True if reasoning_effort else None
-        )["content"]
+        )
 
-    def tool_turn(self, messages, tools) -> ModelTurn:
-        self.last_usage = TokenUsage()
-        message = self._chat(messages, tools=tools)
-        try:
-            return ModelTurn(
-                content=message.get("content", ""),
-                calls=[
-                    ToolCall(
-                        id=str(uuid.uuid4()),
-                        name=call["function"]["name"],
-                        arguments_json=json.dumps(call["function"]["arguments"]),
-                    )
-                    for call in message.get("tool_calls", [])
-                ],
-            )
-        except (KeyError, TypeError, ValueError) as exc:
-            raise GenerationResponseError(
-                "Ollama returned an invalid tool turn"
-            ) from exc
-
-    def _chat(self, messages, *, schema=None, tools=None, think=None):
+    def _chat(self, messages, *, schema=None, think=None):
         base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
         native_url = base_url.removesuffix("/v1").rstrip("/") + "/api/chat"
-        native_messages = copy.deepcopy(messages)
-        for message in native_messages:
-            if message.get("role") == "tool":
-                message.pop("tool_call_id", None)
-                message["tool_name"] = message.pop("name")
-            for call in message.get("tool_calls", []):
-                call.pop("id", None)
-                call["function"]["arguments"] = json.loads(
-                    call["function"]["arguments"]
-                )
         payload = {
             "model": self.model,
-            "messages": native_messages,
+            "messages": copy.deepcopy(messages),
             "stream": False,
             "options": self._options,
         }
@@ -150,8 +115,6 @@ class OllamaProvider:
             payload["think"] = effective_think
         if schema is not None:
             payload["format"] = schema
-        if tools:
-            payload["tools"] = tools
         request = Request(
             native_url,
             data=json.dumps(payload).encode(),
@@ -171,7 +134,7 @@ class OllamaProvider:
                     "response. Disable thinking with OLLAMA_THINK=false "
                     "or increase the output budget."
                 )
-            return body["message"]
+            return body["message"]["content"]
         except TimeoutError as exc:
             raise GenerationTimeoutError(
                 f"Ollama request timed out after {timeout:g} seconds"

@@ -60,7 +60,6 @@ class Provider:
         self.proposals = proposals or [proposal()]
         self.plan = plan
         self.generations = []
-        self.turns = []
         self.plan_arguments = plan_arguments or {}
 
     def generate(self, request):
@@ -77,9 +76,6 @@ class Provider:
                 for name in self.plan
             ],
         )
-
-    def tool_turn(self, messages, tools):
-        pytest.fail("Direct dispatch must not request native tools or acknowledgement")
 
 
 def run(provider, client=None):

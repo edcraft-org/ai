@@ -45,17 +45,7 @@ def test_generation_request_uses_one_typed_response_contract() -> None:
         "Do not encode numbers, booleans, or arrays as strings"
         in request.messages[1]["content"]
     )
-
-
-def test_free_form_prompt_agrees_with_the_typed_response_schema() -> None:
-    request = build_code_generation_request(
-        CodeTemplateRequest(
-            prompt="Create a question with a boolean parameter", difficulty="easy"
-        )
-    )
-    user_prompt = request.messages[1]["content"]
-
-    assert "booleans use JSON booleans" in user_prompt
+    assert "booleans use JSON booleans" in request.messages[1]["content"]
     schema = request.response_model.model_json_schema()
     response_schema = schema["$defs"]["CodeProposalResponse"]
     parameter_items = response_schema["properties"]["parameters"]["items"]

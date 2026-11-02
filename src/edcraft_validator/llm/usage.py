@@ -21,6 +21,8 @@ class TokenUsage(BaseModel):
 
 
 class ModelCallRecord(TokenUsage):
+    # "checking" and "acknowledgement" are legacy labels retained so archived
+    # reports still validate and load.
     operation: Literal[
         "generation", "revision", "checking", "acknowledgement", "judging"
     ]
@@ -72,15 +74,9 @@ class MeasuredProvider:
 
     def generate(self, request):
         operation = (
-            "revision"
-            if request.schema_name in {"template_revision", "code_question_revision"}
-            else "generation"
+            "revision" if request.schema_name == "template_revision" else "generation"
         )
         return self._call(operation, self.delegate.generate, request)
-
-    def tool_turn(self, messages, tools):
-        operation = "checking" if tools else "acknowledgement"
-        return self._call(operation, self.delegate.tool_turn, messages, tools)
 
     def judge(self, request):
         return self._call("judging", self.delegate.generate, request)

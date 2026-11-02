@@ -13,18 +13,9 @@ from edcraft_validator.application.template_difficulty import assess_template_di
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.code_types import Difficulty
 from edcraft_validator.domains.code.difficulty import CodeDifficultyQuestion
-from edcraft_validator.llm.judge_configuration import (
-    JudgeSettings,
-    configured_judge_provider,
-)
+from edcraft_validator.llm.judge_configuration import JudgeSettings
 from edcraft_validator.llm.judging import JudgeProviderFactory
-from edcraft_validator.llm.llm_contracts import ModelProvider
 from edcraft_validator.validation.check_contracts import ToolEvidence
-
-
-def configured_difficulty_provider() -> ModelProvider:
-    """Create a fresh provider per call; configuration is controlled by the host."""
-    return configured_judge_provider()
 
 
 def register_difficulty_tools(
