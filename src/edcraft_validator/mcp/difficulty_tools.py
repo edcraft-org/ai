@@ -13,10 +13,13 @@ from edcraft_validator.application.template_difficulty import assess_template_di
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.code_types import Difficulty
 from edcraft_validator.domains.code.difficulty import CodeDifficultyQuestion
-from edcraft_validator.llm.judge_configuration import configured_judge_provider
+from edcraft_validator.llm.judge_configuration import (
+    JudgeSettings,
+    configured_judge_provider,
+)
 from edcraft_validator.llm.judging import JudgeProviderFactory
 from edcraft_validator.llm.llm_contracts import ModelProvider
-from edcraft_validator.mcp.evidence import ToolEvidence
+from edcraft_validator.validation.check_contracts import ToolEvidence
 
 
 def configured_difficulty_provider() -> ModelProvider:
@@ -29,6 +32,7 @@ def register_difficulty_tools(
     *,
     provider_factory: JudgeProviderFactory,
     judge_timeout_seconds: float,
+    settings: JudgeSettings | None = None,
 ) -> None:
     # Model responses are not deterministic; read-only still sends question data
     # to the host-configured provider and may incur inference cost.
@@ -107,4 +111,5 @@ def register_difficulty_tools(
             candidate,
             provider_factory=provider_factory,
             judge_timeout_seconds=judge_timeout_seconds,
+            settings=settings,
         )

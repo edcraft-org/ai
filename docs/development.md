@@ -1,314 +1,121 @@
-# Developer reference
+# Development
 
-Read the [workflow guide](question-generation/README.md) first. This page identifies
-where behavior lives and what to change when extending it.
+The application sequences authoring and checking. Domains own proposal schemas,
+prompts, candidate construction and deterministic expansion. Provider adapters own
+model communication. MCP adapters expose checking services and translate tool
+metadata. CLI/server/worker boundaries construct dependencies and settings.
 
-Use Python 3.12 or newer. Dependencies are locked in `uv.lock`; `step-tracer` is
-pinned to commit `ab7e22ef18b776a9cbd5260bef4b4eeacc17db11`.
+## Code ownership
 
-## Code layout
-
-All paths below are under `src/edcraft_validator/`.
-
-| Area | Main files | Purpose |
-| --- | --- | --- |
-| Application | `application/template_workflow.py`, `application/authoring_contracts.py` | Checking loop, attempts, and final results. |
-| Saved records | `artifact_contracts.py` | Artifact ID and small origin record. |
-| Providers | `llm/llm_contracts.py`, provider adapters and registry | Shared interface and provider communication. |
-| MCP | `mcp/server.py`, `mcp/code_tools.py`, `mcp/client.py` | Tool registration, deadlines, evidence, and calls. |
-| Domain interface | `domains/domain_contract.py`, `domains/domain_registry.py` | Domain contract and lookup. |
-| Code domain | `domains/code/code_domain.py`, schemas, prompts, and candidate builder | Code-specific authoring and finalization. |
-| Template checking algorithms | `mcp/code_tools.py`, `mcp/code_checks/` | Structure, execution, answers and distractors for reusable templates. |
-| Concrete Python checks | `domains/code/question_checks.py`, `domains/code/features.py`, `application/code_checks.py`, `mcp/code_question_tools.py` | Independent correctness and explicit requirements, without embedding or judge calls. |
-| Question generation | `domains/code/question_generator.py`, expressions and rendering | Local expansion from saved answer and distractor recipes. |
-| Python tools | `tools/python_analysis.py`, `tools/python_execution.py`, `tools/python_worker.py` | Supported syntax and batched tracing. |
-| Advisory difficulty | `mcp/difficulty_tools.py`, `application/code_difficulty.py`, `domains/code/difficulty.py`, `llm/judging.py` | Template difficulty and standalone concrete-MCQ judging, independent of correctness. |
-| Shared relevance | `relevance_contracts.py`, `application/relevance.py`, `mcp/relevance_tools.py`, `llm/decision.py` | Domain-independent configured model alignment decision; no correctness, requirements or difficulty dependency. |
-| Python relevance adapter and review | `domains/code/relevance.py`, `application/code_relevance.py` | Complete learner-facing rendering and caller-side collection of independent reports. |
-
-## Shared relevance and domain responsibilities
-
-`assess_relevance` is registered once with `capability:relevance`, without a
-`domain:code` tag. It is explicitly callable and is not added to the template
-author's fixed check catalogue. Its input contains only `author_request` and
-`question_text`. Empty text, extra fields and texts exceeding 200,000 characters
-are rejected; line endings and surrounding whitespace are normalized. The service
-runs one forced yes/no call through the shared configured judge model, with
-reasoning disabled. It records exact texts, input identity, selected and served
-model, raw score, effective threshold, usage, duration and errors. Errors contain
-no relevance decision. The cutoff is model-specific and the score is not a
-calibrated probability. The local Qwen adapter remains an explicit historical
-baseline. Default server construction loads no model or credentials.
-
-The shared service has no domain or MCP dependencies. The Python adapter renders
-all learner-facing question fields except `correct_option`. Changing only the
-answer designation changes correctness identity but leaves relevance text unchanged.
-There is no diagram metadata or caller-supplied rendering-version field.
-Public checks validate their own inputs. Internal rendering trusts validated objects;
-reviews copy mutable caller data before asynchronous work.
-
-`check_code_question_correctness` runs bounded Python execution and identifies
-its question with `question_sha256`. `check_code_question_requirements` independently
-checks reachable syntax, target and option count and records its own question and
-request. Both use `quality:code`, outside the template catalogue. Neither constructs
-a relevance provider or difficulty judge. `review_code_question_relevance` collects
-these results and `RelevanceReport` for evaluation; no check consumes another
-check's report. This refactor does not change authoring dispatch or difficulty policy.
-
-The former combined `assess_code_quality` tool is removed. Its replacement is the
-shared `assess_relevance` decision plus the two Python checks above; see the
-[migration and review protocol](evaluation.md#what-to-report).
-
-## Model and tool calls
-
-The application lists MCP tools once, selects those tagged `domain:<domain name>`,
-and keeps their definitions for the whole job. Tools with multiple domain tags can
-be shared; untagged tools are not offered. There is no domain-owned tool-name list.
-The first model response contains a proposal and nonempty check plan. Domains can
-supply closed Pydantic argument models through
-`StructuredGenerationRequest.check_argument_models`. Checks without such a model
-accept only `{}`. The code domain defines a nonempty supported-feature list for
-`code_require_features.required`; candidate and distractor count remain
-application-owned. Providers project each offered name and its argument model into
-the wire schema. The application independently validates the plan before building
-a candidate or executing MCP calls.
-
-Only selected checks run. Both check membership and model-owned arguments are
-frozen before checking. The application dispatches each check at most once per
-attempt through MCP, validates the full bound input, output schema and evidence
-identity/version, and records an application-generated execution ID. No native tool
-requests or final acknowledgement calls are made. Bad MCP results remain explicit
-errors and do not prevent other ordinary checks from running.
-
-Checks tagged `stage:after-validation` wait for the other selected checks to pass.
-The domain supplies `checked_tool_bindings` for the exact reusable content. If a
-prerequisite fails, deferred checks stay pending with `skip_reason` and no invented
-MCP evidence. Authoring permits up to three template revisions. An assessment
-error with `retryable: false` ends the job without another check call or revision.
-Revision feedback includes the frozen plan and recorded check evidence; proposals
-can change, while names and arguments cannot.
-
-The code finalizer retains the answer recipe and selected supplied distractors.
-It leaves the checked code and wording unchanged and does not execute the template
-again.
-
-## Full-candidate revision contract
-
-All authoring revisions return the complete domain proposal schema, including every
-required field even when unchanged. There are no failure-specific patch schemas or
-revision/merge hooks. `CodeProposalResponse` contains the program, parameters,
-wording, answer target, answer recipe and distractors. Its wire format advertises
-`code` as an array of individual indented lines and normalizes it to source text;
-JSON serialization uses lines again. `domains/code/template_revision.py` now only
-supplies the original rubric definitions to authors.
-
-Each revision receives the original prompt/context plus `author_request`, the
-`latest_candidate`, frozen `check_plan`, `check_results`, `failed_attempt` and
-`remaining_revisions`. Feedback identifies skipped checks by `skip_reason`; these
-are not observed defects. It includes observations from passed checks and errors,
-without treating earlier evidence as validation of the replacement. Each ordinary
-check runs again; difficulty remains staged behind successful technical checks.
-
-The application revalidates full revision responses locally even when a provider
-returns a preconstructed model. A partial response or request/plan override is not
-merged into old data. The domain builds a new candidate under the original request
-and enforces its supported constraints before MCP execution. In code, difficulty
-is assigned from the request, question type and identity are derived locally, and
-required distractor count is supplied by the application at every attempt.
-The original caller request is copied for the job. Check names and model-owned
-arguments remain frozen. Program, entry function, parameter names/order/values,
-wording, answer target, answer expression and distractors may all change, subject
-to the domain schema and checks. The function signature, placeholders and recipes
-must remain coherent. Parameter domains or feature intent written only in a
-free-form prompt have no general compliance guarantee; the author instructions
-and sampled technical checks do not establish that guarantee.
-
-The policy is recorded as `revision_policy=full-candidate-v1`. Code authoring uses
-`response-v8-full-candidate`; revision requests append `+full-candidate-v1` to their
-prompt version. Historical reports without `revision_policy` remain readable and
-are not reclassified as results of this workflow. Full responses can increase
-output tokens and permit request drift; neither lower cost nor higher yield is
-established by this refactor.
-
-Failed distractor selection adds one counterexample per bad recipe or colliding
-pair, capped at 16 rows. It uses local expressions and existing canonical answers,
-without another execution or model call. Code tools use evidence version 1.1.0.
-The author generation helper permits one additional transport attempt for a
-connection error or HTTP 408/409/429/5xx. It does not retry timeouts, response/schema
-errors, other HTTP failures or judge calls. Measured author
-usage retains both attempts; disable SDK retries to avoid stacking retry policies.
-
-## Saved output
-
-`AuthoringResult` is one report per job. It stores the request, provider settings,
-compact tool catalogue, selected plan, timings and all attempts. Each attempt owns
-one candidate; its executions store frozen planning arguments, additional application
-arguments, skip reasons and full `ToolEvidence`. `check_plan` retains names and
-arguments; `fixed_plan` retains the name list for compatibility. Historical records
-with provider-generated call IDs or malformed argument text remain readable.
-
-The shared report envelope preserves domain-specific artifact fields on reload.
-Before using a reloaded artifact, parse its JSON through the selected domain's
-`validated_model`; that schema owns validation of its content. The code domain's
-schema still rejects unknown fields. Report `failure` records the terminal error's
-stage and code, independently of findings from earlier attempts. The job timer
-includes MCP setup and teardown. Generation timing includes initial and correction
-requests that time out or return invalid responses. Initial generation and MCP
-setup failures also return reports, with zero checking attempts. The compatibility
-`create_validated_template` wrapper raises `AuthoringFailure` with that report.
-
-`model_calls` records author generation and revision calls; no model call is used
-for direct dispatch or acknowledgement. `usage` summarizes authoring input/output
-tokens and application call count. Model-backed checks still perform inference:
-difficulty judge calls and usage are recorded separately in their MCP evidence.
-Historical checking/acknowledgement call records remain readable. Missing
-usage is `null`, with an explicit reason per call. Complete totals are `null` if a
-call is missing the corresponding count; reported subtotals retain known counts.
-The count describes application calls, not transport retries inside an SDK.
-
-`ValidatedCodeTemplate` stores the reusable content and canonical input/answer
-cases. Its check summaries retain names, versions and timings without copying
-canonical answers or trace summaries again. `TemplateAuthoringProvenance` is only
-small origin metadata; it does not contain the report. Question generation needs
-neither the history nor the diagnostic schemas.
-
-The CLI's `--template-output` writes the artifact only on success. The optional
-`--tool-schemas` writes the complete discovered catalogue for diagnostics. Normal
-reports omit schemas, but dispatch still validates against the original definitions.
-Regenerate older development artifacts that fail the new schema.
-
-Evaluation JSON stores the authoring report once under `authoring_result`.
-`TemplateEvaluationAttempt` derives its Python convenience fields from that report
-when loading, so `validated_template`, `tool_catalogue`, and `validation_evidence`
-remain available without repeating them in saved records. Provider-creation failures
-before an authoring report exists retain their error and timing directly.
-
-## Execution limits
-
-The execution operation constructs `ExecutionCheck` using the Python execution tool
-supplied by the MCP wrapper. The default tool sends all cases to one worker process.
-
-- At most 64 parameter combinations per template.
-- Per-case timeout and a 100,000 user-code trace-event limit.
-- Scrubbed worker environment, host timeout, CPU limits, and a Linux 512 MiB
-  address-space limit.
-- Restricted Python syntax and a small set of allowed built-ins.
-- Direct and mutual recursion are supported when every input case finishes within
-  the existing limits. The tracer counts recursive calls and branch evaluations.
-  Non-terminating or excessively deep recursion returns execution failure.
-- Expressions limited to 500 source characters and 100 syntax nodes; numeric values
-  bounded to magnitude 1 billion, sequences to 100 items, and nested values to
-  a total logical size of 1,000.
-
-MCP deadlines are five seconds for static checks and
-`64 * per_case_timeout + 2` seconds for execution. A deadline stops waiting and
-ignores late results; it does not terminate a running synchronous thread. The worker
-has its own process limits. Deployment must supply outer job isolation, filesystem
-and network restrictions, and resource limits; this package does not create a
-container itself.
-
-The application connects to MCP in process by default. Other integrations can start
-the stdio server with:
-
-```bash
-uv run python -m edcraft_validator.mcp
-```
-
-## Adding a domain
-
-1. Define request, proposal, candidate, saved-template, and question schemas. Extend
-   `ValidatedTemplateArtifact` for saved templates.
-2. Implement `DomainModule`: prompts, candidate construction, tool
-   bindings, finalization, and question generation.
-3. Register the domain factory. Supply requests through `--request-json`.
-4. Register the needed MCP tools with tags matching the domain's `name` and test
-   success and failure paths.
-
-Checking algorithms belong under MCP. Template schemas, finalization, generation,
-and their shared expression/rendering helpers remain in the domain. Providers should
-not import domain models.
-See the example domain in `tests/test_template_workflow.py` and request handling in
-`tests/test_cli.py`.
-
-## Adding a provider or check
-
-A provider implements `generate` and `generation_settings`, then registers its
-factory. Parse responses against the supplied schema and report non-secret settings.
-Existing adapters retain optional native-tool methods for other callers; the shared
-authoring protocol does not require them. Test the adapter with a mocked client before
-live verification. To use another model from an existing provider, pass `--model`.
-To report tokens, expose `last_usage` as `TokenUsage`, reset it before each
-`generate` or `tool_turn`, and fill it from response metadata before parsing. Providers
-without this metadata remain usable and explicitly report unavailable token usage.
-
-A check keeps its operation and MCP tool definition together, with a description,
-input and output schemas, version, domain tags, deadline, and `ToolEvidence` result.
-For code, add it to `mcp/code_tools.py` with `tags={"domain:code"}`; checking-only
-helpers belong in `mcp/code_checks/`. Test success, invalid inputs, and failures.
-Declare any model-owned planning arguments using a closed Pydantic model in the
-domain request's `check_argument_models`; never expose candidate or request-owned
-fields. The default is an empty closed argument object. The application does not
-add checks to the selected plan. Use `stage:after-validation` for checks that must
-wait for ordinary checks; operation-specific prerequisites remain inside the check.
-
-The 15 historical topic/difficulty fixtures remain regression tests and evaluation
-examples. They do not restrict free-form authoring or select its checks.
-
-`assess_code_difficulty` uses the separate `quality:code` tag and returns an
-advisory `CodeDifficultyReport`. It uses SocLaas once per check and never calls
-the executor or correctness tools. The compact prompt and exact-option wire
-schema are in `domains/code/difficulty_request.py`; the public report keeps an
-ordered option-evidence list. The wheel bundles `docs/difficulty-rubric.md`.
-`application/difficulty_authoring.py` owns generation and up to three question
-revisions; a failed assessment ends the job immediately. See the
-[configuration and reporting guide](difficulty-judging.md).
-
-## Supported answer targets
-
-| Target | Meaning |
+| Responsibility | Location |
 | --- | --- |
-| `return_value` | Entry-function return value. |
-| `branch_executions` | Number of evaluated `if` conditions. |
-| `loop_iterations` | Total loop-body iterations. |
-| `loop_executions` | Number of loop statements encountered. |
-| `function_calls` | Traced calls, including the entry call and safe built-ins. |
+| Shared evidence data, without transport imports | `validation/check_contracts.py` |
+| Domain behavior interface | `domains/domain_contract.py` |
+| Application-facing tool interface | `application/ports.py` |
+| Authoring orchestration and attempt records | `application/template_workflow.py`, `authoring_contracts.py` |
+| Typed public summaries and worker adapter | `application/authoring_api.py` |
+| Code proposal, binding and finalization | `domains/code/code_domain.py`, schemas and candidate builder |
+| Blinded difficulty prompts and rubric components | `domains/code/template_difficulty.py`, `difficulty_request.py` |
+| Difficulty routing, verdict policy and evidence | `application/template_difficulty.py` |
+| Model adapters and measured judge execution | `llm/` |
+| Check catalogue decoding and dispatch transport | `mcp/catalogue.py`, `mcp/client.py` |
+| Default dependency construction | `bootstrap.py`, `mcp/server.py`, `cli.py` |
 
-`code_assess_template_difficulty` has `domain:code`, `quality:code` and
-`stage:after-validation` tags. The author selects it; the application calls it after
-correctness checks pass. `application/template_difficulty.py` owns a forced
-three-label decision followed, only at confidence <0.70 or decision failure, by a
-structured reasoning assessment using the same configured model. The domain owns
-both prompts and hides the requested difficulty, identity and topic. Both stages
-assess the typical instance across the declared parameter distribution.
-The property-based answer check tests a fixed recipe subset across its samples;
-no complete-domain answer table or collision-exclusion pool is retained.
-Accepted decision mismatches request revision; reasoning mismatches retain the
-0.80 self-confidence gate. Both confidence sources are provisional and explicitly
-identified. Usage includes both calls, within one judge deadline. The standalone
-concrete-question API remains available for evaluations and the older helper.
-Shared host settings are `EDCRAFT_JUDGE_PROVIDER`, `EDCRAFT_JUDGE_MODEL`,
-`EDCRAFT_JUDGE_REASONING_EFFORT` and `EDCRAFT_RELEVANCE_THRESHOLD`.
+Package initializers must not construct servers. Shared evidence can be imported
+without FastMCP or application services. `mcp/evidence.py` retains compatibility
+exports. Application construction and deterministic expansion do not connect tools;
+author/validate obtain a connection when needed. Inject a tool client for tests.
 
-OpenAI and SocLaas project offered check names into a finite literal choice in
-the planning wire schema. The adapter validates that schema locally and returns
-the original response type; the application still validates selected names before
-dispatch. No guessed name is remapped to a different tool. This projection applies
-only to check plans, leaving difficulty assessment requests unchanged.
+The authoring coordinator prepares a frozen plan, executes attempts, and either
+revises or finalizes. Check definitions are decoded once before dispatch; the
+attempt loop does not interpret FastMCP tags. Keep schema validation, application
+argument ownership, exact artifact binding and correctness prerequisites intact.
+Prefer named stages and guard clauses within a module to extra layers/classes.
 
-## Property-based template checking
+## Judge settings and policy
 
-`mcp/code_checks/property_checks.py` owns Hypothesis sampling, boundary examples,
-shrinking, a fixed seed and total execution/time budgets. Its strategies use only
-validated finite parameter values; no model-supplied testing code runs. The sole
-answer-check path executes sampled cases, compares `answer_expression` with the
-selected answer target and selects distractors that pass every sample. A failing
-sample returns a counterexample; budget exhaustion is an error. No exhaustive
-implementation or small-domain switch remains. Tiny domains may happen to be
-covered by Hypothesis, but completion never requires whole-domain coverage.
+`JudgeSettings` is an immutable validated snapshot. The server loads it once and
+passes it to difficulty and relevance. Library callers can supply it explicitly.
+Environment variables are read by boundary constructors, not by routing policy.
+The shared provider/model are independent of the selected authoring provider.
 
-`TemplateValidationSummary` records `checking_mode=property_based`, sample and
-execution counts, limits, seed and selected-tool evidence. Format 2 retains the
-answer recipe; `question_generator.py` evaluates it for new allowed inputs. Cheap
-value/rendering checks have 32 attempts, but generation performs no code execution.
-Generated instances require manual review. Old saved artifacts are unsupported.
-Numeric constants and structural code variation remain a separate follow-up.
+| Final assessment | Workflow |
+| --- | --- |
+| Forced decision confidence >=0.70, level matches | Pass; no reasoning call. |
+| Forced decision accepted, level differs | Fail and request author revision. |
+| Decision below 0.70 or invalid | One reasoning call using the same model. |
+| Reasoning level matches | Pass. |
+| Reasoning mismatch at self-confidence >=0.80 | Fail and request revision. |
+| Reasoning mismatch below 0.80 | Pass policy with an advisory warning. |
+| Reasoning cannot assess | Fail. |
+| Reasoning error or exhausted deadline | Error; never a pass. |
+
+Token confidence and self-reported confidence are different, uncalibrated measures.
+`details.outcome` is the typed final policy result. The existing flat fields remain
+for compatibility. `screen` and `judge` retain detailed stage reports; aggregate
+usage includes both calls. Both paths bind the same exact template/rubric identity.
+
+The decision gets at most 35 seconds within the existing 310-second judge budget;
+reasoning receives only the remaining time. MCP allows 330 seconds per tool call.
+A deadline stops waiting, not a synchronous inference thread. A fallback uses a
+fresh transport; cleanup happens in the executing worker even after a timeout.
+SDK retries are separate from application calls; use zero SDK retries for controlled
+runs. Provider-owned HTTP clients close after completion; injected clients remain
+owned by their caller.
+
+`ModelProvider` supplies structured generation. `DecisionModelProvider` declares
+the optional `decide(messages, labels)` capability. Decision adapters return label
+probabilities; never substitute self-reported confidence for missing logprobs.
+Relevance providers supply `score(request_text, question_text)` and may expose
+`last_usage`, `generation_settings`, `served_model` and `close`. Accounting applies
+to every injected provider; missing token metadata remains unknown.
+
+The local Qwen reranker remains an explicit historical adapter. To reproduce local
+runs, install `uv sync --locked --extra relevance` and download
+`Qwen/Qwen3-Reranker-0.6B`; set `EDCRAFT_RELEVANCE_MODEL_PATH` if needed. It is not
+the default server provider. The standalone concrete-MCQ judge and older direct
+question helper remain separate from reusable-template authoring.
+
+## HTTP and worker boundary
+
+`AuthoringJobCommand` contains a job ID, domain, author selection and JSON request
+payload. The worker validates that payload against the domain's request schema.
+`run_authoring_job_sync` is suitable for a job worker; async HTTP handlers use
+`await run_authoring_job(...)` to keep the synchronous MCP runner off their event
+loop. Do not call `TemplateApplication.author_template` directly in an async route.
+
+The internal `AuthoringJobRecord.report` retains full attempt evidence for storage.
+HTTP adapters return its `response`, which contains an `AuthoringSummary` with
+stable outcomes, check codes and safe error messages. Raw exception strings in the
+internal diagnostic report must not be rendered as public error text.
+
+Job lifecycle (`queued/running/completed/failed`), checking outcome
+(`checked/needs_review/error`) and human approval are independent. A completed job
+may need review; checking never implies approval. The current summary is explicitly
+`unreviewed`. Approval persistence and artifact-bound authorization remain M4 work.
+
+`on_progress` receives immutable events from actual generation/checking/correction/
+finalization stages. It runs on the worker thread; adapters must dispatch events
+safely to their own queue/event loop. Observer failures are logged without changing
+the authoring verdict. The existing HTTP backend still needs a handler, persistence
+adapter and generated frontend client for these contracts; no endpoint is wired yet.
+
+## Extending and verifying
+
+Add domain behavior through `DomainModule` and register its factory. Add model
+communication through the provider registry. Avoid new branches for domain names
+inside shared orchestration. Keep deterministic reuse independent of model/tool
+services. Python features are explicitly bounded; preserve worker isolation,
+resource budgets, schema checks and rejection of unsupported code.
+
+Use shared fixture modules rather than importing fixtures from test modules.
+Regression tests cover fresh-process imports, interchangeable provider accounting,
+settings snapshots, deadlines, correction, evidence identity, worker threading and
+public error projection. Focused mypy checks cover application/worker contracts and
+settings. Run lint, formatting, type checks and appropriate tests before completion.
+
+The production rubric is [v0.2](difficulty-rubric.md); the offline
+[v0.3](difficulty-rubric-v0.3.md) reference remains separate. The rubric Markdown is
+runtime data bundled by `pyproject.toml`; retain it and its schema/header checks.
+See [evaluation](evaluation.md) before interpreting a policy change as an accuracy
+improvement.

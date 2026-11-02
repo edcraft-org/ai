@@ -1,10 +1,10 @@
-"""Advisory template difficulty evidence, independent of technical correctness."""
+"""Template difficulty routing, policy and evidence as separate readable stages."""
 
 import math
 import time
 from dataclasses import replace
-from functools import cache
 
+from edcraft_validator.application.authoring_contracts import DifficultyOutcome
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.difficulty import load_code_difficulty_rubric
 from edcraft_validator.domains.code.difficulty_matching import compare_difficulty
@@ -14,15 +14,20 @@ from edcraft_validator.domains.code.template_difficulty import (
     build_template_difficulty_request,
     template_sha256,
 )
-from edcraft_validator.llm.forced_decision import run_decision
-from edcraft_validator.llm.judge_configuration import configured_reasoning_effort
+from edcraft_validator.llm.forced_decision import (
+    ClassDecision,
+    JudgeProviderSession,
+    run_decision,
+)
+from edcraft_validator.llm.judge_configuration import JudgeSettings
 from edcraft_validator.llm.judging import (
     DEFAULT_JUDGE_TIMEOUT_SECONDS,
     JudgeProviderFactory,
+    failed_judge,
     run_judge,
 )
 from edcraft_validator.llm.usage import summarize_usage
-from edcraft_validator.mcp.evidence import ToolEvidence, ToolFinding
+from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
 
 HIGH_CONFIDENCE_THRESHOLD = 0.8
 DECISION_CONFIDENCE_THRESHOLD = 0.7
@@ -34,159 +39,161 @@ async def assess_template_difficulty(
     *,
     provider_factory: JudgeProviderFactory,
     judge_timeout_seconds: float = DEFAULT_JUDGE_TIMEOUT_SECONDS,
+    settings: JudgeSettings | None = None,
 ) -> ToolEvidence:
     if not math.isfinite(judge_timeout_seconds) or judge_timeout_seconds <= 0:
         raise ValueError("judge timeout must be finite and positive")
     started = time.perf_counter()
+    selected = settings if settings is not None else JudgeSettings()
     candidate = CodeTemplateCandidate.model_validate(candidate.model_dump())
+    try:
+        rubric = load_code_difficulty_rubric()
+        decision_request = build_template_decision_request(candidate, rubric)
+        reasoning_request = build_template_difficulty_request(candidate, rubric)
+    except (OSError, ValueError):
+        return ToolEvidence(
+            tool=TEMPLATE_DIFFICULTY_TOOL,
+            version="1.2.0",
+            status="error",
+            findings=[
+                ToolFinding(
+                    code="RUBRIC_UNAVAILABLE", message="Difficulty rubric unavailable"
+                )
+            ],
+        )
+
+    providers = JudgeProviderSession(provider_factory)
+    screen = await run_decision(
+        decision_request,
+        labels=("easy", "medium", "hard"),
+        provider_factory=providers.decision_provider,
+        timeout_seconds=min(selected.decision_timeout_seconds, judge_timeout_seconds),
+    )
+    if _accept_decision(screen, selected):
+        outcome = _policy_outcome(screen, candidate.difficulty, "decision", selected)
+        return _build_evidence(
+            candidate, rubric, selected, screen, None, outcome, started
+        )
+
+    remaining = judge_timeout_seconds - (time.perf_counter() - started)
+    reasoning_request = replace(
+        reasoning_request, reasoning_effort=selected.reasoning_effort
+    )
+    judge = (
+        failed_judge(reasoning_request, "JUDGE_TIMEOUT", 0)
+        if remaining <= 0
+        else await run_judge(
+            reasoning_request,
+            provider_factory=providers.reasoning_provider,
+            timeout_seconds=remaining,
+        )
+    )
+    outcome = _policy_outcome(judge, candidate.difficulty, "reasoning", selected)
+    return _build_evidence(candidate, rubric, selected, screen, judge, outcome, started)
+
+
+def _accept_decision(screen, settings):
+    return (
+        screen.status == "completed"
+        and screen.assessment.confidence >= settings.decision_threshold
+    )
+
+
+def _policy_outcome(judge, requested, path, settings):
+    if judge.status == "error":
+        return DifficultyOutcome(
+            assessment_path=path,
+            error_code=judge.error_code,
+            reason="Difficulty assessment failed; no check retry was made.",
+        )
+    assessment = judge.assessment
+    is_decision = isinstance(assessment, ClassDecision)
+    estimate = assessment.label if is_decision else assessment.estimated_difficulty
+    if estimate is None:
+        return DifficultyOutcome(
+            assessment_path=path,
+            status="failed",
+            error_code="DIFFICULTY_UNABLE_TO_ASSESS",
+            reason=assessment.unable_to_assess_reason,
+        )
+    matches = compare_difficulty(estimate, requested) == "matches"
+    decisive = is_decision or assessment.confidence >= settings.reasoning_threshold
+    decision = "matches" if matches else "revise" if decisive else "advisory_mismatch"
+    return DifficultyOutcome(
+        assessment_path=path,
+        estimated_difficulty=estimate,
+        confidence=assessment.confidence,
+        confidence_source="first_token_label_mass" if is_decision else "self_reported",
+        decision=decision,
+        status="failed" if decision == "revise" else "passed",
+        reason="Forced decision from first-token label probabilities."
+        if is_decision
+        else assessment.reason,
+    )
+
+
+def _findings(outcome, requested):
+    if outcome.error_code:
+        return [ToolFinding(code=outcome.error_code, message=outcome.reason)]
+    if outcome.decision == "matches":
+        return []
+    return [
+        ToolFinding(
+            code="DIFFICULTY_MISMATCH"
+            if outcome.decision == "revise"
+            else "DIFFICULTY_MISMATCH_LOW_CONFIDENCE",
+            message=(
+                f"Typical instance estimated {outcome.estimated_difficulty}; "
+                f"requested {requested}. Confidence ({outcome.confidence_source}) "
+                f"{outcome.confidence:.2f}. {outcome.reason}"
+            ),
+            field="difficulty",
+        )
+    ]
+
+
+def _build_evidence(candidate, rubric, settings, screen, reasoning, outcome, started):
+    judge = screen if reasoning is None else reasoning
+    calls = [*screen.model_calls, *(reasoning.model_calls if reasoning else [])]
     details = {
         "advisory": True,
         "retryable": False,
         "assessment_scope": "typical_instance_uniform_eligible_combinations",
         "policy_version": DIFFICULTY_POLICY_VERSION,
-        "high_confidence_threshold": HIGH_CONFIDENCE_THRESHOLD,
+        "high_confidence_threshold": settings.reasoning_threshold,
+        "decision_confidence_threshold": settings.decision_threshold,
         "confidence_calibrated": False,
-        "decision_confidence_threshold": DECISION_CONFIDENCE_THRESHOLD,
         "template_sha256": template_sha256(candidate),
         "requested_difficulty": candidate.difficulty,
+        "rubric_version": rubric.version,
+        "rubric_sha256": rubric.sha256,
+        "assessment_conditions_version": rubric.assessment_conditions_version,
+        "screen": screen.model_dump(mode="json"),
+        "judge": judge.model_dump(mode="json"),
+        "outcome": outcome.model_dump(mode="json"),
+        "usage": summarize_usage(calls).model_dump(mode="json"),
+        "model_calls": [call.model_dump(mode="json") for call in calls],
+        # Retain the existing flat fields while clients migrate to the typed outcome.
+        **outcome.model_dump(
+            mode="json",
+            include={
+                "assessment_path",
+                "estimated_difficulty",
+                "confidence",
+                "confidence_source",
+                "decision",
+            },
+        ),
     }
-    status = "error"
-    findings = []
-    try:
-        rubric = load_code_difficulty_rubric()
-        request = build_template_difficulty_request(candidate, rubric)
-    except (OSError, ValueError):
-        findings.append(
-            ToolFinding(
-                code="RUBRIC_UNAVAILABLE", message="Difficulty rubric unavailable"
-            )
+    if outcome.estimated_difficulty is not None:
+        details["difficulty_match"] = compare_difficulty(
+            outcome.estimated_difficulty, candidate.difficulty
         )
-    else:
-
-        @cache
-        def screen_provider():
-            return provider_factory()
-
-        screen = await run_decision(
-            build_template_decision_request(candidate, rubric),
-            labels=("easy", "medium", "hard"),
-            provider_factory=screen_provider,
-            timeout_seconds=min(35.0, judge_timeout_seconds),
-        )
-        accepted = (
-            screen.status == "completed"
-            and screen.assessment.confidence >= DECISION_CONFIDENCE_THRESHOLD
-        )
-        details["screen"] = screen.model_dump(mode="json")
-        details["assessment_path"] = "decision" if accepted else "reasoning"
-        if accepted:
-            judge = screen
-            estimate = screen.assessment.label
-            confidence = screen.assessment.confidence
-            reason = "Forced decision from first-token label probabilities."
-            high_confidence = True
-        else:
-            # A timed-out classifier may still be running. Give the fallback its
-            # own provider so late token usage cannot contaminate its report.
-            # Structured-only injected providers are reused without a decision call.
-            def reasoning_provider():
-                provider = screen_provider()
-                return (
-                    provider_factory()
-                    if callable(getattr(provider, "decide", None))
-                    else provider
-                )
-
-            remaining = judge_timeout_seconds - (time.perf_counter() - started)
-            try:
-                effort = configured_reasoning_effort()
-            except ValueError:
-                effort = None
-            if remaining <= 0 or effort is None:
-                judge = screen.model_copy(
-                    update={
-                        "status": "error",
-                        "assessment": None,
-                        "error_code": "JUDGE_TIMEOUT"
-                        if remaining <= 0
-                        else "JUDGE_CONFIGURATION_ERROR",
-                        "model_calls": [],
-                        "usage": summarize_usage([]),
-                    }
-                )
-            else:
-                judge = await run_judge(
-                    replace(request, reasoning_effort=effort),
-                    provider_factory=reasoning_provider,
-                    timeout_seconds=remaining,
-                )
-            estimate = (
-                judge.assessment.estimated_difficulty if judge.assessment else None
-            )
-            confidence = judge.assessment.confidence if judge.assessment else None
-            reason = judge.assessment.reason if judge.assessment else ""
-            high_confidence = (
-                confidence is not None and confidence >= HIGH_CONFIDENCE_THRESHOLD
-            )
-        calls = [*screen.model_calls, *(judge.model_calls if not accepted else [])]
-        details.update(
-            rubric_version=rubric.version,
-            rubric_sha256=rubric.sha256,
-            assessment_conditions_version=rubric.assessment_conditions_version,
-            judge=judge.model_dump(mode="json"),
-            usage=summarize_usage(calls).model_dump(mode="json"),
-            model_calls=[call.model_dump(mode="json") for call in calls],
-            estimated_difficulty=estimate,
-            confidence=confidence,
-            confidence_source="first_token_label_mass" if accepted else "self_reported",
-        )
-        if judge.status == "error":
-            findings.append(
-                ToolFinding(
-                    code=judge.error_code or "JUDGE_FAILED",
-                    message="Difficulty assessment failed; no check retry was made.",
-                )
-            )
-        elif estimate is None:
-            status = "failed"
-            findings.append(
-                ToolFinding(
-                    code="DIFFICULTY_UNABLE_TO_ASSESS",
-                    message=judge.assessment.unable_to_assess_reason,
-                )
-            )
-        else:
-            match = compare_difficulty(estimate, candidate.difficulty)
-            details["difficulty_match"] = match
-            details["decision"] = (
-                "matches"
-                if match == "matches"
-                else "revise"
-                if high_confidence
-                else "advisory_mismatch"
-            )
-            status = "failed" if match != "matches" and high_confidence else "passed"
-            if match != "matches":
-                findings.append(
-                    ToolFinding(
-                        code="DIFFICULTY_MISMATCH"
-                        if high_confidence
-                        else "DIFFICULTY_MISMATCH_LOW_CONFIDENCE",
-                        message=(
-                            "Typical instance estimated "
-                            f"{estimate}; "
-                            f"requested {candidate.difficulty}. "
-                            f"Confidence ({details['confidence_source']}) "
-                            f"{confidence:.2f}. " + reason
-                        ),
-                        field="difficulty",
-                    )
-                )
     return ToolEvidence(
         tool=TEMPLATE_DIFFICULTY_TOOL,
         version="1.2.0",
-        status=status,
-        findings=findings,
+        status=outcome.status,
+        findings=_findings(outcome, candidate.difficulty),
         details=details,
         duration_ms=(time.perf_counter() - started) * 1000,
     )

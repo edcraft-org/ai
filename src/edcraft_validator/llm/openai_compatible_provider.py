@@ -39,6 +39,7 @@ class OpenAICompatibleProvider:
         if provider not in {"openai", "soclaas"}:
             raise ValueError(f"Unsupported provider: {provider}")
         self.provider = provider
+        self._owns_client = client is None
         if client is None:
             api_key = _api_key(provider)
             if api_key is None:
@@ -92,6 +93,10 @@ class OpenAICompatibleProvider:
         if self.provider == "soclaas":
             settings["reasoning_effort"] = self._reasoning_effort or "provider_default"
         return settings
+
+    def close(self) -> None:
+        if self._owns_client:
+            self.client.close()
 
     def generate[ProposalT: BaseModel](
         self, request: StructuredGenerationRequest[ProposalT]

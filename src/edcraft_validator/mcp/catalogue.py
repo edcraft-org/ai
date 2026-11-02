@@ -3,6 +3,8 @@
 import copy
 from typing import Any, Protocol
 
+from edcraft_validator.validation.check_contracts import CheckDefinition
+
 
 class ToolCatalogueError(ValueError):
     """The MCP catalogue cannot supply tools for the selected domain."""
@@ -42,3 +44,22 @@ def resolve_domain_tools(
                 f"MCP tool {tool['name']!r} has an invalid output schema"
             )
     return resolved
+
+
+def check_definitions(definitions) -> dict[str, CheckDefinition]:
+    """Decode MCP metadata once, before the application executes its frozen plan."""
+    checks = {}
+    for definition in definitions:
+        if isinstance(definition, CheckDefinition):
+            checks[definition.name] = definition
+            continue
+        metadata = definition.get("_meta", {}).get("fastmcp", {})
+        name = definition["name"]
+        checks[name] = CheckDefinition(
+            name=name,
+            input_schema=definition["inputSchema"],
+            output_schema=definition.get("outputSchema"),
+            version=metadata.get("version"),
+            after_validation="stage:after-validation" in metadata.get("tags", []),
+        )
+    return checks

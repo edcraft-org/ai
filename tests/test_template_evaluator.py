@@ -1,6 +1,7 @@
 import json
 
 from authoring_helpers import RequestPendingTools
+from judge_helpers import proposal
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateProposal
 from edcraft_validator.domains.code.template_evaluator import (
@@ -13,29 +14,6 @@ from edcraft_validator.llm.llm_contracts import (
 )
 from edcraft_validator.llm.llm_errors import GenerationError
 from edcraft_validator.tools.python_execution import ExecutionResult
-
-
-def proposal(*, code: str = "def add(a, b):\n    return a + b") -> CodeTemplateProposal:
-    return CodeTemplateProposal.model_validate(
-        {
-            "question_template": "What does add({a}, {b}) return?",
-            "code": code,
-            "entry_function": "add",
-            "parameters": [
-                {"name": "a", "kind": "integer", "values": [1, 2]},
-                {"name": "b", "kind": "integer", "values": [3, 4]},
-            ],
-            "answer_target": "return_value",
-            "answer_expression": "a + b",
-            "distractors": [
-                {"expression": "a + b", "reason_template": "Repeats answer."},
-                {"expression": "a - b", "reason_template": "Subtracts."},
-                {"expression": "a + b + 1", "reason_template": "Adds one."},
-                {"expression": "a + b - 1", "reason_template": "Subtracts one."},
-                {"expression": "a + b + 2", "reason_template": "Adds two."},
-            ],
-        }
-    )
 
 
 class SumExecutor:

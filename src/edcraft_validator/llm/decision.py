@@ -11,16 +11,22 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from edcraft_validator.llm.judge_configuration import (
+    DEFAULT_RELEVANCE_THRESHOLD,
+    JudgeSettings,
+    configured_judge_provider,
+    load_judge_settings,
+)
+from edcraft_validator.llm.llm_contracts import supports_decisions
 from edcraft_validator.llm.usage import (
     ModelCallRecord,
     ModelUsageSummary,
     TokenUsage,
+    close_provider,
     summarize_usage,
 )
 
 LOCAL_RELEVANCE_MODEL = "Qwen/Qwen3-Reranker-0.6B"
-# Selected on 92 development pairs for x-test-3, not a calibrated probability.
-DEFAULT_RELEVANCE_THRESHOLD = 0.9223792980579683
 LOCAL_RELEVANCE_THRESHOLD = 0.0020295610011089593
 RELEVANCE_POLICY = (
     "Assess whether answering the question tests the learning objective. "
@@ -132,17 +138,12 @@ class QwenDecisionProvider:
 class ConfiguredDecisionProvider:
     """Use the same configured judge model as the difficulty cascade."""
 
-    def __init__(self):
-        from edcraft_validator.llm.judge_configuration import configured_judge_provider
-
-        self.delegate = configured_judge_provider()
+    def __init__(self, settings: JudgeSettings | None = None):
+        self.settings = settings if settings is not None else load_judge_settings()
+        self.delegate = configured_judge_provider(self.settings)
         self.provider, self.model = self.delegate.provider, self.delegate.model
-        self.threshold = float(
-            os.getenv("EDCRAFT_RELEVANCE_THRESHOLD", str(DEFAULT_RELEVANCE_THRESHOLD))
-        )
-        if not math.isfinite(self.threshold) or not 0 <= self.threshold <= 1:
-            raise ValueError("Relevance threshold must be in [0, 1]")
-        if not callable(getattr(self.delegate, "decide", None)):
+        self.threshold = self.settings.relevance_threshold
+        if not supports_decisions(self.delegate):
             raise ValueError("Provider does not support token-probability decisions")
         self.served_model = None
 
@@ -177,6 +178,9 @@ class ConfiguredDecisionProvider:
         from edcraft_validator.llm.forced_decision import decision_settings
 
         return decision_settings(self.delegate, ("yes", "no"))
+
+    def close(self):
+        close_provider(self.delegate)
 
 
 class DecisionReport(BaseModel):
@@ -220,8 +224,8 @@ async def measure_relevance(
     try:
         provider = provider_factory()
         report.provider, report.model = provider.provider, provider.model
-        if isinstance(provider, ConfiguredDecisionProvider):
-            report.provider_settings = provider.generation_settings()
+        settings = getattr(provider, "generation_settings", lambda: {})()
+        report.provider_settings = dict(settings)
         threshold = getattr(provider, "threshold", DEFAULT_RELEVANCE_THRESHOLD)
         if (
             type(threshold) not in {int, float}
@@ -232,7 +236,9 @@ async def measure_relevance(
         report.threshold = threshold
         call_started = time.perf_counter()
         async with asyncio.timeout(timeout_seconds):
-            score = await asyncio.to_thread(provider.score, request_text, question_text)
+            score = await asyncio.to_thread(
+                _execute_score, provider, request_text, question_text
+            )
         if (
             type(score) not in {int, float}
             or not math.isfinite(score)
@@ -255,7 +261,9 @@ async def measure_relevance(
             if call_started is not None
             else "RELEVANCE_CONFIGURATION_ERROR"
         )
-    if call_started is not None and isinstance(provider, ConfiguredDecisionProvider):
+    if call_started is None:
+        close_provider(provider)
+    if call_started is not None:
         usage = getattr(provider, "last_usage", None)
         if report.error_code == "RELEVANCE_TIMEOUT" or not isinstance(
             usage, TokenUsage
@@ -277,3 +285,10 @@ async def measure_relevance(
         report.usage = summarize_usage(report.model_calls)
     report.duration_ms = (time.perf_counter() - started) * 1000
     return report
+
+
+def _execute_score(provider, request_text, question_text):
+    try:
+        return provider.score(request_text, question_text)
+    finally:
+        close_provider(provider)

@@ -90,7 +90,7 @@ def worked_anchors(rubric: CodeDifficultyRubric) -> tuple[str, str, str]:
     return easy, medium, hard
 
 
-def runtime_instructions(rubric: CodeDifficultyRubric) -> str:
+def rubric_reference(rubric: CodeDifficultyRubric) -> str:
     dimensions = (
         rubric.text.split("| Dimension | Low | Moderate | High |", 1)[1]
         .split("### Execution and changing state", 1)[0]
@@ -102,6 +102,20 @@ def runtime_instructions(rubric: CodeDifficultyRubric) -> str:
         .strip()
     )
     anchors = worked_anchors(rubric)
+    return (
+        "Dimensions (unchanged):\n| Dimension | Low | Moderate | High |\n"
+        + dimensions
+        + "\n\nLevels (unchanged):\n| Level | Anchor description |\n"
+        + levels
+        + "\n\nExisting worked anchors, training material only:\n\n"
+        + "\n\n".join(
+            f"### {level}\n{anchor}"
+            for level, anchor in zip(("easy", "medium", "hard"), anchors, strict=True)
+        )
+    )
+
+
+def runtime_instructions(rubric: CodeDifficultyRubric) -> str:
     return (
         "Assess the complete concrete Python tracing MCQ independently. Your only "
         "task is difficulty assessment. Do not execute code, verify correctness "
@@ -129,16 +143,7 @@ def runtime_instructions(rubric: CodeDifficultyRubric) -> str:
         "unable_to_assess_reason. Do not invent absent code or inputs from options "
         "or guessed intentions. Missing learner data is not missing question data. "
         "Record other quality concerns separately. Return only the supplied JSON "
-        "response shape.\n\n"
-        "Dimensions (unchanged):\n| Dimension | Low | Moderate | High |\n"
-        + dimensions
-        + "\n\nLevels (unchanged):\n| Level | Anchor description |\n"
-        + levels
-        + "\n\nExisting worked anchors, training material only:\n\n"
-        + "\n\n".join(
-            f"### {level}\n{anchor}"
-            for level, anchor in zip(("easy", "medium", "hard"), anchors, strict=True)
-        )
+        "response shape.\n\n" + rubric_reference(rubric)
     )
 
 

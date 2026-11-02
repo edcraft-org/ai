@@ -4,9 +4,10 @@ import json
 
 import pytest
 from fastmcp import Client
+from judge_helpers import TemplateJudge, candidate
 from pydantic import ValidationError
 from test_authoring_loop import SEMANTIC, STRUCTURE, Executor, Provider
-from test_difficulty_tool import ForbiddenExecutor, assessment
+from test_difficulty_tool import ForbiddenExecutor
 from test_template_evaluator import proposal
 
 from edcraft_validator.application.template_workflow import TemplateApplication
@@ -25,57 +26,8 @@ from edcraft_validator.llm.llm_errors import (
     GenerationTimeoutError,
     GenerationTransportError,
 )
-from edcraft_validator.llm.usage import TokenUsage
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.server import create_validation_server
-
-
-def candidate():
-    return CodeDomain().build_candidate(
-        CodeTemplateRequest(prompt="Create an addition question", difficulty="easy"),
-        proposal(),
-    )
-
-
-class TemplateJudge:
-    provider, model = "scripted", "template-judge"
-
-    def __init__(self, estimate="easy", failure=None, confidence=0.95):
-        self.estimate, self.failure = estimate, failure
-        self.confidence = confidence
-        self.requests = []
-
-    def generation_settings(self):
-        return {"sampling": "scripted", "max_retries": 0}
-
-    def generate(self, request):
-        self.requests.append(request)
-        self.last_usage = TokenUsage(input_tokens=100, output_tokens=50)
-        if self.failure:
-            raise self.failure
-        value = assessment()
-        options = value.pop("option_evidence")
-        value.update(
-            estimated_difficulty=self.estimate,
-            confidence=self.confidence if self.estimate else 0,
-            domain_variation="All listed inputs need the same short reasoning.",
-            unable_to_assess_reason="Essential code missing."
-            if self.estimate is None
-            else None,
-            distractor_evidence={
-                f"D{i}": {k: v for k, v in options[0].items() if k != "option_id"}
-                for i in range(
-                    1,
-                    len(
-                        json.loads(request.messages[1]["content"])["template"][
-                            "distractors"
-                        ]
-                    )
-                    + 1,
-                )
-            },
-        )
-        return request.response_model.model_validate(value)
 
 
 async def test_template_tool_gets_full_domain_without_correctness_execution():

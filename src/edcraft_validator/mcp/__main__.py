@@ -1,6 +1,6 @@
 """Run the EdCraft validation MCP server over stdio."""
 
-from edcraft_validator.mcp.server import mcp
+from edcraft_validator.mcp.server import create_validation_server
 
 if __name__ == "__main__":
-    mcp.run()
+    create_validation_server().run()

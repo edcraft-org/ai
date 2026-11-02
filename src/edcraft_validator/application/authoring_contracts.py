@@ -3,12 +3,12 @@
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, SerializeAsAny
+from pydantic import BaseModel, ConfigDict, Field, SerializeAsAny
 
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.llm.llm_contracts import RecommendedCheck
 from edcraft_validator.llm.usage import ModelCallRecord, ModelUsageSummary
-from edcraft_validator.mcp.evidence import ToolEvidence, ToolFinding
+from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
 
 FailureStage = Literal[
     "configuration",
@@ -26,6 +26,30 @@ class AuthoringError(BaseModel):
 
     stage: FailureStage
     code: str
+
+
+class AuthoringProgress(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    phase: Literal["generating", "checking", "correcting", "finalizing"]
+    attempt: int = Field(ge=0)
+
+
+class DifficultyOutcome(BaseModel):
+    """Stable policy result shared by both assessment paths and the UI boundary."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    assessment_path: Literal["decision", "reasoning"]
+    estimated_difficulty: Literal["easy", "medium", "hard"] | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    confidence_source: Literal["first_token_label_mass", "self_reported"] | None = None
+    decision: Literal["matches", "revise", "advisory_mismatch", "unavailable"] = (
+        "unavailable"
+    )
+    status: Literal["passed", "failed", "error"] = "error"
+    reason: str = ""
+    error_code: str | None = None
 
 
 class CheckExecution(BaseModel):
@@ -100,6 +124,6 @@ class AuthoringResult(BaseModel):
 class AuthoringFailure(ValueError):
     """Compatibility wrapper failure, retaining the complete reviewable result."""
 
-    def __init__(self, result: AuthoringResult):
+    def __init__(self, result: AuthoringResult) -> None:
         super().__init__(result.reason or result.status)
         self.result = result

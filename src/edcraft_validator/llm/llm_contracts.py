@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, TypeGuard
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+if TYPE_CHECKING:
+    from edcraft_validator.llm.forced_decision import ClassDecision
 
 
 class RecommendedCheckArguments(BaseModel):
@@ -109,6 +112,19 @@ class ModelProvider(Protocol):
     def generate[ProposalT: BaseModel](
         self, request: StructuredGenerationRequest[ProposalT]
     ) -> ProposalT: ...
+
+
+class DecisionModelProvider(ModelProvider, Protocol):
+    """Optional classification capability with observed token probabilities."""
+
+    def decide(
+        self, messages: list[dict[str, Any]], labels: tuple[str, ...]
+    ) -> ClassDecision: ...
+
+
+def supports_decisions(provider: ModelProvider) -> TypeGuard[DecisionModelProvider]:
+    """Check the optional capability once at the adapter/session boundary."""
+    return callable(getattr(provider, "decide", None))
 
 
 class ToolCall(BaseModel):

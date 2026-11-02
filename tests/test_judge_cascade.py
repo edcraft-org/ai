@@ -7,6 +7,7 @@ import threading
 from types import SimpleNamespace as NS
 
 import pytest
+from judge_helpers import TemplateJudge, candidate
 
 from edcraft_validator.application.template_difficulty import assess_template_difficulty
 from edcraft_validator.domains.code.difficulty import load_code_difficulty_rubric
@@ -18,7 +19,6 @@ from edcraft_validator.llm.forced_decision import ClassDecision, decision_from_r
 from edcraft_validator.llm.llm_errors import GenerationResponseError
 from edcraft_validator.llm.openai_compatible_provider import SocLaasProvider
 from edcraft_validator.llm.usage import TokenUsage
-from tests.test_template_difficulty import TemplateJudge, candidate
 
 
 def classification(label="easy", confidence=0.7):
@@ -199,10 +199,11 @@ def test_wire_decision_disables_reasoning_and_retains_usage():
 def test_reasoning_call_overrides_author_settings_without_changing_them(monkeypatch):
     from dataclasses import replace
 
+    from judge_helpers import TemplateJudge
+
     from edcraft_validator.domains.code.template_difficulty import (
         build_template_difficulty_request,
     )
-    from tests.test_template_difficulty import TemplateJudge
 
     request = build_template_difficulty_request(
         candidate(), load_code_difficulty_rubric()

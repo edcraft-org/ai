@@ -1,11 +1,14 @@
 """Forced label decisions with first-token probability evidence and no rationale."""
 
 import math
+from functools import partial
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from edcraft_validator.llm.judging import run_judge
+from edcraft_validator.llm.llm_contracts import supports_decisions
 from edcraft_validator.llm.llm_errors import GenerationResponseError
+from edcraft_validator.llm.usage import close_provider
 
 DECISION_REQUEST_OPTIONS = {
     "temperature": 0,
@@ -90,33 +93,57 @@ def decision_from_response(response, labels):
         raise GenerationResponseError("Invalid decision response or logprobs") from exc
 
 
+class DecisionAdapter:
+    """Expose a decision-capable provider to the common measured judge runner."""
+
+    def __init__(self, provider_factory, labels):
+        self.delegate = provider_factory()
+        if not supports_decisions(self.delegate):
+            raise ValueError("Provider does not support token-probability decisions")
+        self.provider, self.model = self.delegate.provider, self.delegate.model
+        self.labels = labels
+
+    def generation_settings(self):
+        return decision_settings(self.delegate, self.labels)
+
+    @property
+    def last_usage(self):
+        return getattr(self.delegate, "last_usage", None)
+
+    def close(self):
+        close_provider(self.delegate)
+
+    def generate(self, request):
+        result = ClassDecision.model_validate(
+            self.delegate.decide(request.messages, self.labels).model_dump()
+        )
+        if set(result.distribution) != set(self.labels):
+            raise GenerationResponseError("Decision labels do not match request")
+        return result
+
+
 async def run_decision(request, *, labels, provider_factory, timeout_seconds):
-    # Adapt the optional decision capability to the existing judge runner so
-    # validation, timeouts, hashing and usage accounting have one implementation.
-    class DecisionAdapter:
-        def __init__(self):
-            self.delegate = provider_factory()
-            if not callable(getattr(self.delegate, "decide", None)):
-                raise ValueError(
-                    "Provider does not support token-probability decisions"
-                )
-            self.provider, self.model = self.delegate.provider, self.delegate.model
-
-        def generation_settings(self):
-            return decision_settings(self.delegate, labels)
-
-        @property
-        def last_usage(self):
-            return getattr(self.delegate, "last_usage", None)
-
-        def generate(self, request):
-            result = ClassDecision.model_validate(
-                self.delegate.decide(request.messages, labels).model_dump()
-            )
-            if set(result.distribution) != set(labels):
-                raise GenerationResponseError("Decision labels do not match request")
-            return result
-
     return await run_judge(
-        request, provider_factory=DecisionAdapter, timeout_seconds=timeout_seconds
+        request,
+        provider_factory=partial(DecisionAdapter, provider_factory, labels),
+        timeout_seconds=timeout_seconds,
     )
+
+
+class JudgeProviderSession:
+    """Fresh fallback transport; structured-only injected providers stay compatible."""
+
+    def __init__(self, factory):
+        self.factory = factory
+        self.first = None
+
+    def decision_provider(self):
+        if self.first is None:
+            self.first = self.factory()
+        return self.first
+
+    def reasoning_provider(self):
+        provider = self.decision_provider()
+        if supports_decisions(provider):
+            return self.factory()
+        return provider

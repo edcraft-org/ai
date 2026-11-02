@@ -1,5 +1,6 @@
 """Small, job-scoped records of application model calls and reported usage."""
 
+import logging
 import time
 from typing import Literal
 
@@ -109,3 +110,14 @@ class MeasuredProvider:
                     ),
                 )
             )
+
+
+def close_provider(provider):
+    """Close owned resources when supported, without changing the call verdict."""
+    close = getattr(provider, "close", None)
+    if not callable(close):
+        return
+    try:
+        close()
+    except Exception:
+        logging.getLogger(__name__).exception("Provider cleanup failed")

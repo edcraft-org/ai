@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
-from edcraft_validator.mcp.evidence import ToolEvidence
+from edcraft_validator.validation.check_contracts import ToolEvidence
 
 
 class DomainModule(Protocol):

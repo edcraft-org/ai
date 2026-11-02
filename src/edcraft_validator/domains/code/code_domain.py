@@ -26,7 +26,7 @@ from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     StructuredGenerationRequest,
 )
-from edcraft_validator.mcp.evidence import ToolEvidence
+from edcraft_validator.validation.check_contracts import ToolEvidence
 from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
 

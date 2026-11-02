@@ -9,6 +9,7 @@ from collections import Counter
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import TextIO
 
@@ -25,6 +26,7 @@ from edcraft_validator.llm.decision import (
     DEFAULT_RELEVANCE_THRESHOLD,
     ConfiguredDecisionProvider,
 )
+from edcraft_validator.llm.usage import close_provider
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = ROOT / "reference_sets/python_tracing/dataset.json"
@@ -179,6 +181,12 @@ async def evaluate(output: Path) -> dict:
     manifest_path = output.with_suffix(".manifest.json")
     summary_path = output.with_suffix(".summary.json")
     decision = ConfiguredDecisionProvider()
+    settings = getattr(decision, "settings", None)
+    decision_factory = (
+        partial(ConfiguredDecisionProvider, settings)
+        if settings is not None
+        else ConfiguredDecisionProvider
+    )
     manifest = {
         "protocol": "code-relevance-evaluation-v6-configured-decision",
         "relevance_tool_version": "2.0.0",
@@ -198,6 +206,7 @@ async def evaluate(output: Path) -> dict:
         "concurrency": 2,
         "cases": cases,
     }
+    close_provider(decision)
     output.parent.mkdir(parents=True, exist_ok=True)
     records = []
     semaphore = asyncio.Semaphore(2)
@@ -215,7 +224,7 @@ async def evaluate(output: Path) -> dict:
                 report = await review_code_question_relevance(
                     question,
                     CodeQuestionRequest.model_validate(case["request"]),
-                    decision_provider_factory=ConfiguredDecisionProvider,
+                    decision_provider_factory=decision_factory,
                 )
                 findings = []
                 if (

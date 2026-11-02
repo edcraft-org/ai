@@ -48,7 +48,7 @@ answer value is available from the option identified by `correct_option`.
 
 Keep question content, approved categories and dimension ratings, topics and
 splits fixed so evaluation results remain comparable. Git history records changes
-to this dataset. See the [evaluation statistics](../../docs/difficulty-glm-comparison-v0.3.md).
+to this dataset. See the [evaluation statistics](../../docs/evaluation-history.md#archived-v03-glm-and-qwen-comparison).
 Production MCP judging retains its v0.2 contract; the v0.3 reference assessment
 is a separate workflow.
 

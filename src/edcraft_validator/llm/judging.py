@@ -19,6 +19,7 @@ from edcraft_validator.llm.usage import (
     MeasuredProvider,
     ModelCallRecord,
     ModelUsageSummary,
+    close_provider,
     summarize_usage,
 )
 
@@ -66,7 +67,67 @@ async def run_judge[AssessmentT: BaseModel](
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError("judge timeout must be finite and positive")
     started = time.perf_counter()
-    report = JudgeRun[AssessmentT](
+    report = _new_run(request, timeout_seconds)
+    measured = None
+    provider = None
+    try:
+        provider = provider_factory()
+        report.provider, report.model = provider.provider, provider.model
+        report.provider_settings = provider.generation_settings()
+        if request.reasoning_effort is not None:
+            report.provider_settings["reasoning_effort"] = request.reasoning_effort
+        measured = MeasuredProvider(provider)
+    except Exception:
+        report.error_code = "JUDGE_CONFIGURATION_ERROR"
+        report.duration_ms = (time.perf_counter() - started) * 1000
+        close_provider(provider)
+        return report
+    call_started = time.perf_counter()
+    try:
+        async with asyncio.timeout(timeout_seconds):
+            assessment = await asyncio.to_thread(_execute_judge, measured, request)
+        report.assessment = request.response_model.model_validate_json(
+            assessment.model_dump_json()
+        )
+        report.status = "completed"
+    except TimeoutError:
+        report.error_code = "JUDGE_TIMEOUT"
+        report.model_calls = [
+            ModelCallRecord(
+                operation="judging",
+                duration_ms=(time.perf_counter() - call_started) * 1000,
+                error="timeout",
+                usage_unavailable_reason="Judge deadline expired; usage is unknown",
+            )
+        ]
+    except GenerationError as exc:
+        report.error_code = f"JUDGE_{exc.category.upper()}"
+        if isinstance(exc.__cause__, ValidationError):
+            report.validation_errors = validation_findings(exc.__cause__)
+    except ValidationError as exc:
+        report.error_code = "JUDGE_INVALID_RESPONSE"
+        report.validation_errors = validation_findings(exc)
+    except (AttributeError, TypeError, ValueError):
+        report.error_code = "JUDGE_INVALID_RESPONSE"
+    except Exception:
+        report.error_code = "JUDGE_INTERNAL_ERROR"
+    if not report.model_calls:
+        report.model_calls = [call.model_copy(deep=True) for call in measured.calls]
+    if report.status == "error" and report.model_calls:
+        report.model_calls[-1].error = report.error_code
+    report.usage = summarize_usage(report.model_calls)
+    report.duration_ms = (time.perf_counter() - started) * 1000
+    return report
+
+
+def failed_judge(request, code, timeout_seconds):
+    report = _new_run(request, timeout_seconds)
+    report.error_code = code
+    return report
+
+
+def _new_run(request, timeout_seconds):
+    return JudgeRun[request.response_model](
         status="error",
         prompt_version=request.prompt_version,
         timeout_seconds=timeout_seconds,
@@ -84,55 +145,6 @@ async def run_judge[AssessmentT: BaseModel](
             ).encode()
         ).hexdigest(),
     )
-    measured = None
-    try:
-        provider = provider_factory()
-        report.provider, report.model = provider.provider, provider.model
-        report.provider_settings = provider.generation_settings()
-        if request.reasoning_effort is not None:
-            report.provider_settings["reasoning_effort"] = request.reasoning_effort
-        measured = MeasuredProvider(provider)
-    except Exception:
-        report.error_code = "JUDGE_CONFIGURATION_ERROR"
-    else:
-        call_started = time.perf_counter()
-        try:
-            async with asyncio.timeout(timeout_seconds):
-                assessment = await asyncio.to_thread(measured.judge, request)
-            # Check even custom/injected providers against the domain's schema.
-            report.assessment = request.response_model.model_validate_json(
-                assessment.model_dump_json()
-            )
-            report.status = "completed"
-        except TimeoutError:
-            report.error_code = "JUDGE_TIMEOUT"
-            # Snapshot only; a late completion must never mutate this report.
-            report.model_calls = [
-                ModelCallRecord(
-                    operation="judging",
-                    duration_ms=(time.perf_counter() - call_started) * 1000,
-                    error="timeout",
-                    usage_unavailable_reason="Judge deadline expired; usage is unknown",
-                )
-            ]
-        except GenerationError as exc:
-            report.error_code = f"JUDGE_{exc.category.upper()}"
-            if isinstance(exc.__cause__, ValidationError):
-                report.validation_errors = validation_findings(exc.__cause__)
-        except ValidationError as exc:
-            report.error_code = "JUDGE_INVALID_RESPONSE"
-            report.validation_errors = validation_findings(exc)
-        except (AttributeError, TypeError, ValueError):
-            report.error_code = "JUDGE_INVALID_RESPONSE"
-        except Exception:
-            report.error_code = "JUDGE_INTERNAL_ERROR"
-        if not report.model_calls:
-            report.model_calls = [call.model_copy(deep=True) for call in measured.calls]
-        if report.status == "error" and report.model_calls:
-            report.model_calls[-1].error = report.error_code
-    report.usage = summarize_usage(report.model_calls)
-    report.duration_ms = (time.perf_counter() - started) * 1000
-    return report
 
 
 def validation_findings(error: ValidationError) -> list[JudgeValidationFinding]:
@@ -146,3 +158,11 @@ def validation_findings(error: ValidationError) -> list[JudgeValidationFinding]:
             include_input=False, include_context=False, include_url=False
         )
     ]
+
+
+def _execute_judge(measured, request):
+    # Ownership stays in the worker, including after the caller's deadline.
+    try:
+        return measured.judge(request)
+    finally:
+        close_provider(measured.delegate)
