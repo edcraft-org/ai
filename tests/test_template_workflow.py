@@ -5,7 +5,10 @@ from authoring_helpers import RequestPendingTools
 from fastmcp import FastMCP
 from pydantic import BaseModel
 
-from edcraft_validator.application.authoring_contracts import AuthoringFailure
+from edcraft_validator.application.authoring_contracts import (
+    AuthoringFailure,
+    GenerationAttempt,
+)
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.domains.code.code_domain import CodeDomain
@@ -509,3 +512,36 @@ def test_non_code_full_revision_enforces_domain_constraints_before_checking(
         assert "original request maximum" in result.reason
         assert checked_values == [-1]
         assert len(result.attempts) == 1 and result.artifact is None
+
+
+def test_run_checks_accepts_legacy_raw_catalogue_definitions() -> None:
+    attempt = GenerationAttempt(number=1, candidate={}, pending=["positive"])
+    definition = {
+        "name": "positive",
+        "description": "Check positivity",
+        "inputSchema": {"type": "object"},
+        "outputSchema": {"type": "object"},
+        "_meta": {"fastmcp": {"version": "1"}},
+    }
+
+    class Domain:
+        def tool_bindings(self, request, candidate, name):
+            return {}
+
+    class Client:
+        def call_tool(self, name, arguments, *, version=None):
+            return {"tool": name, "version": version, "status": "passed"}
+
+    TemplateApplication._run_checks(
+        attempt,
+        ["positive"],
+        {"positive": definition},
+        {"positive": "{}"},
+        Client(),
+        domain=Domain(),
+        request=None,
+        candidate=None,
+    )
+
+    assert attempt.complete and attempt.passed
+    assert attempt.executions[0].evidence.status == "passed"

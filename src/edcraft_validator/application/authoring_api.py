@@ -132,10 +132,10 @@ def summarize_authoring(report: AuthoringResult) -> AuthoringSummary:
                 else [],
             )
         )
-        if evidence is not None and "outcome" in evidence.details:
+        if evidence is not None and "difficulty_outcome" in evidence.details:
             try:
                 difficulty = DifficultyOutcome.model_validate(
-                    evidence.details["outcome"]
+                    evidence.details["difficulty_outcome"]
                 )
             except ValidationError:
                 invalid_outcome = True

@@ -20,6 +20,12 @@ SocLaas uses `SOCLAAS_API_KEY` and `SOCLAAS_BASE_URL`; its structured output def
 to strict JSON schema. Ollama must be running locally; thinking defaults to off.
 See [.env.example](.env.example) for transport settings and output budgets.
 
+For your own OpenAI-compatible endpoint, select `--provider openai` and configure
+`OPENAI_BASE_URL`, `OPENAI_API_KEY` and `OPENAI_MODEL`. Set
+`OPENAI_RESPONSE_FORMAT=json_object` if it lacks strict JSON schema support;
+responses still undergo local schema validation. Token budgets and reasoning
+effort are optional settings in `.env.example`, subject to endpoint support.
+
 Difficulty decisions, reasoning fallback and relevance share one judge model,
 independently of the authoring model:
 

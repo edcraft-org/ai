@@ -13,6 +13,7 @@ metadata. CLI/server/worker boundaries construct dependencies and settings.
 | Domain behavior interface | `domains/domain_contract.py` |
 | Application-facing tool interface | `application/ports.py` |
 | Authoring orchestration and attempt records | `application/template_workflow.py`, `authoring_contracts.py` |
+| Code authoring evaluation and report aggregation | `application/code_evaluation.py` |
 | Typed public summaries and worker adapter | `application/authoring_api.py` |
 | Code proposal, binding and finalization | `domains/code/code_domain.py`, schemas and candidate builder |
 | Blinded difficulty prompts and rubric components | `domains/code/template_difficulty.py`, `difficulty_request.py` |
@@ -51,7 +52,8 @@ The shared provider/model are independent of the selected authoring provider.
 | Reasoning error or exhausted deadline | Error; never a pass. |
 
 Token confidence and self-reported confidence are different, uncalibrated measures.
-`details.outcome` is the typed final policy result. The existing flat fields remain
+`details.difficulty_outcome` is the typed final policy result. The explicit key
+avoids interpreting other domains' `outcome` fields as difficulty. Flat fields remain
 for compatibility. `screen` and `judge` retain detailed stage reports; aggregate
 usage includes both calls. Both paths bind the same exact template/rubric identity.
 
@@ -107,6 +109,17 @@ communication through the provider registry. Avoid new branches for domain names
 inside shared orchestration. Keep deterministic reuse independent of model/tool
 services. Python features are explicitly bounded; preserve worker isolation,
 resource budgets, schema checks and rejection of unsupported code.
+
+Register each domain's checking tools explicitly in `mcp/server.py` with
+`domain:<name>` tags. A registry coverage test checks that every selectable domain
+has discoverable tools. Evaluation belongs to the application layer; the former
+`domains/code/template_evaluator.py` path retains compatibility exports only.
+
+OpenAI-compatible endpoints reuse the `openai` adapter with `OPENAI_BASE_URL` and
+`OPENAI_MODEL`. `OPENAI_RESPONSE_FORMAT`, `OPENAI_GENERATION_MAX_TOKENS`,
+`OPENAI_TOOL_MAX_TOKENS` and `OPENAI_REASONING_EFFORT` configure existing transport
+options without adding another provider. These settings do not guarantee support
+for decision logprobs, reasoning controls or native tool calls on that endpoint.
 
 Use shared fixture modules rather than importing fixtures from test modules.
 Regression tests cover fresh-process imports, interchangeable provider accounting,

@@ -2,7 +2,7 @@
 
 import threading
 
-from judge_helpers import AdditionExecutor, TemplateAuthor
+from judge_helpers import AdditionExecutor, TemplateAuthor, TemplateJudge, candidate
 
 from edcraft_validator.application.authoring_api import (
     AuthoringJobCommand,
@@ -13,10 +13,15 @@ from edcraft_validator.application.authoring_api import (
 from edcraft_validator.application.authoring_contracts import (
     AuthoringError,
     AuthoringResult,
+    CheckExecution,
+    DifficultyOutcome,
+    GenerationAttempt,
 )
+from edcraft_validator.application.template_difficulty import assess_template_difficulty
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.server import create_validation_server
+from edcraft_validator.validation.check_contracts import ToolEvidence
 
 
 def command():
@@ -135,21 +140,9 @@ def test_internal_diagnostic_exception_is_not_a_public_error_message():
     )
 
 
-def test_malformed_optional_assessment_does_not_break_public_response():
-    from edcraft_validator.application.authoring_contracts import (
-        CheckExecution,
-        GenerationAttempt,
-    )
-    from edcraft_validator.validation.check_contracts import ToolEvidence
-
-    evidence = ToolEvidence(
-        tool="custom_check",
-        version="1",
-        status="passed",
-        details={"outcome": {"PRIVATE_VALUE": "invalid"}},
-    )
-    report = AuthoringResult(
-        status="needs_review",
+def report_with_evidence(evidence, *, status="needs_review"):
+    return AuthoringResult(
+        status=status,
         provider="test",
         model="test",
         domain="code",
@@ -165,7 +158,7 @@ def test_malformed_optional_assessment_does_not_break_public_response():
                 executions=[
                     CheckExecution(
                         call_id="check",
-                        tool="custom_check",
+                        tool=evidence.tool,
                         requested_arguments={},
                         evidence=evidence,
                     )
@@ -173,6 +166,41 @@ def test_malformed_optional_assessment_does_not_break_public_response():
             )
         ],
     )
-    summary = summarize_authoring(report)
+
+
+def test_malformed_optional_assessment_does_not_break_public_response():
+    evidence = ToolEvidence(
+        tool="custom_check",
+        version="1",
+        status="passed",
+        details={"difficulty_outcome": {"PRIVATE_VALUE": "invalid"}},
+    )
+    summary = summarize_authoring(report_with_evidence(evidence))
     assert summary.difficulty is None and summary.error.code == "CHECK_REPORT_INVALID"
     assert "PRIVATE" not in summary.model_dump_json()
+
+
+def test_unrelated_tool_outcome_is_not_a_difficulty_or_error():
+    evidence = ToolEvidence(
+        tool="custom_check",
+        version="1",
+        status="passed",
+        details={"outcome": {"PRIVATE_VALUE": "invalid"}},
+    )
+    summary = summarize_authoring(report_with_evidence(evidence))
+    assert summary.difficulty is None and summary.error is None
+    assert summary.checks[0].status == "passed"
+    assert "PRIVATE" not in summary.model_dump_json()
+
+
+async def test_difficulty_evidence_summary_uses_the_producer_key():
+    evidence = await assess_template_difficulty(
+        candidate(), provider_factory=TemplateJudge
+    )
+    summary = summarize_authoring(report_with_evidence(evidence, status="checked"))
+    assert isinstance(summary.difficulty, DifficultyOutcome)
+    assert summary.difficulty.estimated_difficulty == "easy"
+    assert summary.difficulty == DifficultyOutcome.model_validate(
+        evidence.details["difficulty_outcome"]
+    )
+    assert summary.error is None

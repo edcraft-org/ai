@@ -3,11 +3,11 @@ import json
 from authoring_helpers import RequestPendingTools
 from judge_helpers import proposal
 
-from edcraft_validator.domains.code.code_schemas import CodeTemplateProposal
-from edcraft_validator.domains.code.template_evaluator import (
+from edcraft_validator.application.code_evaluation import (
     TemplateEvaluationReport,
     TemplateEvaluator,
 )
+from edcraft_validator.domains.code.code_schemas import CodeTemplateProposal
 from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     RecommendedCheck,

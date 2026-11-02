@@ -30,7 +30,6 @@ from edcraft_validator.llm.llm_contracts import (
     CheckPlanResponse,
     ModelProvider,
     PlannedGenerationResponse,
-    StructuredGenerationRequest,
     ToolCatalogueSnapshot,
 )
 from edcraft_validator.llm.llm_errors import (
@@ -49,7 +48,7 @@ from edcraft_validator.mcp.catalogue import (
     check_definitions,
     resolve_domain_tools,
 )
-from edcraft_validator.validation.check_contracts import CheckDefinition, ToolEvidence
+from edcraft_validator.validation.check_contracts import ToolEvidence
 
 REVISION_POLICY = "full-candidate-v1"
 
@@ -74,7 +73,6 @@ class _AuthoringJob:
     validating: bool
     max_attempts: int
     stage: str = "configuration"
-    generation_duration_ms: float = 0
     observer: Callable[[AuthoringProgress], None] | None = None
 
     def generate(self, operation, *args, phase="generating", **kwargs):
@@ -84,7 +82,8 @@ class _AuthoringJob:
         try:
             return operation(*args, **kwargs)
         finally:
-            self.generation_duration_ms += (time.perf_counter() - started) * 1000
+            elapsed_ms = (time.perf_counter() - started) * 1000
+            self.result.generation_duration_ms += elapsed_ms
 
     def notify(self, phase):
         if self.observer is None:
@@ -95,15 +94,6 @@ class _AuthoringJob:
             self.observer(progress)
         except Exception:
             logging.getLogger(__name__).exception("Authoring progress observer failed")
-
-
-@dataclass
-class _PreparedPlan:
-    generation_request: StructuredGenerationRequest
-    response: CheckPlanResponse
-    names: tuple[str, ...]
-    arguments: dict[str, str]
-    definitions: dict[str, CheckDefinition]
 
 
 class TemplateApplication:
@@ -220,67 +210,63 @@ class TemplateApplication:
                 getattr(provider, "generation_settings", lambda: {})()
             )
             with self._tool_connection() as client:
-                plan = self._prepare_plan(
+                return self._prepare_and_run(
                     job, initial_candidate, client, on_catalogue_resolved
                 )
-                return self._run_attempts(job, plan, initial_candidate, client)
         except Exception as exc:
             self._record_failure(result, exc, job.stage)
             return result
         finally:
             result.duration_ms = (time.perf_counter() - started) * 1000
-            result.generation_duration_ms = job.generation_duration_ms
             result.model_calls = measured.calls
             result.usage = summarize_usage(measured.calls)
 
-    def _prepare_plan(self, job, initial_candidate, client, observer):
+    def _prepare_and_run(self, job, initial_candidate, client, observer):
         tools = resolve_domain_tools(job.domain.name, self.tool_catalogue or client)
         snapshot = ToolCatalogueSnapshot.from_definitions(tools)
         job.result.tool_catalogue = snapshot.summaries()
         if observer is not None:
             observer(snapshot)
-        request = (
+        generation_request = (
             job.domain.validation_request(initial_candidate)
             if job.validating
             else job.domain.generation_request(job.request)
         )
-        request = replace(
-            request, offered_tool_names=snapshot.names, tool_catalogue=snapshot
+        generation_request = replace(
+            generation_request,
+            offered_tool_names=snapshot.names,
+            tool_catalogue=snapshot,
         )
-        job.result.prompt_version = request.prompt_version
-        response = job.generate(_generate_author, job.provider, request)
-        self._validate_response(response, request, plan_only=job.validating)
+        job.result.prompt_version = generation_request.prompt_version
+        response = job.generate(_generate_author, job.provider, generation_request)
+        self._validate_response(response, generation_request, plan_only=job.validating)
         response = response.model_copy(deep=True)
         names = tuple(check.name for check in response.checks)
         job.result.fixed_plan = list(names)
         job.result.check_plan = [
             check.model_copy(deep=True) for check in response.checks
         ]
-        return _PreparedPlan(
-            request,
-            response,
-            names,
-            {check.name: json.dumps(check.arguments) for check in response.checks},
-            check_definitions(snapshot.definitions()),
-        )
+        definitions = check_definitions(tools)
+        planned_arguments = {
+            check.name: json.dumps(check.arguments) for check in response.checks
+        }
 
-    def _run_attempts(self, job, plan, initial_candidate, client):
         for number in range(1, job.max_attempts + 1):
             job.stage = "template_building"
             candidate = (
                 initial_candidate
                 if job.validating
-                else job.domain.build_candidate(job.request, plan.response.proposal)
+                else job.domain.build_candidate(job.request, response.proposal)
             )
-            attempt = self._build_attempt(number, candidate, plan.names)
+            attempt = self._build_attempt(number, candidate, names)
             job.result.attempts.append(attempt)
             job.stage = "checking"
             job.notify("checking")
             self._run_checks(
                 attempt,
-                plan.names,
-                plan.definitions,
-                plan.arguments,
+                names,
+                definitions,
+                planned_arguments,
                 client,
                 domain=job.domain,
                 request=job.request,
@@ -289,22 +275,13 @@ class TemplateApplication:
             if not self._should_revise(attempt, number, job.max_attempts):
                 job.stage = "finalization"
                 job.notify("finalizing")
-                return self._finish_attempt(
-                    job.result,
-                    attempt,
-                    candidate,
-                    domain=job.domain,
-                    provider=job.provider,
-                    validating=job.validating,
-                    provider_settings=job.result.provider_settings,
-                    generation_duration_ms=job.generation_duration_ms,
-                )
-            plan.response = job.generate(
+                return self._finish_attempt(job, attempt, candidate)
+            response = job.generate(
                 self._revise_proposal,
-                plan.generation_request,
-                plan.response,
+                generation_request,
+                response,
                 attempt,
-                plan.names,
+                names,
                 job.provider,
                 author_request=job.result.request,
                 remaining_revisions=job.max_attempts - number,
@@ -335,11 +312,10 @@ class TemplateApplication:
 
     @staticmethod
     def _build_attempt(number, candidate, plan) -> GenerationAttempt:
-        """Record the exact candidate that this attempt will check."""
-        payload = candidate.model_dump(mode="json")
+        """Record the exact candidate; also used by offline research runners."""
         return GenerationAttempt(
             number=number,
-            candidate=payload,
+            candidate=candidate.model_dump(mode="json"),
             pending=list(plan),
         )
 
@@ -437,24 +413,15 @@ class TemplateApplication:
         return response
 
     @staticmethod
-    def _finish_attempt(
-        result,
-        attempt,
-        candidate,
-        *,
-        domain,
-        provider,
-        validating,
-        provider_settings,
-        generation_duration_ms,
-    ) -> AuthoringResult:
+    def _finish_attempt(job, attempt, candidate) -> AuthoringResult:
         """Return the final verdict and package a reusable artifact when possible."""
+        result = job.result
         # Evidence determines the verdict; no acknowledgement inference is needed.
         if not attempt.passed:
             result.status = "needs_review"
             result.reason = (
                 "Selected checks did not pass"
-                if validating
+                if job.validating
                 else "Template checking stopped without all selected checks passing"
             )
             return result
@@ -465,7 +432,7 @@ class TemplateApplication:
             if execution.evidence is not None
         ]
         try:
-            artifact = domain.finalize_checked_template(candidate, evidence)
+            artifact = job.domain.finalize_checked_template(candidate, evidence)
         except ValueError as exc:
             result.status = "needs_review"
             result.reason = f"Selected checks passed; artifact unavailable: {exc}"
@@ -477,13 +444,13 @@ class TemplateApplication:
             raise TypeError("Domain returned no shared validated artifact")
 
         provenance = TemplateAuthoringProvenance(
-            provider=provider.provider,
-            model=provider.model,
-            provider_settings=provider_settings,
-            domain=domain.name,
+            provider=job.provider.provider,
+            model=job.provider.model,
+            provider_settings=result.provider_settings,
+            domain=job.domain.name,
             base_prompt_version=result.prompt_version,
             generated_at=result.generated_at,
-            generation_duration_ms=generation_duration_ms,
+            generation_duration_ms=result.generation_duration_ms,
         )
         result.artifact = artifact.model_copy(
             update={"artifact_id": uuid.uuid4().hex, "authoring": provenance}
@@ -497,8 +464,8 @@ class TemplateApplication:
         ]
         return result
 
-    @classmethod
-    def _validate_response(cls, response, request, *, plan_only=False):
+    @staticmethod
+    def _validate_response(response, request, *, plan_only=False):
         expected = CheckPlanResponse if plan_only else PlannedGenerationResponse
         if not isinstance(response, expected) or (
             plan_only and isinstance(response, PlannedGenerationResponse)
@@ -508,9 +475,13 @@ class TemplateApplication:
                 if plan_only
                 else "generation must return a proposal and recommended checks"
             )
-        cls._validate_recommended_checks(
-            response, offered_tool_names=request.offered_tool_names
+        unknown = sorted(
+            {check.name for check in response.checks} - set(request.offered_tool_names)
         )
+        if unknown:
+            raise GenerationSchemaError(
+                "model recommended checks that were not offered: " + ", ".join(unknown)
+            )
         # Do not rely on the provider's wire-format support or its parser.
         wire_model = constrained_check_plan(
             type(response), request.offered_tool_names, request.check_argument_models
@@ -545,7 +516,7 @@ class TemplateApplication:
         request,
         candidate,
     ):
-        # Accept existing research callers that pass the original catalogue snapshot.
+        # Accept existing research callers that pass raw catalogue definitions.
         definitions = check_definitions(definitions.values())
         deferred = {name for name in plan if definitions[name].after_validation}
         ordered = [name for name in plan if name not in deferred] + [
@@ -624,19 +595,6 @@ class TemplateApplication:
             execution.error = f"Schema validation at {path}: {exc.message}"
         except Exception as exc:
             execution.error = f"{type(exc).__name__}: {exc}"
-
-    @staticmethod
-    def _validate_recommended_checks(
-        response: PlannedGenerationResponse,
-        *,
-        offered_tool_names: tuple[str, ...],
-    ) -> None:
-        offered = set(offered_tool_names)
-        unknown = sorted({check.name for check in response.checks} - offered)
-        if unknown:
-            raise GenerationSchemaError(
-                "model recommended checks that were not offered: " + ", ".join(unknown)
-            )
 
     def generate_question(
         self, validated: ValidatedTemplateArtifact, *, domain: DomainModule, seed: int

@@ -4,7 +4,7 @@ import copy
 import json
 
 import pytest
-from test_template_evaluator import proposal
+from judge_helpers import proposal
 
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.domains.code.code_domain import CodeDomain

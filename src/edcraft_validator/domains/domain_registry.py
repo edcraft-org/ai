@@ -16,9 +16,10 @@ def available_domains() -> tuple[str, ...]:
 
 def create_domain(name: str) -> DomainModule:
     try:
-        return _DOMAIN_FACTORIES[name]()
+        factory = _DOMAIN_FACTORIES[name]
     except KeyError as exc:
         supported = ", ".join(available_domains())
         raise ValueError(
             f"Unsupported domain {name!r}; choose one of: {supported}"
         ) from exc
+    return factory()

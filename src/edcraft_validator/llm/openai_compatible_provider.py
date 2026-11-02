@@ -43,7 +43,7 @@ class OpenAICompatibleProvider:
         if client is None:
             api_key = _api_key(provider)
             if api_key is None:
-                variable = _api_key_variable(provider)
+                variable = _variable(provider, "API_KEY")
                 raise OpenAIGenerationError(f"{variable} is not configured")
             client = OpenAI(
                 api_key=api_key,
@@ -54,22 +54,15 @@ class OpenAICompatibleProvider:
         self.client = client
         self.model = model or _model(provider)
         self.last_usage = TokenUsage()
-        self._response_format = (
-            _soclaas_response_format() if provider == "soclaas" else "json_schema"
+        soclaas = provider == "soclaas"
+        self._response_format = _response_format(provider)
+        self._generation_max_tokens = _positive_int_setting(
+            provider, "GENERATION_MAX_TOKENS", 16384 if soclaas else None
         )
-        self._generation_max_tokens = (
-            _positive_int_setting("SOCLAAS_GENERATION_MAX_TOKENS", 16384)
-            if provider == "soclaas"
-            else None
+        self._tool_max_tokens = _positive_int_setting(
+            provider, "TOOL_MAX_TOKENS", 4096 if soclaas else None
         )
-        self._tool_max_tokens = (
-            _positive_int_setting("SOCLAAS_TOOL_MAX_TOKENS", 4096)
-            if provider == "soclaas"
-            else None
-        )
-        self._reasoning_effort = (
-            _soclaas_reasoning_effort() if provider == "soclaas" else None
-        )
+        self._reasoning_effort = _reasoning_effort(provider)
 
     def generation_settings(self) -> dict[str, Any]:
         # Sampling parameters are deliberately omitted from API requests. Do not
@@ -90,8 +83,10 @@ class OpenAICompatibleProvider:
             settings["tool_max_tokens"] = self._tool_max_tokens
         if self._generation_max_tokens is not None:
             settings["generation_max_tokens"] = self._generation_max_tokens
-        if self.provider == "soclaas":
-            settings["reasoning_effort"] = self._reasoning_effort or "provider_default"
+        if self._reasoning_effort is not None:
+            settings["reasoning_effort"] = self._reasoning_effort
+        elif self.provider == "soclaas":
+            settings["reasoning_effort"] = "provider_default"
         return settings
 
     def close(self) -> None:
@@ -267,8 +262,13 @@ class OpenAICompatibleProvider:
         )
 
 
+def _variable(provider: str, name: str) -> str:
+    """Both providers configure the same options under their own prefix."""
+    return f"{provider.upper()}_{name}"
+
+
 def _api_key(provider: str) -> str | None:
-    variable = _api_key_variable(provider)
+    variable = _variable(provider, "API_KEY")
     raw_value = os.getenv(variable)
     if raw_value is None:
         return None
@@ -283,39 +283,20 @@ def _api_key(provider: str) -> str | None:
     return value
 
 
-def _api_key_variable(provider: str) -> str:
-    return {
-        "soclaas": "SOCLAAS_API_KEY",
-        "openai": "OPENAI_API_KEY",
-    }[provider]
-
-
 def _base_url(provider: str) -> str | None:
-    value = {
-        "soclaas": os.getenv("SOCLAAS_BASE_URL"),
-        "openai": os.getenv("OPENAI_BASE_URL"),
-    }[provider]
+    value = os.getenv(_variable(provider, "BASE_URL"))
     return value.strip() if value else None
 
 
 def _model(provider: str) -> str:
-    variable = {
-        "soclaas": "SOCLAAS_MODEL",
-        "openai": "OPENAI_MODEL",
-    }[provider]
-    configured = os.getenv(variable, "").strip()
+    configured = os.getenv(_variable(provider, "MODEL"), "").strip()
     if configured:
         return configured
-    if provider == "openai":
-        return DEFAULT_OPENAI_MODEL
-    return DEFAULT_SOCLAAS_MODEL
+    return DEFAULT_OPENAI_MODEL if provider == "openai" else DEFAULT_SOCLAAS_MODEL
 
 
 def _timeout_seconds(provider: str) -> float:
-    variable = {
-        "soclaas": "SOCLAAS_TIMEOUT_SECONDS",
-        "openai": "OPENAI_TIMEOUT_SECONDS",
-    }[provider]
+    variable = _variable(provider, "TIMEOUT_SECONDS")
     raw_value = os.getenv(variable, "300" if provider == "soclaas" else "120").strip()
     try:
         value = float(raw_value)
@@ -327,10 +308,7 @@ def _timeout_seconds(provider: str) -> float:
 
 
 def _max_retries(provider: str) -> int:
-    variable = {
-        "soclaas": "SOCLAAS_MAX_RETRIES",
-        "openai": "OPENAI_MAX_RETRIES",
-    }[provider]
+    variable = _variable(provider, "MAX_RETRIES")
     raw_value = os.getenv(variable, "1").strip()
     try:
         value = int(raw_value)
@@ -341,10 +319,15 @@ def _max_retries(provider: str) -> int:
     return value
 
 
-def _positive_int_setting(variable: str, default: int) -> int:
-    raw = os.getenv(variable, str(default)).strip()
+def _positive_int_setting(
+    provider: str, name: str, default: int | None = None
+) -> int | None:
+    variable = _variable(provider, name)
+    raw = os.getenv(variable)
+    if raw is None:
+        return default
     try:
-        value = int(raw)
+        value = int(raw.strip())
     except ValueError as exc:
         raise OpenAIGenerationError(f"{variable} must be an integer") from exc
     if value < 1:
@@ -352,17 +335,17 @@ def _positive_int_setting(variable: str, default: int) -> int:
     return value
 
 
-def _soclaas_response_format() -> str:
-    value = os.getenv("SOCLAAS_RESPONSE_FORMAT", "json_schema").strip()
+def _response_format(provider: str) -> str:
+    variable = _variable(provider, "RESPONSE_FORMAT")
+    value = os.getenv(variable, "json_schema").strip()
     if value not in {"json_object", "json_schema"}:
-        raise OpenAIGenerationError(
-            "SOCLAAS_RESPONSE_FORMAT must be json_object or json_schema"
-        )
+        raise OpenAIGenerationError(f"{variable} must be json_object or json_schema")
     return value
 
 
-def _soclaas_reasoning_effort() -> str | None:
-    value = os.getenv("SOCLAAS_REASONING_EFFORT", "default").strip() or "default"
+def _reasoning_effort(provider: str) -> str | None:
+    value = os.getenv(_variable(provider, "REASONING_EFFORT"), "default")
+    value = value.strip() or "default"
     return None if value == "default" else value
 
 

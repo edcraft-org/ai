@@ -170,7 +170,7 @@ def _build_evidence(candidate, rubric, settings, screen, reasoning, outcome, sta
         "assessment_conditions_version": rubric.assessment_conditions_version,
         "screen": screen.model_dump(mode="json"),
         "judge": judge.model_dump(mode="json"),
-        "outcome": outcome.model_dump(mode="json"),
+        "difficulty_outcome": outcome.model_dump(mode="json"),
         "usage": summarize_usage(calls).model_dump(mode="json"),
         "model_calls": [call.model_dump(mode="json") for call in calls],
         # Retain the existing flat fields while clients migrate to the typed outcome.

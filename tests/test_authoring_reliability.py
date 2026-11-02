@@ -5,10 +5,9 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from judge_helpers import TemplateJudge, proposal
 from pydantic import ValidationError
 from test_authoring_loop import Executor, Provider, RecordingClient, run
-from test_template_difficulty import TemplateJudge
-from test_template_evaluator import proposal
 
 from edcraft_validator.application.template_workflow import _generate_author
 from edcraft_validator.domains.code.code_domain import CodeDomain

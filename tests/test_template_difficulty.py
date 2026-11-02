@@ -4,11 +4,10 @@ import json
 
 import pytest
 from fastmcp import Client
-from judge_helpers import TemplateJudge, candidate
+from judge_helpers import TemplateJudge, candidate, proposal
 from pydantic import ValidationError
 from test_authoring_loop import SEMANTIC, STRUCTURE, Executor, Provider
 from test_difficulty_tool import ForbiddenExecutor
-from test_template_evaluator import proposal
 
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.domains.code.code_domain import CodeDomain

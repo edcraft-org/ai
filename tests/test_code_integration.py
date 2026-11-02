@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from authoring_helpers import RequestPendingTools, SelectSemanticCheck
 
+from edcraft_validator.application.code_evaluation import TemplateEvaluator
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import (
@@ -12,7 +13,6 @@ from edcraft_validator.domains.code.code_schemas import (
     ValidatedCodeTemplate,
 )
 from edcraft_validator.domains.code.question_generator import generate_code_question
-from edcraft_validator.domains.code.template_evaluator import TemplateEvaluator
 from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     RecommendedCheck,
