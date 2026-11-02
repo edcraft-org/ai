@@ -1,11 +1,32 @@
 # Evaluation results
 
-The issue 40 baseline below uses the current model-selected checking workflow.
-Earlier milestones and provider experiments are historical context and should
-not be treated as its current pass rates.
+The records below describe their tested revisions. Earlier milestones and
+provider experiments are historical context, not current production pass rates.
 
 Historical records may use `beginner`, `intermediate`, and `advanced`. The current
 labels are `easy`, `medium`, and `hard`.
+
+## Shared judge model and difficulty cascade: 2 November 2026
+
+Authoring now uses `decision-cascade-v1`: accept a forced difficulty decision at
+token confidence >=0.70; otherwise use the same configured model for structured
+reasoning. Accepted decision mismatches request author revision. Reasoning keeps
+the existing 0.80 self-confidence policy. Relevance also uses the shared model,
+with reasoning disabled and a model-specific configurable cutoff.
+
+The complete scripted suite passed (717 passed, 3 opt-in live tests skipped),
+with 140 focused tests rerun after correcting decision-settings metadata. Ruff
+lint/format checks, dependency lock verification and diff whitespace checks passed.
+A separate live compatibility smoke used `x-test-3` for all three calls: the toy
+template took the decision path (easy, token confidence 0.99249), an explicit
+structured reasoning call completed, and integer-addition relevance was assessed
+(score 0.98743, threshold 0.92238). The reasoning call took about 14.41 seconds;
+relevance took about 0.334 seconds. These isolated observations establish endpoint
+compatibility, not accuracy, calibrated confidence or general latency claims.
+
+Local smoke records are retained under
+`.artifacts/judge-cascade-smoke-2026-11-02/`. Earlier frozen evaluations remain
+unchanged; the prior concrete-question cascade used a different reasoning model.
 
 ## Difficulty reference and GLM selection: 22 October 2026
 

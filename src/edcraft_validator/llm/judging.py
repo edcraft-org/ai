@@ -77,6 +77,7 @@ async def run_judge[AssessmentT: BaseModel](
                     "schema": request.response_model.model_json_schema(),
                     "schema_name": request.schema_name,
                     "prompt_version": request.prompt_version,
+                    "reasoning_effort": request.reasoning_effort,
                 },
                 sort_keys=True,
                 allow_nan=False,
@@ -88,6 +89,8 @@ async def run_judge[AssessmentT: BaseModel](
         provider = provider_factory()
         report.provider, report.model = provider.provider, provider.model
         report.provider_settings = provider.generation_settings()
+        if request.reasoning_effort is not None:
+            report.provider_settings["reasoning_effort"] = request.reasoning_effort
         measured = MeasuredProvider(provider)
     except Exception:
         report.error_code = "JUDGE_CONFIGURATION_ERROR"

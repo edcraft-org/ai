@@ -92,6 +92,8 @@ class StructuredGenerationRequest[ProposalT: BaseModel]:
     offered_tool_names: tuple[str, ...] = ()
     tool_catalogue: ToolCatalogueSnapshot | None = None
     check_argument_models: tuple[tuple[str, type[BaseModel]], ...] = ()
+    # Per-call override, so judge reasoning does not change authoring settings.
+    reasoning_effort: str | None = None
 
 
 class ModelProvider(Protocol):

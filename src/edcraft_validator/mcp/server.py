@@ -5,8 +5,8 @@ import math
 from fastmcp import FastMCP
 
 from edcraft_validator.llm.decision import (
+    ConfiguredDecisionProvider,
     DecisionProviderFactory,
-    QwenDecisionProvider,
 )
 from edcraft_validator.llm.judging import (
     DEFAULT_JUDGE_TIMEOUT_SECONDS,
@@ -68,7 +68,8 @@ def create_validation_server(
     )
     register_relevance_tools(
         server,
-        decision_provider_factory=decision_provider_factory or QwenDecisionProvider,
+        decision_provider_factory=decision_provider_factory
+        or ConfiguredDecisionProvider,
         relevance_timeout_seconds=relevance_timeout_seconds,
     )
     return server

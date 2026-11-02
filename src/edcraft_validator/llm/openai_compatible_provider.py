@@ -136,8 +136,9 @@ class OpenAICompatibleProvider:
                 "messages": _wire_messages(messages),
                 "response_format": response_format,
             }
-            if self._reasoning_effort is not None:
-                kwargs["reasoning_effort"] = self._reasoning_effort
+            effort = request.reasoning_effort or self._reasoning_effort
+            if effort is not None:
+                kwargs["reasoning_effort"] = effort
             if self._generation_max_tokens is not None:
                 kwargs["max_tokens"] = self._generation_max_tokens
             response = self.client.chat.completions.create(**kwargs)
@@ -181,6 +182,27 @@ class OpenAICompatibleProvider:
             raise OpenAIGenerationError(
                 f"{self.provider} failed to generate a structured result: {exc}"
             ) from exc
+
+    def decide(self, messages, labels):
+        """One forced classification call; no reasoning or structured generation."""
+        from edcraft_validator.llm.forced_decision import (
+            DECISION_REQUEST_OPTIONS,
+            decision_from_response,
+        )
+
+        self.last_usage = TokenUsage()
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=_wire_messages(messages),
+                **DECISION_REQUEST_OPTIONS,
+            )
+            self._record_usage(response)
+            return decision_from_response(response, labels)
+        except APITimeoutError as exc:
+            raise GenerationTimeoutError("Decision request timed out") from exc
+        except (APIConnectionError, APIStatusError) as exc:
+            raise GenerationTransportError("Decision request failed") from exc
 
     def tool_turn(self, messages, tools) -> ModelTurn:
         """Translate native function calls; execution remains application-owned."""

@@ -75,11 +75,12 @@ collects results before requesting a revision. The initial plan includes a nonem
 `required` feature list when `code_require_features` is selected; other code checks
 use empty model-owned arguments.
 The template difficulty check runs after correctness passes, using the selected
-distractors and the declared parameter distribution. SocLaas
-estimates the typical instance. A mismatch at confidence 0.80 or higher feeds
-back to the authoring model for up to three template revisions; a lower-confidence
-mismatch returns a warning with both labels. Confidence is a provisional self-estimate. A failed judge response ends the job without
-retrying the check. Configure SocLaas even when OpenAI authors the template.
+distractors and declared parameter distribution. The configured judge model first
+classifies the typical instance with reasoning disabled, then reasons only when
+the decision confidence is below 0.70 or the decision fails. Accepted decision
+mismatches request author revision. Reasoning mismatches use the existing 0.80
+self-confidence policy; see [difficulty checking](docs/difficulty-judging.md).
+Configure the shared judge independently of the authoring model.
 
 ## Create a template
 
@@ -204,43 +205,56 @@ already include general recipes and are checked using the new format.
 
 Imports, file access, networking, and other unsupported Python features
 are rejected. The template retains its requested difficulty label. When selected,
-the SocLaas difficulty check compares that label with an advisory estimate for a
+the configured difficulty check compares that label with an advisory estimate for a
 typical instance; it does not establish measured learner difficulty.
 
 The explicitly invoked [`assess_code_difficulty` MCP tool](docs/difficulty-judging.md)
 adds a separate provisional LLM assessment of a complete concrete MCQ. It records
 one closest difficulty label, reasons, model usage and comparison in a single
 assessment call. Failed checks return errors without correction or reassessment.
-Difficulty checks use SocLaas only, with no provider fallback.
+The standalone tool is retained for evaluations and the older concrete-question
+helper; normal reusable-template authoring uses `code_assess_template_difficulty`.
 
-The explicitly invoked `assess_relevance` MCP tool uses local
-`Qwen/Qwen3-Reranker-0.6B` to assess whether a question exercises an author request.
-It returns an advisory `decision.relevant`, raw `decision.score`, and threshold
-(`0.0020295610011089593`). The score is a yes/no token score, not a calibrated
-probability. No embedding API or generated answer is used. Correctness,
-requirements and difficulty remain separate checks.
+Difficulty authoring and relevance share one configured judge model:
 
-Install the local inference extra and download weights once:
-
-```bash
-uv sync --locked --extra relevance
-uv run --extra relevance hf download Qwen/Qwen3-Reranker-0.6B
+```env
+EDCRAFT_JUDGE_PROVIDER=soclaas
+EDCRAFT_JUDGE_MODEL=x-test-3
+EDCRAFT_JUDGE_REASONING_EFFORT=medium
+EDCRAFT_RELEVANCE_THRESHOLD=0.9223792980579683
 ```
 
-Inference reads existing local files and sends no question text outside the
-process. Set `EDCRAFT_RELEVANCE_MODEL_PATH` to a downloaded copy of that model,
-or leave it unset to use the Hugging Face cache. Weights are loaded lazily once
-per process and reused; MPS/CUDA use FP16, with FP32 CPU fallback. Allow roughly
-3 GB of memory for the model and inference. Inputs over 4,096 tokens are rejected
-rather than truncated. Missing dependencies/weights and inference timeouts return
-errors with no relevance decision. The default application deadline is 35 seconds;
-a timeout does not stop an already running local inference thread.
+These settings are independent of the authoring provider/model. The old
+`EDCRAFT_DIFFICULTY_PROVIDER` and `EDCRAFT_DIFFICULTY_MODEL` settings are replaced
+by `EDCRAFT_JUDGE_PROVIDER` and `EDCRAFT_JUDGE_MODEL`. Selection uses the existing
+provider registry. Forced decisions require an endpoint that supports first-token
+log probabilities and disabling reasoning (implemented by the OpenAI-compatible
+adapters); unsupported relevance configurations return an error, not a guess.
 
-This replaces the v1 cosine report: relevance reports/tool definitions are v2,
-`similarity` becomes `decision`, and embedding dimensions/usage are removed.
-Injected callers now use `decision_provider_factory` and
-`relevance_timeout_seconds`. The cutoff comes from a small chemistry pilot;
-Python accuracy and combined-request behavior remain unvalidated.
+The template difficulty check first requests only `easy`, `medium` or `hard`,
+with reasoning disabled. It accepts the label when normalized first-token class
+mass is at least 0.70; a mismatch requests author revision. Lower confidence,
+invalid decisions or unavailable probability data invoke the **same model** once
+with reasoning enabled and the full structured rubric. Reasoning mismatches use
+the existing 0.80 self-reported-confidence revision policy. Both confidence measures
+are provisional and uncalibrated. The complete cascade shares the existing judge
+deadline, retains both call records and runs only after correctness checks pass.
+No model calls are added to deterministic template expansion.
+
+`assess_relevance` uses the same configured model with reasoning disabled and a
+forced yes/no response. It reports advisory `decision.relevant`, normalized
+`decision.score`, the effective threshold, served model, usage and latency.
+Errors produce no decision. It does not invoke the difficulty reasoning fallback.
+The default cutoff was fitted on development pairs for `x-test-3`; changing the
+model requires checking/recalibrating that cutoff. It is not a calibrated
+probability of educational alignment. Inputs go to the configured model endpoint.
+
+The local `QwenDecisionProvider` remains available explicitly for reproducing
+older evaluations, with its original cutoff and optional `relevance` dependencies;
+it is no longer the server default. Relevance reports retain their v2 interface
+with additional usage metadata. The same-model template cascade is a new
+production policy: the earlier cascade evaluation used concrete questions and a
+different reasoning model, so its accuracy is not evidence for this configuration.
 
 Python callers use `domains/code/relevance.py` to render code, exact inputs,
 wording, target and all options while excluding the correct-option designation.

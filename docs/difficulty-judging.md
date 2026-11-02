@@ -15,7 +15,7 @@ directly, without asking the authoring model for a native tool call. If correctn
 fails, difficulty stays pending with a skip reason and no judge call is spent on
 that attempt.
 
-SocLaas assesses the **typical instance** under the effective sampling policy.
+The configured judge model assesses the **typical instance** under the effective sampling policy.
 Parameter values are sampled independently and uniformly; generation may resample
 recipe/option collisions. Property-based checks do not prove correctness for every
 variant. The checker reports
@@ -25,34 +25,57 @@ three worked anchors are reused; no evaluation examples are added. Closed keys
 D1, D2, ... cover every selected distractor. Template ID, topic and requested level
 are hidden from the judge and the level is compared afterwards.
 
-Template tool version 1.1.0 returns a bounded numeric `confidence` self-estimate.
-Policy `confidence-gated-v1` uses a provisional threshold of 0.80:
+Template tool version 1.2.0 uses policy `decision-cascade-v1`:
 
-| Result | Evidence and workflow |
+1. Classify the exact template with reasoning disabled, using only one of
+   `easy`, `medium`, `hard`. Normalize the first content token's observed top-k
+   log-probability mass over these labels. Missing label mass is zero, so this
+   conditional distribution is not a full-vocabulary probability or calibrated
+   accuracy. Requested difficulty, template identity and topic are withheld.
+2. Accept the decision at confidence **>=0.70**. A label mismatch fails the check
+   and requests author revision, including decisions between 0.70 and 0.80.
+3. For lower confidence or a failed/invalid decision, call the **same configured
+   model** once with reasoning enabled and the existing full structured template
+   prompt. Do not show the classifier label to the reasoning judge.
+
+| Final result | Evidence and workflow |
 | --- | --- |
-| Estimate matches target | `passed`, decision `matches`. |
-| Mismatch, confidence >= 0.80 | `failed`, decision `revise`; feedback goes to the authoring model. |
-| Mismatch, confidence < 0.80 | `passed` with `DIFFICULTY_MISMATCH_LOW_CONFIDENCE`, decision `advisory_mismatch`. |
-| Missing essential information | `failed`; no difficulty assessment is established. |
-| Judge failure | `error`; no automatic check retry. |
+| Accepted decision matches target | `passed`, `matches`; no reasoning call. |
+| Accepted decision differs | `failed`, `revise`. |
+| Reasoning estimate matches | `passed`, `matches`. |
+| Reasoning mismatch, self-reported confidence >=0.80 | `failed`, `revise`. |
+| Reasoning mismatch, confidence <0.80 | `passed`, `advisory_mismatch`, with warning. |
+| Missing essential information in reasoning assessment | `failed`. |
+| Reasoning failure or exhausted cascade deadline | `error`; never a pass. |
 
-A passing policy decision does **not** necessarily mean a difficulty match. Inspect
-`difficulty_match`, `decision` and `AuthoringResult.warnings`. Low-confidence
-mismatches preserve the requested label and expose the estimate, confidence and
-warning in both the report and saved artifact; clients should show both labels.
-Confidence is not calibrated accuracy (`confidence_calibrated: false`). Judge
-reasoning, usage, request/rubric hashes and the exact template hash remain in
-`details`. The finalizer binds the assessment to the exact saved eligible domain.
-This tool does not execute code or check correctness, even when called independently.
+The 0.70 routing threshold uses token probabilities. The 0.80 revision threshold
+uses the reasoning judge's self-reported confidence. Neither is calibrated.
+`details.screen` retains the decision, distribution, served model, request hash,
+settings and usage. `details.judge` retains the final decision or structured
+reasoning report; `estimated_difficulty`, `confidence`, `confidence_source` and
+`assessment_path` identify the final result without inventing rationale for a
+one-word decision. Aggregated `usage` and `model_calls` include both calls.
+The rubric and exact template hash bind both paths to the checked content.
+A passing policy decision does not necessarily establish a difficulty match.
 
-Authoring permits the initial proposal plus up to three **template** revisions.
-The original request, target and selected check names stay fixed. High-confidence mismatch feedback
-can change code, parameter domains, wording and distractor recipes coherently; the
-new template must pass correctness again before another difficulty assessment.
-A judge error ends the job without a check retry or template revision. `validate`
-checks once without revision. `generate` remains deterministic local expansion
-and makes no model calls. The selected author provider performs generation and
-revision; every difficulty assessment uses SocLaas.
+Authoring permits the initial proposal plus up to three template revisions. A
+mismatch can change code, parameter domains, wording and distractors coherently;
+each replacement passes correctness again before difficulty checking. The request,
+target and selected checks remain fixed. A failed reasoning call ends checking
+without retrying the check or revising the template. `validate` never revises;
+`generate` remains deterministic local expansion and makes no model calls.
+
+Decision and reasoning calls share the existing 310-second application budget;
+the decision gets at most 35 seconds. The reasoning call uses only the remaining
+time. A deadline stops waiting rather than cancelling a synchronous provider
+thread. Fallback uses a fresh provider instance, preventing late decision usage
+from contaminating reasoning records. Structured-only injected judge providers
+can still be used; their unavailable decision capability is recorded and they
+receive one structured assessment call.
+
+The prior live cascade experiment assessed concrete questions with `x-test-3`
+followed by `x-test-1`. It did not evaluate this same-model template policy.
+Existing frozen evaluation artifacts remain unchanged.
 
 The author receives the original level definitions and a short description of the
 four dimensions, without added worked examples. Its wire format uses individual
@@ -75,21 +98,32 @@ each invocation assesses its supplied template exactly once.
 
 ## Standalone concrete-question API
 
-`assess_code_difficulty` v2 assesses one concrete Python tracing MCQ using SocLaas.
+`assess_code_difficulty` v2 assesses one concrete Python tracing MCQ using the configured model.
 It returns one closest `easy`, `medium` or `hard` label under the original rubric's
 manual, untimed tracing conditions. It is advisory: it does not execute code,
 verify the answer or distractors, repair the question, or establish learner difficulty.
 
 ## Configuration
 
-Set `SOCLAAS_API_KEY` and `SOCLAAS_BASE_URL` in the environment. The default
-model is GLM5.3 Flash (`x-test-1`); `SOCLAAS_MODEL` overrides it.
-SocLaas is the default difficulty provider. A different
-`EDCRAFT_DIFFICULTY_PROVIDER` is rejected; there is no provider fallback.
-`EDCRAFT_DIFFICULTY_MODEL` optionally overrides the SocLaas model.
-Strict JSON-schema output is the default. Set `SOCLAAS_MAX_RETRIES=0` to disable
-SDK transport retries. Each tool invocation makes one assessment attempt and
-returns failures immediately; it sends no correction feedback.
+Set `EDCRAFT_JUDGE_PROVIDER` and `EDCRAFT_JUDGE_MODEL` to choose one model for
+both difficulty stages and relevance. Defaults are `soclaas` and `x-test-3`.
+The provider registry supplies endpoint/credential configuration; for SocLaas set
+`SOCLAAS_API_KEY` and `SOCLAAS_BASE_URL`. These judge settings are independent of
+`SOCLAAS_MODEL` or the selected authoring model. Old `EDCRAFT_DIFFICULTY_*`
+configuration has been replaced by the shared `EDCRAFT_JUDGE_*` names.
+
+`EDCRAFT_JUDGE_REASONING_EFFORT` defaults to `medium` and accepts `low`, `medium`,
+`high` or `xhigh`. Only the fallback applies it; forced decisions always request
+`reasoning_effort=none`, temperature 0, max_tokens 16, logprobs and top_logprobs 20.
+OpenAI-compatible adapters implement this decision capability. Other injected
+adapters must implement `decide(messages, labels)` to provide token decisions.
+Do not substitute an LLM's self-reported confidence for missing logprobs.
+
+Strict JSON-schema output remains the reasoning default. Set provider SDK retries
+to zero for exactly one HTTP attempt per stage. The cascade never switches models
+or providers automatically. The standalone concrete-question tool is preserved
+for evaluation and the older authoring helper; it still runs one structured
+assessment, outside the reusable-template cascade.
 
 ```bash
 uv run python -m edcraft_validator.mcp
@@ -159,7 +193,7 @@ revision. A failed assessment ends the job immediately. Every question version,
 author failure and assessment remains in the returned result.
 
 The caller supplies the author provider factory and a connected MCP client.
-`configured_difficulty_provider` supplies the SocLaas factory when authoring should
-also use SocLaas. Author and tool deadlines are configurable. The upper bound is
+`configured_difficulty_provider` supplies the shared configured judge model;
+author generation can use a different provider/model. Author and tool deadlines are configurable. The upper bound is
 four author calls plus four single-call assessments. Neither operation invokes
 correctness tools; applications combine their independent results when needed.

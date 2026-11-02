@@ -335,6 +335,23 @@ def test_thinking_budget_exhaustion_has_actionable_error(monkeypatch):
         OllamaProvider().generate(generation_request())
 
 
+def test_judge_override_enables_thinking_without_changing_author_default(monkeypatch):
+    import io
+
+    captured = []
+
+    def fake_urlopen(request, timeout):
+        captured.append(json.loads(request.data))
+        return io.BytesIO(b'{"message":{"content":"ok"},"done_reason":"stop"}')
+
+    monkeypatch.setenv("OLLAMA_THINK", "false")
+    monkeypatch.setattr("edcraft_validator.llm.ollama_provider.urlopen", fake_urlopen)
+    provider = OllamaProvider()
+    provider._ollama_request([], {}, reasoning_effort="medium")
+    assert captured[0]["think"] is True
+    assert provider.generation_settings()["think"] is False
+
+
 def test_ollama_reports_connection_reset_as_transport_failure(monkeypatch) -> None:
     def reset(request, timeout):
         raise ConnectionResetError("peer restarted")

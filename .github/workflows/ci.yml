@@ -45,7 +45,9 @@ jobs:
       SOCLAAS_TIMEOUT_SECONDS: "300"
       SOCLAAS_MAX_RETRIES: "0"
       SOCLAAS_RESPONSE_FORMAT: json_schema
-      EDCRAFT_DIFFICULTY_PROVIDER: soclaas
+      EDCRAFT_JUDGE_PROVIDER: soclaas
+      EDCRAFT_JUDGE_MODEL: x-test-3
+      EDCRAFT_JUDGE_REASONING_EFFORT: medium
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6

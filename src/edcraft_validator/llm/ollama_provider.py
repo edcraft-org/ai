@@ -62,6 +62,11 @@ class OllamaProvider:
             content = self._ollama_request(
                 generation_messages(request),
                 wire_model.model_json_schema(),
+                **(
+                    {"reasoning_effort": request.reasoning_effort}
+                    if request.reasoning_effort is not None
+                    else {}
+                ),
             )
             if not content:
                 raise GenerationResponseError("Ollama returned an empty response")
@@ -79,7 +84,11 @@ class OllamaProvider:
             ) from exc
 
     def _ollama_request(
-        self, messages: list[dict[str, str]], schema: dict[str, object]
+        self,
+        messages: list[dict[str, str]],
+        schema: dict[str, object],
+        *,
+        reasoning_effort: str | None = None,
     ) -> str:
         # Ollama's format constrains JSON syntax; the prompt also needs to show
         # the field meanings, especially when a revision uses a different schema.
@@ -93,7 +102,9 @@ class OllamaProvider:
                 ),
             }
         ]
-        return self._chat(messages, schema=schema)["content"]
+        return self._chat(
+            messages, schema=schema, think=True if reasoning_effort else None
+        )["content"]
 
     def tool_turn(self, messages, tools) -> ModelTurn:
         self.last_usage = TokenUsage()
@@ -115,7 +126,7 @@ class OllamaProvider:
                 "Ollama returned an invalid tool turn"
             ) from exc
 
-    def _chat(self, messages, *, schema=None, tools=None):
+    def _chat(self, messages, *, schema=None, tools=None, think=None):
         base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
         native_url = base_url.removesuffix("/v1").rstrip("/") + "/api/chat"
         native_messages = copy.deepcopy(messages)
@@ -134,8 +145,9 @@ class OllamaProvider:
             "stream": False,
             "options": self._options,
         }
-        if self._think is not None:
-            payload["think"] = self._think
+        effective_think = self._think if think is None else think
+        if effective_think is not None:
+            payload["think"] = effective_think
         if schema is not None:
             payload["format"] = schema
         if tools:

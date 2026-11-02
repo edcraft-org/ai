@@ -23,7 +23,7 @@ All paths below are under `src/edcraft_validator/`.
 | Question generation | `domains/code/question_generator.py`, expressions and rendering | Local expansion from saved answer and distractor recipes. |
 | Python tools | `tools/python_analysis.py`, `tools/python_execution.py`, `tools/python_worker.py` | Supported syntax and batched tracing. |
 | Advisory difficulty | `mcp/difficulty_tools.py`, `application/code_difficulty.py`, `domains/code/difficulty.py`, `llm/judging.py` | Template difficulty and standalone concrete-MCQ judging, independent of correctness. |
-| Shared relevance | `relevance_contracts.py`, `application/relevance.py`, `mcp/relevance_tools.py`, `llm/decision.py` | Domain-independent local alignment decision; no correctness, requirements or difficulty dependency. |
+| Shared relevance | `relevance_contracts.py`, `application/relevance.py`, `mcp/relevance_tools.py`, `llm/decision.py` | Domain-independent configured model alignment decision; no correctness, requirements or difficulty dependency. |
 | Python relevance adapter and review | `domains/code/relevance.py`, `application/code_relevance.py` | Complete learner-facing rendering and caller-side collection of independent reports. |
 
 ## Shared relevance and domain responsibilities
@@ -33,10 +33,12 @@ All paths below are under `src/edcraft_validator/`.
 author's fixed check catalogue. Its input contains only `author_request` and
 `question_text`. Empty text, extra fields and texts exceeding 200,000 characters
 are rejected; line endings and surrounding whitespace are normalized. The service
-runs one local Qwen yes/no forward pass and records exact texts, input identity,
-model, raw score, threshold, relevance decision, duration and errors. The model is
-loaded lazily and reused under a process lock. Errors contain no relevance decision.
-A completed assessment is advisory; its score is not a calibrated probability.
+runs one forced yes/no call through the shared configured judge model, with
+reasoning disabled. It records exact texts, input identity, selected and served
+model, raw score, effective threshold, usage, duration and errors. Errors contain
+no relevance decision. The cutoff is model-specific and the score is not a
+calibrated probability. The local Qwen adapter remains an explicit historical
+baseline. Default server construction loads no model or credentials.
 
 The shared service has no domain or MCP dependencies. The Python adapter renders
 all learner-facing question fields except `correct_option`. Changing only the
@@ -273,16 +275,19 @@ revisions; a failed assessment ends the job immediately. See the
 
 `code_assess_template_difficulty` has `domain:code`, `quality:code` and
 `stage:after-validation` tags. The author selects it; the application calls it after
-correctness checks pass. `application/template_difficulty.py` owns its single
-SocLaas call; `domains/code/template_difficulty.py` owns the template prompt and
-required per-recipe evidence schema. It judges the typical instance across the
-declared parameter distribution, with generation resampling cheap option collisions.
+correctness checks pass. `application/template_difficulty.py` owns a forced
+three-label decision followed, only at confidence <0.70 or decision failure, by a
+structured reasoning assessment using the same configured model. The domain owns
+both prompts and hides the requested difficulty, identity and topic. Both stages
+assess the typical instance across the declared parameter distribution.
 The property-based answer check tests a fixed recipe subset across its samples;
 no complete-domain answer table or collision-exclusion pool is retained.
-The single-call judge reports numeric self-confidence. At confidence >= 0.80 a
-mismatch fails; below it, a mismatch passes policy with explicit warnings in the
-report and artifact. This threshold is provisional and confidence uncalibrated. The existing concrete-question API remains
-available separately and is not used for template authoring.
+Accepted decision mismatches request revision; reasoning mismatches retain the
+0.80 self-confidence gate. Both confidence sources are provisional and explicitly
+identified. Usage includes both calls, within one judge deadline. The standalone
+concrete-question API remains available for evaluations and the older helper.
+Shared host settings are `EDCRAFT_JUDGE_PROVIDER`, `EDCRAFT_JUDGE_MODEL`,
+`EDCRAFT_JUDGE_REASONING_EFFORT` and `EDCRAFT_RELEVANCE_THRESHOLD`.
 
 OpenAI and SocLaas project offered check names into a finite literal choice in
 the planning wire schema. The adapter validates that schema locally and returns

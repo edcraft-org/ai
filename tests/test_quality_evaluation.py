@@ -61,7 +61,7 @@ async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreem
         pytest.fail("Relevance evaluation must not start another judge call")
 
     monkeypatch.setattr(code_difficulty, "run_judge", forbidden)
-    monkeypatch.setattr(evaluation, "QwenDecisionProvider", PartialDecisions)
+    monkeypatch.setattr(evaluation, "ConfiguredDecisionProvider", PartialDecisions)
     before = evaluation.DATASET.read_bytes()
     output = tmp_path / "review.jsonl"
     result = await evaluation.evaluate(output)
@@ -79,7 +79,7 @@ async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreem
         json.loads(before), json.loads(evaluation.CONTROLS.read_text())
     )
     assert "judge" not in manifest and manifest["new_judge_calls"] == 0
-    assert manifest["protocol"] == "code-relevance-evaluation-v5-decision"
+    assert manifest["protocol"] == "code-relevance-evaluation-v6-configured-decision"
     assert "difficulty_report_sha256" not in manifest
     assert result == json.loads(output.with_suffix(".summary.json").read_text())
     assert evaluation.DATASET.read_bytes() == before
@@ -156,7 +156,7 @@ def test_concurrent_run_cannot_replace_the_winning_manifest(monkeypatch, tmp_pat
         local.name = name
         return asyncio.run(evaluation.evaluate(output))
 
-    monkeypatch.setattr(evaluation, "QwenDecisionProvider", RacingDecisions)
+    monkeypatch.setattr(evaluation, "ConfiguredDecisionProvider", RacingDecisions)
     monkeypatch.setattr(Path, "open", observed_open)
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(invoke, "first-run")
@@ -182,7 +182,7 @@ async def test_output_collision_preserves_existing_files_and_rolls_back_reservat
     output = tmp_path / "review.jsonl"
     existing = output.with_suffix(occupied_suffix)
     existing.write_bytes(b"prior evaluation evidence\n")
-    monkeypatch.setattr(evaluation, "QwenDecisionProvider", Decisions)
+    monkeypatch.setattr(evaluation, "ConfiguredDecisionProvider", Decisions)
     with pytest.raises(FileExistsError):
         await evaluation.evaluate(output)
     assert list(tmp_path.iterdir()) == [existing]
@@ -216,7 +216,7 @@ def test_cli_checks_held_out_measurements_and_preserves_expected_control_failure
         return report
 
     output = tmp_path / "review.jsonl"
-    monkeypatch.setattr(evaluation, "QwenDecisionProvider", Decisions)
+    monkeypatch.setattr(evaluation, "ConfiguredDecisionProvider", Decisions)
     monkeypatch.setattr(evaluation, "review_code_question_relevance", assess)
     monkeypatch.setattr(sys, "argv", ["review", "--output", str(output)])
     assert evaluation.main() == (0 if section is None else 2)

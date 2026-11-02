@@ -21,17 +21,19 @@ def register_relevance_tools(
             "readOnlyHint": True,
             "destructiveHint": False,
             "idempotentHint": False,
-            "openWorldHint": False,
+            "openWorldHint": True,
         },
         description=(
             "Assess semantic alignment between an original author request and a "
-            "complete textual question, using local Qwen3-Reranker-0.6B. Supply "
+            "complete textual question, using the host-configured judge model "
+            "with reasoning disabled. Supply "
             "all learner-facing text. Returns an advisory yes/no decision, raw "
             "yes/no score and pilot-derived threshold. The score is not a "
-            "calibrated probability. No embedding API, text generation, code "
+            "calibrated probability. No embedding API, code "
             "execution or difficulty judge is used. Consumes no other assessment "
-            "reports. Errors have no relevance decision. Model files must already "
-            "be downloaded; relevance inputs remain local. Pilot chemistry "
+            "reports. Errors have no relevance decision. Inputs are sent to the "
+            "configured "
+            "model endpoint and may incur cost. Pilot chemistry "
             "results do not establish accuracy in every domain."
         ),
     )

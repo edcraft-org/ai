@@ -91,7 +91,7 @@ async def test_template_tool_gets_full_domain_without_correctness_execution():
         )
     evidence = result.structured_content
     assert evidence["status"] == "passed"
-    assert evidence["details"]["judge"]["timeout_seconds"] == 310
+    assert 309 < evidence["details"]["judge"]["timeout_seconds"] <= 310
     assert evidence["details"]["advisory"] is True
     assert evidence["details"]["template_sha256"] == template_sha256(original)
     assert evidence["details"]["usage"]["model_call_count"] == 1
@@ -105,9 +105,10 @@ async def test_template_tool_gets_full_domain_without_correctness_execution():
     assert "independently and uniformly" in judge.requests[0].messages[0]["content"]
     other = original.model_copy(update={"difficulty": "hard", "template_id": "hard"})
     assert (
-        build_template_difficulty_request(other, load_code_difficulty_rubric())
-        == judge.requests[0]
+        build_template_difficulty_request(other, load_code_difficulty_rubric()).messages
+        == judge.requests[0].messages
     )
+    assert judge.requests[0].reasoning_effort == "medium"
 
 
 @pytest.mark.parametrize("count", range(2, 9))

@@ -18,6 +18,7 @@ from edcraft_validator.domains.code.difficulty_request import (
     OptionExplanation,
     runtime_instructions,
 )
+from edcraft_validator.llm.forced_decision import ClassDecision
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
 
 TEMPLATE_DIFFICULTY_PROMPT_VERSION = "code-template-difficulty-v3-sampled-confidence"
@@ -78,6 +79,7 @@ def build_template_difficulty_request(
     payload = candidate.model_dump(
         mode="json", exclude={"template_id", "topic", "difficulty"}
     )
+
     instructions = runtime_instructions(rubric)
     # Reuse the original dimensions, levels and three anchors without adding
     # evaluation examples. The procedure below owns template-level aggregation.
@@ -130,4 +132,29 @@ def build_template_difficulty_request(
         response_model=template_assessment_model(len(candidate.distractors)),
         prompt_version=TEMPLATE_DIFFICULTY_PROMPT_VERSION,
         schema_name="code_template_difficulty_assessment",
+    )
+
+
+def build_template_decision_request(candidate, rubric):
+    reasoning = build_template_difficulty_request(candidate, rubric)
+    instructions = reasoning.messages[0]["content"]
+    scope = instructions.split("Explain which reasoning demands", 1)[0]
+    anchors = instructions.split("Dimensions (unchanged):", 1)[1]
+    return StructuredGenerationRequest(
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a difficulty classifier. Reply with exactly one word: "
+                    "easy, medium, or hard. Do not explain, reason, or prefix.\n\n"
+                    + scope
+                    + "\nDimensions and original anchors:\n"
+                    + anchors
+                ),
+            },
+            *reasoning.messages[1:],
+        ],
+        response_model=ClassDecision,
+        prompt_version="code-template-difficulty-decision-v1",
+        schema_name="code_template_difficulty_decision",
     )

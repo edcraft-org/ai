@@ -143,21 +143,22 @@ unseen accuracy, independent human agreement or learner calibration.
 
 For issue 44, see the [project report](edcraft%20logs.docx),
 Section 6, for relevance checks, model selection and evaluation findings.
-The v5 runner freezes all 12 reserved MCQs and seven versioned control contents,
+The runner freezes all 12 reserved MCQs and seven versioned control contents,
 and collects independent Python correctness, explicit requirements and shared
 relevance reports. The reference and control files are unchanged.
-It neither consumes difficulty reports nor makes generative judge calls.
+It neither consumes difficulty reports nor invokes a reasoning judge.
 Difficulty judgments and quality concerns remain in their separate report.
 The original v1 live review is retained
 as historical evidence. There are no human relevance labels for the reserved set;
-the local decision does not establish Python relevance accuracy.
+the decision does not establish Python relevance accuracy.
 Earlier embedding selection is historical. Current pilot statistics are below;
-local model integration tests remain opt-in.
+live model integration tests remain opt-in.
 
-Run the frozen review with `uv run --extra relevance python scripts/evaluate_code_relevance.py
---env-file .env --output .artifacts/relevance-v5.jsonl`.
-The new protocol is `code-relevance-evaluation-v5-decision`. Reports contain
-`technical`, `requirements` and `relevance`; local decision details are under
+Run the frozen review with `uv run python scripts/evaluate_code_relevance.py
+--env-file .env --output .artifacts/relevance-v6.jsonl`.
+The current protocol is `code-relevance-evaluation-v6-configured-decision`, using
+the shared `EDCRAFT_JUDGE_*` model and `EDCRAFT_RELEVANCE_THRESHOLD` settings. Reports contain
+`technical`, `requirements` and `relevance`; configured decision details are under
 `relevance.decision`. The manifest identifies the renderer, shared tool and
 review-report versions. Existing evaluation artifacts retain their original schemas.
 

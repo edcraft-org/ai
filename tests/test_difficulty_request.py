@@ -119,20 +119,23 @@ async def test_request_is_blinded_single_pass_and_mcp_output_remains_canonical()
     }
 
 
-def test_soclaas_is_default_and_other_providers_are_rejected(monkeypatch):
-    from edcraft_validator.mcp import difficulty_tools
+def test_judge_provider_and_model_follow_shared_configuration(monkeypatch):
+    from edcraft_validator.llm import judge_configuration
 
     selected = []
-    monkeypatch.delenv("EDCRAFT_DIFFICULTY_PROVIDER", raising=False)
+    monkeypatch.delenv("EDCRAFT_JUDGE_PROVIDER", raising=False)
+    monkeypatch.delenv("EDCRAFT_JUDGE_MODEL", raising=False)
     monkeypatch.setattr(
-        difficulty_tools,
+        judge_configuration,
         "create_model_provider",
         lambda s: selected.append(s) or Provider(),
     )
     configured_difficulty_provider()
     assert selected[0].provider == "soclaas"
+    assert selected[0].model == "x-test-3"
     for name in ("openai", "ollama"):
-        monkeypatch.setenv("EDCRAFT_DIFFICULTY_PROVIDER", name)
-        with pytest.raises(ValueError, match="SocLaas only"):
-            configured_difficulty_provider()
-    assert len(selected) == 1
+        monkeypatch.setenv("EDCRAFT_JUDGE_PROVIDER", name)
+        monkeypatch.setenv("EDCRAFT_JUDGE_MODEL", "configured-model")
+        configured_difficulty_provider()
+        assert selected[-1].provider == name
+        assert selected[-1].model == "configured-model"

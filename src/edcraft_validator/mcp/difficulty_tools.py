@@ -1,6 +1,5 @@
 """Explicit advisory tools kept outside the authoritative validation catalogue."""
 
-import os
 from typing import Annotated
 
 from fastmcp import FastMCP
@@ -14,22 +13,15 @@ from edcraft_validator.application.template_difficulty import assess_template_di
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.code_types import Difficulty
 from edcraft_validator.domains.code.difficulty import CodeDifficultyQuestion
+from edcraft_validator.llm.judge_configuration import configured_judge_provider
 from edcraft_validator.llm.judging import JudgeProviderFactory
-from edcraft_validator.llm.llm_contracts import ModelProvider, TemplateProviderSelection
-from edcraft_validator.llm.provider_registry import create_model_provider
+from edcraft_validator.llm.llm_contracts import ModelProvider
 from edcraft_validator.mcp.evidence import ToolEvidence
 
 
 def configured_difficulty_provider() -> ModelProvider:
     """Create a fresh provider per call; configuration is controlled by the host."""
-    name = os.getenv("EDCRAFT_DIFFICULTY_PROVIDER", "").strip() or "soclaas"
-    if name != "soclaas":
-        raise ValueError("Difficulty checks use SocLaas only")
-    return create_model_provider(
-        TemplateProviderSelection(
-            provider=name, model=os.getenv("EDCRAFT_DIFFICULTY_MODEL") or None
-        )
-    )
+    return configured_judge_provider()
 
 
 def register_difficulty_tools(
@@ -79,7 +71,7 @@ def register_difficulty_tools(
 
     @server.tool(
         name="code_assess_template_difficulty",
-        version="1.1.0",
+        version="1.2.0",
         tags={"domain:code", "quality:code", "stage:after-validation"},
         annotations={
             "readOnlyHint": True,
@@ -90,17 +82,21 @@ def register_difficulty_tools(
         description=(
             "Assess the difficulty of a reusable Python tracing MCQ template. "
             "Select this check when authoring or validating a template with a target "
-            "difficulty. SocLaas estimates the typical instance across the "
+            "difficulty. The configured model estimates the typical instance across "
             "effective domain: uniform eligible combinations when supplied, "
             "otherwise independent uniform parameter values, "
             "using code, question pattern, answer target and distractor recipes. "
             "The declared level is hidden from the judge and compared afterwards. "
-            "Passed means a match or a low-confidence advisory mismatch; inspect "
-            "difficulty_match and decision. A mismatch at self-reported confidence "
+            "A forced decision is accepted at token confidence >=0.70; otherwise "
+            "the same model reasons about the template. Accepted decision mismatches "
+            "request author revision. Passed means a match or an advisory reasoning "
+            "mismatch; inspect difficulty_match and decision. Reasoning mismatch "
+            "at confidence "
             "0.80 or higher fails and requests author revision; this confidence "
             "threshold is provisional, not calibrated accuracy. Missing essential "
             "information also fails. Reports parameter-dependent variation. "
-            "One judge call, no check corrections or retries. Does not execute code "
+            "One decision and at most one reasoning call; no check retries. "
+            "Does not execute code "
             "or verify correctness; use separate correctness tools. May incur cost."
         ),
     )

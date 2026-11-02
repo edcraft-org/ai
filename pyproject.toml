@@ -41,7 +41,7 @@ pythonpath = ["."]
 markers = [
     "openai_live: real OpenAI template-authoring API test, run before a PR",
     "ollama_live: real Ollama template workflow, requires a running local model",
-    "relevance_live: local Qwen relevance integration, requires downloaded model weights",
+    "relevance_live: configured relevance model integration, requires endpoint credentials",
 ]
 
 [tool.ruff]
