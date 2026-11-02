@@ -176,8 +176,85 @@ def test_malformed_optional_assessment_does_not_break_public_response():
         details={"difficulty_outcome": {"PRIVATE_VALUE": "invalid"}},
     )
     summary = summarize_authoring(report_with_evidence(evidence))
-    assert summary.difficulty is None and summary.error.code == "CHECK_REPORT_INVALID"
+    assert summary.difficulty is None and summary.error is None
+    assert summary.warnings == ["ASSESSMENT_REPORT_INVALID"]
     assert "PRIVATE" not in summary.model_dump_json()
+
+
+def test_advisory_error_is_not_a_public_job_error():
+    evidence = ToolEvidence(
+        tool="advisory_check",
+        version="1",
+        status="error",
+        findings=[{"code": "ADVISORY_JUDGE_UNAVAILABLE", "message": "Unavailable"}],
+        details={"advisory": True, "relevance_outcome": {"unavailable": True}},
+    )
+    report = report_with_evidence(evidence, status="checked")
+    report.attempts[0].executions[0].advisory = True
+    summary = summarize_authoring(report)
+    assert summary.status == "checked" and summary.error is None
+    assert summary.checks[0].advisory is True
+    assert summary.relevance.unavailable is True
+    assert "ADVISORY_JUDGE_UNAVAILABLE" in summary.warnings
+
+
+def test_advisory_transport_failure_without_evidence_gets_unavailable_warning():
+    report = AuthoringResult(
+        status="checked",
+        provider="test",
+        model="test",
+        domain="code",
+        request={},
+        prompt_version="",
+        fixed_plan=[],
+        tool_catalogue=[],
+        attempts=[
+            GenerationAttempt(
+                number=1,
+                candidate={},
+                pending=[],
+                executions=[
+                    CheckExecution(
+                        call_id="check",
+                        tool="advisory_check",
+                        advisory=True,
+                        requested_arguments={},
+                        error="RuntimeError: PRIVATE MODEL ERROR",
+                    )
+                ],
+            )
+        ],
+    )
+    summary = summarize_authoring(report)
+    assert summary.error is None
+    assert summary.checks[0].status == "error" and summary.checks[0].advisory
+    assert summary.warnings == ["ADVISORY_ASSESSMENT_UNAVAILABLE"]
+    assert "PRIVATE" not in summary.model_dump_json()
+
+
+def test_relevance_summary_exposes_actual_advisory_verdict():
+    evidence = ToolEvidence(
+        tool="relevance_check",
+        version="1",
+        status="failed",
+        findings=[{"code": "RELEVANCE_MISMATCH", "message": "Advisory mismatch"}],
+        details={
+            "advisory": True,
+            "relevance_outcome": {
+                "status": "assessed",
+                "unavailable": False,
+                "score": 0.1,
+                "threshold": 0.94,
+                "relevant": False,
+            },
+        },
+    )
+    summary = summarize_authoring(report_with_evidence(evidence, status="checked"))
+    assert summary.error is None
+    assert summary.relevance.score == 0.1
+    assert summary.relevance.threshold == 0.94
+    assert summary.relevance.relevant is False
+    assert summary.relevance.advisory is True
 
 
 def test_unrelated_tool_outcome_is_not_a_difficulty_or_error():
@@ -200,6 +277,8 @@ async def test_difficulty_evidence_summary_uses_the_producer_key():
     summary = summarize_authoring(report_with_evidence(evidence, status="checked"))
     assert isinstance(summary.difficulty, DifficultyOutcome)
     assert summary.difficulty.estimated_difficulty == "easy"
+    assert summary.difficulty.requested_difficulty == "easy"
+    assert summary.difficulty.advisory is True
     assert summary.difficulty == DifficultyOutcome.model_validate(
         evidence.details["difficulty_outcome"]
     )

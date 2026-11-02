@@ -26,6 +26,7 @@ from edcraft_validator.llm.llm_errors import (
 )
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.server import create_validation_server
+from edcraft_validator.validation.check_contracts import ToolFinding
 
 
 async def test_template_tool_gets_full_domain_without_correctness_execution():
@@ -106,51 +107,57 @@ def run(
     return result, author, judges
 
 
-def test_direct_template_tool_feedback_reaches_author_and_third_revision_can_pass():
-    result, author, judges = run(["hard", "medium", "medium", "easy"])
-    assert result.status == "checked" and len(result.attempts) == 4
-    assert len(judges) == 4 and all(len(j.requests) == 1 for j in judges)
-    assert all(attempt.candidate["difficulty"] == "easy" for attempt in result.attempts)
+def test_direct_template_tool_mismatch_is_advisory_and_reuse_stays_local():
+    result, author, judges = run(["hard"])
+    assert result.status == "checked" and len(result.attempts) == 1
+    assert len(judges) == 1 and len(judges[0].requests) == 1
+    assert len(author.generations) == 1
+    assert result.attempts[0].candidate["difficulty"] == "easy"
     assert result.fixed_plan == [SEMANTIC, STRUCTURE, TEMPLATE_DIFFICULTY_TOOL]
-    for request, attempt in zip(author.generations[1:], result.attempts, strict=False):
-        feedback = json.loads(request[-1]["content"])["check_results"]
-        difficulty = next(f for f in feedback if f["tool"] == TEMPLATE_DIFFICULTY_TOOL)
-        assert (
-            difficulty["evidence"]["details"] == attempt.executions[-1].evidence.details
-        )
-        assert difficulty["evidence"]["findings"][0]["code"] == "DIFFICULTY_MISMATCH"
-    assert TEMPLATE_DIFFICULTY_TOOL in {
-        item.check for item in result.artifact.validation.evidence
-    }
-    final_check = result.attempts[-1].executions[-1]
+    final_check = result.attempts[0].executions[-1]
+    assert final_check.evidence.status == "failed"
+    assert final_check.evidence.findings[0].code == "DIFFICULTY_MISMATCH"
+    assert final_check.evidence.details["decision"] == "advisory_mismatch"
     assert final_check.evidence.details["template_sha256"] == template_sha256(
         result.artifact.template
     )
+    saved = next(
+        item
+        for item in result.artifact.validation.evidence
+        if item.check == TEMPLATE_DIFFICULTY_TOOL
+    )
+    assert saved.status == "failed"
+    assert saved.details["advisory"] is True
+    assert saved.details["requested_difficulty"] == "easy"
+    assert saved.details["estimated_difficulty"] == "hard"
+    assert saved.details["template_sha256"] == template_sha256(result.artifact.template)
     assert final_check.application_arguments["candidate"] == (
         result.artifact.template.model_dump(mode="json")
     )
-    assert len(result.attempts[-1].candidate["distractors"]) == 5
+    assert len(result.attempts[0].candidate["distractors"]) == 5
     assert len(final_check.application_arguments["candidate"]["distractors"]) == 3
-    for attempt in result.attempts:
-        assert attempt.executions[-1].requested_arguments == {}
+    assert final_check.requested_arguments == {}
     instance = TemplateApplication().generate_question(
         result.artifact, domain=CodeDomain(), seed=42
     )
     assert instance.question.proposed_answer in (4, 5, 6)
-    assert len(judges) == 4  # Expansion makes no model calls.
+    assert len(judges) == 1  # Expansion makes no model calls.
 
 
 @pytest.mark.parametrize(
     "failure",
     [GenerationResponseError, GenerationTransportError, GenerationTimeoutError],
 )
-def test_template_judge_failure_stops_without_check_retry_or_template_revision(failure):
+def test_template_judge_failure_is_unavailable_without_revision_or_check_retry(failure):
     result, author, judges = run(["easy"], failure("private"))
-    assert result.status == "needs_review" and result.artifact is None
+    assert result.status == "checked" and result.artifact is not None
     assert len(result.attempts) == len(author.generations) == len(judges) == 1
     output = result.attempts[0].executions[-1].evidence
     assert output.status == "error" and output.details["retryable"] is False
     assert "private" not in output.model_dump_json()
+    saved = result.artifact.validation.evidence[-1]
+    assert saved.status == "incomplete" and saved.details["advisory"] is True
+    assert result.warnings[0].code.startswith("JUDGE_")
 
 
 def test_correctness_failure_defers_difficulty_without_spending_a_judge_call():
@@ -167,28 +174,96 @@ def test_correctness_failure_defers_difficulty_without_spending_a_judge_call():
     )
 
 
-def test_saved_artifact_rejects_difficulty_evidence_for_a_different_template():
+@pytest.mark.parametrize(
+    ("change", "reason"),
+    [
+        ("stale", "different template"),
+        ("missing", "missing its template identity"),
+    ],
+)
+def test_saved_artifact_marks_bad_difficulty_identity_unavailable(change, reason):
     result, _, _ = run(["easy"])
     evidence = [e.evidence for e in result.attempts[0].executions]
-    evidence[-1].details["template_sha256"] = "stale"
-    with pytest.raises(ValueError, match="different template"):
+    if change == "stale":
+        evidence[-1].details["template_sha256"] = "stale"
+    else:
+        evidence[-1].details.pop("template_sha256")
+    artifact = CodeDomain().finalize_checked_template(candidate(), evidence)
+    saved = next(
+        item
+        for item in artifact.validation.evidence
+        if item.check == TEMPLATE_DIFFICULTY_TOOL
+    )
+    assert saved.status == "incomplete"
+    assert saved.details["unavailable"] is True
+    assert reason in saved.details["unavailable_reason"]
+
+
+@pytest.mark.parametrize("tool", [STRUCTURE, "unknown_check"])
+def test_forged_technical_advisory_details_still_block(tool):
+    result, _, _ = run(["easy"])
+    evidence = [
+        item.evidence.model_copy(deep=True) for item in result.attempts[0].executions
+    ]
+    forged = next(item for item in evidence if item.tool == STRUCTURE).model_copy(
+        update={
+            "tool": tool,
+            "status": "failed",
+            "findings": [ToolFinding(code="FORGED", message="forged advisory")],
+            "details": {"advisory": True},
+        }
+    )
+    evidence = [item for item in evidence if item.tool != STRUCTURE] + [forged]
+    with pytest.raises(ValueError, match="All selected checks must pass"):
         CodeDomain().finalize_checked_template(candidate(), evidence)
 
 
-def test_missing_information_can_revise_the_template_without_repairing_the_judge():
-    result, author, judges = run([None, "easy"])
-    assert result.status == "checked" and len(author.generations) == len(judges) == 2
+def test_rubric_unavailable_is_typed_and_not_stale(monkeypatch):
+    from edcraft_validator.application import template_difficulty as difficulty_module
+    from edcraft_validator.application.authoring_api import summarize_authoring
+
+    def unavailable():
+        raise OSError("missing rubric")
+
+    monkeypatch.setattr(difficulty_module, "load_code_difficulty_rubric", unavailable)
+    result, author, _ = run([])
+    assert result.status == "checked" and len(author.generations) == 1
+    saved = next(
+        item
+        for item in result.artifact.validation.evidence
+        if item.check == TEMPLATE_DIFFICULTY_TOOL
+    )
+    assert saved.status == "incomplete"
+    assert saved.details["advisory"] is True
+    assert saved.details["template_sha256"] == template_sha256(result.artifact.template)
+    assert saved.details["unavailable"] is True
+    assert "different template" not in saved.details["unavailable_reason"]
+    outcome = saved.details["difficulty_outcome"]
+    assert outcome["decision"] == "unavailable"
+    assert outcome["status"] == "error"
+    assert outcome["requested_difficulty"] == "easy"
+    summary = summarize_authoring(result)
+    assert summary.error is None
+    assert summary.difficulty.decision == "unavailable"
+    assert summary.difficulty.requested_difficulty == "easy"
+    assert summary.difficulty.error_code == "RUBRIC_UNAVAILABLE"
+
+
+def test_missing_information_is_unavailable_without_author_revision():
+    result, author, judges = run([None])
+    assert result.status == "checked" and len(author.generations) == len(judges) == 1
     assert all(len(j.requests) == 1 for j in judges)
     assert (
         result.attempts[0].executions[-1].evidence.findings[0].code
         == "DIFFICULTY_UNABLE_TO_ASSESS"
     )
+    assert result.artifact is not None
 
 
-def test_unresolved_mismatch_retains_all_four_template_attempts():
-    result, _, judges = run(["hard"] * 4)
-    assert result.status == "needs_review" and result.artifact is None
-    assert len(result.attempts) == len(judges) == 4
+def test_unresolved_advisory_mismatch_retains_one_checked_artifact():
+    result, author, judges = run(["hard"])
+    assert result.status == "checked" and result.artifact is not None
+    assert len(result.attempts) == len(judges) == len(author.generations) == 1
 
 
 @pytest.mark.parametrize("limit", [-1, 4, True, 1.5])

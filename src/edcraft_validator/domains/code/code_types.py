@@ -53,5 +53,11 @@ CODE_TOPICS: tuple[ProgrammingTopic, ...] = get_args(ProgrammingTopic)
 
 CODE_DIFFICULTIES: tuple[Difficulty, ...] = get_args(Difficulty)
 
+# Domain-owned advisory identities. Application policy never derives this from
+# untrusted tool evidence or model arguments.
+CODE_ADVISORY_CHECK_NAMES = frozenset(
+    {"code_assess_template_difficulty", "code_assess_template_relevance"}
+)
+
 
 ParameterValue = int | bool | str | list[int]

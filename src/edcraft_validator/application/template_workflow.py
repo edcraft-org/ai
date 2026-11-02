@@ -47,7 +47,7 @@ from edcraft_validator.mcp.catalogue import (
     check_definitions,
     resolve_domain_tools,
 )
-from edcraft_validator.validation.check_contracts import ToolEvidence
+from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
 
 REVISION_POLICY = "full-candidate-v1"
 
@@ -235,7 +235,8 @@ class TemplateApplication:
     @staticmethod
     def _should_revise(attempt, number, max_attempts):
         terminal_error = any(
-            entry.evidence is not None
+            not entry.advisory
+            and entry.evidence is not None
             and entry.evidence.status == "error"
             and entry.evidence.details.get("retryable") is False
             for entry in attempt.executions
@@ -290,11 +291,13 @@ class TemplateApplication:
                 "content": json.dumps(
                     {
                         "instruction": (
-                            "The current checking attempt failed. Fix each failure "
-                            "reported below. "
+                            "A required technical check failed. Fix each technical "
+                            "failure reported below. "
                             "Use tool observations to address the failures. "
-                            "Difficulty estimates are advisory rubric judgments, "
-                            "not correctness evidence or measured learner outcomes. "
+                            "Difficulty and relevance assessments are advisory "
+                            "rubric judgments, not correctness evidence or revision "
+                            "requirements; do not change a field only because an "
+                            "advisory verdict differs. "
                             "Distinguish observations from requirements you supplied. "
                             "Check names and model-owned arguments are fixed. "
                             "The model_arguments below were selected in the initial "
@@ -401,8 +404,19 @@ class TemplateApplication:
             finding
             for item in evidence
             for finding in item.findings
-            if item.status == "passed"
+            if item.status == "passed" or item.details.get("advisory") is True
         ]
+        result.warnings.extend(
+            ToolFinding(
+                code="ADVISORY_ASSESSMENT_UNAVAILABLE",
+                message=(
+                    f"{execution.tool} advisory assessment was unavailable; "
+                    "the technically checked artifact was retained."
+                ),
+            )
+            for execution in attempt.executions
+            if execution.advisory and execution.evidence is None
+        )
         return result
 
     @staticmethod
@@ -462,11 +476,12 @@ class TemplateApplication:
             execution = CheckExecution(
                 call_id=f"attempt-{attempt.number}:{name}",
                 tool=name,
+                advisory=definitions[name].advisory,
                 requested_arguments=json.loads(planned_arguments[name]),
             )
             attempt.executions.append(execution)
             if name in deferred and any(
-                not entry.passed
+                not entry.passed and not entry.advisory
                 for entry in attempt.executions
                 if entry.tool not in deferred
             ):
@@ -484,8 +499,10 @@ class TemplateApplication:
                 name in deferred,
             )
         attempt.complete = not attempt.pending
+        # Advisory assessments are retained as evidence but never gate the
+        # technical artifact or request revisions.
         attempt.passed = attempt.complete and all(
-            entry.passed for entry in attempt.executions
+            entry.passed for entry in attempt.executions if not entry.advisory
         )
 
     @staticmethod
@@ -525,6 +542,14 @@ class TemplateApplication:
                 definition.version and evidence.version != definition.version
             ):
                 raise ValueError("MCP evidence tool identity/version mismatch")
+            # The application, not the tool or model, owns advisory policy.
+            details = dict(evidence.details)
+            if definition.advisory:
+                details["advisory"] = True
+            else:
+                details.pop("advisory", None)
+            if details != evidence.details:
+                evidence = evidence.model_copy(update={"details": details})
             execution.evidence = evidence
         except JsonSchemaError as exc:
             path = ".".join(str(part) for part in exc.absolute_path) or "arguments"

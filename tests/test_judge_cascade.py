@@ -52,9 +52,9 @@ class Judge(TemplateJudge):
 
 @pytest.mark.parametrize(
     "label,status,decision",
-    [("easy", "passed", "matches"), ("hard", "failed", "revise")],
+    [("easy", "passed", "matches"), ("hard", "failed", "advisory_mismatch")],
 )
-async def test_confidence_070_accepts_decision_and_mismatch_revises(
+async def test_confidence_070_accepts_decision_and_mismatch_is_advisory(
     label, status, decision
 ):
     judge = Judge(classification(label, 0.7))
@@ -109,7 +109,9 @@ async def test_failed_decision_falls_back_once_and_failed_reasoning_cannot_pass(
     assert "PRIVATE" not in result.model_dump_json()
 
 
-def test_decision_mismatch_revises_in_real_authoring_and_reuse_stays_local(monkeypatch):
+def test_advisory_decision_mismatch_saves_checked_artifact_and_reuse_stays_local(
+    monkeypatch,
+):
     from edcraft_validator.application.template_workflow import TemplateApplication
     from edcraft_validator.domains.code.code_domain import CodeDomain
     from tests import test_template_difficulty as integration
@@ -119,14 +121,16 @@ def test_decision_mismatch_revises_in_real_authoring_and_reuse_stays_local(monke
         return classification(self.estimate, 0.75)
 
     monkeypatch.setattr(integration.TemplateJudge, "decide", decide, raising=False)
-    result, author, judges = integration.run(["hard", "easy"])
-    assert result.status == "checked" and len(result.attempts) == 2
-    assert len(author.generations) == len(judges) == 2
+    result, author, judges = integration.run(["hard"])
+    assert result.status == "checked" and len(result.attempts) == 1
+    assert len(author.generations) == len(judges) == 1
     assert all(not judge.requests for judge in judges)
     first = result.attempts[0].executions[-1].evidence
-    assert first.status == "failed" and first.details["decision"] == "revise"
+    assert first.status == "failed"
+    assert first.details["decision"] == "advisory_mismatch"
     saved = result.artifact.validation.evidence[-1].details
-    assert saved["estimated_difficulty"] == "easy"
+    assert saved["estimated_difficulty"] == "hard"
+    assert saved["requested_difficulty"] == "easy"
     assert saved["confidence_source"] == "first_token_label_mass"
     before = len(judges)
     app = TemplateApplication()

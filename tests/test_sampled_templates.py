@@ -140,11 +140,12 @@ def test_low_confidence_mismatch_returns_warning_without_revision_or_relabelling
     assert saved.details["confidence_calibrated"] is False
 
 
-def test_high_confidence_mismatch_exhausts_three_author_revisions():
-    result, author, judges = run(["hard"] * 4, confidence=0.80)
-    assert result.status == "needs_review" and result.artifact is None
-    assert len(result.attempts) == len(author.generations) == len(judges) == 4
+def test_high_confidence_mismatch_is_advisory_without_author_revision():
+    result, author, judges = run(["hard"], confidence=0.80)
+    assert result.status == "checked" and result.artifact is not None
+    assert len(result.attempts) == len(author.generations) == len(judges) == 1
     assert all(len(j.requests) == 1 for j in judges)  # Checks never repair or retry.
+    assert result.warnings[0].code == "DIFFICULTY_MISMATCH"
 
 
 @pytest.mark.parametrize("confidence", [-0.1, 1.1, float("nan")])

@@ -67,7 +67,12 @@ def register_difficulty_tools(
     @server.tool(
         name="code_assess_template_difficulty",
         version="1.2.0",
-        tags={"domain:code", "quality:code", "stage:after-validation"},
+        tags={
+            "domain:code",
+            "quality:code",
+            "stage:after-validation",
+            "policy:advisory",
+        },
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -83,13 +88,13 @@ def register_difficulty_tools(
             "using code, question pattern, answer target and distractor recipes. "
             "The declared level is hidden from the judge and compared afterwards. "
             "A forced decision is accepted at token confidence >=0.70; otherwise "
-            "the same model reasons about the template. Accepted decision mismatches "
-            "request author revision. Passed means a match or an advisory reasoning "
-            "mismatch; inspect difficulty_match and decision. Reasoning mismatch "
-            "at confidence "
-            "0.80 or higher fails and requests author revision; this confidence "
-            "threshold is provisional, not calibrated accuracy. Missing essential "
-            "information also fails. Reports parameter-dependent variation. "
+            "the same model reasons about the template. Difficulty mismatches are "
+            "advisory: they never request author revision or block a technically "
+            "checked artifact. Inspect status, difficulty_match and decision; "
+            "reasoning confidence 0.80 or higher remains provisional, not "
+            "calibrated accuracy. Missing essential information and model errors "
+            "are unavailable advisory evidence. Reports parameter-dependent "
+            "variation. "
             "One decision and at most one reasoning call; no check retries. "
             "Does not execute code "
             "or verify correctness; use separate correctness tools. May incur cost."

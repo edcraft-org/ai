@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.domains.code.code_types import (
+    CODE_ADVISORY_CHECK_NAMES,
     AnswerTarget,
     Difficulty,
     ParameterValue,
@@ -237,7 +238,10 @@ class TemplateValidationSummary(BaseModel):
         checks = [item.check for item in self.evidence]
         if len(checks) != len(set(checks)):
             raise ValueError("validation evidence checks must be unique")
-        if any(item.status != "passed" for item in self.evidence):
+        if any(
+            item.status != "passed" and item.check not in CODE_ADVISORY_CHECK_NAMES
+            for item in self.evidence
+        ):
             raise ValueError("checked templates require passing validation evidence")
         if (
             not self.examples_checked

@@ -15,15 +15,13 @@ from edcraft_validator.domains.code.code_schemas import (
     TemplateValidationSummary,
     ValidatedCodeTemplate,
 )
+from edcraft_validator.domains.code.code_types import CODE_ADVISORY_CHECK_NAMES
 from edcraft_validator.domains.code.prompt_builder import (
     build_code_generation_request,
 )
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
 from edcraft_validator.domains.code.question_generator import generate_code_question
 from edcraft_validator.domains.code.relevance import TEMPLATE_RELEVANCE_TOOL
-from edcraft_validator.domains.code.template_difficulty import (
-    TEMPLATE_DIFFICULTY_TOOL,
-)
 from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     StructuredGenerationRequest,
@@ -75,7 +73,10 @@ class CodeDomain:
     ) -> ValidatedCodeTemplate:
         """Package actual MCP outputs without re-execution or answer repair."""
         template = _require_type(candidate, CodeTemplateCandidate)
-        if not evidence or any(item.status != "passed" for item in evidence):
+        if not evidence or any(
+            item.status != "passed" and item.tool not in CODE_ADVISORY_CHECK_NAMES
+            for item in evidence
+        ):
             raise ValueError("All selected checks must pass")
         semantic = next(
             (
@@ -85,28 +86,27 @@ class CodeDomain:
             ),
             None,
         )
-        if semantic is None:
+        if semantic is None or semantic.status != "passed":
             raise ValueError(
                 "Missing execution-derived canonical answers and distractors"
             )
-        saved_evidence = [
-            ValidationEvidence(
-                check=item.tool,
-                status="passed",
-                duration_ms=item.duration_ms,
-                issues=[finding.model_dump() for finding in item.findings],
-                details={
-                    "tool_version": item.version,
-                    **(
-                        item.details
-                        if item.tool
-                        in {TEMPLATE_DIFFICULTY_TOOL, TEMPLATE_RELEVANCE_TOOL}
-                        else {}
-                    ),
-                },
-            )
-            for item in evidence
+        selected = [
+            DistractorRecipe.model_validate(item)
+            for item in semantic.details["selected_distractors"]
         ]
+        if len(selected) < 2 or any(
+            recipe not in template.distractors for recipe in selected
+        ):
+            raise ValueError("Selected distractors are not checked proposal recipes")
+        reusable = template.model_copy(
+            update={
+                "distractors": selected,
+            },
+            deep=True,
+        )
+        reusable = CodeTemplateCandidate.model_validate(reusable.model_dump())
+        expected_sha256 = template_sha256(reusable)
+        saved_evidence = [_saved_evidence(item, expected_sha256) for item in evidence]
         summary = TemplateValidationSummary.model_validate(
             {
                 **{
@@ -124,26 +124,6 @@ class CodeDomain:
                 "evidence": saved_evidence,
             }
         )
-        selected = [
-            DistractorRecipe.model_validate(item)
-            for item in semantic.details["selected_distractors"]
-        ]
-        if len(selected) < 2 or any(
-            recipe not in template.distractors for recipe in selected
-        ):
-            raise ValueError("Selected distractors are not checked proposal recipes")
-        reusable = template.model_copy(
-            update={
-                "distractors": selected,
-            },
-            deep=True,
-        )
-        reusable = CodeTemplateCandidate.model_validate(reusable.model_dump())
-        for item in evidence:
-            if item.tool in {TEMPLATE_DIFFICULTY_TOOL, TEMPLATE_RELEVANCE_TOOL} and (
-                item.details.get("template_sha256") != template_sha256(reusable)
-            ):
-                raise ValueError("Assessment evidence belongs to a different template")
         return ValidatedCodeTemplate(
             template=reusable,
             validation=summary,
@@ -166,6 +146,49 @@ class CodeDomain:
         return generate_code_question(
             _require_type(validated, ValidatedCodeTemplate), seed
         )
+
+
+def _saved_evidence(item: ToolEvidence, expected_sha256: str) -> ValidationEvidence:
+    """Keep technical passes and advisory verdicts distinct in saved evidence."""
+    if item.tool not in CODE_ADVISORY_CHECK_NAMES:
+        return ValidationEvidence(
+            check=item.tool,
+            status="passed",
+            duration_ms=item.duration_ms,
+            issues=[finding.model_dump() for finding in item.findings],
+            details={"tool_version": item.version},
+        )
+    details = {"tool_version": item.version, **item.details}
+    recorded_sha256 = item.details.get("template_sha256")
+    if recorded_sha256 is None:
+        details.update(
+            unavailable=True,
+            unavailable_reason="Assessment evidence is missing its template identity",
+        )
+        status = "incomplete"
+    elif recorded_sha256 != expected_sha256:
+        details.update(
+            unavailable=True,
+            unavailable_reason="Assessment evidence belongs to a different template",
+        )
+        status = "incomplete"
+    elif item.status == "failed":
+        status = "failed"
+    elif item.status == "error":
+        details.update(
+            unavailable=True,
+            unavailable_reason="Advisory assessment did not return a verdict",
+        )
+        status = "incomplete"
+    else:
+        status = "passed"
+    return ValidationEvidence(
+        check=item.tool,
+        status=status,
+        duration_ms=item.duration_ms,
+        issues=[finding.model_dump() for finding in item.findings],
+        details=details,
+    )
 
 
 def _require_type[ModelT: BaseModel](value: BaseModel, model: type[ModelT]) -> ModelT:

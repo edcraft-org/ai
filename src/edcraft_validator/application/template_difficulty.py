@@ -51,15 +51,41 @@ async def assess_template_difficulty(
         decision_request = build_template_decision_request(candidate, rubric)
         reasoning_request = build_template_difficulty_request(candidate, rubric)
     except (OSError, ValueError):
+        outcome = DifficultyOutcome(
+            assessment_path="decision",
+            requested_difficulty=candidate.difficulty,
+            error_code="RUBRIC_UNAVAILABLE",
+            reason="Difficulty rubric unavailable; no assessment was made.",
+        )
         return ToolEvidence(
             tool=TEMPLATE_DIFFICULTY_TOOL,
             version="1.2.0",
             status="error",
             findings=[
                 ToolFinding(
-                    code="RUBRIC_UNAVAILABLE", message="Difficulty rubric unavailable"
+                    code="RUBRIC_UNAVAILABLE",
+                    message="Difficulty rubric unavailable; no assessment was made.",
                 )
             ],
+            details={
+                "advisory": True,
+                "retryable": False,
+                "template_sha256": template_sha256(candidate),
+                "requested_difficulty": candidate.difficulty,
+                "difficulty_outcome": outcome.model_dump(mode="json"),
+                **outcome.model_dump(
+                    mode="json",
+                    include={
+                        "assessment_path",
+                        "requested_difficulty",
+                        "estimated_difficulty",
+                        "confidence",
+                        "confidence_source",
+                        "decision",
+                    },
+                ),
+            },
+            duration_ms=(time.perf_counter() - started) * 1000,
         )
 
     providers = JudgeProviderSession(provider_factory)
@@ -103,8 +129,9 @@ def _policy_outcome(judge, requested, path, settings):
     if judge.status == "error":
         return DifficultyOutcome(
             assessment_path=path,
+            requested_difficulty=requested,
             error_code=judge.error_code,
-            reason="Difficulty assessment failed; no check retry was made.",
+            reason="Difficulty assessment unavailable; no check retry was made.",
         )
     assessment = judge.assessment
     is_decision = isinstance(assessment, ClassDecision)
@@ -112,20 +139,24 @@ def _policy_outcome(judge, requested, path, settings):
     if estimate is None:
         return DifficultyOutcome(
             assessment_path=path,
+            requested_difficulty=requested,
             status="failed",
             error_code="DIFFICULTY_UNABLE_TO_ASSESS",
             reason=assessment.unable_to_assess_reason,
         )
     matches = compare_difficulty(estimate, requested) == "matches"
     decisive = is_decision or assessment.confidence >= settings.reasoning_threshold
-    decision = "matches" if matches else "revise" if decisive else "advisory_mismatch"
+    decision = "matches" if matches else "advisory_mismatch"
     return DifficultyOutcome(
         assessment_path=path,
+        requested_difficulty=requested,
         estimated_difficulty=estimate,
         confidence=assessment.confidence,
         confidence_source="first_token_label_mass" if is_decision else "self_reported",
         decision=decision,
-        status="failed" if decision == "revise" else "passed",
+        # A decisive mismatch stays an honest advisory failure; it never gates
+        # technical checking or requests an author revision.
+        status="failed" if not matches and decisive else "passed",
         reason="Forced decision from first-token label probabilities."
         if is_decision
         else assessment.reason,
@@ -140,7 +171,7 @@ def _findings(outcome, requested):
     return [
         ToolFinding(
             code="DIFFICULTY_MISMATCH"
-            if outcome.decision == "revise"
+            if outcome.status == "failed"
             else "DIFFICULTY_MISMATCH_LOW_CONFIDENCE",
             message=(
                 f"Typical instance estimated {outcome.estimated_difficulty}; "
@@ -178,6 +209,7 @@ def _build_evidence(candidate, rubric, settings, screen, reasoning, outcome, sta
             mode="json",
             include={
                 "assessment_path",
+                "requested_difficulty",
                 "estimated_difficulty",
                 "confidence",
                 "confidence_source",

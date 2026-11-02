@@ -14,6 +14,7 @@ from edcraft_validator.application.authoring_contracts import (
     AuthoringProgress,
     AuthoringResult,
     DifficultyOutcome,
+    RelevanceOutcome,
 )
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.domains.domain_contract import DomainModule
@@ -40,6 +41,7 @@ class PublicAuthoringError(BaseModel):
 class CheckSummary(BaseModel):
     tool: str
     status: Literal["passed", "failed", "error", "skipped"]
+    advisory: bool = False
     findings: list[str] = Field(default_factory=list)
 
 
@@ -54,6 +56,7 @@ class AuthoringSummary(BaseModel):
     # Checking is never a human approval decision.
     approval: Literal["unreviewed"] = "unreviewed"
     difficulty: DifficultyOutcome | None = None
+    relevance: RelevanceOutcome | None = None
     checks: list[CheckSummary] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     error: PublicAuthoringError | None = None
@@ -99,6 +102,11 @@ def _public_error(report: AuthoringResult) -> PublicAuthoringError | None:
     if not report.attempts:
         return None
     for execution in report.attempts[-1].executions:
+        advisory = execution.advisory or bool(
+            execution.evidence and execution.evidence.details.get("advisory") is True
+        )
+        if advisory:
+            continue
         if execution.error or (
             execution.evidence and execution.evidence.status == "error"
         ):
@@ -115,10 +123,14 @@ def _public_error(report: AuthoringResult) -> PublicAuthoringError | None:
 def summarize_authoring(report: AuthoringResult) -> AuthoringSummary:
     checks: list[CheckSummary] = []
     difficulty: DifficultyOutcome | None = None
-    invalid_outcome = False
+    relevance: RelevanceOutcome | None = None
+    warnings = [warning.code for warning in report.warnings]
     executions = report.attempts[-1].executions if report.attempts else []
     for execution in executions:
         evidence = execution.evidence
+        advisory = execution.advisory or bool(
+            evidence and evidence.details.get("advisory") is True
+        )
         checks.append(
             CheckSummary(
                 tool=execution.tool,
@@ -127,24 +139,34 @@ def summarize_authoring(report: AuthoringResult) -> AuthoringSummary:
                 else "error"
                 if execution.error
                 else "skipped",
+                advisory=advisory,
                 findings=[finding.code for finding in evidence.findings]
                 if evidence
                 else [],
             )
         )
+        if advisory and evidence is None and execution.error is not None:
+            warnings.append("ADVISORY_ASSESSMENT_UNAVAILABLE")
+        elif advisory and evidence is not None and evidence.status == "error":
+            warnings.append(
+                evidence.findings[0].code
+                if evidence.findings
+                else "ADVISORY_ASSESSMENT_UNAVAILABLE"
+            )
         if evidence is not None and "difficulty_outcome" in evidence.details:
             try:
                 difficulty = DifficultyOutcome.model_validate(
                     evidence.details["difficulty_outcome"]
                 )
             except ValidationError:
-                invalid_outcome = True
-    error = _public_error(report)
-    if invalid_outcome:
-        error = PublicAuthoringError(
-            code="CHECK_REPORT_INVALID",
-            message="An assessment report could not be read. Recheck the template.",
-        )
+                warnings.append("ASSESSMENT_REPORT_INVALID")
+        if evidence is not None and "relevance_outcome" in evidence.details:
+            try:
+                relevance = RelevanceOutcome.model_validate(
+                    evidence.details["relevance_outcome"]
+                )
+            except ValidationError:
+                warnings.append("ASSESSMENT_REPORT_INVALID")
     return AuthoringSummary(
         status=report.status,
         domain=report.domain,
@@ -152,9 +174,10 @@ def summarize_authoring(report: AuthoringResult) -> AuthoringSummary:
         model=report.model,
         artifact_id=report.artifact.artifact_id if report.artifact else None,
         difficulty=difficulty,
+        relevance=relevance,
         checks=checks,
-        warnings=[warning.code for warning in report.warnings],
-        error=error,
+        warnings=list(dict.fromkeys(warnings)),
+        error=_public_error(report),
     )
 
 

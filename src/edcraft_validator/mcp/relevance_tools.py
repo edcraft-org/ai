@@ -54,7 +54,12 @@ def register_relevance_tools(
     @server.tool(
         name=TEMPLATE_RELEVANCE_TOOL,
         version="1.0.0",
-        tags={"domain:code", "quality:code", "stage:after-validation"},
+        tags={
+            "domain:code",
+            "quality:code",
+            "stage:after-validation",
+            "policy:advisory",
+        },
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -67,8 +72,10 @@ def register_relevance_tools(
             "candidate and the unchanged author request; use no model-owned "
             "arguments. Select this check for authoring. Uses the "
             "configured judge model with reasoning disabled and the configured "
-            "relevance threshold. An irrelevant decision fails the check and "
-            "requests revision. Errors never pass. Assesses the code, question "
+            "relevance threshold. An irrelevant decision is advisory evidence: it "
+            "never requests revision or blocks a technically checked artifact. "
+            "Errors never pass and are reported as unavailable advisory evidence. "
+            "Assesses the code, question "
             "pattern, answer target and finite parameter domain; does not execute "
             "code or consume correctness/difficulty reports. Reuses the text "
             "relevance classifier; template accuracy is not established by the "

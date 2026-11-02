@@ -15,6 +15,7 @@ class CheckDefinition:
     output_schema: dict[str, Any] | None
     version: str | None
     after_validation: bool
+    advisory: bool = False
 
 
 class ToolFinding(BaseModel):

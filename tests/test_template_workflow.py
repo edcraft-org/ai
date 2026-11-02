@@ -266,6 +266,78 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
     assert instance == ExampleInstance(value=24, seed=5)
 
 
+def test_non_deferred_advisory_failure_does_not_skip_deferred_assessment() -> None:
+    from types import SimpleNamespace
+
+    from edcraft_validator.validation.check_contracts import CheckDefinition
+
+    plan = ["technical_check", "advisory_now", "deferred_assessment"]
+
+    def definition(name, *, advisory=False, after_validation=False):
+        return CheckDefinition(
+            name=name,
+            input_schema={"type": "object"},
+            output_schema={"type": "object"},
+            version="1",
+            after_validation=after_validation,
+            advisory=advisory,
+        )
+
+    definitions = {
+        "technical_check": definition("technical_check"),
+        "advisory_now": definition("advisory_now", advisory=True),
+        "deferred_assessment": definition(
+            "deferred_assessment", advisory=True, after_validation=True
+        ),
+    }
+    results = {
+        "technical_check": ToolEvidence(
+            tool="technical_check", version="1", status="passed"
+        ),
+        "advisory_now": ToolEvidence(
+            tool="advisory_now",
+            version="1",
+            status="failed",
+            findings=[{"code": "ADVISORY_MISMATCH", "message": "Advisory mismatch"}],
+        ),
+        "deferred_assessment": ToolEvidence(
+            tool="deferred_assessment", version="1", status="passed"
+        ),
+    }
+    calls = []
+
+    class Client:
+        def call_tool(self, name, arguments, *, version=None):
+            calls.append(name)
+            return results[name].model_dump(mode="json")
+
+    domain = SimpleNamespace(
+        tool_bindings=lambda request, candidate, tool_name: {},
+        checked_tool_bindings=lambda request, candidate, tool_name, evidence: {},
+    )
+    candidate = ExampleTemplate(value=12)
+    attempt = TemplateApplication._build_attempt(1, candidate, plan)
+    TemplateApplication._run_checks(
+        attempt,
+        plan,
+        definitions,
+        {name: "{}" for name in plan},
+        Client(),
+        domain=domain,
+        request=ExampleRequest(topic="fractions"),
+        candidate=candidate,
+    )
+
+    assert calls == plan
+    assert attempt.complete and attempt.passed
+    assert not TemplateApplication._should_revise(attempt, 1, 4)
+    assert {item.tool: item.evidence.status for item in attempt.executions} == {
+        "technical_check": "passed",
+        "advisory_now": "failed",
+        "deferred_assessment": "passed",
+    }
+
+
 @pytest.mark.parametrize(
     "generation_error",
     [

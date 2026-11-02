@@ -115,20 +115,20 @@ async def assess_code_template_relevance(
             ToolFinding(
                 code="RELEVANCE_MISMATCH",
                 message=(
-                    "The template does not assess the original author request. "
-                    "Revise the code, question and parameter domain to test that "
-                    "request; related vocabulary or background mentions are "
-                    "insufficient."
+                    "The template may not assess the original author request; "
+                    "this is advisory evidence for educator review, not a "
+                    "technical failure or a revision request."
                 ),
             )
         ]
+    unavailable = report.status != "assessed"
     return ToolEvidence(
         tool=TEMPLATE_RELEVANCE_TOOL,
         version="1.0.0",
         status=status,
         findings=findings,
         details={
-            "advisory": False,
+            "advisory": True,
             "retryable": False,
             "template_sha256": template_sha256(candidate),
             "score": report.decision.score,
@@ -138,6 +138,19 @@ async def assess_code_template_relevance(
             "model": report.decision.model,
             "usage": report.decision.usage.model_dump(mode="json"),
             "relevance": report.model_dump(mode="json"),
+            "relevance_outcome": {
+                "status": "unavailable" if unavailable else "assessed",
+                "unavailable": unavailable,
+                "score": report.decision.score,
+                "threshold": report.decision.threshold,
+                "relevant": report.decision.relevant,
+                "reason": (
+                    "Relevance assessment unavailable; no check retry was made."
+                    if unavailable
+                    else "Advisory relevance assessment completed."
+                ),
+                "error_code": report.decision.error_code,
+            },
         },
         duration_ms=report.duration_ms,
     )

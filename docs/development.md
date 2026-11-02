@@ -18,7 +18,7 @@ metadata. CLI/server/worker boundaries construct dependencies and settings.
 | Code proposal, binding and finalization | `domains/code/code_domain.py`, schemas and candidate builder |
 | Blinded difficulty prompts and rubric components | `domains/code/template_difficulty.py`, `difficulty_request.py` |
 | Difficulty routing, verdict policy and evidence | `application/template_difficulty.py` |
-| Shared relevance, code-template projection and revision gate | `application/relevance.py`, `application/code_relevance.py`, `domains/code/relevance.py` |
+| Shared relevance and code-template advisory adapter | `application/relevance.py`, `application/code_relevance.py`, `domains/code/relevance.py` |
 | Model adapters and measured judge execution | `llm/` |
 | Check catalogue decoding and dispatch transport | `mcp/catalogue.py`, `mcp/client.py` |
 | Default dependency construction | `bootstrap.py`, `mcp/server.py`, `cli.py` |
@@ -30,8 +30,11 @@ authoring obtains a connection when needed. Inject a tool client for tests.
 
 The authoring coordinator prepares a frozen plan, executes attempts, and either
 revises or finalizes. Check definitions are decoded once before dispatch; the
-attempt loop does not interpret FastMCP tags. Keep schema validation, application
-argument ownership, exact artifact binding and correctness prerequisites intact.
+attempt loop reads only decoded metadata and does not interpret FastMCP tags.
+`policy:advisory` marks assessments whose failed or error evidence is saved for
+review but never requests revision or blocks technical success. Keep schema
+validation, application argument ownership, exact artifact binding and
+correctness prerequisites intact.
 Prefer named stages and guard clauses within a module to extra layers/classes.
 
 ## Judge settings and policy
@@ -44,22 +47,25 @@ The shared provider/model are independent of the selected authoring provider.
 | Final assessment | Workflow |
 | --- | --- |
 | Forced decision confidence >=0.70, level matches | Pass; no reasoning call. |
-| Forced decision accepted, level differs | Fail and request author revision. |
+| Forced decision accepted, level differs | Honest failed advisory evidence; no revision gate. |
 | Decision below 0.70 or invalid | One reasoning call using the same model. |
 | Reasoning level matches | Pass. |
-| Reasoning mismatch at self-confidence >=0.80 | Fail and request revision. |
-| Reasoning mismatch below 0.80 | Pass policy with an advisory warning. |
-| Reasoning cannot assess | Fail. |
-| Reasoning error or exhausted deadline | Error; never a pass. |
+| Reasoning mismatch (any confidence) | Advisory mismatch; no revision gate. |
+| Reasoning cannot assess | Failed advisory evidence; no revision gate. |
+| Reasoning error or exhausted deadline | Error advisory evidence; artifact may still be saved. |
 | Relevance decision is relevant | Pass. |
-| Relevance decision is irrelevant | Fail and request revision under the unchanged author prompt. |
-| Relevance model, deadline or configuration failure | Error; stop without author revision. |
+| Relevance decision is irrelevant | Failed advisory evidence; no revision gate. |
+| Relevance model, deadline or configuration failure | Unavailable advisory evidence; no author revision. |
 
 Token confidence and self-reported confidence are different, uncalibrated measures.
-`details.difficulty_outcome` is the typed final policy result. The explicit key
-avoids interpreting other domains' `outcome` fields as difficulty. Flat fields remain
-for compatibility. `screen` and `judge` retain detailed stage reports; aggregate
-usage includes both calls. Both paths bind the same exact template/rubric identity.
+`details.difficulty_outcome` is the typed final policy result and carries
+`advisory`, requested and estimated difficulty, confidence and reason. The explicit
+key avoids interpreting other domains' `outcome` fields as difficulty. Relevance
+adds `details.relevance_outcome` with score, threshold, decision and unavailable
+status. Flat fields remain for compatibility. `screen` and `judge` retain detailed
+stage reports; aggregate usage includes both calls. Both paths bind the same exact
+template/rubric identity. Raw failed or error statuses stay honest and are mapped to
+failed/incomplete saved advisory evidence rather than fabricated passes.
 
 The decision gets at most 35 seconds within the existing 310-second judge budget;
 reasoning receives only the remaining time. MCP allows 330 seconds per tool call.
@@ -84,8 +90,11 @@ parameters in readable text, excluding topic labels, requested difficulty,
 answer and distractor recipes, and misconception explanations. Difficulty and relevance do not consume each other's
 results. Their saved evidence binds the exact reusable template hash; relevance
 also retains the request/text input hash, score, threshold and model usage.
-Only selected checks run; the authoring prompt requests both assessments. The
-standalone shared relevance report remains advisory for research callers.
+Stale or malformed advisory evidence is marked unavailable instead of being accepted
+as a judgment or blocking technical saving. Only selected checks run; the authoring
+prompt requests both assessments. The standalone shared relevance report remains
+advisory for research callers. Public summaries expose the advisory difficulty and
+relevance outcomes plus unavailable warnings without raw provider exceptions.
 
 There is no standalone validation workflow. Re-author changes through the existing
 checking/revision loop; deterministic generation expands only checked artifacts.

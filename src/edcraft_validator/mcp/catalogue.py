@@ -61,5 +61,6 @@ def check_definitions(definitions) -> dict[str, CheckDefinition]:
             output_schema=definition.get("outputSchema"),
             version=metadata.get("version"),
             after_validation="stage:after-validation" in metadata.get("tags", []),
+            advisory="policy:advisory" in metadata.get("tags", []),
         )
     return checks

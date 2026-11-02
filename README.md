@@ -60,22 +60,24 @@ Python, malformed responses and incomplete checks cannot become technical passes
 
 The selected difficulty check runs after correctness checks pass. It first returns
 only a level. A decision at confidence >=0.70 is accepted; otherwise the same model
-runs one structured reasoning assessment. Accepted mismatches request revision.
-Reasoning mismatches use the existing 0.80 self-confidence policy.
+runs one structured reasoning assessment. Difficulty mismatches are advisory: they
+are saved with their actual verdict and never request revision or block a
+technically checked template. Reasoning mismatches retain the existing 0.80
+self-confidence policy for reporting.
 
 Authoring also selects `code_assess_template_relevance`. It compares the original
 author prompt with the correctness-checked template using the same judge model,
-with reasoning disabled. An irrelevant decision fails the check and triggers a
-revision under the unchanged request and check plan. Both assessments run after
-correctness checks and independently of each other's verdicts. A relevance model
-or configuration error stops checking without spending author revisions; an
-unresolved mismatch exhausts the existing revision limit and produces no reusable
-artifact. Score, threshold, provider and input/template identities are saved with
-the evidence. The standalone `assess_relevance` tool remains advisory for research;
-the concrete-question pilot does not establish accuracy on reusable templates.
+with reasoning disabled. Relevance mismatches and assessment errors are advisory.
+They are retained as a saved verdict or an unavailable warning for educator review,
+without author revision, extra generation, or a top-level job error. Both
+assessments run after required correctness checks pass and independently of each
+other's verdicts. Score, threshold, provider and input/template identities are saved
+with the evidence. The standalone `assess_relevance` tool remains advisory for
+research; the concrete-question pilot does not establish accuracy on reusable
+templates.
 
 Inspect the report's `status`, `fixed_plan`, `attempts`, `warnings` and `artifact`.
-`checked` means the selected checking policy passed; it does not mean human
+`checked` means required technical checks passed; it does not mean human
 approval. `needs_review` and `error` do not produce an ordinary reusable artifact.
 Inspect requested and estimated difficulty separately.
 

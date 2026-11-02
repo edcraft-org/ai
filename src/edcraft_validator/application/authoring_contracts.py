@@ -41,6 +41,8 @@ class DifficultyOutcome(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     assessment_path: Literal["decision", "reasoning"]
+    advisory: Literal[True] = True
+    requested_difficulty: Literal["easy", "medium", "hard"] | None = None
     estimated_difficulty: Literal["easy", "medium", "hard"] | None = None
     confidence: float | None = Field(default=None, ge=0, le=1)
     confidence_source: Literal["first_token_label_mass", "self_reported"] | None = None
@@ -52,10 +54,27 @@ class DifficultyOutcome(BaseModel):
     error_code: str | None = None
 
 
+class RelevanceOutcome(BaseModel):
+    """Advisory relevance verdict retained for educator review."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    advisory: Literal[True] = True
+    status: Literal["assessed", "unavailable"] = "unavailable"
+    unavailable: bool = True
+    score: float | None = Field(default=None, ge=0, le=1)
+    threshold: float | None = Field(default=None, ge=0, le=1)
+    relevant: bool | None = None
+    reason: str = ""
+    error_code: str | None = None
+
+
 class CheckExecution(BaseModel):
     # Application-generated execution ID; historical records retain provider IDs.
     call_id: str
     tool: str
+    # Application-owned policy from the check metadata, never model arguments.
+    advisory: bool = False
     # The enclosing attempt stores the candidate supplied to this call.
     requested_arguments: dict[str, Any] | str
     application_arguments: dict[str, Any] | None = None
