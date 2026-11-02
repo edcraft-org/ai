@@ -4,15 +4,12 @@ import copy
 import json
 
 import pytest
-from test_template_evaluator import proposal
+from judge_helpers import proposal
 
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
-from edcraft_validator.llm.llm_contracts import (
-    CheckPlanResponse,
-    PlannedGenerationResponse,
-)
+from edcraft_validator.llm.llm_contracts import PlannedGenerationResponse
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.tools.python_execution import ExecutionResult
@@ -60,7 +57,6 @@ class Provider:
         self.proposals = proposals or [proposal()]
         self.plan = plan
         self.generations = []
-        self.turns = []
         self.plan_arguments = plan_arguments or {}
 
     def generate(self, request):
@@ -77,9 +73,6 @@ class Provider:
                 for name in self.plan
             ],
         )
-
-    def tool_turn(self, messages, tools):
-        pytest.fail("Direct dispatch must not request native tools or acknowledgement")
 
 
 def run(provider, client=None):
@@ -339,14 +332,11 @@ def test_execution_records_keep_model_arguments_separate_from_owned_bindings():
     ]
 
 
-def test_live_workflow_assertions_cover_authoring_editing_and_replay():
+def test_live_workflow_assertions_cover_authoring_and_replay():
     from live_provider_helpers import check_live_workflow
 
     class WorkflowProvider(Provider):
-        def generate(self, request):
-            if request.response_model is CheckPlanResponse:
-                return CheckPlanResponse(checks=[{"name": SEMANTIC, "arguments": {}}])
-            return super().generate(request)
+        pass
 
     fixture = proposal().model_copy(deep=True)
     fixture.parameters[0].values = [2, 3]

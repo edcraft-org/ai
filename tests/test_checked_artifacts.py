@@ -91,7 +91,6 @@ def test_saved_previews_replay_offline_with_the_same_artifact_and_seeds(monkeypa
         pytest.fail("Preview and question reuse must not call a model or MCP")
 
     monkeypatch.setattr(Provider, "generate", unexpected_call)
-    monkeypatch.setattr(Provider, "tool_turn", unexpected_call)
     monkeypatch.setattr(FastMcpToolClient, "__enter__", unexpected_call)
     monkeypatch.setattr(FastMcpToolClient, "list_tools", unexpected_call)
     monkeypatch.setattr(FastMcpToolClient, "call_tool", unexpected_call)
@@ -130,7 +129,6 @@ def test_finalization_only_packages_checked_content_and_evidence(monkeypatch):
         pytest.fail("Finalization must only package the completed check outputs")
 
     monkeypatch.setattr(Provider, "generate", unexpected_call)
-    monkeypatch.setattr(Provider, "tool_turn", unexpected_call)
     monkeypatch.setattr(FastMcpToolClient, "call_tool", unexpected_call)
     domain = CodeDomain()
     finalized = domain.finalize_checked_template(candidate, evidence)

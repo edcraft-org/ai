@@ -1,42 +1,4 @@
-"""Model schemas expose only callable arguments, across domains and providers."""
-
-import copy
-
-from jsonschema import Draft202012Validator
-
-from edcraft_validator.llm.tool_context import callable_tool
-
-
-def test_callable_schema_retains_nested_and_recursive_argument_definitions():
-    definition = {
-        "name": "example_check",
-        "description": "Check a supplied feature tree",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "candidate": {"$ref": "#/$defs/Candidate"},
-                "required": {"$ref": "#/$defs/Features"},
-            },
-            "required": ["candidate", "required"],
-            "$defs": {
-                "Candidate": {"type": "object"},
-                "Features": {"type": "array", "items": {"$ref": "#/$defs/Feature"}},
-                "Feature": {
-                    "anyOf": [
-                        {"type": "string"},
-                        {"type": "array", "items": {"$ref": "#/$defs/Feature"}},
-                    ]
-                },
-            },
-        },
-    }
-    original = copy.deepcopy(definition)
-    tool = callable_tool(definition, {"candidate": {}})
-    schema = tool["function"]["parameters"]
-    assert set(schema["$defs"]) == {"Features", "Feature"}
-    assert schema["required"] == ["required"]
-    Draft202012Validator(schema).validate({"required": ["loop", ["helper"]]})
-    assert definition == original
+"""Planning schemas expose only model-owned arguments, across domains and providers."""
 
 
 def test_planning_schema_pairs_each_tool_with_its_own_closed_arguments():
@@ -49,7 +11,11 @@ def test_planning_schema_pairs_each_tool_with_its_own_closed_arguments():
 
     model = constrained_check_plan(
         CheckPlanResponse,
-        ("code_require_features", "code_verify_template_structure"),
+        (
+            "code_require_features",
+            "code_verify_template_structure",
+            "code_assess_template_relevance",
+        ),
         CODE_CHECK_ARGUMENT_MODELS,
     )
     valid = {
@@ -64,6 +30,10 @@ def test_planning_schema_pairs_each_tool_with_its_own_closed_arguments():
         {"name": "code_verify_template_structure", "arguments": {"required": ["loop"]}},
         {"name": "invented", "arguments": {}},
         {
+            "name": "code_assess_template_relevance",
+            "arguments": {"author_request": "changed"},
+        },
+        {
             "name": "code_require_features",
             "arguments": {"required": ["loop"], "candidate": {}},
         },
@@ -76,3 +46,19 @@ def test_planning_schema_pairs_each_tool_with_its_own_closed_arguments():
         if node.get("type") == "object":
             assert node["additionalProperties"] is False
             assert set(node.get("required", [])) == set(node["properties"])
+
+
+def test_check_plan_rejects_empty_duplicate_and_unexpected_fields():
+    import pytest
+    from pydantic import ValidationError
+
+    from edcraft_validator.llm.llm_contracts import CheckPlanResponse
+
+    check = {"name": "check", "arguments": {}}
+    for payload in [
+        {"checks": []},
+        {"checks": [check, check]},
+        {"checks": [check], "unexpected": {}},
+    ]:
+        with pytest.raises(ValidationError):
+            CheckPlanResponse.model_validate(payload)

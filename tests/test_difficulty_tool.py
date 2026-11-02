@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
+from judge_helpers import assessment
 from pydantic import ValidationError
 
 from edcraft_validator.application.code_difficulty import (
@@ -47,46 +48,6 @@ def question():
         ],
         correct_option="C",
     )
-
-
-def assessment():
-    return {
-        "estimated_difficulty": "easy",
-        "dimensions": {
-            name: {"rating": "low", "reason": reason}
-            for name, reason in {
-                "execution_burden": "Two sequential calculations give 5 then 10.",
-                "changing_state": "Only y is assigned before the return.",
-                "conceptual_interaction": "Addition feeds multiplication directly.",
-                "answer_discrimination": "Sequential evaluation distinguishes C.",
-            }.items()
-        },
-        "reason": "A short direct trace needs little coordination.",
-        "solution_reasoning": "x is 3, y becomes 5, and the return value is 10.",
-        "concepts_and_dependencies": "Assignment, addition, then multiplication.",
-        "shortcuts": "Substitution gives (3 + 2) * 2.",
-        "nearest_anchor": "The easy arithmetic worked anchor.",
-        "option_evidence": [
-            {
-                "option_id": option_id,
-                "reasoning": reason,
-                "hypothesised_error": None if option_id == "C" else reason,
-                "shortcut_or_cue": None,
-            }
-            for option_id, reason in zip(
-                "ABCD",
-                [
-                    "6 omits the addition.",
-                    "7 applies multiplication before addition.",
-                    "10 follows both assignments correctly.",
-                    "12 uses an extra increment, a weak distractor hypothesis.",
-                ],
-                strict=True,
-            )
-        ],
-        "unable_to_assess_reason": None,
-        "quality_concerns": ["The 12 distractor has weak plausibility evidence."],
-    }
 
 
 class Provider:

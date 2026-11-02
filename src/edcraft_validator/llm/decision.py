@@ -1,4 +1,4 @@
-"""Local Qwen yes/no relevance scoring; no generation or embedding API calls."""
+"""Configurable yes/no relevance decisions, with an optional legacy local adapter."""
 
 import asyncio
 import math
@@ -11,9 +11,23 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
-DEFAULT_RELEVANCE_MODEL = "Qwen/Qwen3-Reranker-0.6B"
-# Selected on 72 SmartSTEM development pairs, not a calibrated probability.
-DEFAULT_RELEVANCE_THRESHOLD = 0.0020295610011089593
+from edcraft_validator.llm.judge_configuration import (
+    DEFAULT_RELEVANCE_THRESHOLD,
+    JudgeSettings,
+    configured_judge_provider,
+    load_judge_settings,
+)
+from edcraft_validator.llm.llm_contracts import supports_decisions
+from edcraft_validator.llm.usage import (
+    ModelCallRecord,
+    ModelUsageSummary,
+    TokenUsage,
+    close_provider,
+    summarize_usage,
+)
+
+LOCAL_RELEVANCE_MODEL = "Qwen/Qwen3-Reranker-0.6B"
+LOCAL_RELEVANCE_THRESHOLD = 0.0020295610011089593
 RELEVANCE_POLICY = (
     "Assess whether answering the question tests the learning objective. "
     "Infer the skills and concepts needed to solve the actual task, even when the "
@@ -88,7 +102,8 @@ def _load_runtime(path: str):
 
 class QwenDecisionProvider:
     provider = "transformers-local"
-    model = DEFAULT_RELEVANCE_MODEL
+    model = LOCAL_RELEVANCE_MODEL
+    threshold = LOCAL_RELEVANCE_THRESHOLD
 
     def __init__(self):
         self.path = os.getenv("EDCRAFT_RELEVANCE_MODEL_PATH") or self.model
@@ -120,6 +135,54 @@ class QwenDecisionProvider:
                 return logits.softmax(-1)[1].item()
 
 
+class ConfiguredDecisionProvider:
+    """Use the same configured judge model as the difficulty cascade."""
+
+    def __init__(self, settings: JudgeSettings | None = None):
+        self.settings = settings if settings is not None else load_judge_settings()
+        self.delegate = configured_judge_provider(self.settings)
+        self.provider, self.model = self.delegate.provider, self.delegate.model
+        self.threshold = self.settings.relevance_threshold
+        if not supports_decisions(self.delegate):
+            raise ValueError("Provider does not support token-probability decisions")
+        self.served_model = None
+
+    @property
+    def last_usage(self):
+        return getattr(self.delegate, "last_usage", None)
+
+    def score(self, request_text, question_text):
+        result = self.delegate.decide(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a relevance classifier. Reply with exactly one word: "
+                        "yes or no. Do not explain, do not reason, do not prefix."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"<Instruct>: {RELEVANCE_POLICY}\n"
+                        f"<Query>: {request_text}\n<Document>: {question_text}"
+                    ),
+                },
+            ],
+            ("yes", "no"),
+        )
+        self.served_model = result.served_model
+        return result.distribution["yes"]
+
+    def generation_settings(self):
+        from edcraft_validator.llm.forced_decision import decision_settings
+
+        return decision_settings(self.delegate, ("yes", "no"))
+
+    def close(self):
+        close_provider(self.delegate)
+
+
 class DecisionReport(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
@@ -134,6 +197,10 @@ class DecisionReport(BaseModel):
     timeout_seconds: float
     error_code: str | None = None
     duration_ms: float = 0
+    served_model: str | None = None
+    provider_settings: dict = Field(default_factory=dict)
+    model_calls: list[ModelCallRecord] = Field(default_factory=list)
+    usage: ModelUsageSummary = Field(default_factory=ModelUsageSummary)
 
 
 async def measure_relevance(
@@ -152,24 +219,33 @@ async def measure_relevance(
         timeout_seconds=timeout_seconds,
     )
 
-    def run():
-        provider = provider_factory()
-        return (
-            provider.provider,
-            provider.model,
-            provider.score(request_text, question_text),
-        )
-
+    provider = None
+    call_started = None
     try:
+        provider = provider_factory()
+        report.provider, report.model = provider.provider, provider.model
+        settings = getattr(provider, "generation_settings", lambda: {})()
+        report.provider_settings = dict(settings)
+        threshold = getattr(provider, "threshold", DEFAULT_RELEVANCE_THRESHOLD)
+        if (
+            type(threshold) not in {int, float}
+            or not math.isfinite(threshold)
+            or not 0 <= threshold <= 1
+        ):
+            raise ValueError("Invalid relevance threshold")
+        report.threshold = threshold
+        call_started = time.perf_counter()
         async with asyncio.timeout(timeout_seconds):
-            provider, model, score = await asyncio.to_thread(run)
+            score = await asyncio.to_thread(
+                _execute_score, provider, request_text, question_text
+            )
         if (
             type(score) not in {int, float}
             or not math.isfinite(score)
             or not 0 <= score <= 1
         ):
             raise ValueError("decision score must be finite and in [0, 1]")
-        report.provider, report.model = provider, model
+        report.served_model = getattr(provider, "served_model", None)
         report.score = score
         report.relevant = score >= report.threshold
         report.status = "assessed"
@@ -180,6 +256,39 @@ async def measure_relevance(
     except (ImportError, OSError, KeyError):
         report.error_code = "RELEVANCE_CONFIGURATION_ERROR"
     except Exception:
-        report.error_code = "RELEVANCE_FAILED"
+        report.error_code = (
+            "RELEVANCE_FAILED"
+            if call_started is not None
+            else "RELEVANCE_CONFIGURATION_ERROR"
+        )
+    if call_started is None:
+        close_provider(provider)
+    if call_started is not None:
+        usage = getattr(provider, "last_usage", None)
+        if report.error_code == "RELEVANCE_TIMEOUT" or not isinstance(
+            usage, TokenUsage
+        ):
+            usage = TokenUsage()
+        report.model_calls = [
+            ModelCallRecord(
+                operation="judging",
+                duration_ms=(time.perf_counter() - call_started) * 1000,
+                error=report.error_code,
+                **usage.model_dump(),
+                usage_unavailable_reason=(
+                    "Provider usage unavailable or decision deadline expired"
+                    if usage.input_tokens is None or usage.output_tokens is None
+                    else None
+                ),
+            )
+        ]
+        report.usage = summarize_usage(report.model_calls)
     report.duration_ms = (time.perf_counter() - started) * 1000
     return report
+
+
+def _execute_score(provider, request_text, question_text):
+    try:
+        return provider.score(request_text, question_text)
+    finally:
+        close_provider(provider)

@@ -1,12 +1,18 @@
 """FastMCP server exposing technical checks and separate advisory assessments."""
 
 import math
+from functools import partial
 
 from fastmcp import FastMCP
 
 from edcraft_validator.llm.decision import (
+    ConfiguredDecisionProvider,
     DecisionProviderFactory,
-    QwenDecisionProvider,
+)
+from edcraft_validator.llm.judge_configuration import (
+    JudgeSettings,
+    configured_judge_provider,
+    load_judge_settings,
 )
 from edcraft_validator.llm.judging import (
     DEFAULT_JUDGE_TIMEOUT_SECONDS,
@@ -15,10 +21,7 @@ from edcraft_validator.llm.judging import (
 from edcraft_validator.mcp.code_checks.property_checks import PropertyCheckSettings
 from edcraft_validator.mcp.code_question_tools import register_code_question_tools
 from edcraft_validator.mcp.code_tools import register_code_validation_tools
-from edcraft_validator.mcp.difficulty_tools import (
-    configured_difficulty_provider,
-    register_difficulty_tools,
-)
+from edcraft_validator.mcp.difficulty_tools import register_difficulty_tools
 from edcraft_validator.mcp.relevance_tools import register_relevance_tools
 from edcraft_validator.tools.python_execution import (
     LocalPythonTool,
@@ -35,6 +38,7 @@ def create_validation_server(
     decision_provider_factory: DecisionProviderFactory | None = None,
     relevance_timeout_seconds: float = 35.0,
     template_property_settings: PropertyCheckSettings | None = None,
+    judge_settings: JudgeSettings | None = None,
 ) -> FastMCP:
     """Build the centralized server with injectable code-domain dependencies."""
     for timeout in (
@@ -49,6 +53,7 @@ def create_validation_server(
         strict_input_validation=True,
         mask_error_details=True,
     )
+    selected = judge_settings if judge_settings is not None else load_judge_settings()
     execution_tool = code_execution_tool or LocalPythonTool()
     register_code_validation_tools(
         server,
@@ -58,8 +63,10 @@ def create_validation_server(
     )
     register_difficulty_tools(
         server,
-        provider_factory=difficulty_provider_factory or configured_difficulty_provider,
+        provider_factory=difficulty_provider_factory
+        or partial(configured_judge_provider, selected),
         judge_timeout_seconds=difficulty_judge_timeout_seconds,
+        settings=selected,
     )
     register_code_question_tools(
         server,
@@ -68,10 +75,8 @@ def create_validation_server(
     )
     register_relevance_tools(
         server,
-        decision_provider_factory=decision_provider_factory or QwenDecisionProvider,
+        decision_provider_factory=decision_provider_factory
+        or partial(ConfiguredDecisionProvider, selected),
         relevance_timeout_seconds=relevance_timeout_seconds,
     )
     return server
-
-
-mcp = create_validation_server()

@@ -39,8 +39,8 @@ from edcraft_validator.mcp.code_checks.validation_context import (
     CodeValidationContext,
     DistractorCandidate,
 )
-from edcraft_validator.mcp.evidence import ToolEvidence, ToolFinding
 from edcraft_validator.tools.python_execution import PythonExecutionTool
+from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
 from edcraft_validator.validation.validation_contracts import ValidationFailure
 from edcraft_validator.value_comparison import equivalent, same_value_shape
 

@@ -50,6 +50,7 @@ def test_code_domain_resolves_real_tagged_mcp_definitions():
 
     assert [tool["name"] for tool in tools] == [
         "code_assess_template_difficulty",
+        "code_assess_template_relevance",
         "code_require_features",
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",

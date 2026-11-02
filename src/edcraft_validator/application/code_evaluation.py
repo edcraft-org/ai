@@ -40,6 +40,7 @@ from edcraft_validator.llm.llm_contracts import (
 )
 from edcraft_validator.llm.llm_errors import GenerationError
 from edcraft_validator.llm.provider_registry import create_model_provider
+from edcraft_validator.llm.usage import close_provider
 from edcraft_validator.mcp.catalogue import ToolCatalogueError
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.server import create_validation_server
@@ -289,6 +290,8 @@ class TemplateEvaluator:
                     exc.evidence if isinstance(exc, TemplateValidationError) else []
                 ),
             )
+        finally:
+            close_provider(model_provider)
 
         provenance = validated.authoring
         if provenance is None:

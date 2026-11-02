@@ -2,7 +2,6 @@
 
 import json
 import time
-from pathlib import Path
 
 import pytest
 from code_validation_helpers import validate_code
@@ -105,15 +104,7 @@ def test_failing_generated_input_shrinks_and_replays():
     assert seen[0]["a"] == 5
 
 
-def test_no_template_cartesian_enumerator_or_legacy_fields_remain():
-    root = Path("src/edcraft_validator")
-    for name in [
-        "domains/code/question_generator.py",
-        "domains/code/code_domain.py",
-        "mcp/code_checks/validation_context.py",
-    ]:
-        text = (root / name).read_text()
-        assert "itertools.product" not in text and "eligible_inputs" not in text
+def test_legacy_exhaustive_artifact_fields_are_rejected():
     checked = validate_code(template(), execution_tool=ArithmeticExecutor())
     raw = checked.model_dump()
     raw["validation"]["validated_cases"] = []

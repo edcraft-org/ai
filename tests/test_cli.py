@@ -12,10 +12,10 @@ from edcraft_validator.domains import domain_registry
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.llm import provider_registry
 from edcraft_validator.llm.llm_contracts import (
-    CheckPlanResponse,
     PlannedGenerationResponse,
     StructuredGenerationRequest,
 )
+from edcraft_validator.llm.llm_errors import GenerationError
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.evidence import ToolEvidence
 
@@ -44,7 +44,6 @@ class ExampleDomain:
     name = "example"
 
     request_model = ExampleRequest
-    candidate_model = ExampleCandidate
     validated_model = ExampleValidated
 
     def generation_request(self, request):
@@ -64,13 +63,6 @@ class ExampleDomain:
         assert evidence[0].status == "passed"
         return ExampleValidated(lesson=candidate.lesson, value=candidate.value)
 
-    def validation_request(self, candidate):
-        return StructuredGenerationRequest(
-            messages=[{"role": "user", "content": candidate.model_dump_json()}],
-            response_model=CheckPlanResponse,
-            prompt_version="example-validation-v1",
-        )
-
     def generate_question(self, validated, *, seed):
         raise NotImplementedError
 
@@ -82,10 +74,6 @@ class ExampleProvider(RequestPendingTools):
         self.model = model or "example-model"
 
     def generate(self, request):
-        if request.response_model is CheckPlanResponse:
-            return CheckPlanResponse.model_validate(
-                {"checks": [{"name": "positive_value", "arguments": {}}]}
-            )
         assert request.response_model == PlannedGenerationResponse[ExampleProposal]
         return request.response_model.model_validate(
             {
@@ -142,7 +130,7 @@ def test_generate_cli_passes_domain_without_creating_provider(
             assert json.loads(content) == {"value": 7}
             return parsed
 
-    domain = SimpleNamespace(candidate_model=Model, validated_model=Model)
+    domain = SimpleNamespace(validated_model=Model)
 
     class Result:
         def model_dump(self, *, mode):
@@ -374,6 +362,69 @@ def test_author_cli_passes_explicit_provider_and_model(monkeypatch, capsys) -> N
     assert json.loads(capsys.readouterr().out) == {"validated": True}
 
 
+@pytest.mark.parametrize("outcome", ["success", "returned_failure", "raised_failure"])
+def test_author_closes_owned_provider_on_success_and_failure(
+    outcome, monkeypatch, capsys
+):
+    class Provider:
+        model = "stub-model"
+
+        def __init__(self):
+            self.closed = 0
+
+        def close(self):
+            self.closed += 1
+
+    provider = Provider()
+
+    class Result:
+        def __init__(self):
+            self.status = "checked" if outcome == "success" else "needs_review"
+            self.artifact = None
+
+        def model_dump(self, *, mode):
+            return {"status": self.status, "artifact": None}
+
+    class Application:
+        def author_template(self, request, *, domain, provider, **kwargs):
+            if outcome == "raised_failure":
+                raise GenerationError("failed")
+            return Result()
+
+    monkeypatch.setattr(
+        template_cli, "create_model_provider", lambda selection: provider
+    )
+    monkeypatch.setattr(template_cli, "TemplateApplication", Application)
+    monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "edcraft-template",
+            "author",
+            "--domain",
+            "code",
+            "--provider",
+            "ollama",
+            "--prompt",
+            "Addition",
+            "--difficulty",
+            "easy",
+        ],
+    )
+
+    exit_code = template_cli.main()
+
+    assert (
+        exit_code
+        == {
+            "success": 0,
+            "returned_failure": 2,
+            "raised_failure": 1,
+        }[outcome]
+    )
+    assert provider.closed == 1
+
+
 def test_evaluate_cli_writes_attempts_and_prints_summary(
     monkeypatch, capsys, tmp_path
 ) -> None:
@@ -506,101 +557,36 @@ def test_author_cli_preserves_unsuccessful_result_and_returns_nonzero(
     }
 
 
-@pytest.mark.parametrize("command", ["author", "validate"])
-def test_checking_commands_require_a_provider(command):
+def test_author_command_requires_a_provider():
     with pytest.raises(SystemExit):
-        template_cli.build_parser().parse_args([command, "--domain", "code"])
+        template_cli.build_parser().parse_args(["author", "--domain", "code"])
 
 
-def test_validate_cli_selects_checks_through_provider_and_mcp(
-    example_registry, monkeypatch, tmp_path, capsys
-):
-    source = tmp_path / "candidate.json"
-    source.write_text(json.dumps({"lesson": "fractions", "value": 7}))
-    monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "edcraft-template",
-            "validate",
-            "--domain",
-            "example",
-            "--provider",
-            "example-provider",
-            "--model",
-            "selector",
-            str(source),
-        ],
-    )
-    assert template_cli.main() == 0
-    result = json.loads(capsys.readouterr().out)
-    assert example_registry == ["selector"]
-    assert result["status"] == "checked"
-    assert result["artifact"]["value"] == 7
-    assert result["fixed_plan"] == ["positive_value"]
-    assert len(result["attempts"]) == 1
-    assert json.loads(source.read_text()) == {"lesson": "fractions", "value": 7}
+def test_validate_command_is_retired():
+    with pytest.raises(SystemExit):
+        template_cli.build_parser().parse_args(
+            [
+                "validate",
+                "--domain",
+                "code",
+                "--provider",
+                "ollama",
+                "template.json",
+            ]
+        )
 
 
-@pytest.mark.parametrize("status", ["needs_review", "error"])
-def test_validate_cli_preserves_unsuccessful_evidence(
-    monkeypatch, tmp_path, capsys, status
-):
-    from pathlib import Path
-
-    from edcraft_validator.application.authoring_contracts import AuthoringResult
-
-    source = Path("examples/templates/arithmetic_linear.json")
-    template_output = tmp_path / "template.json"
-
-    class Application:
-        def validate_template(self, candidate, *, domain, provider):
-            return AuthoringResult(
-                status=status,
-                provider="stub",
-                model="stub",
-                domain="code",
-                request={},
-                prompt_version="test",
-                fixed_plan=["code_verify_template_structure"],
-                tool_catalogue=[],
-                reason="failed",
-            )
-
-    monkeypatch.setattr(template_cli, "TemplateApplication", Application)
-    monkeypatch.setattr(
-        template_cli, "create_model_provider", lambda selection: object()
-    )
-    monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "edcraft-template",
-            "validate",
-            "--domain",
-            "code",
-            "--provider",
-            "openai",
-            str(source),
-            "--template-output",
-            str(template_output),
-        ],
-    )
-    assert template_cli.main() == 2
-    assert json.loads(capsys.readouterr().out)["status"] == status
-    assert not template_output.exists()
-
-
-@pytest.mark.parametrize("command", ["author", "validate"])
 def test_cli_writes_one_report_and_small_template_with_optional_schema_file(
-    command, example_registry, monkeypatch, tmp_path
+    example_registry, monkeypatch, tmp_path
 ):
     report_path = tmp_path / "report.json"
     template_path = tmp_path / "template.json"
     schemas_path = tmp_path / "schemas.json"
+    source = tmp_path / "input.json"
+    source.write_text(json.dumps({"lesson": "fractions"}))
     args = [
         "edcraft-template",
-        command,
+        "author",
         "--domain",
         "example",
         "--provider",
@@ -611,14 +597,9 @@ def test_cli_writes_one_report_and_small_template_with_optional_schema_file(
         str(template_path),
         "--tool-schemas",
         str(schemas_path),
+        "--request-json",
+        str(source),
     ]
-    source = tmp_path / "input.json"
-    if command == "author":
-        source.write_text(json.dumps({"lesson": "fractions"}))
-        args += ["--request-json", str(source)]
-    else:
-        source.write_text(json.dumps({"lesson": "fractions", "value": 7}))
-        args += [str(source)]
     monkeypatch.setattr("sys.argv", args)
     monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
 
@@ -633,7 +614,7 @@ def test_cli_writes_one_report_and_small_template_with_optional_schema_file(
     assert "inputSchema" in schemas["tools"][0]
     assert "outputSchema" in schemas["tools"][0]
     loaded = ExampleValidated.model_validate_json(template_path.read_text())
-    assert loaded.value == (12 if command == "author" else 7)
+    assert loaded.value == 12
 
 
 def test_cli_rejects_overlapping_report_and_template_paths_before_model_call(

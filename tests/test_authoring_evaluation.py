@@ -205,6 +205,45 @@ def test_rerun_does_not_attach_catalogue_from_previous_job(
     assert failed["authoring_result"]["attempts"] == []
 
 
+@pytest.mark.parametrize("fails", [False, True], ids=["success", "failure"])
+def test_each_job_closes_owned_provider_on_success_and_failure(
+    monkeypatch, tmp_path, fails
+):
+    closed = []
+
+    class ClosingProvider(Provider):
+        def close(self):
+            closed.append(self)
+
+    class FailingProvider(ClosingProvider):
+        def generate(self, request):
+            raise GenerationError("not configured")
+
+    monkeypatch.setattr(
+        evaluation,
+        "create_model_provider",
+        lambda selection: FailingProvider() if fails else ClosingProvider(),
+    )
+    monkeypatch.setattr(
+        evaluation,
+        "TemplateApplication",
+        lambda: TemplateApplication(tool_client=RecordingClient(Executor())),
+    )
+    monkeypatch.setattr(
+        evaluation,
+        "source_revision",
+        lambda: {"git_revision": "test", "working_tree_dirty": True},
+    )
+    output = tmp_path / "baseline.jsonl"
+    monkeypatch.setattr(
+        "sys.argv",
+        ["evaluate", "--provider", "openai", "--jobs", "1", "--output", str(output)],
+    )
+
+    assert evaluation.main() == (1 if fails else 0)
+    assert len(closed) == 1
+
+
 def test_nonpositive_job_count_stops_before_model_creation(monkeypatch, tmp_path):
     monkeypatch.setattr(
         "sys.argv",

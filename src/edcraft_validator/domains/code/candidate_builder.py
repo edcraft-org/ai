@@ -37,3 +37,15 @@ def build_code_candidate(
         distractors=proposal.distractors,
         question_type="mcq",
     )
+
+
+def template_sha256(candidate: CodeTemplateCandidate) -> str:
+    """Identify the exact reusable content independently of any assessment."""
+    return hashlib.sha256(
+        json.dumps(
+            candidate.model_dump(mode="json"),
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode()
+    ).hexdigest()

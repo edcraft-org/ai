@@ -129,7 +129,7 @@ def test_ollama_generates_template_with_native_schema_endpoint(monkeypatch) -> N
     monkeypatch.setenv("OLLAMA_NUM_PREDICT", "4096")
     monkeypatch.setenv("OLLAMA_TIMEOUT_SECONDS", "10")
     monkeypatch.setenv("OLLAMA_THINK", "true")
-    provider.tool_turn([], [])
+    provider._ollama_request([], {})
     assert captured["payload"]["options"] == provider.generation_settings()["options"]
     assert captured["payload"]["options"]["temperature"] == 0
     assert captured["timeout"] == 300
@@ -299,7 +299,7 @@ def test_ollama_reports_timeout_separately(monkeypatch) -> None:
 
 
 @pytest.mark.parametrize("value", ["true", "false", "default", "low", "medium", "high"])
-def test_thinking_setting_is_used_for_generation_and_native_calls(monkeypatch, value):
+def test_thinking_setting_is_used_for_generation(monkeypatch, value):
     import io
 
     captured = []
@@ -312,14 +312,13 @@ def test_thinking_setting_is_used_for_generation_and_native_calls(monkeypatch, v
     monkeypatch.setattr("edcraft_validator.llm.ollama_provider.urlopen", fake_urlopen)
     provider = OllamaProvider()
     provider._ollama_request([], {})
-    provider.tool_turn([], [])
     expected = {"true": True, "false": False, "default": None}.get(value, value)
     assert provider.generation_settings()["think"] == expected
-    for payload in captured:
-        if expected is None:
-            assert "think" not in payload
-        else:
-            assert payload["think"] == expected
+    payload = captured[0]
+    if expected is None:
+        assert "think" not in payload
+    else:
+        assert payload["think"] == expected
 
 
 def test_thinking_budget_exhaustion_has_actionable_error(monkeypatch):
@@ -333,6 +332,23 @@ def test_thinking_budget_exhaustion_has_actionable_error(monkeypatch):
     )
     with pytest.raises(GenerationResponseError, match="OLLAMA_THINK=false"):
         OllamaProvider().generate(generation_request())
+
+
+def test_judge_override_enables_thinking_without_changing_author_default(monkeypatch):
+    import io
+
+    captured = []
+
+    def fake_urlopen(request, timeout):
+        captured.append(json.loads(request.data))
+        return io.BytesIO(b'{"message":{"content":"ok"},"done_reason":"stop"}')
+
+    monkeypatch.setenv("OLLAMA_THINK", "false")
+    monkeypatch.setattr("edcraft_validator.llm.ollama_provider.urlopen", fake_urlopen)
+    provider = OllamaProvider()
+    provider._ollama_request([], {}, reasoning_effort="medium")
+    assert captured[0]["think"] is True
+    assert provider.generation_settings()["think"] is False
 
 
 def test_ollama_reports_connection_reset_as_transport_failure(monkeypatch) -> None:
@@ -366,80 +382,21 @@ def test_ollama_rejects_invalid_generation_bounds(
         reader()
 
 
-def test_native_tool_calls_and_tool_name_feedback_round_trip(monkeypatch):
-    from edcraft_validator.llm.llm_contracts import ModelTurn
+@pytest.mark.parametrize("body", [{}, {"message": {}}, {"message": None}])
+def test_ollama_malformed_chat_body_fails_closed(monkeypatch, body):
+    import io
 
-    payloads = []
-
-    class Response:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
-
-        def read(self):
-            return json.dumps(
-                {
-                    "message": {
-                        "content": "",
-                        "tool_calls": [
-                            {
-                                "function": {
-                                    "name": "check",
-                                    "arguments": {"required": ["loop"]},
-                                }
-                            }
-                        ],
-                    }
-                }
-            ).encode()
-
-    def request(req, timeout):
-        payloads.append(json.loads(req.data))
-        return Response()
-
-    monkeypatch.setattr("edcraft_validator.llm.ollama_provider.urlopen", request)
-    provider = OllamaProvider(model="tool-model")
-    tools = [
-        {
-            "type": "function",
-            "function": {"name": "check", "parameters": {"type": "object"}},
-        }
-    ]
-    turn = provider.tool_turn([], tools)
-    assert isinstance(turn, ModelTurn)
-    assert json.loads(turn.calls[0].arguments_json) == {"required": ["loop"]}
-    messages = [
-        turn.message(),
-        {
-            "role": "tool",
-            "tool_call_id": turn.calls[0].id,
-            "name": "check",
-            "content": '{"status":"failed"}',
-        },
-    ]
-    provider.tool_turn(messages, tools)
-    assert payloads[0]["tools"] == tools
-    assert "format" not in payloads[0]
-    native = payloads[1]["messages"]
-    assert native[0]["tool_calls"][0]["function"]["arguments"] == {"required": ["loop"]}
-    assert native[1]["tool_name"] == "check"
-    assert "tool_call_id" not in native[1]
-    assert messages[1]["tool_call_id"] == turn.calls[0].id
-
-
-def test_ollama_malformed_tool_call_fails_closed(monkeypatch):
     monkeypatch.setattr(
-        OllamaProvider,
-        "_chat",
-        lambda *args, **kwargs: {"tool_calls": [{"function": {"arguments": {}}}]},
+        "edcraft_validator.llm.ollama_provider.urlopen",
+        lambda *args, **kwargs: io.BytesIO(json.dumps(body).encode()),
     )
-    with pytest.raises(GenerationResponseError, match="invalid tool turn"):
-        OllamaProvider().tool_turn([], [])
+    with pytest.raises(
+        GenerationResponseError, match="did not contain message.content"
+    ):
+        OllamaProvider().generate(generation_request())
 
 
-def test_ollama_validates_initial_feature_plan_without_native_tools(monkeypatch):
+def test_ollama_validates_initial_feature_plan(monkeypatch):
     payload = {
         "proposal": {
             "question_template": "What does f({a}) return?",

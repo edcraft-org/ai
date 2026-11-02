@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, TypeGuard
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+if TYPE_CHECKING:
+    from edcraft_validator.llm.forced_decision import ClassDecision
 
 
 class RecommendedCheckArguments(BaseModel):
@@ -92,6 +95,8 @@ class StructuredGenerationRequest[ProposalT: BaseModel]:
     offered_tool_names: tuple[str, ...] = ()
     tool_catalogue: ToolCatalogueSnapshot | None = None
     check_argument_models: tuple[tuple[str, type[BaseModel]], ...] = ()
+    # Per-call override, so judge reasoning does not change authoring settings.
+    reasoning_effort: str | None = None
 
 
 class ModelProvider(Protocol):
@@ -109,33 +114,17 @@ class ModelProvider(Protocol):
     ) -> ProposalT: ...
 
 
-class ToolCall(BaseModel):
-    """Provider-normalized call; malformed argument JSON is retained for feedback."""
+class DecisionModelProvider(ModelProvider, Protocol):
+    """Optional classification capability with observed token probabilities."""
 
-    id: str = Field(min_length=1)
-    name: str = Field(min_length=1)
-    arguments_json: str
+    def decide(
+        self, messages: list[dict[str, Any]], labels: tuple[str, ...]
+    ) -> ClassDecision: ...
 
 
-class ModelTurn(BaseModel):
-    content: str = ""
-    calls: list[ToolCall] = Field(default_factory=list)
-
-    def message(self) -> dict[str, Any]:
-        message: dict[str, Any] = {"role": "assistant", "content": self.content}
-        if self.calls:
-            message["tool_calls"] = [
-                {
-                    "id": call.id,
-                    "type": "function",
-                    "function": {
-                        "name": call.name,
-                        "arguments": call.arguments_json,
-                    },
-                }
-                for call in self.calls
-            ]
-        return message
+def supports_decisions(provider: ModelProvider) -> TypeGuard[DecisionModelProvider]:
+    """Check the optional capability once at the adapter/session boundary."""
+    return callable(getattr(provider, "decide", None))
 
 
 class TemplateProviderSelection(BaseModel):

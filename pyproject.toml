@@ -23,6 +23,7 @@ relevance = ["torch>=2.6,<3", "transformers>=5.0,<6"]
 
 [dependency-groups]
 dev = [
+    "mypy>=1.18,<2",
     "pytest>=8.4,<9",
     "pytest-asyncio>=1.2,<2",
     "ruff>=0.12,<1",
@@ -41,12 +42,30 @@ pythonpath = ["."]
 markers = [
     "openai_live: real OpenAI template-authoring API test, run before a PR",
     "ollama_live: real Ollama template workflow, requires a running local model",
-    "relevance_live: local Qwen relevance integration, requires downloaded model weights",
+    "relevance_live: configured relevance model integration, requires endpoint credentials",
 ]
 
 [tool.ruff]
 target-version = "py312"
 line-length = 88
+
+[tool.mypy]
+python_version = "3.12"
+follow_imports = "silent"
+ignore_missing_imports = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+files = [
+    "src/edcraft_validator/application/ports.py",
+    "src/edcraft_validator/application/authoring_contracts.py",
+    "src/edcraft_validator/application/authoring_api.py",
+    "src/edcraft_validator/validation/check_contracts.py",
+    "src/edcraft_validator/llm/judge_configuration.py",
+]
+
+[tool.pydantic-mypy]
+init_typed = true
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

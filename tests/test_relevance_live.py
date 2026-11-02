@@ -1,15 +1,16 @@
-"""Opt-in MCP integration using already downloaded local Qwen weights."""
+"""Opt-in MCP integration using the configured hosted decision model."""
+
+import os
 
 import pytest
 from fastmcp import Client
 
-from edcraft_validator.llm.decision import DEFAULT_RELEVANCE_MODEL
 from edcraft_validator.mcp.server import create_validation_server
 
 pytestmark = pytest.mark.relevance_live
 
 
-async def test_local_qwen_mcp_returns_decision_without_other_checks():
+async def test_configured_mcp_returns_decision_without_other_checks():
     def forbidden():
         pytest.fail("Relevance must not call the difficulty judge")
 
@@ -33,8 +34,11 @@ async def test_local_qwen_mcp_returns_decision_without_other_checks():
             data = result.structured_content
             assert data["status"] == "assessed", data
             decision = data["decision"]
-            assert decision["model"] == DEFAULT_RELEVANCE_MODEL
-            assert decision["provider"] == "transformers-local"
+            assert decision["model"] == os.getenv("EDCRAFT_JUDGE_MODEL", "x-test-3")
+            assert decision["provider"] == os.getenv(
+                "EDCRAFT_JUDGE_PROVIDER", "soclaas"
+            )
+            assert decision["usage"]["model_call_count"] == 1
             assert 0 <= decision["score"] <= 1
             assert decision["relevant"] == (decision["score"] >= decision["threshold"])
             assert (

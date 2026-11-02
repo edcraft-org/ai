@@ -232,7 +232,7 @@ async def test_configuration_errors_are_explicit_and_do_not_leak_secrets():
     )
     assert report.status == "error"
     assert report.technical.status == "passed"
-    assert report.relevance.decision.error_code == "RELEVANCE_FAILED"
+    assert report.relevance.decision.error_code == "RELEVANCE_CONFIGURATION_ERROR"
     assert "PRIVATE TOKEN" not in report.model_dump_json()
 
 
