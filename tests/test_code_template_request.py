@@ -2,18 +2,34 @@ import pytest
 from pydantic import ValidationError
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
+from edcraft_validator.domains.code.code_types import (
+    DEFAULT_DISTRACTORS,
+    MAX_DISTRACTORS,
+    MIN_DISTRACTORS,
+)
 from edcraft_validator.llm.llm_contracts import TemplateProviderSelection
 
 
-def test_template_request_defaults_to_three_distractors() -> None:
+def test_template_request_defaults_to_four_choices() -> None:
     request = CodeTemplateRequest(
         prompt="Create a question about loops", difficulty="easy"
     )
 
-    assert request.num_distractors == 3
+    assert request.num_distractors == DEFAULT_DISTRACTORS == 3
 
 
-@pytest.mark.parametrize("count", [0, 1, 4])
+@pytest.mark.parametrize("count", [MIN_DISTRACTORS, 2, 4, MAX_DISTRACTORS])
+def test_template_request_accepts_any_supported_distractor_count(count: int) -> None:
+    request = CodeTemplateRequest(
+        prompt="Create a question about loops",
+        difficulty="easy",
+        num_distractors=count,
+    )
+
+    assert request.num_distractors == count
+
+
+@pytest.mark.parametrize("count", [0, MIN_DISTRACTORS - 1, MAX_DISTRACTORS + 1])
 def test_template_request_rejects_unsupported_distractor_count(count: int) -> None:
     with pytest.raises(ValidationError):
         CodeTemplateRequest(

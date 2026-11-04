@@ -6,6 +6,11 @@ from edcraft_validator.domains.code.check_plan import CODE_CHECK_ARGUMENT_MODELS
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateRequest,
 )
+from edcraft_validator.domains.code.code_types import (
+    MAX_DISTRACTOR_CANDIDATES,
+    MAX_DISTRACTORS,
+    MIN_DISTRACTORS,
+)
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
 from edcraft_validator.domains.code.template_revision import author_difficulty_guidance
 from edcraft_validator.llm.llm_contracts import (
@@ -13,7 +18,7 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v22-relevance-check"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v23-choice-counts"
 
 
 def build_template_prompt(
@@ -25,6 +30,7 @@ Author request (preserve its meaning; do not replace it with a catalogue topic):
 
 Requested difficulty: {request.difficulty}
 Required usable distractors: {request.num_distractors}
+Supported distractor range: {MIN_DISTRACTORS} to {MAX_DISTRACTORS}
 Checks available for recommendation are in the supplied MCP catalogue.
 
 Choose the entry function, finite parameters, learner-facing question template, and
@@ -45,7 +51,8 @@ parameter placeholders such as `{{n}}`; never put expressions inside braces.
 Choose parameter values that keep the proposed misconceptions distinct. Values
 such as zero, one, or equal operands can make a wrong operation yield the right
 answer. You may change finite parameter values when consistent with the author
-request, or supply extra distractor candidates (up to five), to avoid collisions.
+request, or supply extra distractor candidates (up to
+{MAX_DISTRACTOR_CANDIDATES}), to avoid collisions.
 
 Recommend a nonempty fixed subset of the available MCP tools using their supplied
 descriptions. Use each tool name at most once and do not invent names.
