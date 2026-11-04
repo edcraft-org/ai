@@ -6,7 +6,11 @@ from functools import lru_cache
 from pydantic import Field, create_model, model_validator
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
-from edcraft_validator.domains.code.code_types import Difficulty
+from edcraft_validator.domains.code.code_types import (
+    MAX_DISTRACTOR_CANDIDATES,
+    MIN_DISTRACTORS,
+    Difficulty,
+)
 from edcraft_validator.domains.code.difficulty import (
     CodeDifficultyRubric,
     DifficultyDimensions,
@@ -44,10 +48,13 @@ class TemplateDifficultyAssessment(Record):
         return self
 
 
-@lru_cache(maxsize=7)
+@lru_cache(maxsize=MAX_DISTRACTOR_CANDIDATES + 1)
 def template_assessment_model(distractor_count: int):
-    if not 2 <= distractor_count <= 8:
-        raise ValueError("expected two to eight distractor recipes")
+    if not MIN_DISTRACTORS <= distractor_count <= MAX_DISTRACTOR_CANDIDATES:
+        raise ValueError(
+            f"expected {MIN_DISTRACTORS} to {MAX_DISTRACTOR_CANDIDATES} "
+            "distractor recipes"
+        )
     evidence = create_model(
         f"EvidenceFor{distractor_count}DistractorRecipes",
         __base__=Record,

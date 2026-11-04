@@ -37,7 +37,7 @@ def test_generation_request_uses_one_typed_response_contract() -> None:
     assert request.response_model == PlannedGenerationResponse[CodeProposalResponse]
     assert (
         request.prompt_version
-        == "code-template-v22-relevance-check+response-v8-full-candidate"
+        == "code-template-v23-choice-counts+response-v8-full-candidate"
     )
     assert "Create a question about arithmetic" in request.messages[1]["content"]
     assert "Use native JSON values" in request.messages[1]["content"]
@@ -94,6 +94,31 @@ def test_response_schema_rejects_values_that_do_not_match_kind(
         CodeProposalResponse.model_validate_json(
             json.dumps(response_with_parameter(kind, values))
         )
+
+
+@pytest.mark.parametrize("count", [1, 12])
+def test_response_schema_accepts_supported_candidate_counts(count: int) -> None:
+    payload = response_with_parameter("integer", [1, 2])
+    payload["distractors"] = [
+        {"expression": f"value + {offset + 1}", "reason_template": "Off by one."}
+        for offset in range(count)
+    ]
+
+    proposal = CodeProposalResponse.model_validate(payload)
+
+    assert len(proposal.distractors) == count
+
+
+@pytest.mark.parametrize("count", [0, 13])
+def test_response_schema_rejects_unsupported_candidate_counts(count: int) -> None:
+    payload = response_with_parameter("integer", [1, 2])
+    payload["distractors"] = [
+        {"expression": f"value + {offset + 1}", "reason_template": "Off by one."}
+        for offset in range(count)
+    ]
+
+    with pytest.raises(ValidationError):
+        CodeProposalResponse.model_validate(payload)
 
 
 def test_response_schema_rejects_duplicate_typed_values() -> None:

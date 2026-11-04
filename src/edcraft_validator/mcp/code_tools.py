@@ -14,7 +14,11 @@ from pydantic import Field
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
 )
-from edcraft_validator.domains.code.code_types import CodeFeature
+from edcraft_validator.domains.code.code_types import (
+    MAX_DISTRACTORS,
+    MIN_DISTRACTORS,
+    CodeFeature,
+)
 from edcraft_validator.domains.code.features import extract_code_features
 from edcraft_validator.mcp.code_checks.answer_checks import (
     check_canonical_answers,
@@ -138,8 +142,8 @@ def register_code_validation_tools(
         required_distractors: Annotated[
             int,
             Field(
-                ge=2,
-                le=3,
+                ge=MIN_DISTRACTORS,
+                le=MAX_DISTRACTORS,
                 description="Number of valid learner-facing distractors required.",
             ),
         ],

@@ -8,6 +8,7 @@ from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
+from edcraft_validator.domains.code.code_types import MAX_DISTRACTORS, MIN_DISTRACTORS
 from edcraft_validator.mcp import code_tools
 from edcraft_validator.mcp.code_checks.property_checks import (
     PropertyCheckRun,
@@ -424,7 +425,15 @@ async def test_invalid_arguments_and_unknown_tools_are_protocol_errors():
                 "code_validate_answers_and_distractors",
                 {
                     "candidate": candidate().model_dump(mode="json"),
-                    "required_distractors": 4,
+                    "required_distractors": MAX_DISTRACTORS + 1,
+                },
+            )
+        with pytest.raises(ToolError, match="greater_than_equal"):
+            await client.call_tool(
+                "code_validate_answers_and_distractors",
+                {
+                    "candidate": candidate().model_dump(mode="json"),
+                    "required_distractors": MIN_DISTRACTORS - 1,
                 },
             )
         with pytest.raises(ToolError, match="Unknown tool"):

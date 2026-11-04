@@ -53,6 +53,19 @@ CODE_TOPICS: tuple[ProgrammingTopic, ...] = get_args(ProgrammingTopic)
 
 CODE_DIFFICULTIES: tuple[Difficulty, ...] = get_args(Difficulty)
 
+
+# Learner-facing choice count is distractors + 1. The default keeps the familiar
+# four choices, while authors may request any supported count.
+MIN_DISTRACTORS = 1
+DEFAULT_DISTRACTORS = 3
+MAX_DISTRACTORS = 10
+MIN_CHOICES = MIN_DISTRACTORS + 1
+MAX_CHOICES = MAX_DISTRACTORS + 1
+
+# Models may propose spare candidates so selection can skip collisions. Keep
+# enough headroom for the largest supported request plus a couple of spares.
+MAX_DISTRACTOR_CANDIDATES = 12
+
 # Domain-owned advisory identities. Application policy never derives this from
 # untrusted tool evidence or model arguments.
 CODE_ADVISORY_CHECK_NAMES = frozenset(

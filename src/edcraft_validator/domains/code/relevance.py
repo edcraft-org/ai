@@ -5,7 +5,12 @@ import json
 from pydantic import Field
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
-from edcraft_validator.domains.code.code_types import AnswerTarget, CodeFeature
+from edcraft_validator.domains.code.code_types import (
+    MAX_DISTRACTORS,
+    MIN_DISTRACTORS,
+    AnswerTarget,
+    CodeFeature,
+)
 from edcraft_validator.domains.code.difficulty import (
     CodeDifficultyQuestion,
     Record,
@@ -18,7 +23,9 @@ class CodeQuestionRequest(Record):
     prompt: Text = Field(max_length=4000)
     required_features: list[CodeFeature] = Field(default_factory=list, max_length=13)
     answer_target: AnswerTarget | None = None
-    num_distractors: int | None = Field(default=None, ge=2, le=3)
+    num_distractors: int | None = Field(
+        default=None, ge=MIN_DISTRACTORS, le=MAX_DISTRACTORS
+    )
     learner_prerequisites: list[Text] = Field(default_factory=list, max_length=20)
 
 

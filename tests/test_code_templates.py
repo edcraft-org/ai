@@ -282,6 +282,43 @@ def test_two_model_distractors_are_enough_when_two_are_requested() -> None:
     assert len(built.distractors) == 2
 
 
+@pytest.mark.parametrize("count", [1, 3, 10])
+def test_supported_candidate_counts_validate_and_are_selected(count: int) -> None:
+    canonical = template()
+    if count <= len(canonical.distractors):
+        candidate = canonical
+    else:
+        candidate = template(
+            distractors=[
+                {
+                    "expression": f"a + b - c + {offset + 1}",
+                    "reason_template": f"Misconception {offset + 1}.",
+                }
+                for offset in range(count)
+            ]
+        )
+
+    validated = validate_code(
+        candidate, execution_tool=ArithmeticExecutor(), num_distractors=count
+    )
+
+    assert len(validated.template.distractors) == count
+
+
+@pytest.mark.parametrize("count", [0, 13])
+def test_unsupported_candidate_counts_are_rejected(count: int) -> None:
+    with pytest.raises(ValueError):
+        template(
+            distractors=[
+                {
+                    "expression": f"a + b - c + {offset}",
+                    "reason_template": f"Misconception {offset}.",
+                }
+                for offset in range(count)
+            ]
+        )
+
+
 def test_candidate_builder_leaves_missing_distractors_for_check_failure() -> None:
     canonical = template()
     payload = canonical.model_dump(
