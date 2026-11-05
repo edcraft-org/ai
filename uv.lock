@@ -409,6 +409,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
+    { name = "httpx" },
     { name = "hypothesis" },
     { name = "jsonschema" },
     { name = "openai" },
@@ -434,6 +435,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastmcp", specifier = ">=4,<5" },
+    { name = "httpx", specifier = ">=0.28,<0.29" },
     { name = "hypothesis", specifier = ">=6.140,<7" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "openai", specifier = ">=1.99,<2" },
