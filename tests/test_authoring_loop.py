@@ -6,6 +6,8 @@ import json
 import pytest
 from judge_helpers import proposal
 
+from edcraft_validator.application.authoring_api import summarize_authoring
+from edcraft_validator.application.authoring_contracts import AuthoringError
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
@@ -196,6 +198,29 @@ def test_fourth_failure_retains_full_history_without_attempt_five():
         }
         for execution in result.attempts[1].executions
     ]
+
+
+def test_exhausted_attempts_expose_technical_check_failure():
+    result, _ = run(Provider([wrong_answer()]))
+    assert result.status == "needs_review" and result.artifact is None
+    assert not result.attempts[-1].passed
+    assert result.failure == AuthoringError(
+        stage="checking", code="TEMPLATE_CHECKS_FAILED"
+    )
+    summary = summarize_authoring(result)
+    assert summary.error.code == "TEMPLATE_CHECKS_FAILED"
+    assert summary.error.message == (
+        "The model did not produce a template that passes technical checks. "
+        "Retry, or rephrase the request."
+    )
+
+
+def test_checked_workflow_exposes_no_public_error():
+    result, _ = run(Provider())
+    summary = summarize_authoring(result)
+    assert summary.status == "checked" and summary.artifact_id is not None
+    assert result.failure is None
+    assert summary.error is None
 
 
 @pytest.mark.parametrize(

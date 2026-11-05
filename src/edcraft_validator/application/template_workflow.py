@@ -368,6 +368,10 @@ class TemplateApplication:
             result.reason = (
                 "Template checking stopped without all selected checks passing"
             )
+            if result.failure is None:
+                result.failure = AuthoringError(
+                    stage="checking", code="TEMPLATE_CHECKS_FAILED"
+                )
             return result
 
         evidence = [
