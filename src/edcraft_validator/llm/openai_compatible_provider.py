@@ -53,7 +53,7 @@ class OpenAICompatibleProvider:
         soclaas = provider == "soclaas"
         self._response_format = _response_format(provider)
         self._generation_max_tokens = _positive_int_setting(
-            provider, "GENERATION_MAX_TOKENS", 16384 if soclaas else None
+            provider, "GENERATION_MAX_TOKENS", 32768 if soclaas else None
         )
         self._reasoning_effort = _reasoning_effort(provider)
 
@@ -236,7 +236,7 @@ def _model(provider: str) -> str:
 
 def _timeout_seconds(provider: str) -> float:
     variable = _variable(provider, "TIMEOUT_SECONDS")
-    raw_value = os.getenv(variable, "300" if provider == "soclaas" else "120").strip()
+    raw_value = os.getenv(variable, "600" if provider == "soclaas" else "120").strip()
     try:
         value = float(raw_value)
     except ValueError as exc:
