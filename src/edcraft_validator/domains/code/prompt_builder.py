@@ -18,7 +18,7 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v23-choice-counts"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v24-closed-form-recipes"
 
 
 def build_template_prompt(
@@ -117,6 +117,13 @@ Rules:
   len, sum, min, max, sorted, all, and any are also supported. Do not use methods or
   other function calls. Expressions use bare parameter names, for example `a + b`.
   Placeholder braces belong only in question_template and reason_template.
+- Answer and distractor recipes are closed-form expressions over the declared
+  parameter names only. If the code accumulates in a local variable, derive the
+  closed form over the parameters; never answer with a local variable name or a
+  function call. For example, `total = 0; for i in range(1, n + 1): total += i`
+  has recipe `n * (n + 1) // 2`, and a nested loop over `n` and `m` runs `n * m`
+  times. If the request asks how many times code runs, prefer loop_iterations,
+  loop_executions, branch_executions, or function_calls with a closed-form count.
 - question_template must name the entry function and use plain placeholders for every
   declared parameter. Its wording must match answer_target.
 - Each distractor candidate must represent a specific misconception. The MCP tool

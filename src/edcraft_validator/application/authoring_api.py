@@ -92,6 +92,14 @@ def _public_error(report: AuthoringResult) -> PublicAuthoringError | None:
                 "Review the evidence."
             ),
         }
+        if report.failure.code == "TEMPLATE_CHECKS_FAILED":
+            return PublicAuthoringError(
+                code=report.failure.code,
+                message=(
+                    "The model did not produce a template that passes technical "
+                    "checks. Retry, or rephrase the request."
+                ),
+            )
         return PublicAuthoringError(
             code=f"{report.failure.stage.upper()}_ERROR",
             message=messages.get(

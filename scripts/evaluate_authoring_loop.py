@@ -127,7 +127,7 @@ def summarize_records(records, requested_jobs):
         result = record.get("authoring_result", {})
         if record["status"] != "checked":
             failure = result.get("failure") or record.get("failure")
-            if failure:
+            if failure and failure.get("code") != "TEMPLATE_CHECKS_FAILED":
                 failures[f"{failure['stage']}:{failure['code']}"] += 1
             else:
                 executions = (result.get("attempts") or [{}])[-1].get("executions", [])

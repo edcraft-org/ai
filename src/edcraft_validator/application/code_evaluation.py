@@ -311,7 +311,9 @@ class TemplateEvaluator:
 
 
 def _terminal_failure(result: AuthoringResult) -> tuple[FailureStage, str]:
-    if result.failure is not None:
+    # TEMPLATE_CHECKS_FAILED is a summary-level outcome. Evaluation keeps the
+    # specific check finding from the final attempt for comparable metrics.
+    if result.failure is not None and result.failure.code != "TEMPLATE_CHECKS_FAILED":
         return result.failure.stage, result.failure.code
     if result.attempts:
         for execution in result.attempts[-1].executions:
