@@ -148,6 +148,13 @@ and `OPENAI_REASONING_EFFORT` configure existing transport
 options without adding another provider. These settings do not guarantee support
 for decision logprobs or reasoning controls on that endpoint.
 
+SocLaas defaults to a 32,768-token output budget. The shipped configuration also
+sets low generation reasoning; `SOCLAAS_GENERATION_MAX_TOKENS`,
+`SOCLAAS_REASONING_EFFORT` and `SOCLAAS_TIMEOUT_SECONDS` override both settings.
+The gateway caps `max_tokens` at the selected model's `max_model_len`. Set a
+reasoning effort only for models that advertise one; models without reasoning
+support reject the parameter.
+
 Use shared fixture modules rather than importing fixtures from test modules.
 Regression tests cover fresh-process imports, interchangeable provider accounting,
 settings snapshots, deadlines, correction, evidence identity, worker threading and
