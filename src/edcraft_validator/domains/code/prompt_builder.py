@@ -18,7 +18,7 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v24-closed-form-recipes"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v25-supported-subset"
 
 
 def build_template_prompt(
@@ -100,9 +100,27 @@ Rules:
   Define called helper functions at module level, not inside another function.
   Recursion is allowed. Recursive code must have a base case
   and use bounded inputs suitable for manual tracing.
-- Use only expressions, assignments, if statements, and for loops. Do not use imports,
-  attributes, classes, decorators, comprehensions, while loops, lambdas,
-  exceptions, file access, networking, input, eval, or exec.
+- Supported Python subset (statically enforced; code outside it is rejected before
+  execution). Allowed statements are module-level `def`, module-level assignment,
+  `if`, `for`, `return`, `break`, `continue`, `pass`, and expression statements.
+  Allowed calls are direct calls to module-level functions you define and these
+  built-ins only: abs, all, any, bool, enumerate, float, int, len, list, max, min,
+  range, reversed, round, sorted, str, sum, tuple, zip. Do not call `print`, do not
+  use attribute or method access (`.append`, `.items`, `.upper`, ...), do not call a
+  function defined inside another function, and do not call through a variable.
+  Forbidden constructs are import, class, decorator, lambda, list/dict/set/generator
+  comprehension, `yield` and `yield from`, `try`/`except`/`finally`, `raise`,
+  `while`, `with`, `del`, `global`, `nonlocal`, `async`/`await`, and any name
+  starting with `__`. Integer literals must not exceed 10,000 in absolute value.
+  Define every helper you call at module level; a nested `def` is not callable
+  under this subset, so prefer inlining the logic in the entry function.
+- If the author request names a construct outside this subset (for example a
+  generator, comprehension, `while` loop, exception, class, attribute, file read,
+  or `print`), do not use it. Translate the request into the nearest supported form
+  using `for`, `if`, assignment, and `return`, and word the question around that
+  supported behaviour. Do not mark an unsupported construct as a required feature.
+  A supported question that preserves the author's intent is better than a rejected
+  template that copies an unsupported construct literally.
 - Every parameter declares a kind and two to 32 distinct finite values. Supported
   kinds are integer (-100 through 100), boolean, string (non-empty short printable
   text), and
