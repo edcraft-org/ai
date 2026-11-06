@@ -328,6 +328,25 @@ def test_bad_mcp_results_never_pass_and_do_not_skip_other_checks(kind):
     )
 
 
+def test_tool_execution_failure_is_reported_as_a_check_error():
+    class UnavailableClient(RecordingClient):
+        def call_tool(self, name, arguments, *, version=None):
+            if name == SEMANTIC:
+                raise TimeoutError("MCP tool unavailable")
+            return super().call_tool(name, arguments, version=version)
+
+    result, _ = run(Provider(), UnavailableClient(Executor()))
+    assert result.status == "needs_review"
+    assert len(result.attempts) == 4  # Retryable failures still use the loop.
+    assert result.failure == AuthoringError(stage="checking", code="CHECK_ERROR")
+    assert "could not complete" in result.reason
+    summary = summarize_authoring(result)
+    assert summary.error.code == "CHECK_ERROR"
+    assert summary.error.message == (
+        "A check could not complete. Verify the model or tool service and try again."
+    )
+
+
 def test_structure_only_success_cannot_fabricate_reusable_answers():
     result, _ = run(Provider(plan=(STRUCTURE,)))
     assert result.status == "needs_review"
