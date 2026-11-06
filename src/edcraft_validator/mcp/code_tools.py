@@ -13,6 +13,7 @@ from pydantic import Field
 
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
+    TemplateValidationError,
 )
 from edcraft_validator.domains.code.code_types import (
     MAX_DISTRACTORS,
@@ -48,7 +49,7 @@ from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFindi
 from edcraft_validator.validation.validation_contracts import ValidationFailure
 from edcraft_validator.value_comparison import equivalent, same_value_shape
 
-CODE_TOOL_VERSION = "2.1.0"
+CODE_TOOL_VERSION = "2.1.1"
 STATIC_TOOL_TIMEOUT_SECONDS = 5.0
 
 
@@ -136,7 +137,10 @@ def register_code_validation_tools(
             "sampled evidence, not exhaustive verification. Unseen generated "
             "questions remain drafts for manual review. Execution, trace and "
             "sampling-budget limits return explicit error evidence. Only the "
-            "supported Python subset is executed."
+            "supported Python subset is executed. If the template structure is "
+            "invalid, this check reports ANSWERS_NOT_EVALUATED instead of "
+            "repeating the structural finding owned by "
+            "code_verify_template_structure."
         ),
     )
     async def code_validate_answers_and_distractors(
@@ -307,7 +311,18 @@ def validate_answers_and_distractors(
     # Revalidate mutable Python caller objects as well as MCP boundary inputs.
     candidate = CodeTemplateCandidate.model_validate(candidate.model_dump())
     context = CodeValidationContext(candidate, num_distractors=required_distractors)
-    check_structure(context)
+    try:
+        check_structure(context)
+    except TemplateValidationError as exc:
+        # Structure owns the actionable finding. Report a distinct blocked
+        # status here instead of repeating the same finding under both checks.
+        raise ValidationFailure(
+            "Answer and distractor checks were not evaluated because the "
+            "template structure is invalid. Fix the structure check first.",
+            code="ANSWERS_NOT_EVALUATED",
+            field=exc.field,
+            context={"blocking_code": exc.code},
+        ) from exc
     check_expressions(context)
     config = property_settings or PropertyCheckSettings()
     run = PropertyCheckRun(config)

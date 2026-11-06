@@ -24,6 +24,7 @@ from edcraft_validator.domains.code.profiles import (
 from edcraft_validator.domains.code.prompt_builder import build_template_prompt
 from edcraft_validator.domains.code.question_generator import generate_code_question
 from edcraft_validator.domains.code.safe_expressions import SafeExpression
+from edcraft_validator.mcp.code_tools import verify_template_structure
 from edcraft_validator.tools.python_execution import ExecutionResult
 from edcraft_validator.tools.python_worker import execute_request
 from edcraft_validator.validation.validation_contracts import ValidationFailure
@@ -487,12 +488,17 @@ def test_unsupported_code_is_rejected_before_execution() -> None:
     executor = UnexpectedExecutor()
     value = template(code="import os\n\ndef calculate(a, b, c):\n    return a + b - c")
 
-    with pytest.raises(TemplateValidationError) as error:
+    with pytest.raises(TemplateValidationError) as structure:
+        verify_template_structure(value)
+    assert structure.value.code == "UNSUPPORTED_CODE"
+    assert structure.value.field == "code"
+
+    with pytest.raises(ValidationFailure) as answers:
         validate_code(value, execution_tool=executor)
 
-    assert error.value.code == "UNSUPPORTED_CODE"
+    assert answers.value.code == "ANSWERS_NOT_EVALUATED"
+    assert answers.value.context["blocking_code"] == "UNSUPPORTED_CODE"
     assert executor.called is False
-    assert error.value.field == "code"
 
 
 def test_inconsistent_answer_types_precede_distractor_selection() -> None:
@@ -538,12 +544,17 @@ def test_rejects_an_unused_entry_parameter_before_execution() -> None:
         answer_expression="a + b",
     )
 
-    with pytest.raises(TemplateValidationError) as error:
+    with pytest.raises(TemplateValidationError) as structure:
+        verify_template_structure(value)
+    assert structure.value.code == "UNUSED_PARAMETER"
+    assert structure.value.field == "parameters"
+    assert "c" in str(structure.value)
+
+    with pytest.raises(ValidationFailure) as answers:
         validate_code(value, execution_tool=executor)
 
-    assert error.value.code == "UNUSED_PARAMETER"
-    assert error.value.field == "parameters"
-    assert "c" in str(error.value)
+    assert answers.value.code == "ANSWERS_NOT_EVALUATED"
+    assert answers.value.context["blocking_code"] == "UNUSED_PARAMETER"
     assert executor.batch_calls == 0
 
 

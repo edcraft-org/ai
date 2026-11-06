@@ -78,6 +78,24 @@ def test_invalid_distractor_expression_is_rejected_as_a_candidate(candidate):
     assert "bare parameter names" in str(caught.value)
 
 
+def test_answers_check_does_not_repeat_a_structure_finding(candidate):
+    candidate.code = "import os\n" + candidate.code
+
+    with pytest.raises(ValidationFailure) as structure:
+        verify_template_structure(candidate)
+    with pytest.raises(ValidationFailure) as answers:
+        validate_answers_and_distractors(
+            candidate, 3, execution_tool=LocalPythonTool(), timeout_seconds=2
+        )
+
+    assert structure.value.code == "UNSUPPORTED_CODE"
+    assert "Import is not supported" in str(structure.value)
+    assert answers.value.code == "ANSWERS_NOT_EVALUATED"
+    assert answers.value.context["blocking_code"] == "UNSUPPORTED_CODE"
+    assert "Import is not supported" not in str(answers.value)
+    assert "structure" in str(answers.value)
+
+
 @pytest.mark.parametrize("field", ["answer_expression", "distractors[0].expression"])
 def test_structure_check_does_not_validate_expression_semantics(candidate, field):
     source = "{a} + {b}"
