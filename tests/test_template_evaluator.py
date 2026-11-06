@@ -124,9 +124,9 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
         records[1]["authoring_result"]["tool_catalogue"]
         == report.attempts[1].tool_catalogue
     )
-    answers_evidence = records[1]["authoring_result"]["attempts"][-1]["executions"][
-        -1
-    ]["evidence"]
+    answers_evidence = records[1]["authoring_result"]["attempts"][-1]["executions"][-1][
+        "evidence"
+    ]
     assert answers_evidence["findings"][0]["code"] == "ANSWERS_NOT_EVALUATED"
     assert answers_evidence["details"]["blocking_code"] == "UNUSED_PARAMETER"
     for record in records:
