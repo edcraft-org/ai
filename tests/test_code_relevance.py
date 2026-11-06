@@ -5,6 +5,7 @@ import json
 import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
+from pydantic import ValidationError
 
 from edcraft_validator.application.code_relevance import (
     CodeRelevanceReview,
@@ -56,6 +57,19 @@ async def assess(*, item=None, request=None, decisions=None, **kwargs):
         execution_tool=Executor(),
         **kwargs,
     )
+
+
+@pytest.mark.parametrize("count", [2, 3])
+def test_concrete_request_accepts_the_supported_choice_counts(count):
+    request = CodeQuestionRequest(prompt="Trace arithmetic.", num_distractors=count)
+    assert request.num_distractors == count
+
+
+@pytest.mark.parametrize("count", [0, 1, 4, 5, 10])
+def test_concrete_request_rejects_counts_outside_its_fixed_option_schema(count):
+    """Template authoring allows 1-10 distractors; concrete MCQs use A-D only."""
+    with pytest.raises(ValidationError):
+        CodeQuestionRequest(prompt="Trace arithmetic.", num_distractors=count)
 
 
 async def test_full_content_and_independent_evidence_are_explicit():

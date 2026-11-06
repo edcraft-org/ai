@@ -6,8 +6,8 @@ from pydantic import Field
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.code_types import (
-    MAX_DISTRACTORS,
-    MIN_DISTRACTORS,
+    MAX_CONCRETE_DISTRACTORS,
+    MIN_CONCRETE_DISTRACTORS,
     AnswerTarget,
     CodeFeature,
 )
@@ -20,11 +20,18 @@ from edcraft_validator.relevance_contracts import RelevanceInput
 
 
 class CodeQuestionRequest(Record):
+    """Requirements for one concrete question, not a reusable template.
+
+    Concrete questions use the fixed A-D option schema, so their distractor
+    count is bounded to 2-3 (three or four choices). Template authoring has
+    its own request model and the wider 1-10 distractor range.
+    """
+
     prompt: Text = Field(max_length=4000)
     required_features: list[CodeFeature] = Field(default_factory=list, max_length=13)
     answer_target: AnswerTarget | None = None
     num_distractors: int | None = Field(
-        default=None, ge=MIN_DISTRACTORS, le=MAX_DISTRACTORS
+        default=None, ge=MIN_CONCRETE_DISTRACTORS, le=MAX_CONCRETE_DISTRACTORS
     )
     learner_prerequisites: list[Text] = Field(default_factory=list, max_length=20)
 

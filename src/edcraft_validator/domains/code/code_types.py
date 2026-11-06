@@ -62,6 +62,11 @@ MAX_DISTRACTORS = 10
 MIN_CHOICES = MIN_DISTRACTORS + 1
 MAX_CHOICES = MAX_DISTRACTORS + 1
 
+# Concrete MCQs use the fixed A-D option schema, so they support only the
+# three- and four-choice forms. Template authoring has the wider range above.
+MIN_CONCRETE_DISTRACTORS = 2
+MAX_CONCRETE_DISTRACTORS = 3
+
 # Models may propose spare candidates so selection can skip collisions. Keep
 # enough headroom for the largest supported request plus a couple of spares.
 MAX_DISTRACTOR_CANDIDATES = 12
