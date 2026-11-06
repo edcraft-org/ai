@@ -48,7 +48,7 @@ from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFindi
 from edcraft_validator.validation.validation_contracts import ValidationFailure
 from edcraft_validator.value_comparison import equivalent, same_value_shape
 
-CODE_TOOL_VERSION = "2.0.0"
+CODE_TOOL_VERSION = "2.1.0"
 STATIC_TOOL_TIMEOUT_SECONDS = 5.0
 
 
@@ -99,9 +99,11 @@ def register_code_validation_tools(
         description=(
             "Select this tool to establish that a Python template uses the supported "
             "safe subset, declares a matching entry function and finite parameter "
-            "domain, contains valid answer and distractor expressions, and renders "
-            "for boundary examples. It performs static and expression checks only; "
-            "it does not execute the program or establish that answers are correct."
+            "domain, and renders for boundary examples. It performs static structure "
+            "and rendering checks only; it does not parse answer or distractor "
+            "expressions, execute the program, or establish that answers are correct. "
+            "Select code_validate_answers_and_distractors for expression and answer "
+            "semantics."
         ),
     )
     async def code_verify_template_structure(
@@ -283,8 +285,6 @@ def verify_template_structure(candidate: CodeTemplateCandidate) -> dict[str, Any
     context = CodeValidationContext(candidate)
     context.inputs_cases = boundary_examples(candidate)
     check_structure(context)
-    check_expressions(context)
-    check_proposed_answers(context)
     check_rendering(context)
     return {
         **context.case_details,
