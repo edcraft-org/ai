@@ -107,6 +107,18 @@ def test_structure_check_does_not_validate_expression_semantics(candidate, field
     assert 1 <= verify_template_structure(candidate)["cases"] <= 5
 
 
+def test_features_check_does_not_repeat_a_structure_finding(candidate):
+    candidate.code = "import os\n" + candidate.code
+
+    with pytest.raises(ValidationFailure) as caught:
+        require_features(candidate, ["arithmetic"])
+
+    assert caught.value.code == "FEATURES_NOT_EVALUATED"
+    assert caught.value.context["blocking_code"] == "UNSUPPORTED_CODE"
+    assert "Import is not supported" not in str(caught.value)
+    assert "structure" in str(caught.value)
+
+
 def test_checking_reports_missing_features(candidate):
     with pytest.raises(ValidationFailure) as caught:
         require_features(candidate, ["loop"])

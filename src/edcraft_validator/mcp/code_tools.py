@@ -49,7 +49,7 @@ from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFindi
 from edcraft_validator.validation.validation_contracts import ValidationFailure
 from edcraft_validator.value_comparison import equivalent, same_value_shape
 
-CODE_TOOL_VERSION = "2.1.1"
+CODE_TOOL_VERSION = "2.1.2"
 STATIC_TOOL_TIMEOUT_SECONDS = 5.0
 
 
@@ -187,7 +187,9 @@ def register_code_validation_tools(
             "accumulation in a loop. "
             "It checks the supported program structure and reports features reachable "
             "from the entry function. It establishes syntactic presence, not that the "
-            "feature is pedagogically central or that the requested difficulty matches."
+            "feature is pedagogically central or that the requested difficulty "
+            "matches. If the template structure is invalid, it reports "
+            "FEATURES_NOT_EVALUATED instead of repeating the structural finding."
         ),
     )
     async def code_require_features(
@@ -402,7 +404,16 @@ def require_features(
     candidate: CodeTemplateCandidate, required: list[CodeFeature]
 ) -> dict[str, Any]:
     context = CodeValidationContext(candidate)
-    check_structure(context)
+    try:
+        check_structure(context)
+    except TemplateValidationError as exc:
+        raise ValidationFailure(
+            "Required-feature checks were not evaluated because the template "
+            "structure is invalid. Fix the structure check first.",
+            code="FEATURES_NOT_EVALUATED",
+            field=exc.field,
+            context={"blocking_code": exc.code},
+        ) from exc
     observed = extract_code_features(
         context.template.code, context.template.entry_function
     )

@@ -325,9 +325,9 @@ def _terminal_failure(result: AuthoringResult) -> tuple[FailureStage, str]:
                 )
                 code = execution.evidence.findings[0].code
                 blocking = execution.evidence.details.get("blocking_code")
-                if code == "ANSWERS_NOT_EVALUATED" and isinstance(blocking, str):
+                if code.endswith("_NOT_EVALUATED") and isinstance(blocking, str):
                     # Keep evaluation metrics on the root structural cause while
-                    # the per-check review still shows the blocked answers check.
+                    # the per-check review still shows the blocked check.
                     code = blocking
                 return stage, code
             return "checking", "TOOL_CALL_ERROR"
