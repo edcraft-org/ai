@@ -6,6 +6,7 @@ from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
     TemplateValidationError,
 )
+from edcraft_validator.domains.code.code_types import MAX_DISTRACTORS, MIN_DISTRACTORS
 from edcraft_validator.domains.code.text_rendering import render_template
 from edcraft_validator.mcp.code_checks.validation_context import (
     CodeValidationContext,
@@ -16,8 +17,12 @@ from edcraft_validator.tools.python_analysis import analyze_python_subset
 def check_structure(context: CodeValidationContext) -> None:
     """Validate code, profile, parameters, and the question template."""
     _validate_structure(context.template, context.names)
-    if context.num_distractors is not None and not 2 <= context.num_distractors <= 3:
-        raise ValueError("num_distractors must be 2 or 3")
+    if context.num_distractors is not None and not (
+        MIN_DISTRACTORS <= context.num_distractors <= MAX_DISTRACTORS
+    ):
+        raise ValueError(
+            f"num_distractors must be between {MIN_DISTRACTORS} and {MAX_DISTRACTORS}"
+        )
 
 
 def check_rendering(context: CodeValidationContext) -> None:

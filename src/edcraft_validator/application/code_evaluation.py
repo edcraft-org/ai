@@ -311,7 +311,9 @@ class TemplateEvaluator:
 
 
 def _terminal_failure(result: AuthoringResult) -> tuple[FailureStage, str]:
-    if result.failure is not None:
+    # TEMPLATE_CHECKS_FAILED is a summary-level outcome. Evaluation keeps the
+    # specific check finding from the final attempt for comparable metrics.
+    if result.failure is not None and result.failure.code != "TEMPLATE_CHECKS_FAILED":
         return result.failure.stage, result.failure.code
     if result.attempts:
         for execution in result.attempts[-1].executions:
@@ -321,7 +323,13 @@ def _terminal_failure(result: AuthoringResult) -> tuple[FailureStage, str]:
                 stage = (
                     "checking" if execution.evidence.status == "error" else "validation"
                 )
-                return stage, execution.evidence.findings[0].code
+                code = execution.evidence.findings[0].code
+                blocking = execution.evidence.details.get("blocking_code")
+                if code.endswith("_NOT_EVALUATED") and isinstance(blocking, str):
+                    # Keep evaluation metrics on the root structural cause while
+                    # the per-check review still shows the blocked check.
+                    code = blocking
+                return stage, code
             return "checking", "TOOL_CALL_ERROR"
     return "validation", result.status
 

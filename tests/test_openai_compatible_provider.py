@@ -149,7 +149,7 @@ def test_generates_template_using_strict_structured_outputs(
     assert result.checks[0].name == "code_execution"
     assert client.chat.completions.arguments["model"] == "test-model"
     assert client.chat.completions.arguments.get("max_tokens") == (
-        16384 if provider_name == "soclaas" else None
+        32768 if provider_name == "soclaas" else None
     )
     response_format = client.chat.completions.arguments["response_format"]
     assert response_format["type"] == "json_schema"
@@ -517,7 +517,7 @@ def test_per_call_reasoning_effort_overrides_configured_default(
 
 
 @pytest.mark.parametrize(
-    ("provider_name", "seconds"), [("openai", 120), ("soclaas", 300)]
+    ("provider_name", "seconds"), [("openai", 120), ("soclaas", 600)]
 )
 def test_provider_default_timeout_and_retries(monkeypatch, provider_name, seconds):
     monkeypatch.delenv(f"{provider_name.upper()}_TIMEOUT_SECONDS", raising=False)

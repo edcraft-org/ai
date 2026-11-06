@@ -13,8 +13,13 @@ from pydantic import Field
 
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
+    TemplateValidationError,
 )
-from edcraft_validator.domains.code.code_types import CodeFeature
+from edcraft_validator.domains.code.code_types import (
+    MAX_DISTRACTORS,
+    MIN_DISTRACTORS,
+    CodeFeature,
+)
 from edcraft_validator.domains.code.features import extract_code_features
 from edcraft_validator.mcp.code_checks.answer_checks import (
     check_canonical_answers,
@@ -44,7 +49,7 @@ from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFindi
 from edcraft_validator.validation.validation_contracts import ValidationFailure
 from edcraft_validator.value_comparison import equivalent, same_value_shape
 
-CODE_TOOL_VERSION = "2.0.0"
+CODE_TOOL_VERSION = "2.1.2"
 STATIC_TOOL_TIMEOUT_SECONDS = 5.0
 
 
@@ -95,9 +100,11 @@ def register_code_validation_tools(
         description=(
             "Select this tool to establish that a Python template uses the supported "
             "safe subset, declares a matching entry function and finite parameter "
-            "domain, contains valid answer and distractor expressions, and renders "
-            "for boundary examples. It performs static and expression checks only; "
-            "it does not execute the program or establish that answers are correct."
+            "domain, and renders for boundary examples. It performs static structure "
+            "and rendering checks only; it does not parse answer or distractor "
+            "expressions, execute the program, or establish that answers are correct. "
+            "Select code_validate_answers_and_distractors for expression and answer "
+            "semantics."
         ),
     )
     async def code_verify_template_structure(
@@ -130,7 +137,10 @@ def register_code_validation_tools(
             "sampled evidence, not exhaustive verification. Unseen generated "
             "questions remain drafts for manual review. Execution, trace and "
             "sampling-budget limits return explicit error evidence. Only the "
-            "supported Python subset is executed."
+            "supported Python subset is executed. If the template structure is "
+            "invalid, this check reports ANSWERS_NOT_EVALUATED instead of "
+            "repeating the structural finding owned by "
+            "code_verify_template_structure."
         ),
     )
     async def code_validate_answers_and_distractors(
@@ -138,8 +148,8 @@ def register_code_validation_tools(
         required_distractors: Annotated[
             int,
             Field(
-                ge=2,
-                le=3,
+                ge=MIN_DISTRACTORS,
+                le=MAX_DISTRACTORS,
                 description="Number of valid learner-facing distractors required.",
             ),
         ],
@@ -177,7 +187,9 @@ def register_code_validation_tools(
             "accumulation in a loop. "
             "It checks the supported program structure and reports features reachable "
             "from the entry function. It establishes syntactic presence, not that the "
-            "feature is pedagogically central or that the requested difficulty matches."
+            "feature is pedagogically central or that the requested difficulty "
+            "matches. If the template structure is invalid, it reports "
+            "FEATURES_NOT_EVALUATED instead of repeating the structural finding."
         ),
     )
     async def code_require_features(
@@ -279,8 +291,6 @@ def verify_template_structure(candidate: CodeTemplateCandidate) -> dict[str, Any
     context = CodeValidationContext(candidate)
     context.inputs_cases = boundary_examples(candidate)
     check_structure(context)
-    check_expressions(context)
-    check_proposed_answers(context)
     check_rendering(context)
     return {
         **context.case_details,
@@ -303,7 +313,18 @@ def validate_answers_and_distractors(
     # Revalidate mutable Python caller objects as well as MCP boundary inputs.
     candidate = CodeTemplateCandidate.model_validate(candidate.model_dump())
     context = CodeValidationContext(candidate, num_distractors=required_distractors)
-    check_structure(context)
+    try:
+        check_structure(context)
+    except TemplateValidationError as exc:
+        # Structure owns the actionable finding. Report a distinct blocked
+        # status here instead of repeating the same finding under both checks.
+        raise ValidationFailure(
+            "Answer and distractor checks were not evaluated because the "
+            "template structure is invalid. Fix the structure check first.",
+            code="ANSWERS_NOT_EVALUATED",
+            field=exc.field,
+            context={"blocking_code": exc.code},
+        ) from exc
     check_expressions(context)
     config = property_settings or PropertyCheckSettings()
     run = PropertyCheckRun(config)
@@ -383,7 +404,16 @@ def require_features(
     candidate: CodeTemplateCandidate, required: list[CodeFeature]
 ) -> dict[str, Any]:
     context = CodeValidationContext(candidate)
-    check_structure(context)
+    try:
+        check_structure(context)
+    except TemplateValidationError as exc:
+        raise ValidationFailure(
+            "Required-feature checks were not evaluated because the template "
+            "structure is invalid. Fix the structure check first.",
+            code="FEATURES_NOT_EVALUATED",
+            field=exc.field,
+            context={"blocking_code": exc.code},
+        ) from exc
     observed = extract_code_features(
         context.template.code, context.template.entry_function
     )

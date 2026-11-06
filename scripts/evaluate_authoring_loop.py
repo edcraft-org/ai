@@ -102,6 +102,24 @@ class ObservedProvider:
         close_provider(self.delegate)
 
 
+def _failure_codes(executions):
+    """Derive root failure codes, folding blocked checks into their blocker."""
+    codes = set()
+    for execution in executions:
+        if execution.get("error"):
+            codes.add("TOOL_CALL_ERROR")
+        evidence = execution.get("evidence") or {}
+        blocking = (evidence.get("details") or {}).get("blocking_code")
+        for finding in evidence.get("findings", []):
+            code = finding["code"]
+            if code.endswith("_NOT_EVALUATED") and isinstance(blocking, str):
+                # Mirror evaluation normalization: one structural cause, not
+                # every check that was blocked by it.
+                code = blocking
+            codes.add(code)
+    return codes
+
+
 def summarize_records(records, requested_jobs):
     """Report denominators and all outcomes, including interrupted/unresolved jobs."""
     results = [
@@ -127,17 +145,14 @@ def summarize_records(records, requested_jobs):
         result = record.get("authoring_result", {})
         if record["status"] != "checked":
             failure = result.get("failure") or record.get("failure")
-            if failure:
+            if failure and failure.get("code") not in {
+                "TEMPLATE_CHECKS_FAILED",
+                "CHECK_ERROR",
+            }:
                 failures[f"{failure['stage']}:{failure['code']}"] += 1
             else:
                 executions = (result.get("attempts") or [{}])[-1].get("executions", [])
-                codes = {
-                    finding["code"]
-                    for execution in executions
-                    for finding in (execution.get("evidence") or {}).get("findings", [])
-                }
-                if any(execution["error"] for execution in executions):
-                    codes.add("TOOL_CALL_ERROR")
+                codes = _failure_codes(executions)
                 for code in codes or {"unknown"}:
                     failures[code] += 1
         for attempt in result.get("attempts", []):
