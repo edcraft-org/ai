@@ -33,7 +33,39 @@ def test_registry_rejects_unknown_model_provider() -> None:
 
 def test_domain_registry_exposes_code_without_changing_the_application() -> None:
     assert "code" in available_domains()
-    assert isinstance(create_domain("code"), CodeDomain)
+    domain = create_domain("code")
+    assert isinstance(domain, CodeDomain)
+    assert domain.request_model is not None
+    assert domain.candidate_model is not None
+    assert domain.validated_model is not None
+    assert domain.question_model is not None
+
+
+def test_domain_registry_can_register_and_unregister_a_domain() -> None:
+    class StubDomain(CodeDomain):
+        name = "stub"
+
+    assert "stub" not in available_domains()
+    domain_registry.register_domain("stub", StubDomain)
+
+    assert "stub" in available_domains()
+    assert isinstance(create_domain("stub"), StubDomain)
+
+    domain_registry.unregister_domain("stub")
+
+    assert "stub" not in available_domains()
+
+
+def test_domain_registry_rejects_invalid_or_duplicate_registrations() -> None:
+    class StubDomain(CodeDomain):
+        name = "stub"
+
+    with pytest.raises(ValueError, match="Invalid domain name"):
+        domain_registry.register_domain("Stub Domain", StubDomain)
+    with pytest.raises(ValueError, match="already registered"):
+        domain_registry.register_domain("code", StubDomain)
+    with pytest.raises(ValueError, match="is not registered"):
+        domain_registry.unregister_domain("missing-test-domain")
 
 
 def test_domain_registry_rejects_unknown_domain() -> None:
