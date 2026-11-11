@@ -172,6 +172,14 @@ def test_template_application_authors_once_then_generates_locally() -> None:
         "Subtracts one.",
     ]
 
+    view = domain.review_view(validated)
+    assert view is not None
+    assert view.template_id == validated.template.template_id
+    assert view.candidate["code"] == validated.template.code
+    assert view.language == "python"
+    assert view.limits is not None
+    assert view.limits["checking_mode"] == "property_based"
+
 
 def test_application_can_run_a_non_code_domain_without_provider_changes() -> None:
     events = []

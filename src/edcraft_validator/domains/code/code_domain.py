@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel
 
+from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.domains.code.candidate_builder import (
     build_code_candidate,
     template_sha256,
@@ -26,6 +27,8 @@ from edcraft_validator.domains.code.proposal_response import CodeProposalRespons
 from edcraft_validator.domains.code.question_generator import generate_code_question
 from edcraft_validator.domains.code.relevance import TEMPLATE_RELEVANCE_TOOL
 from edcraft_validator.domains.domain_support import (
+    ReviewTemplateView,
+    build_review_view,
     require_type,
     save_checked_evidence,
 )
@@ -45,6 +48,11 @@ class CodeDomain:
     validated_model = ValidatedCodeTemplate
     question_model = CodeQuestionInstance
     template_language = "python"
+
+    def review_view(
+        self, artifact: ValidatedTemplateArtifact
+    ) -> ReviewTemplateView | None:
+        return build_review_view(artifact, language=self.template_language)
 
     def generation_request(
         self, request: BaseModel

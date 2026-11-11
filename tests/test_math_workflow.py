@@ -56,6 +56,14 @@ def test_math_authoring_and_question_generation_round_trip() -> None:
     )
     instance = application.generate_question(validated, domain=MathDomain(), seed=7)
 
+    view = MathDomain().review_view(validated)
+    assert view is not None
+    assert view.template_id == validated.template.template_id
+    assert view.candidate["equation_template"] == "{a}x + {b} = {c}"
+    assert view.language is None
+    assert view.limits is not None
+    assert view.limits["checking_mode"] == "exhaustive_domain"
+
     assert offered == [
         "math_assess_template_difficulty",
         "math_assess_template_relevance",

@@ -6,8 +6,36 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.validation.check_contracts import ToolEvidence
 from edcraft_validator.validation.validation_contracts import ValidationEvidence
+
+
+class ReviewTemplateView(BaseModel):
+    """Domain-owned projection of a validated artifact for human review."""
+
+    template_id: str
+    candidate: dict[str, Any]
+    language: str | None = None
+    limits: dict[str, Any] | None = None
+
+
+def build_review_view(
+    artifact: ValidatedTemplateArtifact, *, language: str | None
+) -> ReviewTemplateView | None:
+    """Project the shared review fields without exposing artifact internals."""
+    template = getattr(artifact, "template", None)
+    template_id = getattr(template, "template_id", None)
+    dump = getattr(template, "model_dump", None)
+    if not isinstance(template_id, str) or dump is None:
+        return None
+    validation = getattr(artifact, "validation", None)
+    return ReviewTemplateView(
+        template_id=template_id,
+        candidate=dump(mode="json"),
+        language=language,
+        limits=validation.model_dump() if validation is not None else None,
+    )
 
 
 def require_type[ModelT: BaseModel](value: BaseModel, model: type[ModelT]) -> ModelT:

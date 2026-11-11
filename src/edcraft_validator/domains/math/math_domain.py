@@ -2,7 +2,10 @@
 
 from pydantic import BaseModel, ValidationError
 
+from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.domains.domain_support import (
+    ReviewTemplateView,
+    build_review_view,
     require_type,
     save_checked_evidence,
 )
@@ -47,6 +50,11 @@ class MathDomain:
     validated_model = ValidatedMathTemplate
     question_model = MathQuestionInstance
     template_language = None
+
+    def review_view(
+        self, artifact: ValidatedTemplateArtifact
+    ) -> ReviewTemplateView | None:
+        return build_review_view(artifact, language=self.template_language)
 
     def generation_request(
         self, request: BaseModel
