@@ -14,7 +14,9 @@ class DomainModule(Protocol):
 
     name: str
     request_model: type[BaseModel]
+    candidate_model: type[BaseModel]
     validated_model: type[ValidatedTemplateArtifact]
+    question_model: type[BaseModel]
 
     def generation_request(self, request: BaseModel) -> StructuredGenerationRequest: ...
 

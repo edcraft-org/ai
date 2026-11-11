@@ -38,7 +38,9 @@ class CodeDomain:
 
     name = "code"
     request_model = CodeTemplateRequest
+    candidate_model = CodeTemplateCandidate
     validated_model = ValidatedCodeTemplate
+    question_model = CodeQuestionInstance
 
     def generation_request(
         self, request: BaseModel
