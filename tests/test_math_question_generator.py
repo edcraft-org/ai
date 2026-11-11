@@ -8,6 +8,7 @@ from math_helpers import math_candidate
 from edcraft_validator.domains.math.math_schemas import (
     MathValidationSummary,
     ValidatedMathTemplate,
+    render_linear_equation,
 )
 from edcraft_validator.domains.math.question_generator import (
     generate_math_question,
@@ -65,14 +66,47 @@ def test_generated_instance_has_consistent_exact_fields() -> None:
     assert instance.choices[instance.correct_index] == instance.answer
     assert len(instance.choices) == len(set(instance.choices)) == 4
     assert instance.question == f"Solve for x: {instance.equation}"
-    assert instance.equation == (
-        f"{instance.parameters['a']}x + {instance.parameters['b']} = "
-        f"{instance.parameters['c']}"
+    assert instance.equation == render_linear_equation(
+        instance.parameters["a"],
+        instance.parameters["b"],
+        instance.parameters["c"],
     )
     assert answer == Fraction(
         instance.parameters["c"] - instance.parameters["b"],
         instance.parameters["a"],
     )
+
+
+def test_generated_equation_renders_a_negative_constant_cleanly() -> None:
+    artifact = validated(
+        math_candidate(
+            parameters=[
+                {"name": "a", "values": [2]},
+                {"name": "b", "values": [-6]},
+                {"name": "c", "values": [5]},
+            ]
+        )
+    )
+
+    instance = generate_math_question(artifact, 0)
+
+    assert instance.equation == "2x - 6 = 5"
+    assert instance.question == "Solve for x: 2x - 6 = 5"
+
+
+@pytest.mark.parametrize(
+    ("a", "b", "c", "expected"),
+    [
+        (3, -6, -1, "3x - 6 = -1"),
+        (2, 3, 7, "2x + 3 = 7"),
+        (1, 2, 4, "x + 2 = 4"),
+        (-1, 2, 4, "-x + 2 = 4"),
+        (1, 0, 4, "x = 4"),
+        (2, 0, -5, "2x = -5"),
+    ],
+)
+def test_linear_equation_rendering(a: int, b: int, c: int, expected: str) -> None:
+    assert render_linear_equation(a, b, c) == expected
 
 
 def test_fractional_answers_are_exact_strings() -> None:

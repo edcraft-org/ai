@@ -8,6 +8,7 @@ from itertools import product
 from edcraft_validator.domains.math.math_schemas import (
     MathQuestionInstance,
     ValidatedMathTemplate,
+    render_linear_equation,
     render_math_text,
 )
 from edcraft_validator.domains.math.safe_linear import (
@@ -46,7 +47,11 @@ def _build_instance(
     template = validated.template
     answer_value = evaluate_expression(template.answer_expression, values)
     answer = format_fraction(answer_value)
-    equation = render_math_text(template.equation_template, values)
+    # The equation template is validated to the canonical a*x + b = c shape, so
+    # render it with correct signs instead of raw placeholder substitution.
+    equation = render_linear_equation(
+        values["a"], values["b"], values["c"]
+    )
     question = render_math_text(
         template.question_template, {**values, "equation": equation}
     )

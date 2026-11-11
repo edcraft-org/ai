@@ -271,3 +271,26 @@ def render_math_text(source: str, values: dict[str, object]) -> str:
     if not rendered.strip():
         raise ValueError("rendered text must not be blank")
     return rendered
+
+
+def render_linear_equation(a: int, b: int, c: int) -> str:
+    """Render the canonical ``a*x + b = c`` form the way a student reads it.
+
+    Naive substitution turns a negative constant into ``+ -6`` and a unit
+    coefficient into ``1x``. Neither changes the canonical solve, so this is a
+    presentation rule only, applied to the one equation shape the domain
+    supports.
+    """
+    if a == 1:
+        coefficient = "x"
+    elif a == -1:
+        coefficient = "-x"
+    else:
+        coefficient = f"{a}x"
+    if b > 0:
+        constant = f" + {b}"
+    elif b < 0:
+        constant = f" - {abs(b)}"
+    else:
+        constant = ""
+    return f"{coefficient}{constant} = {c}"
