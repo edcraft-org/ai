@@ -25,12 +25,15 @@ from edcraft_validator.domains.code.prompt_builder import (
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
 from edcraft_validator.domains.code.question_generator import generate_code_question
 from edcraft_validator.domains.code.relevance import TEMPLATE_RELEVANCE_TOOL
+from edcraft_validator.domains.domain_support import (
+    require_type,
+    save_checked_evidence,
+)
 from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     StructuredGenerationRequest,
 )
 from edcraft_validator.validation.check_contracts import ToolEvidence
-from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
 
 class CodeDomain:
@@ -41,34 +44,35 @@ class CodeDomain:
     candidate_model = CodeTemplateCandidate
     validated_model = ValidatedCodeTemplate
     question_model = CodeQuestionInstance
+    template_language = "python"
 
     def generation_request(
         self, request: BaseModel
     ) -> StructuredGenerationRequest[PlannedGenerationResponse[CodeProposalResponse]]:
-        typed_request = _require_type(request, CodeTemplateRequest)
+        typed_request = require_type(request, CodeTemplateRequest)
         return build_code_generation_request(typed_request)
 
     def build_candidate(
         self, request: BaseModel, proposal: BaseModel
     ) -> CodeTemplateCandidate:
         return build_code_candidate(
-            _require_type(request, CodeTemplateRequest),
-            _require_type(proposal, CodeTemplateContent),
+            require_type(request, CodeTemplateRequest),
+            require_type(proposal, CodeTemplateContent),
         )
 
     def tool_bindings(self, request, candidate, tool_name):
         """Application-owned values never come from model tool arguments."""
         bindings = {
-            "candidate": _require_type(candidate, CodeTemplateCandidate).model_dump(
+            "candidate": require_type(candidate, CodeTemplateCandidate).model_dump(
                 mode="json"
             )
         }
         if tool_name == TEMPLATE_RELEVANCE_TOOL:
-            bindings["author_request"] = _require_type(
+            bindings["author_request"] = require_type(
                 request, CodeTemplateRequest
             ).prompt
         if tool_name == "code_validate_answers_and_distractors":
-            bindings["required_distractors"] = _require_type(
+            bindings["required_distractors"] = require_type(
                 request, CodeTemplateRequest
             ).num_distractors
         return bindings
@@ -77,7 +81,7 @@ class CodeDomain:
         self, candidate: BaseModel, evidence: list[ToolEvidence]
     ) -> ValidatedCodeTemplate:
         """Package actual MCP outputs without re-execution or answer repair."""
-        template = _require_type(candidate, CodeTemplateCandidate)
+        template = require_type(candidate, CodeTemplateCandidate)
         if not evidence or any(
             item.status != "passed" and item.tool not in CODE_ADVISORY_CHECK_NAMES
             for item in evidence
@@ -111,7 +115,12 @@ class CodeDomain:
         )
         reusable = CodeTemplateCandidate.model_validate(reusable.model_dump())
         expected_sha256 = template_sha256(reusable)
-        saved_evidence = [_saved_evidence(item, expected_sha256) for item in evidence]
+        saved_evidence = [
+            save_checked_evidence(
+                item, expected_sha256, advisory_names=CODE_ADVISORY_CHECK_NAMES
+            )
+            for item in evidence
+        ]
         summary = TemplateValidationSummary.model_validate(
             {
                 **{
@@ -149,54 +158,5 @@ class CodeDomain:
         self, validated: BaseModel, *, seed: int
     ) -> CodeQuestionInstance:
         return generate_code_question(
-            _require_type(validated, ValidatedCodeTemplate), seed
+            require_type(validated, ValidatedCodeTemplate), seed
         )
-
-
-def _saved_evidence(item: ToolEvidence, expected_sha256: str) -> ValidationEvidence:
-    """Keep technical passes and advisory verdicts distinct in saved evidence."""
-    if item.tool not in CODE_ADVISORY_CHECK_NAMES:
-        return ValidationEvidence(
-            check=item.tool,
-            status="passed",
-            duration_ms=item.duration_ms,
-            issues=[finding.model_dump() for finding in item.findings],
-            details={"tool_version": item.version},
-        )
-    details = {"tool_version": item.version, **item.details}
-    recorded_sha256 = item.details.get("template_sha256")
-    if recorded_sha256 is None:
-        details.update(
-            unavailable=True,
-            unavailable_reason="Assessment evidence is missing its template identity",
-        )
-        status = "incomplete"
-    elif recorded_sha256 != expected_sha256:
-        details.update(
-            unavailable=True,
-            unavailable_reason="Assessment evidence belongs to a different template",
-        )
-        status = "incomplete"
-    elif item.status == "failed":
-        status = "failed"
-    elif item.status == "error":
-        details.update(
-            unavailable=True,
-            unavailable_reason="Advisory assessment did not return a verdict",
-        )
-        status = "incomplete"
-    else:
-        status = "passed"
-    return ValidationEvidence(
-        check=item.tool,
-        status=status,
-        duration_ms=item.duration_ms,
-        issues=[finding.model_dump() for finding in item.findings],
-        details=details,
-    )
-
-
-def _require_type[ModelT: BaseModel](value: BaseModel, model: type[ModelT]) -> ModelT:
-    if not isinstance(value, model):
-        raise TypeError(f"code domain requires {model.__name__}")
-    return value

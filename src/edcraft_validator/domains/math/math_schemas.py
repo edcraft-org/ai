@@ -232,10 +232,20 @@ def template_fields(source: str) -> set[str]:
 
 
 def validate_equation_template(source: str) -> None:
-    """Require exactly the a, b, and c placeholders in the equation."""
+    """Require the canonical bounded linear form ``a*x + b = c``.
+
+    The pilot supports exactly one equation shape. Fixing the layout lets the
+    answer check solve the equation directly instead of trusting a model-written
+    answer recipe, and it rejects powers, unknowns on both sides, and any other
+    unsupported form before it can pass a technical check.
+    """
     if template_fields(source) != set(MATH_PARAMETER_NAMES):
         raise ValueError(
             "equation_template must contain {a}, {b}, and {c} placeholders"
+        )
+    if "".join(source.split()) != "{a}x+{b}={c}":
+        raise ValueError(
+            "equation_template must use the supported {a}x + {b} = {c} form"
         )
 
 

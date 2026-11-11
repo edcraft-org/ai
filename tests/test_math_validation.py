@@ -16,6 +16,7 @@ from edcraft_validator.domains.math.math_types import (
 from edcraft_validator.mcp.math_tools import (
     MathToolFailure,
     assess_template_difficulty,
+    assess_template_relevance,
     validate_answers_and_distractors,
     verify_template_structure,
 )
@@ -130,6 +131,25 @@ def test_answer_check_rejects_pairwise_distractor_collisions() -> None:
     assert failure.value.code == "DISTRACTOR_COLLISION"
 
 
+def test_answer_check_rejects_a_recipe_that_does_not_solve_the_equation() -> None:
+    candidate = math_candidate(answer_expression="(c + b) / a")
+
+    with pytest.raises(MathToolFailure) as failure:
+        validate_answers_and_distractors(candidate, 3)
+
+    assert failure.value.code == "ANSWER_INCORRECT"
+    assert failure.value.context["failing_parameters"]["a"] in {2, 3}
+    assert failure.value.context["expected"] != failure.value.context["actual"]
+
+
+def test_answer_check_accepts_an_equivalent_exact_form() -> None:
+    candidate = math_candidate(answer_expression="c / a - b / a")
+
+    details = validate_answers_and_distractors(candidate, 3)
+
+    assert details["combinations_checked"] == 8
+
+
 def test_answer_check_rejects_insufficient_distractors() -> None:
     candidate = math_candidate(
         distractors=[
@@ -151,6 +171,9 @@ def test_finalize_rejects_missing_or_failed_technical_evidence() -> None:
         MathDomain().finalize_checked_template(
             candidate, [structural_evidence(candidate)]
         )
+
+    with pytest.raises(ValueError, match="Missing passing template-structure"):
+        MathDomain().finalize_checked_template(candidate, [semantic])
 
     failed_structure = ToolEvidence(
         tool=MATH_STRUCTURE_TOOL,
@@ -225,6 +248,64 @@ def test_finalize_accepts_complete_evidence_and_keeps_advisory_failures() -> Non
         if item.check == MATH_DIFFICULTY_TOOL
     )
     assert saved.status == "failed"
+
+
+def test_relevance_scores_only_candidate_text() -> None:
+    candidate = math_candidate()
+
+    matched = assess_template_relevance(
+        candidate, "Write a linear equation question for x."
+    )
+    mismatch = assess_template_relevance(candidate, "Label a photosynthesis diagram.")
+    no_keywords = assess_template_relevance(candidate, "the and for")
+
+    assert matched.status == "passed"
+    assert matched.details["relevant"] is True
+    assert mismatch.status == "failed"
+    assert mismatch.details["relevant"] is False
+    assert no_keywords.status == "error"
+    assert no_keywords.details["relevance_outcome"]["error_code"] == (
+        "RELEVANCE_NO_KEYWORDS"
+    )
+
+
+def test_difficulty_bands_follow_the_documented_heuristic() -> None:
+    easy = math_candidate(
+        difficulty="easy",
+        parameters=[
+            {"name": "a", "values": [2]},
+            {"name": "b", "values": [2]},
+            {"name": "c", "values": [5]},
+        ],
+    )
+    medium = math_candidate(
+        difficulty="medium",
+        parameters=[
+            {"name": "a", "values": [2, 3]},
+            {"name": "b", "values": [-3]},
+            {"name": "c", "values": [5]},
+        ],
+    )
+    hard = math_candidate(
+        difficulty="hard",
+        parameters=[
+            {"name": "a", "values": [10, 11, 12, 13, 14]},
+            {"name": "b", "values": [-4, -3, -2, -1]},
+            {"name": "c", "values": [5, 6, 7]},
+        ],
+    )
+
+    easy_outcome = assess_template_difficulty(easy)
+    medium_outcome = assess_template_difficulty(medium)
+    hard_outcome = assess_template_difficulty(hard)
+
+    assert easy_outcome.details["estimated_difficulty"] == "easy"
+    assert medium_outcome.details["estimated_difficulty"] == "medium"
+    assert hard_outcome.details["estimated_difficulty"] == "hard"
+    for outcome in (easy_outcome, medium_outcome, hard_outcome):
+        assert outcome.details["difficulty_outcome"]["assessment_path"] == "decision"
+        assert outcome.details["difficulty_outcome"]["confidence"] is None
+        assert outcome.details["difficulty_outcome"]["confidence_source"] is None
 
 
 def test_finalize_only_keeps_checked_distractor_recipes() -> None:

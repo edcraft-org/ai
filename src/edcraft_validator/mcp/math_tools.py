@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from fractions import Fraction
 from itertools import product
 from typing import Annotated, Any
 
@@ -20,16 +21,19 @@ from edcraft_validator.domains.math.math_schemas import (
 )
 from edcraft_validator.domains.math.math_types import (
     MATH_ANSWERS_TOOL,
+    MATH_CHECKING_MODE,
     MATH_DIFFICULTY_TOOL,
     MATH_PARAMETER_NAMES,
     MATH_RELEVANCE_TOOL,
     MATH_STRUCTURE_TOOL,
     MATH_TOOL_VERSION,
     MAX_DISTRACTORS,
+    MAX_PROMPT_LENGTH,
     MIN_DISTRACTORS,
 )
 from edcraft_validator.domains.math.safe_linear import (
     evaluate_expression,
+    format_fraction,
     validate_expression,
 )
 from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
@@ -202,7 +206,9 @@ def register_math_tools(server: FastMCP) -> None:
     )
     async def math_assess_template_relevance(
         candidate: CandidateArgument,
-        author_request: Annotated[str, Field(min_length=1, max_length=4000)],
+        author_request: Annotated[
+            str, Field(min_length=1, max_length=MAX_PROMPT_LENGTH)
+        ],
     ) -> ToolEvidence:
         return assess_template_relevance(candidate, author_request)
 
@@ -294,15 +300,6 @@ def verify_template_structure(
                 code="REASON_PLACEHOLDER_UNSUPPORTED",
                 field=f"distractors.{index}.reason_template",
             )
-    coefficient_a = next(
-        parameter for parameter in candidate.parameters if parameter.name == "a"
-    )
-    if 0 in coefficient_a.values:
-        raise MathToolFailure(
-            "Parameter a must never be zero",
-            code="NONZERO_COEFFICIENT_REQUIRED",
-            field="parameters.a",
-        )
     combinations = _parameter_combinations(candidate)
     return {
         "parameters": len(candidate.parameters),
@@ -336,13 +333,9 @@ def validate_answers_and_distractors(
     combinations = _parameter_combinations(candidate)
     selected = candidate.distractors[:required_distractors]
     for values in combinations:
-        if values["a"] == 0:
-            raise MathToolFailure(
-                "Parameter a must never be zero",
-                code="NONZERO_COEFFICIENT_REQUIRED",
-                field="parameters.a",
-                context={"failing_parameters": values},
-            )
+        # The candidate schema fixes the equation shape to a*x + b = c and
+        # rejects a == 0, so solve it exactly instead of trusting the recipe.
+        canonical_answer = Fraction(values["c"] - values["b"], values["a"])
         try:
             answer = evaluate_expression(candidate.answer_expression, values)
         except ValueError as exc:
@@ -352,7 +345,18 @@ def validate_answers_and_distractors(
                 field="answer_expression",
                 context={"failing_parameters": values},
             ) from exc
-        seen: set[Any] = set()
+        if answer != canonical_answer:
+            raise MathToolFailure(
+                "Answer recipe does not solve the equation for this combination",
+                code="ANSWER_INCORRECT",
+                field="answer_expression",
+                context={
+                    "failing_parameters": values,
+                    "expected": format_fraction(canonical_answer),
+                    "actual": format_fraction(answer),
+                },
+            )
+        seen: set[Any] = {canonical_answer}
         for index, recipe in enumerate(selected):
             try:
                 distractor = evaluate_expression(recipe.expression, values)
@@ -363,7 +367,7 @@ def validate_answers_and_distractors(
                     field=f"distractors.{index}.expression",
                     context={"failing_parameters": values},
                 ) from exc
-            if distractor == answer:
+            if distractor == canonical_answer:
                 raise MathToolFailure(
                     "A distractor coincides with the answer for a declared "
                     "parameter combination",
@@ -387,7 +391,7 @@ def validate_answers_and_distractors(
                 )
             seen.add(distractor)
     return {
-        "checking_mode": "exhaustive_domain",
+        "checking_mode": MATH_CHECKING_MODE,
         "combinations_checked": len(combinations),
         "max_combinations": len(combinations),
         "seed": 0,
@@ -404,15 +408,15 @@ def assess_template_difficulty(
     estimate = _estimate_difficulty(candidate)
     matches = estimate == candidate.difficulty
     outcome = DifficultyOutcome(
-        assessment_path="reasoning",
+        # This is a deterministic policy rule, not model reasoning and not a
+        # calibrated confidence. Reporting either would misstate the evidence.
+        assessment_path="decision",
         requested_difficulty=candidate.difficulty,
         estimated_difficulty=estimate,
-        confidence=0.55,
-        confidence_source="self_reported",
         decision="matches" if matches else "advisory_mismatch",
         status="passed" if matches else "failed",
         reason=(
-            "Provisional heuristic estimate from coefficient magnitude, sign "
+            "Provisional deterministic heuristic from coefficient magnitude, sign "
             "variety, parameter-domain size, and distractor count; not calibrated."
         ),
     )
@@ -466,9 +470,11 @@ def assess_template_relevance(
     started = time.perf_counter()
     candidate = _revalidate(candidate)
     request_tokens = _tokens(author_request)
+    # Score only text supplied by the candidate. Adding a fixed domain phrase
+    # would let every template inherit relevance it was never assessed for.
     template_tokens = _tokens(
-        "linear equation solve for x "
-        f"{candidate.equation_template} {candidate.question_template}"
+        f"{candidate.template_id} {candidate.equation_template} "
+        f"{candidate.question_template}"
     )
     if not request_tokens:
         outcome = RelevanceOutcome(

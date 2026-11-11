@@ -39,6 +39,7 @@ def test_domain_registry_exposes_code_without_changing_the_application() -> None
     assert domain.candidate_model is not None
     assert domain.validated_model is not None
     assert domain.question_model is not None
+    assert domain.template_language == "python"
 
 
 def test_domain_registry_can_register_and_unregister_a_domain() -> None:

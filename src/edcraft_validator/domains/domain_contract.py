@@ -17,6 +17,8 @@ class DomainModule(Protocol):
     candidate_model: type[BaseModel]
     validated_model: type[ValidatedTemplateArtifact]
     question_model: type[BaseModel]
+    # Human-readable review label for a candidate language, when it has one.
+    template_language: str | None
 
     def generation_request(self, request: BaseModel) -> StructuredGenerationRequest: ...
 

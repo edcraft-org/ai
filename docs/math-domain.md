@@ -20,13 +20,14 @@ it.
 
 A math template declares:
 
-- `equation_template`: text containing exactly `{a}`, `{b}`, and `{c}`, for
-  example `{a}x + {b} = {c}`.
+- `equation_template`: exactly the canonical `{a}x + {b} = {c}` form
+  (whitespace is ignored). Other layouts, including `x^2`, unknowns on both
+  sides, or reordered terms, are rejected.
 - `question_template`: text that may use `{a}`, `{b}`, `{c}`, and `{equation}`.
 - `parameters`: exactly three named parameters `a`, `b`, and `c`, each with
   1–6 unique integer values in `[-100, 100]`. `a` must not include zero.
-- `answer_expression`: an arithmetic expression in `a`, `b`, and `c` that
-  evaluates to the solution of the equation.
+- `answer_expression`: an arithmetic expression in `a`, `b`, and `c` whose exact
+  value equals `(c - b) / a` for every parameter combination.
 - `distractors`: 1–12 recipes, each an arithmetic expression and a misconception
   reason. The saved artifact keeps only the recipes that passed checking.
 - `difficulty`: `easy`, `medium`, or `hard` (advisory, see below).

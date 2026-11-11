@@ -51,7 +51,7 @@ def test_request_round_trips_and_rejects_extra_fields() -> None:
         {"prompt": "   "},
         {"difficulty": "extreme"},
         {"num_distractors": 0},
-        {"num_distractors": 10},
+        {"num_distractors": 11},
     ],
 )
 def test_request_rejects_invalid_values(overrides) -> None:
@@ -95,6 +95,10 @@ def test_candidate_round_trips() -> None:
     [
         {"equation_template": "2x + 3 = 7"},
         {"equation_template": "{a}x + {b} = {d}"},
+        {"equation_template": "{a}x^2 + {b} = {c}"},
+        {"equation_template": "{a}x - {b} = {c}"},
+        {"equation_template": "{b} + {a}x = {c}"},
+        {"equation_template": "{a}*x + {b} = {c}"},
         {"question_template": "Solve {unknown}: {equation}"},
         {
             "parameters": [
