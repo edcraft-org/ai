@@ -107,6 +107,7 @@ uv run pytest
 Default tests use scripted providers. Live tests are opt-in; run the OpenAI
 workflow smoke before a PR. See [evaluation](docs/evaluation.md) for commands.
 
+- [Mathematics domain](docs/math-domain.md): supported linear-equation templates, exact checks and unsupported cases.
 - [Development](docs/development.md): responsibilities, contracts and extension points.
 - [Evaluation](docs/evaluation.md): reproducible runs and interpretation limits.
 - [Production rubric](docs/difficulty-rubric.md): runtime v0.2 assessment resource.
