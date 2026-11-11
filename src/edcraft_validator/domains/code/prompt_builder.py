@@ -6,6 +6,11 @@ from edcraft_validator.domains.code.check_plan import CODE_CHECK_ARGUMENT_MODELS
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateRequest,
 )
+from edcraft_validator.domains.code.code_types import (
+    MAX_DISTRACTOR_CANDIDATES,
+    MAX_DISTRACTORS,
+    MIN_DISTRACTORS,
+)
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
 from edcraft_validator.domains.code.template_revision import author_difficulty_guidance
 from edcraft_validator.llm.llm_contracts import (
@@ -13,7 +18,7 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 
-CODE_TEMPLATE_PROMPT_VERSION = "code-template-v22-relevance-check"
+CODE_TEMPLATE_PROMPT_VERSION = "code-template-v25-supported-subset"
 
 
 def build_template_prompt(
@@ -25,6 +30,7 @@ Author request (preserve its meaning; do not replace it with a catalogue topic):
 
 Requested difficulty: {request.difficulty}
 Required usable distractors: {request.num_distractors}
+Supported distractor range: {MIN_DISTRACTORS} to {MAX_DISTRACTORS}
 Checks available for recommendation are in the supplied MCP catalogue.
 
 Choose the entry function, finite parameters, learner-facing question template, and
@@ -45,7 +51,8 @@ parameter placeholders such as `{{n}}`; never put expressions inside braces.
 Choose parameter values that keep the proposed misconceptions distinct. Values
 such as zero, one, or equal operands can make a wrong operation yield the right
 answer. You may change finite parameter values when consistent with the author
-request, or supply extra distractor candidates (up to five), to avoid collisions.
+request, or supply extra distractor candidates (up to
+{MAX_DISTRACTOR_CANDIDATES}), to avoid collisions.
 
 Recommend a nonempty fixed subset of the available MCP tools using their supplied
 descriptions. Use each tool name at most once and do not invent names.
@@ -93,9 +100,27 @@ Rules:
   Define called helper functions at module level, not inside another function.
   Recursion is allowed. Recursive code must have a base case
   and use bounded inputs suitable for manual tracing.
-- Use only expressions, assignments, if statements, and for loops. Do not use imports,
-  attributes, classes, decorators, comprehensions, while loops, lambdas,
-  exceptions, file access, networking, input, eval, or exec.
+- Supported Python subset (statically enforced; code outside it is rejected before
+  execution). Allowed statements are module-level `def`, module-level assignment,
+  `if`, `for`, `return`, `break`, `continue`, `pass`, and expression statements.
+  Allowed calls are direct calls to module-level functions you define and these
+  built-ins only: abs, all, any, bool, enumerate, float, int, len, list, max, min,
+  range, reversed, round, sorted, str, sum, tuple, zip. Do not call `print`, do not
+  use attribute or method access (`.append`, `.items`, `.upper`, ...), do not call a
+  function defined inside another function, and do not call through a variable.
+  Forbidden constructs are import, class, decorator, lambda, list/dict/set/generator
+  comprehension, `yield` and `yield from`, `try`/`except`/`finally`, `raise`,
+  `while`, `with`, `del`, `global`, `nonlocal`, `async`/`await`, and any name
+  starting with `__`. Integer literals must not exceed 10,000 in absolute value.
+  Define every helper you call at module level; a nested `def` is not callable
+  under this subset, so prefer inlining the logic in the entry function.
+- If the author request names a construct outside this subset (for example a
+  generator, comprehension, `while` loop, exception, class, attribute, file read,
+  or `print`), do not use it. Translate the request into the nearest supported form
+  using `for`, `if`, assignment, and `return`, and word the question around that
+  supported behaviour. Do not mark an unsupported construct as a required feature.
+  A supported question that preserves the author's intent is better than a rejected
+  template that copies an unsupported construct literally.
 - Every parameter declares a kind and two to 32 distinct finite values. Supported
   kinds are integer (-100 through 100), boolean, string (non-empty short printable
   text), and
@@ -110,6 +135,13 @@ Rules:
   len, sum, min, max, sorted, all, and any are also supported. Do not use methods or
   other function calls. Expressions use bare parameter names, for example `a + b`.
   Placeholder braces belong only in question_template and reason_template.
+- Answer and distractor recipes are closed-form expressions over the declared
+  parameter names only. If the code accumulates in a local variable, derive the
+  closed form over the parameters; never answer with a local variable name or a
+  function call. For example, `total = 0; for i in range(1, n + 1): total += i`
+  has recipe `n * (n + 1) // 2`, and a nested loop over `n` and `m` runs `n * m`
+  times. If the request asks how many times code runs, prefer loop_iterations,
+  loop_executions, branch_executions, or function_calls with a closed-form count.
 - question_template must name the entry function and use plain placeholders for every
   declared parameter. Its wording must match answer_target.
 - Each distractor candidate must represent a specific misconception. The MCP tool

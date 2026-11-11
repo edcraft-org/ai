@@ -62,7 +62,7 @@ async def test_template_tool_gets_full_domain_without_correctness_execution():
     assert judge.requests[0].reasoning_effort == "medium"
 
 
-@pytest.mark.parametrize("count", range(2, 9))
+@pytest.mark.parametrize("count", range(1, 13))
 def test_each_distractor_recipe_has_a_required_closed_evidence_key(count):
     schema = template_assessment_model(count).model_json_schema()
     evidence = schema["$defs"][f"EvidenceFor{count}DistractorRecipes"]

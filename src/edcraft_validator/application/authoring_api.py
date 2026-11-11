@@ -71,6 +71,11 @@ class AuthoringJobResponse(BaseModel):
     result: AuthoringSummary | None = None
 
 
+_CHECK_ERROR_MESSAGE = (
+    "A check could not complete. Verify the model or tool service and try again."
+)
+
+
 @dataclass(frozen=True)
 class AuthoringJobRecord:
     """Internal persistence record. HTTP handlers return response, not report."""
@@ -92,6 +97,19 @@ def _public_error(report: AuthoringResult) -> PublicAuthoringError | None:
                 "Review the evidence."
             ),
         }
+        if report.failure.code == "TEMPLATE_CHECKS_FAILED":
+            return PublicAuthoringError(
+                code=report.failure.code,
+                message=(
+                    "The model did not produce a template that passes technical "
+                    "checks. Retry, or rephrase the request."
+                ),
+            )
+        if report.failure.code == "CHECK_ERROR":
+            return PublicAuthoringError(
+                code="CHECK_ERROR",
+                message=_CHECK_ERROR_MESSAGE,
+            )
         return PublicAuthoringError(
             code=f"{report.failure.stage.upper()}_ERROR",
             message=messages.get(
@@ -112,10 +130,7 @@ def _public_error(report: AuthoringResult) -> PublicAuthoringError | None:
         ):
             return PublicAuthoringError(
                 code="CHECK_ERROR",
-                message=(
-                    "A check could not complete. "
-                    "Verify the model or tool service and try again."
-                ),
+                message=_CHECK_ERROR_MESSAGE,
             )
     return None
 

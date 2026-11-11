@@ -25,11 +25,17 @@ def test_generated_question_rejects_unknown_fields() -> None:
         GeneratedQuestion.model_validate(data)
 
 
-def test_rejects_too_few_distractors() -> None:
-    # An MCQ needs at least two incorrect alternatives in this first version.
+def test_accepts_a_single_distractor_for_a_two_choice_question() -> None:
     data = valid_data()
     data["distractors"] = [40]
-    with pytest.raises(ValidationError, match="at least 2 items"):
+
+    assert len(GeneratedQuestion.model_validate(data).distractors) == 1
+
+
+def test_rejects_a_question_without_distractors() -> None:
+    data = valid_data()
+    data["distractors"] = []
+    with pytest.raises(ValidationError, match="at least 1 item"):
         GeneratedQuestion.model_validate(data)
 
 

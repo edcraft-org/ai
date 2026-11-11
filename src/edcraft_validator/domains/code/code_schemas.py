@@ -11,6 +11,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.domains.code.code_types import (
     CODE_ADVISORY_CHECK_NAMES,
+    DEFAULT_DISTRACTORS,
+    MAX_DISTRACTOR_CANDIDATES,
+    MAX_DISTRACTORS,
+    MIN_DISTRACTORS,
     AnswerTarget,
     Difficulty,
     ParameterValue,
@@ -32,7 +36,7 @@ class GeneratedQuestion(BaseModel):
     inputs: dict[str, Any]
     question: str = Field(min_length=1)
     proposed_answer: Any
-    distractors: list[Any] = Field(min_length=2)
+    distractors: list[Any] = Field(min_length=MIN_DISTRACTORS)
     distractor_reasons: list[str] = Field(default_factory=list)
     answer_target: AnswerTarget = "return_value"
     question_type: Literal["mcq"] = "mcq"
@@ -60,7 +64,9 @@ class CodeTemplateRequest(BaseModel):
 
     prompt: str = Field(min_length=1, max_length=4000)
     difficulty: Difficulty
-    num_distractors: int = Field(default=3, ge=2, le=3)
+    num_distractors: int = Field(
+        default=DEFAULT_DISTRACTORS, ge=MIN_DISTRACTORS, le=MAX_DISTRACTORS
+    )
 
     @field_validator("prompt")
     @classmethod
@@ -158,7 +164,9 @@ class CodeTemplateContent(BaseModel):
     parameters: list[FiniteParameter] = Field(min_length=1, max_length=3)
     answer_target: AnswerTarget
     answer_expression: str = Field(min_length=1)
-    distractors: list[DistractorRecipe] = Field(min_length=2, max_length=5)
+    distractors: list[DistractorRecipe] = Field(
+        min_length=MIN_DISTRACTORS, max_length=MAX_DISTRACTOR_CANDIDATES
+    )
 
     @field_validator("question_template", "code", "answer_expression")
     @classmethod
@@ -193,7 +201,9 @@ class CodeTemplateCandidate(BaseModel):
     question_template: str = Field(min_length=1)
     answer_target: AnswerTarget
     answer_expression: str = Field(min_length=1)
-    distractors: list[DistractorRecipe] = Field(min_length=2, max_length=8)
+    distractors: list[DistractorRecipe] = Field(
+        min_length=MIN_DISTRACTORS, max_length=MAX_DISTRACTOR_CANDIDATES
+    )
     question_type: Literal["mcq"]
 
     @field_validator("code", "question_template")

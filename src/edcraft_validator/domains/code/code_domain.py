@@ -15,7 +15,10 @@ from edcraft_validator.domains.code.code_schemas import (
     TemplateValidationSummary,
     ValidatedCodeTemplate,
 )
-from edcraft_validator.domains.code.code_types import CODE_ADVISORY_CHECK_NAMES
+from edcraft_validator.domains.code.code_types import (
+    CODE_ADVISORY_CHECK_NAMES,
+    MIN_DISTRACTORS,
+)
 from edcraft_validator.domains.code.prompt_builder import (
     build_code_generation_request,
 )
@@ -94,7 +97,7 @@ class CodeDomain:
             DistractorRecipe.model_validate(item)
             for item in semantic.details["selected_distractors"]
         ]
-        if len(selected) < 2 or any(
+        if len(selected) < MIN_DISTRACTORS or any(
             recipe not in template.distractors for recipe in selected
         ):
             raise ValueError("Selected distractors are not checked proposal recipes")

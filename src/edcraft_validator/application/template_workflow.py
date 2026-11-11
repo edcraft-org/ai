@@ -52,6 +52,18 @@ from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFindi
 REVISION_POLICY = "full-candidate-v1"
 
 
+def _has_technical_check_error(attempt) -> bool:
+    """Distinguish tool/protocol failures from genuine finding failures."""
+    return any(
+        not execution.advisory
+        and (
+            execution.error is not None
+            or (execution.evidence is not None and execution.evidence.status == "error")
+        )
+        for execution in attempt.executions
+    )
+
+
 def _generate_author(provider, request):
     """One bounded transport retry for author calls, never for judge assessments."""
     try:
@@ -368,6 +380,19 @@ class TemplateApplication:
             result.reason = (
                 "Template checking stopped without all selected checks passing"
             )
+            if result.failure is None:
+                if _has_technical_check_error(attempt):
+                    result.failure = AuthoringError(
+                        stage="checking", code="CHECK_ERROR"
+                    )
+                    result.reason = (
+                        "A technical check could not complete, so the template "
+                        "could not be fully checked"
+                    )
+                else:
+                    result.failure = AuthoringError(
+                        stage="checking", code="TEMPLATE_CHECKS_FAILED"
+                    )
             return result
 
         evidence = [

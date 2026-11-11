@@ -14,8 +14,15 @@ from test_authoring_loop import (
 )
 from test_tool_catalogue import RecordingCatalogue
 
+from edcraft_validator.application.authoring_contracts import (
+    AuthoringError,
+    AuthoringResult,
+    CheckExecution,
+    GenerationAttempt,
+)
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.llm.llm_errors import GenerationError
+from edcraft_validator.validation.check_contracts import ToolEvidence
 from scripts import evaluate_authoring_loop as evaluation
 
 
@@ -48,6 +55,65 @@ def test_summary_separates_jobs_attempts_corrections_and_missing_usage():
     assert summary["usage"]["input_tokens"] is None
     assert summary["mean_input_tokens_per_recorded_job"] is None
     assert evaluation.summarize_records([], 5)["correction_success_rate"] is None
+
+
+def test_blocked_checks_fold_into_the_root_structural_failure():
+    def execution(tool, code, *, status="error", blocking=None):
+        return CheckExecution(
+            call_id=tool,
+            tool=tool,
+            requested_arguments={},
+            evidence=ToolEvidence(
+                tool=tool,
+                version="1",
+                status=status,
+                findings=[{"code": code, "message": code}],
+                details={} if blocking is None else {"blocking_code": blocking},
+            ),
+        )
+
+    result = AuthoringResult(
+        status="needs_review",
+        provider="test",
+        model="test",
+        domain="code",
+        request={},
+        prompt_version="",
+        fixed_plan=[],
+        tool_catalogue=[],
+        failure=AuthoringError(stage="checking", code="TEMPLATE_CHECKS_FAILED"),
+        attempts=[
+            GenerationAttempt(
+                number=1,
+                candidate={},
+                pending=[],
+                complete=True,
+                passed=False,
+                executions=[
+                    execution(
+                        "code_verify_template_structure",
+                        "UNSUPPORTED_CODE",
+                        status="failed",
+                    ),
+                    execution(
+                        "code_validate_answers_and_distractors",
+                        "ANSWERS_NOT_EVALUATED",
+                        blocking="UNSUPPORTED_CODE",
+                    ),
+                    execution(
+                        "code_require_features",
+                        "FEATURES_NOT_EVALUATED",
+                        blocking="UNSUPPORTED_CODE",
+                    ),
+                ],
+            )
+        ],
+    )
+    summary = evaluation.summarize_records([record(result)], 1)
+    assert summary["failure_counts"] == {"UNSUPPORTED_CODE": 1}
+    assert not any(
+        code.endswith("_NOT_EVALUATED") for code in summary["failure_counts"]
+    )
 
 
 def test_five_job_run_retains_provider_setup_failure_and_replays_saved_templates(
