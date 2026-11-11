@@ -22,6 +22,7 @@ from edcraft_validator.mcp.code_checks.property_checks import PropertyCheckSetti
 from edcraft_validator.mcp.code_question_tools import register_code_question_tools
 from edcraft_validator.mcp.code_tools import register_code_validation_tools
 from edcraft_validator.mcp.difficulty_tools import register_difficulty_tools
+from edcraft_validator.mcp.math_tools import register_math_tools
 from edcraft_validator.mcp.relevance_tools import register_relevance_tools
 from edcraft_validator.tools.python_execution import (
     LocalPythonTool,
@@ -73,6 +74,7 @@ def create_validation_server(
         execution_tool=execution_tool,
         execution_timeout_seconds=code_execution_timeout_seconds,
     )
+    register_math_tools(server)
     register_relevance_tools(
         server,
         decision_provider_factory=decision_provider_factory
