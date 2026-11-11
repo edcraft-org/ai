@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 
+from edcraft_validator.domains.domain_support import content_sha256
 from edcraft_validator.domains.math.math_schemas import (
     MathTemplateCandidate,
     MathTemplateContent,
@@ -39,11 +40,4 @@ def build_math_candidate(
 
 def template_sha256(candidate: MathTemplateCandidate) -> str:
     """Identify the exact reusable content independently of any assessment."""
-    return hashlib.sha256(
-        json.dumps(
-            candidate.model_dump(mode="json"),
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
-        ).encode()
-    ).hexdigest()
+    return content_sha256(candidate)

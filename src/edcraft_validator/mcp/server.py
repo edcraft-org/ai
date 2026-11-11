@@ -38,6 +38,7 @@ def create_validation_server(
     difficulty_judge_timeout_seconds: float = DEFAULT_JUDGE_TIMEOUT_SECONDS,
     decision_provider_factory: DecisionProviderFactory | None = None,
     relevance_timeout_seconds: float = 35.0,
+    fidelity_judge_timeout_seconds: float = 60.0,
     template_property_settings: PropertyCheckSettings | None = None,
     judge_settings: JudgeSettings | None = None,
 ) -> FastMCP:
@@ -46,6 +47,7 @@ def create_validation_server(
         code_execution_timeout_seconds,
         difficulty_judge_timeout_seconds,
         relevance_timeout_seconds,
+        fidelity_judge_timeout_seconds,
     ):
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("tool timeouts must be finite and positive")
@@ -74,7 +76,11 @@ def create_validation_server(
         execution_tool=execution_tool,
         execution_timeout_seconds=code_execution_timeout_seconds,
     )
-    register_math_tools(server)
+    register_math_tools(
+        server,
+        fidelity_provider_factory=partial(configured_judge_provider, selected),
+        fidelity_timeout_seconds=fidelity_judge_timeout_seconds,
+    )
     register_relevance_tools(
         server,
         decision_provider_factory=decision_provider_factory

@@ -13,15 +13,14 @@ from edcraft_validator.domains.math.math_schemas import (
     MathParameter,
     MathQuestionInstance,
     MathTemplateCandidate,
+    MathTemplateContent,
     MathTemplateRequest,
     MathValidationSummary,
     ValidatedMathTemplate,
 )
-from edcraft_validator.domains.math.math_types import LEGACY_MATH_RELEVANCE_TOOL
 from edcraft_validator.domains.math.prompt_builder import (
     build_math_generation_request,
 )
-from edcraft_validator.domains.math.proposal_response import MathProposalResponse
 from edcraft_validator.llm.llm_contracts import PlannedGenerationResponse
 from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
@@ -126,7 +125,7 @@ def test_candidate_round_trips() -> None:
 )
 def test_candidate_rejects_malformed_or_unsupported_content(overrides) -> None:
     with pytest.raises(ValidationError):
-        MathProposalResponse.model_validate(math_payload(**overrides))
+        MathTemplateContent.model_validate(math_payload(**overrides))
 
 
 def test_candidate_rejects_extra_fields() -> None:
@@ -134,7 +133,7 @@ def test_candidate_rejects_extra_fields() -> None:
     payload["unexpected"] = "value"
 
     with pytest.raises(ValidationError, match="Extra inputs"):
-        MathProposalResponse.model_validate(payload)
+        MathTemplateContent.model_validate(payload)
 
 
 def test_distractor_recipe_rejects_blank_text() -> None:
@@ -155,7 +154,7 @@ def test_validation_summary_rejects_failed_technical_evidence() -> None:
         )
 
 
-def test_validation_summary_accepts_legacy_relevance_advisory_failure() -> None:
+def test_validation_summary_migrates_legacy_relevance_on_read() -> None:
     summary = MathValidationSummary(
         combinations_checked=8,
         max_combinations=8,
@@ -164,12 +163,29 @@ def test_validation_summary_accepts_legacy_relevance_advisory_failure() -> None:
             ValidationEvidence(
                 check="math_validate_answers_and_distractors", status="passed"
             ),
-            ValidationEvidence(check=LEGACY_MATH_RELEVANCE_TOOL, status="failed"),
+            ValidationEvidence(check="math_assess_template_relevance", status="failed"),
         ],
     )
 
-    assert summary.evidence[-1].check == "math_assess_template_relevance"
+    assert summary.evidence[-1].check == "assess_template_relevance"
     assert summary.evidence[-1].status == "failed"
+
+
+def test_validation_summary_drops_stale_legacy_relevance_duplicate() -> None:
+    summary = MathValidationSummary(
+        combinations_checked=8,
+        max_combinations=8,
+        evidence=[
+            ValidationEvidence(check="math_verify_template_structure", status="passed"),
+            ValidationEvidence(check="math_assess_template_relevance", status="failed"),
+            ValidationEvidence(check="assess_template_relevance", status="failed"),
+        ],
+    )
+
+    assert [item.check for item in summary.evidence] == [
+        "math_verify_template_structure",
+        "assess_template_relevance",
+    ]
 
 
 def test_validated_artifact_round_trips() -> None:
@@ -227,7 +243,7 @@ def test_generation_request_uses_math_response_contract() -> None:
         )
     )
 
-    assert request.response_model == PlannedGenerationResponse[MathProposalResponse]
+    assert request.response_model == PlannedGenerationResponse[MathTemplateContent]
     assert request.check_argument_models == ()
     assert "Create an easy linear equation question" in request.messages[1]["content"]
     assert "a*x + b = c" in request.messages[0]["content"]
@@ -252,6 +268,6 @@ def test_generation_request_schema_is_json_serializable() -> None:
 
     encoded = json.dumps(request.response_model.model_json_schema())
 
-    assert "MathProposalResponse" in encoded
+    assert "MathTemplateContent" in encoded
     assert "distractors" in encoded
     assert "parameters" in encoded

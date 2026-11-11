@@ -3,9 +3,9 @@
 from edcraft_validator.domains.math.candidate_builder import build_math_candidate
 from edcraft_validator.domains.math.math_schemas import (
     MathTemplateCandidate,
+    MathTemplateContent,
     MathTemplateRequest,
 )
-from edcraft_validator.domains.math.proposal_response import MathProposalResponse
 
 
 def math_payload(**overrides):
@@ -37,8 +37,8 @@ def math_payload(**overrides):
     return payload
 
 
-def math_proposal(**overrides) -> MathProposalResponse:
-    return MathProposalResponse.model_validate(math_payload(**overrides))
+def math_proposal(**overrides) -> MathTemplateContent:
+    return MathTemplateContent.model_validate(math_payload(**overrides))
 
 
 def math_candidate(

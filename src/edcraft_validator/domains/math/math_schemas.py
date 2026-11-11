@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from string import Formatter
+from itertools import product
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -29,9 +29,14 @@ from edcraft_validator.domains.math.math_types import (
     MIN_PARAMETER_VALUES,
     Difficulty,
 )
+from edcraft_validator.text_templates import render_text_template, template_fields
+from edcraft_validator.validation.check_names import TEMPLATE_RELEVANCE_CHECK
 from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
 _QUESTION_FIELDS = frozenset({*MATH_PARAMETER_NAMES, "equation"})
+# Read compatibility only: artifacts written before relevance became a shared
+# capability still carry this name. New evidence never uses it.
+_LEGACY_MATH_RELEVANCE_CHECK = "math_assess_template_relevance"
 
 
 class MathTemplateRequest(BaseModel):
@@ -76,6 +81,17 @@ class MathParameter(BaseModel):
                 f"{MIN_PARAMETER_VALUE} to {MAX_PARAMETER_VALUE}"
             )
         return self
+
+
+def parameter_combinations(
+    parameters: list[MathParameter],
+) -> list[dict[str, int]]:
+    """Expand the declared finite parameter grid in stable order."""
+    names = tuple(parameter.name for parameter in parameters)
+    return [
+        dict(zip(names, values, strict=True))
+        for values in product(*(parameter.values for parameter in parameters))
+    ]
 
 
 class MathDistractorRecipe(BaseModel):
@@ -157,6 +173,36 @@ class MathValidationSummary(BaseModel):
     seed: int = 0
     evidence: list[ValidationEvidence] = Field(min_length=1)
 
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def migrate_legacy_relevance(cls, value: object) -> object:
+        """Rewrite the retired relevance check name while reading old artifacts."""
+        if not isinstance(value, list):
+            return value
+        migrated: list[object] = []
+        seen: set[str] = set()
+        for item in value:
+            if isinstance(item, BaseModel):
+                data = item.model_dump()
+            elif isinstance(item, dict):
+                data = dict(item)
+            else:
+                migrated.append(item)
+                continue
+            legacy = data.get("check") == _LEGACY_MATH_RELEVANCE_CHECK
+            if legacy:
+                data["check"] = TEMPLATE_RELEVANCE_CHECK
+            check = data.get("check")
+            if isinstance(check, str):
+                # An artifact rewritten after the rename can carry both names.
+                # Evidence checks are unique by contract, so read-compat keeps
+                # the first row for each name instead of rejecting old files.
+                if check in seen:
+                    continue
+                seen.add(check)
+            migrated.append(data)
+        return migrated
+
     @model_validator(mode="after")
     def require_successful_unique_evidence(self) -> MathValidationSummary:
         checks = [item.check for item in self.evidence]
@@ -211,26 +257,6 @@ class MathQuestionInstance(BaseModel):
         return self
 
 
-def template_fields(source: str) -> set[str]:
-    """Return allowed placeholder fields, rejecting format specifications."""
-    try:
-        parsed = list(Formatter().parse(source))
-    except ValueError as exc:
-        raise ValueError(f"invalid text template: {exc}") from exc
-    fields: set[str] = set()
-    for _, field_name, format_spec, conversion in parsed:
-        if field_name is None:
-            continue
-        if not field_name:
-            raise ValueError("text templates require named placeholders")
-        if format_spec or conversion:
-            raise ValueError(
-                "text templates do not support conversions or format specifications"
-            )
-        fields.add(field_name)
-    return fields
-
-
 def validate_equation_template(source: str) -> None:
     """Require the canonical bounded linear form ``a*x + b = c``.
 
@@ -261,16 +287,7 @@ def validate_question_template(source: str) -> None:
 
 def render_math_text(source: str, values: dict[str, object]) -> str:
     """Render a template after checking that every placeholder has a value."""
-    fields = template_fields(source)
-    missing = fields - set(values)
-    if missing:
-        raise ValueError(
-            "text template uses unknown placeholders: " + ", ".join(sorted(missing))
-        )
-    rendered = source.format_map(values)
-    if not rendered.strip():
-        raise ValueError("rendered text must not be blank")
-    return rendered
+    return render_text_template(source, values)
 
 
 def render_linear_equation(a: int, b: int, c: int) -> str:

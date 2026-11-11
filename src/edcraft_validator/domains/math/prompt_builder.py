@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from edcraft_validator.domains.math.math_schemas import MathTemplateRequest
+from edcraft_validator.domains.math.math_schemas import (
+    MathTemplateContent,
+    MathTemplateRequest,
+)
 from edcraft_validator.domains.math.math_types import (
     MAX_DISTRACTOR_CANDIDATES,
     MAX_DISTRACTORS,
@@ -11,7 +14,6 @@ from edcraft_validator.domains.math.math_types import (
     MIN_DISTRACTORS,
     MIN_PARAMETER_VALUE,
 )
-from edcraft_validator.domains.math.proposal_response import MathProposalResponse
 from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     StructuredGenerationRequest,
@@ -66,7 +68,7 @@ Use native JSON values. Parameters are objects like
 
 def build_math_generation_request(
     request: MathTemplateRequest,
-) -> StructuredGenerationRequest[PlannedGenerationResponse[MathProposalResponse]]:
+) -> StructuredGenerationRequest[PlannedGenerationResponse[MathTemplateContent]]:
     """Return the provider-independent math proposal contract."""
     user_prompt = f"""\
 Author request (preserve its meaning):
@@ -88,7 +90,7 @@ Supported distractor range: {MIN_DISTRACTORS} to {MAX_DISTRACTORS}
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"{user_prompt}\n{RESPONSE_GUIDANCE}"},
         ],
-        response_model=PlannedGenerationResponse[MathProposalResponse],
+        response_model=PlannedGenerationResponse[MathTemplateContent],
         prompt_version=f"{MATH_TEMPLATE_PROMPT_VERSION}+response-v1",
         schema_name="template_proposal_and_check_plan",
         check_argument_models=(),

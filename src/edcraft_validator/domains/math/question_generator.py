@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import hashlib
-from itertools import product
 
 from edcraft_validator.domains.math.math_schemas import (
     MathQuestionInstance,
     ValidatedMathTemplate,
+    parameter_combinations,
     render_linear_equation,
     render_math_text,
 )
@@ -22,11 +22,7 @@ def generate_math_question(
 ) -> MathQuestionInstance:
     """Expand one validated template without AI calls or external I/O."""
     template = validated.template
-    parameters = template.parameters
-    combinations = [
-        dict(zip((parameter.name for parameter in parameters), values, strict=True))
-        for values in product(*(parameter.values for parameter in parameters))
-    ]
+    combinations = parameter_combinations(template.parameters)
     if not combinations:
         raise ValueError("validated template has an empty parameter domain")
     start = _seeded_index(

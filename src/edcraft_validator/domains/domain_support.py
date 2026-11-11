@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any
 
 from pydantic import BaseModel
@@ -36,6 +38,18 @@ def build_review_view(
         language=language,
         limits=validation.model_dump() if validation is not None else None,
     )
+
+
+def content_sha256(model: BaseModel) -> str:
+    """Identify exact canonical content independently of any assessment."""
+    return hashlib.sha256(
+        json.dumps(
+            model.model_dump(mode="json"),
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode()
+    ).hexdigest()
 
 
 def require_type[ModelT: BaseModel](value: BaseModel, model: type[ModelT]) -> ModelT:

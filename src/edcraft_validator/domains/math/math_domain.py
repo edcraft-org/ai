@@ -13,6 +13,10 @@ from edcraft_validator.domains.math.candidate_builder import (
     build_math_candidate,
     template_sha256,
 )
+from edcraft_validator.domains.math.linear_ir import (
+    MAX_IR_VARIANTS,
+    linear_template_ir,
+)
 from edcraft_validator.domains.math.math_schemas import (
     MathDistractorRecipe,
     MathQuestionInstance,
@@ -25,15 +29,16 @@ from edcraft_validator.domains.math.math_schemas import (
 from edcraft_validator.domains.math.math_types import (
     MATH_ADVISORY_CHECK_NAMES,
     MATH_ANSWERS_TOOL,
+    MATH_FIDELITY_TOOL,
     MATH_STRUCTURE_TOOL,
     MIN_DISTRACTORS,
 )
 from edcraft_validator.domains.math.prompt_builder import (
     build_math_generation_request,
 )
-from edcraft_validator.domains.math.proposal_response import MathProposalResponse
 from edcraft_validator.domains.math.question_generator import generate_math_question
 from edcraft_validator.domains.math.relevance import template_relevance_text
+from edcraft_validator.domains.math.validation.harness import validate_template
 from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     StructuredGenerationRequest,
@@ -63,7 +68,7 @@ class MathDomain:
 
     def generation_request(
         self, request: BaseModel
-    ) -> StructuredGenerationRequest[PlannedGenerationResponse[MathProposalResponse]]:
+    ) -> StructuredGenerationRequest[PlannedGenerationResponse[MathTemplateContent]]:
         typed_request = require_type(request, MathTemplateRequest)
         return build_math_generation_request(typed_request)
 
@@ -84,6 +89,11 @@ class MathDomain:
                 "question_text": template_relevance_text(typed_candidate),
                 "subject_sha256": template_sha256(typed_candidate),
             }
+        if tool_name == MATH_FIDELITY_TOOL:
+            # The checked linear template is symbolic, so the fidelity gate
+            # inspects the projected IR and skips the blind parse-back.
+            projected = linear_template_ir(typed_candidate).body
+            return {"item": projected.model_dump(mode="json")}
         bindings = {"candidate": typed_candidate.model_dump(mode="json")}
         if tool_name == MATH_ANSWERS_TOOL:
             bindings["required_distractors"] = require_type(
@@ -126,6 +136,17 @@ class MathDomain:
             raise ValueError("No checked distractor recipes were selected")
         if any(recipe not in template.distractors for recipe in selected):
             raise ValueError("Selected distractors are not checked proposal recipes")
+        # The legacy evidence above keeps the 1.0 wire contract readable. The
+        # typed IR gate is the authoritative solve: it derives the answer from
+        # the equation instead of trusting the answer recipe and sweeps every
+        # declared parameter combination.
+        ir_report = validate_template(
+            linear_template_ir(template),
+            max_variants=MAX_IR_VARIANTS,
+        )
+        if not ir_report.passed:
+            detail = "; ".join(ir_report.report.findings) or ir_report.report.status
+            raise ValueError(f"IR validation did not pass: {detail}")
         reusable = template.model_copy(
             update={"distractors": selected},
             deep=True,
