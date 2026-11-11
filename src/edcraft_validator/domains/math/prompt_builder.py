@@ -52,7 +52,7 @@ Rules:
   checks without model-owned arguments. The application freezes these arguments and
   supplies the current candidate and required distractor count. Select the structure
   check and the answers/distractors check for every reusable template. Also select
-  math_assess_template_difficulty and math_assess_template_relevance; both are
+  math_assess_template_difficulty and assess_template_relevance; both are
   advisory evidence for educator review and never block a technically checked
   template.
 """

@@ -185,7 +185,11 @@ class TemplateApplication:
             result.usage = summarize_usage(measured.calls)
 
     def _prepare_and_run(self, job, client, observer):
-        tools = resolve_domain_tools(job.domain.name, self.tool_catalogue or client)
+        tools = resolve_domain_tools(
+            job.domain.name,
+            self.tool_catalogue or client,
+            capabilities=getattr(job.domain, "capabilities", ()),
+        )
         snapshot = ToolCatalogueSnapshot.from_definitions(tools)
         job.result.tool_catalogue = snapshot.summaries()
         if observer is not None:

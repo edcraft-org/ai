@@ -61,7 +61,9 @@ def save_checked_evidence(
             details={"tool_version": item.version},
         )
     details: dict[str, Any] = {"tool_version": item.version, **item.details}
-    recorded_sha256 = item.details.get("template_sha256")
+    recorded_sha256 = item.details.get("subject_sha256")
+    if recorded_sha256 is None:
+        recorded_sha256 = item.details.get("template_sha256")
     if recorded_sha256 is None:
         details.update(
             unavailable=True,

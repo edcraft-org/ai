@@ -1,0 +1,89 @@
+"""Domain-neutral authoring relevance evidence from the shared classifier."""
+
+from typing import Literal
+
+from edcraft_validator.application.relevance import assess_relevance
+from edcraft_validator.llm.decision import DecisionProviderFactory
+from edcraft_validator.relevance_contracts import RelevanceInput
+from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
+from edcraft_validator.validation.check_names import TEMPLATE_RELEVANCE_CHECK
+
+
+async def assess_template_relevance(
+    *,
+    subject_sha256: str,
+    author_request: str,
+    question_text: str,
+    decision_provider_factory: DecisionProviderFactory,
+    relevance_timeout_seconds: float = 35,
+    tool_name: str = TEMPLATE_RELEVANCE_CHECK,
+) -> ToolEvidence:
+    """Map the shared relevance decision into the authoring check contract.
+
+    Domains supply only the learner-facing text projection. The measurement,
+    threshold and verdict stay in the shared classifier so every domain is judged
+    by the same policy.
+    """
+    report = await assess_relevance(
+        RelevanceInput(
+            author_request=author_request,
+            question_text=question_text,
+        ),
+        decision_provider_factory=decision_provider_factory,
+        relevance_timeout_seconds=relevance_timeout_seconds,
+    )
+    status: Literal["passed", "failed", "error"] = "passed"
+    findings: list[ToolFinding] = []
+    if report.status == "error":
+        status = "error"
+        findings = [
+            ToolFinding(
+                code=report.decision.error_code or "RELEVANCE_FAILED",
+                message="Relevance assessment failed; no check retry was made.",
+            )
+        ]
+    elif not report.decision.relevant:
+        status = "failed"
+        findings = [
+            ToolFinding(
+                code="RELEVANCE_MISMATCH",
+                message=(
+                    "The template may not assess the original author request; "
+                    "this is advisory evidence for educator review, not a "
+                    "technical failure or a revision request."
+                ),
+            )
+        ]
+    unavailable = report.status != "assessed"
+    return ToolEvidence(
+        tool=tool_name,
+        version="1.0.0",
+        status=status,
+        findings=findings,
+        details={
+            "advisory": True,
+            "retryable": False,
+            "subject_sha256": subject_sha256,
+            "score": report.decision.score,
+            "threshold": report.decision.threshold,
+            "relevant": report.decision.relevant,
+            "provider": report.decision.provider,
+            "model": report.decision.model,
+            "usage": report.decision.usage.model_dump(mode="json"),
+            "relevance": report.model_dump(mode="json"),
+            "relevance_outcome": {
+                "status": "unavailable" if unavailable else "assessed",
+                "unavailable": unavailable,
+                "score": report.decision.score,
+                "threshold": report.decision.threshold,
+                "relevant": report.decision.relevant,
+                "reason": (
+                    "Relevance assessment unavailable; no check retry was made."
+                    if unavailable
+                    else "Advisory relevance assessment completed."
+                ),
+                "error_code": report.decision.error_code,
+            },
+        },
+        duration_ms=report.duration_ms,
+    )

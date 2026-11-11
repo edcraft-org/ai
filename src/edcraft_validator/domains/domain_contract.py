@@ -20,6 +20,8 @@ class DomainModule(Protocol):
     question_model: type[BaseModel]
     # Human-readable review label for a candidate language, when it has one.
     template_language: str | None
+    # Shared checks this domain opts into, selected by ``capability:<name>``.
+    capabilities: frozenset[str]
 
     def review_view(
         self, artifact: ValidatedTemplateArtifact

@@ -7,20 +7,22 @@ from math_helpers import math_candidate, math_payload
 
 from edcraft_validator.domains.math.candidate_builder import template_sha256
 from edcraft_validator.domains.math.math_domain import MathDomain
+from edcraft_validator.domains.math.math_schemas import MathTemplateRequest
 from edcraft_validator.domains.math.math_types import (
     MATH_ANSWERS_TOOL,
     MATH_DIFFICULTY_TOOL,
     MATH_STRUCTURE_TOOL,
     MATH_TOOL_VERSION,
 )
+from edcraft_validator.domains.math.relevance import template_relevance_text
 from edcraft_validator.mcp.math_tools import (
     MathToolFailure,
     assess_template_difficulty,
-    assess_template_relevance,
     validate_answers_and_distractors,
     verify_template_structure,
 )
 from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
+from edcraft_validator.validation.check_names import TEMPLATE_RELEVANCE_CHECK
 
 
 def semantic_evidence(candidate, required: int = 3) -> ToolEvidence:
@@ -250,23 +252,34 @@ def test_finalize_accepts_complete_evidence_and_keeps_advisory_failures() -> Non
     assert saved.status == "failed"
 
 
-def test_relevance_scores_only_candidate_text() -> None:
+def test_relevance_projection_is_learner_facing_only() -> None:
     candidate = math_candidate()
 
-    matched = assess_template_relevance(
-        candidate, "Write a linear equation question for x."
-    )
-    mismatch = assess_template_relevance(candidate, "Label a photosynthesis diagram.")
-    no_keywords = assess_template_relevance(candidate, "the and for")
+    text = template_relevance_text(candidate)
 
-    assert matched.status == "passed"
-    assert matched.details["relevant"] is True
-    assert mismatch.status == "failed"
-    assert mismatch.details["relevant"] is False
-    assert no_keywords.status == "error"
-    assert no_keywords.details["relevance_outcome"]["error_code"] == (
-        "RELEVANCE_NO_KEYWORDS"
+    assert "{a}x + {b} = {c}" in text
+    assert "Solve for x: {equation}" in text
+    assert candidate.template_id not in text
+    assert candidate.answer_expression not in text
+    assert all(recipe.reason_template not in text for recipe in candidate.distractors)
+
+
+def test_relevance_binding_carries_checked_identity_without_a_candidate() -> None:
+    candidate = math_candidate()
+    request = MathTemplateRequest(
+        prompt="Write a linear equation question for x.",
+        difficulty="easy",
+        num_distractors=3,
     )
+
+    bindings = MathDomain().tool_bindings(request, candidate, TEMPLATE_RELEVANCE_CHECK)
+
+    assert bindings == {
+        "author_request": request.prompt,
+        "question_text": template_relevance_text(candidate),
+        "subject_sha256": template_sha256(candidate),
+    }
+    assert "candidate" not in bindings
 
 
 def test_difficulty_bands_follow_the_documented_heuristic() -> None:

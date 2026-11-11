@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Literal, get_args
 
+from edcraft_validator.validation.check_names import TEMPLATE_RELEVANCE_CHECK
+
 Difficulty = Literal["easy", "medium", "hard"]
 
 MATH_DIFFICULTIES: tuple[Difficulty, ...] = get_args(Difficulty)
@@ -36,11 +38,12 @@ MAX_REASON_TEMPLATE_LENGTH = 1000
 MATH_STRUCTURE_TOOL = "math_verify_template_structure"
 MATH_ANSWERS_TOOL = "math_validate_answers_and_distractors"
 MATH_DIFFICULTY_TOOL = "math_assess_template_difficulty"
-MATH_RELEVANCE_TOOL = "math_assess_template_relevance"
 
 # Domain-owned advisory identities. Application policy never derives these from
-# untrusted tool evidence or model arguments.
-MATH_ADVISORY_CHECK_NAMES = frozenset({MATH_DIFFICULTY_TOOL, MATH_RELEVANCE_TOOL})
+# untrusted tool evidence or model arguments. Relevance is a shared check the
+# math domain opts into by capability, so its identifier is imported rather
+# than duplicated.
+MATH_ADVISORY_CHECK_NAMES = frozenset({MATH_DIFFICULTY_TOOL, TEMPLATE_RELEVANCE_CHECK})
 
 MATH_CHECKING_MODE = "exhaustive_domain"
 MATH_VALIDATOR_VERSION = "mcp-math-template-v1"

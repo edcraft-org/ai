@@ -8,6 +8,7 @@ from edcraft_validator.domains.math.math_domain import MathDomain
 from edcraft_validator.domains.math.math_schemas import MathTemplateRequest
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.server import create_validation_server
+from tests.test_code_relevance import Decisions
 
 
 def test_math_authoring_and_question_generation_round_trip() -> None:
@@ -34,14 +35,14 @@ def test_math_authoring_and_question_generation_round_trip() -> None:
                             "arguments": {},
                         },
                         {
-                            "name": "math_assess_template_relevance",
+                            "name": "assess_template_relevance",
                             "arguments": {},
                         },
                     ],
                 }
             )
 
-    server = create_validation_server()
+    server = create_validation_server(decision_provider_factory=Decisions)
     application = TemplateApplication(tool_client=FastMcpToolClient(server))
     request = MathTemplateRequest(
         prompt="Solve a linear equation for x with small integer coefficients.",
@@ -65,8 +66,8 @@ def test_math_authoring_and_question_generation_round_trip() -> None:
     assert view.limits["checking_mode"] == "exhaustive_domain"
 
     assert offered == [
+        "assess_template_relevance",
         "math_assess_template_difficulty",
-        "math_assess_template_relevance",
         "math_validate_answers_and_distractors",
         "math_verify_template_structure",
     ]
@@ -77,8 +78,8 @@ def test_math_authoring_and_question_generation_round_trip() -> None:
     assert validated.validation.checking_mode == "exhaustive_domain"
     assert validated.validation.combinations_checked == 8
     assert {item.check for item in validated.validation.evidence} == {
+        "assess_template_relevance",
         "math_assess_template_difficulty",
-        "math_assess_template_relevance",
         "math_validate_answers_and_distractors",
         "math_verify_template_structure",
     }
@@ -103,14 +104,20 @@ def test_math_tools_are_tagged_and_listed_for_the_domain() -> None:
 
     assert set(math_tools) == {
         "math_assess_template_difficulty",
-        "math_assess_template_relevance",
         "math_validate_answers_and_distractors",
         "math_verify_template_structure",
     }
-    for name in (
-        "math_assess_template_difficulty",
-        "math_assess_template_relevance",
-    ):
-        tags = math_tools[name]["_meta"]["fastmcp"]["tags"]
-        assert "policy:advisory" in tags
-        assert "stage:after-validation" in tags
+    difficulty_tags = math_tools["math_assess_template_difficulty"]["_meta"]["fastmcp"][
+        "tags"
+    ]
+    assert "policy:advisory" in difficulty_tags
+    assert "stage:after-validation" in difficulty_tags
+
+    relevance = next(
+        tool for tool in tools if tool["name"] == "assess_template_relevance"
+    )
+    relevance_tags = relevance["_meta"]["fastmcp"]["tags"]
+    assert "capability:template-relevance" in relevance_tags
+    assert "domain:math" not in relevance_tags
+    assert "policy:advisory" in relevance_tags
+    assert "stage:after-validation" in relevance_tags

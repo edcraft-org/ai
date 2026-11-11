@@ -15,15 +15,24 @@ class ToolCatalogue(Protocol):
 
 
 def resolve_domain_tools(
-    domain_name: str, catalogue: ToolCatalogue
+    domain_name: str,
+    catalogue: ToolCatalogue,
+    *,
+    capabilities: tuple[str, ...] | frozenset[str] = (),
 ) -> tuple[dict[str, Any], ...]:
-    """Return an ordered snapshot of tools tagged for the selected domain."""
-    tag = f"domain:{domain_name}"
+    """Return an ordered snapshot of tools offered to the selected domain.
+
+    A tool is offered when it is tagged ``domain:<name>`` or when it is tagged
+    ``capability:<name>`` for one of the domain's declared capabilities. Shared
+    checks stay registered once while each domain selects them explicitly.
+    """
+    accepted = {f"domain:{domain_name}"}
+    accepted.update(f"capability:{capability}" for capability in capabilities)
     listed = catalogue.list_tools()
     matched = [
         tool
         for tool in listed
-        if tag in tool.get("_meta", {}).get("fastmcp", {}).get("tags", [])
+        if accepted & set(tool.get("_meta", {}).get("fastmcp", {}).get("tags", []))
     ]
     if not matched:
         raise ToolCatalogueError(f"no MCP tools tagged for domain: {domain_name}")

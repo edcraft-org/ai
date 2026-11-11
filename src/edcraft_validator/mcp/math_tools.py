@@ -10,10 +10,7 @@ from typing import Annotated, Any
 from fastmcp import FastMCP
 from pydantic import Field, ValidationError
 
-from edcraft_validator.application.authoring_contracts import (
-    DifficultyOutcome,
-    RelevanceOutcome,
-)
+from edcraft_validator.application.authoring_contracts import DifficultyOutcome
 from edcraft_validator.domains.math.candidate_builder import template_sha256
 from edcraft_validator.domains.math.math_schemas import (
     MathTemplateCandidate,
@@ -24,11 +21,9 @@ from edcraft_validator.domains.math.math_types import (
     MATH_CHECKING_MODE,
     MATH_DIFFICULTY_TOOL,
     MATH_PARAMETER_NAMES,
-    MATH_RELEVANCE_TOOL,
     MATH_STRUCTURE_TOOL,
     MATH_TOOL_VERSION,
     MAX_DISTRACTORS,
-    MAX_PROMPT_LENGTH,
     MIN_DISTRACTORS,
 )
 from edcraft_validator.domains.math.safe_linear import (
@@ -37,27 +32,6 @@ from edcraft_validator.domains.math.safe_linear import (
     validate_expression,
 )
 from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
-
-_RELEVANCE_THRESHOLD = 0.2
-_RELEVANCE_STOPWORDS = frozenset(
-    {
-        "a",
-        "an",
-        "and",
-        "about",
-        "create",
-        "for",
-        "from",
-        "generate",
-        "in",
-        "of",
-        "on",
-        "question",
-        "the",
-        "to",
-        "with",
-    }
-)
 
 CandidateArgument = Annotated[
     MathTemplateCandidate,
@@ -180,37 +154,6 @@ def register_math_tools(server: FastMCP) -> None:
         candidate: CandidateArgument,
     ) -> ToolEvidence:
         return assess_template_difficulty(candidate)
-
-    @server.tool(
-        name=MATH_RELEVANCE_TOOL,
-        version=MATH_TOOL_VERSION,
-        tags={
-            "domain:math",
-            "quality:math",
-            "stage:after-validation",
-            "policy:advisory",
-        },
-        annotations={
-            "readOnlyHint": True,
-            "destructiveHint": False,
-            "idempotentHint": True,
-            "openWorldHint": False,
-        },
-        description=(
-            "Compare a checked linear-equation template with the original author "
-            "request using a conservative keyword-overlap heuristic. The "
-            "application supplies the unchanged request. A low overlap is advisory "
-            "evidence for educator review and never blocks a technically checked "
-            "template. No model call, embedding, or external I/O is used."
-        ),
-    )
-    async def math_assess_template_relevance(
-        candidate: CandidateArgument,
-        author_request: Annotated[
-            str, Field(min_length=1, max_length=MAX_PROMPT_LENGTH)
-        ],
-    ) -> ToolEvidence:
-        return assess_template_relevance(candidate, author_request)
 
 
 def _run_tool(name: str, operation) -> ToolEvidence:
@@ -463,86 +406,6 @@ def assess_template_difficulty(
     )
 
 
-def assess_template_relevance(
-    candidate: MathTemplateCandidate, author_request: str
-) -> ToolEvidence:
-    """Return a conservative keyword-overlap relevance verdict."""
-    started = time.perf_counter()
-    candidate = _revalidate(candidate)
-    request_tokens = _tokens(author_request)
-    # Score only text supplied by the candidate. Adding a fixed domain phrase
-    # would let every template inherit relevance it was never assessed for.
-    template_tokens = _tokens(
-        f"{candidate.template_id} {candidate.equation_template} "
-        f"{candidate.question_template}"
-    )
-    if not request_tokens:
-        outcome = RelevanceOutcome(
-            status="unavailable",
-            unavailable=True,
-            relevant=None,
-            reason="Author request has no informative keywords.",
-            error_code="RELEVANCE_NO_KEYWORDS",
-        )
-        return ToolEvidence(
-            tool=MATH_RELEVANCE_TOOL,
-            version=MATH_TOOL_VERSION,
-            status="error",
-            findings=[
-                ToolFinding(
-                    code="RELEVANCE_NO_KEYWORDS",
-                    message="Author request has no informative keywords.",
-                )
-            ],
-            details={
-                "advisory": True,
-                "template_sha256": template_sha256(candidate),
-                "relevance_outcome": outcome.model_dump(mode="json"),
-            },
-            duration_ms=_elapsed_ms(started),
-        )
-    overlap = len(request_tokens & template_tokens)
-    score = overlap / len(request_tokens)
-    relevant = score >= _RELEVANCE_THRESHOLD
-    outcome = RelevanceOutcome(
-        status="assessed",
-        unavailable=False,
-        score=round(score, 4),
-        threshold=_RELEVANCE_THRESHOLD,
-        relevant=relevant,
-        reason=(
-            "Conservative keyword overlap between the original request and the "
-            "equation template; advisory and uncalibrated."
-        ),
-        error_code=None,
-    )
-    return ToolEvidence(
-        tool=MATH_RELEVANCE_TOOL,
-        version=MATH_TOOL_VERSION,
-        status="passed" if relevant else "failed",
-        findings=[]
-        if relevant
-        else [
-            ToolFinding(
-                code="RELEVANCE_MISMATCH",
-                message=(
-                    "The template may not assess the original author request; "
-                    "this is advisory evidence, not a technical failure."
-                ),
-            )
-        ],
-        details={
-            "advisory": True,
-            "template_sha256": template_sha256(candidate),
-            "score": outcome.score,
-            "threshold": outcome.threshold,
-            "relevant": relevant,
-            "relevance_outcome": outcome.model_dump(mode="json"),
-        },
-        duration_ms=_elapsed_ms(started),
-    )
-
-
 def _revalidate(candidate: MathTemplateCandidate) -> MathTemplateCandidate:
     try:
         return MathTemplateCandidate.model_validate(candidate.model_dump())
@@ -584,24 +447,6 @@ def _estimate_difficulty(candidate: MathTemplateCandidate) -> str:
     if score <= 3:
         return "medium"
     return "hard"
-
-
-def _tokens(text: str) -> set[str]:
-    token = []
-    tokens: set[str] = set()
-    for character in text.lower():
-        if character.isalnum():
-            token.append(character)
-        elif token:
-            word = "".join(token)
-            token = []
-            if word not in _RELEVANCE_STOPWORDS:
-                tokens.add(word)
-    if token:
-        word = "".join(token)
-        if word not in _RELEVANCE_STOPWORDS:
-            tokens.add(word)
-    return tokens
 
 
 def _elapsed_ms(started: float) -> float:

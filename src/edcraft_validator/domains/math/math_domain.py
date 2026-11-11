@@ -25,7 +25,6 @@ from edcraft_validator.domains.math.math_schemas import (
 from edcraft_validator.domains.math.math_types import (
     MATH_ADVISORY_CHECK_NAMES,
     MATH_ANSWERS_TOOL,
-    MATH_RELEVANCE_TOOL,
     MATH_STRUCTURE_TOOL,
     MIN_DISTRACTORS,
 )
@@ -34,11 +33,16 @@ from edcraft_validator.domains.math.prompt_builder import (
 )
 from edcraft_validator.domains.math.proposal_response import MathProposalResponse
 from edcraft_validator.domains.math.question_generator import generate_math_question
+from edcraft_validator.domains.math.relevance import template_relevance_text
 from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     StructuredGenerationRequest,
 )
 from edcraft_validator.validation.check_contracts import ToolEvidence
+from edcraft_validator.validation.check_names import (
+    TEMPLATE_RELEVANCE_CAPABILITY,
+    TEMPLATE_RELEVANCE_CHECK,
+)
 
 
 class MathDomain:
@@ -50,6 +54,7 @@ class MathDomain:
     validated_model = ValidatedMathTemplate
     question_model = MathQuestionInstance
     template_language = None
+    capabilities = frozenset({TEMPLATE_RELEVANCE_CAPABILITY})
 
     def review_view(
         self, artifact: ValidatedTemplateArtifact
@@ -72,15 +77,14 @@ class MathDomain:
 
     def tool_bindings(self, request, candidate, tool_name):
         """Application-owned values never come from model tool arguments."""
-        bindings = {
-            "candidate": require_type(candidate, MathTemplateCandidate).model_dump(
-                mode="json"
-            )
-        }
-        if tool_name == MATH_RELEVANCE_TOOL:
-            bindings["author_request"] = require_type(
-                request, MathTemplateRequest
-            ).prompt
+        typed_candidate = require_type(candidate, MathTemplateCandidate)
+        if tool_name == TEMPLATE_RELEVANCE_CHECK:
+            return {
+                "author_request": require_type(request, MathTemplateRequest).prompt,
+                "question_text": template_relevance_text(typed_candidate),
+                "subject_sha256": template_sha256(typed_candidate),
+            }
+        bindings = {"candidate": typed_candidate.model_dump(mode="json")}
         if tool_name == MATH_ANSWERS_TOOL:
             bindings["required_distractors"] = require_type(
                 request, MathTemplateRequest

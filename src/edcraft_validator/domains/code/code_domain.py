@@ -48,6 +48,7 @@ class CodeDomain:
     validated_model = ValidatedCodeTemplate
     question_model = CodeQuestionInstance
     template_language = "python"
+    capabilities: frozenset[str] = frozenset()
 
     def review_view(
         self, artifact: ValidatedTemplateArtifact

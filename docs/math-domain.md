@@ -65,8 +65,10 @@ Two technical checks gate approval:
 Two advisory checks never gate approval:
 
 3. `math_assess_template_difficulty` — a deterministic, provisional heuristic.
-4. `math_assess_template_relevance` — conservative keyword overlap between the
-   author request and the template.
+4. `assess_template_relevance` — the shared semantic relevance classifier, offered
+   to the math domain through the `template-relevance` capability. Math supplies
+   only the learner-facing text projection; the measurement, threshold and verdict
+   are shared with every other domain.
 
 Advisory `failed` or `unavailable` outcomes stay visible in the review evidence
 and warnings, but only technical failures, missing evidence, unsupported cases,
