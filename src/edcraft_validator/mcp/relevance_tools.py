@@ -7,9 +7,7 @@ from pydantic import Field
 
 from edcraft_validator.application.code_relevance import assess_code_template_relevance
 from edcraft_validator.application.relevance import assess_relevance
-from edcraft_validator.application.template_relevance import (
-    assess_template_relevance as build_template_relevance_evidence,
-)
+from edcraft_validator.application.template_relevance import assess_template_relevance
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.relevance import TEMPLATE_RELEVANCE_TOOL
 from edcraft_validator.llm.decision import DecisionProviderFactory
@@ -18,6 +16,7 @@ from edcraft_validator.validation.check_contracts import ToolEvidence
 from edcraft_validator.validation.check_names import (
     TEMPLATE_RELEVANCE_CAPABILITY,
     TEMPLATE_RELEVANCE_CHECK,
+    TEMPLATE_RELEVANCE_TOOL_VERSION,
 )
 
 
@@ -60,7 +59,7 @@ def register_relevance_tools(
 
     @server.tool(
         name=TEMPLATE_RELEVANCE_CHECK,
-        version="1.0.0",
+        version=TEMPLATE_RELEVANCE_TOOL_VERSION,
         tags={
             f"capability:{TEMPLATE_RELEVANCE_CAPABILITY}",
             "stage:after-validation",
@@ -89,7 +88,7 @@ def register_relevance_tools(
         question_text: Annotated[str, Field(min_length=1, max_length=200_000)],
         subject_sha256: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")],
     ) -> ToolEvidence:
-        return await build_template_relevance_evidence(
+        return await assess_template_relevance(
             subject_sha256=subject_sha256,
             author_request=author_request,
             question_text=question_text,
@@ -99,7 +98,7 @@ def register_relevance_tools(
 
     @server.tool(
         name=TEMPLATE_RELEVANCE_TOOL,
-        version="1.0.0",
+        version=TEMPLATE_RELEVANCE_TOOL_VERSION,
         tags={
             "domain:code",
             "quality:code",

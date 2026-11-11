@@ -7,3 +7,4 @@ can refer to it without importing one another.
 
 TEMPLATE_RELEVANCE_CAPABILITY = "template-relevance"
 TEMPLATE_RELEVANCE_CHECK = "assess_template_relevance"
+TEMPLATE_RELEVANCE_TOOL_VERSION = "1.0.0"

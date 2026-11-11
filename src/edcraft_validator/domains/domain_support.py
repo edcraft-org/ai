@@ -67,13 +67,13 @@ def save_checked_evidence(
     if recorded_sha256 is None:
         details.update(
             unavailable=True,
-            unavailable_reason="Assessment evidence is missing its template identity",
+            unavailable_reason="Assessment evidence is missing its subject identity",
         )
         status = "incomplete"
     elif recorded_sha256 != expected_sha256:
         details.update(
             unavailable=True,
-            unavailable_reason="Assessment evidence belongs to a different template",
+            unavailable_reason="Assessment evidence belongs to a different subject",
         )
         status = "incomplete"
     elif item.status == "failed":

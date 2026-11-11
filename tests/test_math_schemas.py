@@ -17,6 +17,7 @@ from edcraft_validator.domains.math.math_schemas import (
     MathValidationSummary,
     ValidatedMathTemplate,
 )
+from edcraft_validator.domains.math.math_types import LEGACY_MATH_RELEVANCE_TOOL
 from edcraft_validator.domains.math.prompt_builder import (
     build_math_generation_request,
 )
@@ -152,6 +153,23 @@ def test_validation_summary_rejects_failed_technical_evidence() -> None:
                 )
             ],
         )
+
+
+def test_validation_summary_accepts_legacy_relevance_advisory_failure() -> None:
+    summary = MathValidationSummary(
+        combinations_checked=8,
+        max_combinations=8,
+        evidence=[
+            ValidationEvidence(check="math_verify_template_structure", status="passed"),
+            ValidationEvidence(
+                check="math_validate_answers_and_distractors", status="passed"
+            ),
+            ValidationEvidence(check=LEGACY_MATH_RELEVANCE_TOOL, status="failed"),
+        ],
+    )
+
+    assert summary.evidence[-1].check == "math_assess_template_relevance"
+    assert summary.evidence[-1].status == "failed"
 
 
 def test_validated_artifact_round_trips() -> None:

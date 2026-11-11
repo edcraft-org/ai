@@ -146,6 +146,7 @@ def test_bad_catalogue_stops_before_generation(listed, message):
 
     class Domain:
         name = "code"
+        capabilities = frozenset()
 
         def generation_request(self, request):
             pytest.fail("invalid catalogues must stop before prompt construction")

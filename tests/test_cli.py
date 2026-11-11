@@ -42,6 +42,7 @@ class ExampleValidated(ValidatedTemplateArtifact):
 
 class ExampleDomain:
     name = "example"
+    capabilities = frozenset()
 
     request_model = ExampleRequest
     validated_model = ExampleValidated

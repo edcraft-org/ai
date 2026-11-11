@@ -206,6 +206,7 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
 
     class ExampleDomain:
         name = "example"
+        capabilities = frozenset()
 
         request_model = ExampleRequest
         validated_model = ExampleValidated
@@ -358,6 +359,7 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
 ) -> None:
     class FailingDomain:
         name = "example"
+        capabilities = frozenset()
 
         def generation_request(self, request):
             from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
@@ -402,9 +404,35 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
     assert captured_catalogues[0].names == ("double_value", "positive_value")
 
 
+def test_domain_without_capabilities_fails_before_generation() -> None:
+    class Domain:
+        name = "example"
+
+        def generation_request(self, request):
+            pytest.fail("capabilities must be validated before prompt construction")
+
+    class Provider:
+        provider = "stub"
+        model = "stub-model"
+
+        def generate(self, request):
+            pytest.fail("capabilities must be validated before model generation")
+
+    with pytest.raises(AuthoringFailure, match="must declare capabilities") as failure:
+        TemplateApplication(
+            tool_catalogue=ExampleCatalogue()
+        ).create_validated_template(
+            ExampleRequest(topic="fractions"),
+            domain=Domain(),
+            provider=Provider(),
+        )
+    assert failure.value.result.failure.stage == "configuration"
+
+
 def test_unknown_recommended_check_stops_before_candidate_validation() -> None:
     class Domain:
         name = "example"
+        capabilities = frozenset()
 
         def generation_request(self, request):
             from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
@@ -467,6 +495,7 @@ def test_non_code_domain_can_plan_typed_arguments_without_shared_tool_names():
 
     class Domain:
         name = "example"
+        capabilities = frozenset()
 
         def generation_request(self, request):
             return StructuredGenerationRequest(
@@ -533,6 +562,7 @@ def test_non_code_full_revision_enforces_domain_constraints_before_checking(
 
     class Domain:
         name = "example"
+        capabilities = frozenset()
 
         def generation_request(self, request):
             return StructuredGenerationRequest(
@@ -640,6 +670,7 @@ def test_authoring_rejects_a_domain_that_returns_no_shared_artifact():
 
     class Domain:
         name = "example"
+        capabilities = frozenset()
         request_model = Request
 
         def generation_request(self, request):

@@ -177,8 +177,8 @@ def test_correctness_failure_defers_difficulty_without_spending_a_judge_call():
 @pytest.mark.parametrize(
     ("change", "reason"),
     [
-        ("stale", "different template"),
-        ("missing", "missing its template identity"),
+        ("stale", "different subject"),
+        ("missing", "missing its subject identity"),
     ],
 )
 def test_saved_artifact_marks_bad_difficulty_identity_unavailable(change, reason):

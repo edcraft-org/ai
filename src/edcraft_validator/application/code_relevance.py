@@ -12,6 +12,7 @@ from edcraft_validator.application.code_checks import (
     check_code_question_requirements,
 )
 from edcraft_validator.application.relevance import assess_relevance
+from edcraft_validator.application.template_relevance import build_relevance_evidence
 from edcraft_validator.domains.code.candidate_builder import template_sha256
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.difficulty import CodeDifficultyQuestion, Record
@@ -28,7 +29,7 @@ from edcraft_validator.domains.code.relevance import (
 from edcraft_validator.llm.decision import DecisionProviderFactory
 from edcraft_validator.relevance_contracts import RelevanceReport
 from edcraft_validator.tools.python_execution import PythonExecutionTool
-from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
+from edcraft_validator.validation.check_contracts import ToolEvidence
 
 
 class CodeRelevanceReview(Record):
@@ -99,58 +100,8 @@ async def assess_code_template_relevance(
         decision_provider_factory=decision_provider_factory,
         relevance_timeout_seconds=relevance_timeout_seconds,
     )
-    status = "passed"
-    findings = []
-    if report.status == "error":
-        status = "error"
-        findings = [
-            ToolFinding(
-                code=report.decision.error_code or "RELEVANCE_FAILED",
-                message="Relevance assessment failed; no check retry was made.",
-            )
-        ]
-    elif not report.decision.relevant:
-        status = "failed"
-        findings = [
-            ToolFinding(
-                code="RELEVANCE_MISMATCH",
-                message=(
-                    "The template may not assess the original author request; "
-                    "this is advisory evidence for educator review, not a "
-                    "technical failure or a revision request."
-                ),
-            )
-        ]
-    unavailable = report.status != "assessed"
-    return ToolEvidence(
+    return build_relevance_evidence(
+        report,
         tool=TEMPLATE_RELEVANCE_TOOL,
-        version="1.0.0",
-        status=status,
-        findings=findings,
-        details={
-            "advisory": True,
-            "retryable": False,
-            "template_sha256": template_sha256(candidate),
-            "score": report.decision.score,
-            "threshold": report.decision.threshold,
-            "relevant": report.decision.relevant,
-            "provider": report.decision.provider,
-            "model": report.decision.model,
-            "usage": report.decision.usage.model_dump(mode="json"),
-            "relevance": report.model_dump(mode="json"),
-            "relevance_outcome": {
-                "status": "unavailable" if unavailable else "assessed",
-                "unavailable": unavailable,
-                "score": report.decision.score,
-                "threshold": report.decision.threshold,
-                "relevant": report.decision.relevant,
-                "reason": (
-                    "Relevance assessment unavailable; no check retry was made."
-                    if unavailable
-                    else "Advisory relevance assessment completed."
-                ),
-                "error_code": report.decision.error_code,
-            },
-        },
-        duration_ms=report.duration_ms,
+        identity={"template_sha256": template_sha256(candidate)},
     )
