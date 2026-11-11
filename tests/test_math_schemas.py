@@ -271,3 +271,10 @@ def test_generation_request_schema_is_json_serializable() -> None:
     assert "MathTemplateContent" in encoded
     assert "distractors" in encoded
     assert "parameters" in encoded
+
+
+def test_proposal_response_alias_keeps_downstream_imports_working() -> None:
+    from edcraft_validator.domains.math.math_schemas import MathTemplateContent
+    from edcraft_validator.domains.math.proposal_response import MathProposalResponse
+
+    assert MathProposalResponse is MathTemplateContent
