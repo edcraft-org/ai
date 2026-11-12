@@ -245,6 +245,7 @@ class KernelGoal(PilotModel):
     min_degree: int = Field(default=0, ge=0, le=5)
     max_degree: int = Field(ge=0, le=5)
     max_abs_coefficient: int = Field(ge=1, le=MAX_BINDING_ABS)
+    min_dimension: int = Field(default=0, ge=0, le=MAX_DIMENSION_BOUND)
     max_dimension: int = Field(default=0, ge=0, le=MAX_DIMENSION_BOUND)
     requires_general_antiderivative: bool = False
     domain_assumptions: list[str] = Field(default_factory=list, max_length=8)
@@ -253,6 +254,8 @@ class KernelGoal(PilotModel):
     def require_ordered_bounds(self) -> KernelGoal:
         if self.min_degree > self.max_degree:
             raise ValueError("min_degree must not exceed max_degree")
+        if self.min_dimension > self.max_dimension:
+            raise ValueError("min_dimension must not exceed max_dimension")
         if self.requires_general_antiderivative and self.operation != "antiderivative":
             raise ValueError("only antiderivative goals can require a general answer")
         if len(set(self.domain_assumptions)) != len(self.domain_assumptions):
@@ -566,6 +569,10 @@ class PilotTemplateDefinition(PilotModel):
             raise ValueError("template goal degree is outside its contract scope")
         if self.goal.max_abs_coefficient > self.scope.max_abs_coefficient:
             raise ValueError("template goal coefficient is outside its contract scope")
+        if self.goal.min_dimension < self.scope.min_dimension:
+            raise ValueError(
+                "template goal minimum dimension is outside its contract scope"
+            )
         if self.goal.max_dimension > self.scope.max_dimension:
             raise ValueError("template goal dimension is outside its contract scope")
         if self.structured_family.contract_id != self.contract_id:

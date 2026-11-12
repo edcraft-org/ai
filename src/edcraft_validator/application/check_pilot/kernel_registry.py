@@ -74,6 +74,16 @@ _REQUIRED_POLICY: tuple[RequiredPolicy, ...] = (
     "all_options_checked",
 )
 
+# A contract can carry a general (+C) answer only where its declared
+# mathematical kind supports one. The registry derives this capability from the
+# module's CONTRACT_SPECS instead of repeating a per-entry literal.
+_GENERAL_ANSWER_KINDS = frozenset({"polynomial_antiderivative"})
+
+
+def _requires_general_answer(declared: dict[str, str]) -> bool:
+    return declared.get("kind") in _GENERAL_ANSWER_KINDS
+
+
 # Domain-specific task metadata and bounds owned by the concrete kernels.
 # Bounds use their exported constants and are never inferred from model data.
 _CATALOG: dict[str, dict[str, Any]] = {
@@ -86,7 +96,6 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "max_abs_coefficient": calculus_checks.MAX_ABS_COEFFICIENT,
         "min_dimension": 0,
         "max_dimension": 0,
-        "requires_general": False,
         "domain_assumptions": (),
     },
     "polynomial.definite-integral/1": {
@@ -98,7 +107,6 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "max_abs_coefficient": calculus_checks.MAX_ABS_COEFFICIENT,
         "min_dimension": 0,
         "max_dimension": 0,
-        "requires_general": False,
         "domain_assumptions": (),
     },
     "expression.differentiate/1": {
@@ -110,7 +118,6 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "max_abs_coefficient": calculus_checks.MAX_ABS_COEFFICIENT,
         "min_dimension": 0,
         "max_dimension": 0,
-        "requires_general": False,
         "domain_assumptions": (
             "Every declared symbol is real; positive implies nonzero.",
         ),
@@ -124,7 +131,6 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "max_abs_coefficient": algebra_checks.MAX_EXPANDED_COEFFICIENT,
         "min_dimension": 0,
         "max_dimension": 0,
-        "requires_general": False,
         "domain_assumptions": (),
     },
     "polynomial.factor/1": {
@@ -136,7 +142,6 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "max_abs_coefficient": algebra_checks.MAX_EXPANDED_COEFFICIENT,
         "min_dimension": 0,
         "max_dimension": 0,
-        "requires_general": False,
         "domain_assumptions": (),
     },
     "polynomial.complete-square/1": {
@@ -148,7 +153,6 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "max_abs_coefficient": algebra_checks.MAX_EXPANDED_COEFFICIENT,
         "min_dimension": 0,
         "max_dimension": 0,
-        "requires_general": False,
         "domain_assumptions": (),
     },
     "linear-system.unique/1": {
@@ -160,7 +164,6 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "max_abs_coefficient": algebra_checks.MAX_SYSTEM_ENTRY,
         "min_dimension": 2,
         "max_dimension": 2,
-        "requires_general": False,
         "domain_assumptions": (),
     },
     "matrix.multiply/1": {
@@ -172,7 +175,6 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "max_abs_coefficient": matrix_checks.MAX_ENTRY_ABS,
         "min_dimension": 1,
         "max_dimension": max(matrix_checks.MAX_ROWS, matrix_checks.MAX_COLUMNS),
-        "requires_general": False,
         "domain_assumptions": (),
     },
     "matrix.determinant/1": {
@@ -182,9 +184,8 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "min_degree": 0,
         "max_degree": 0,
         "max_abs_coefficient": matrix_checks.MAX_ENTRY_ABS,
-        "min_dimension": 2,
+        "min_dimension": matrix_checks.MIN_SQUARE_SIZE,
         "max_dimension": matrix_checks.MAX_SQUARE_SIZE,
-        "requires_general": False,
         "domain_assumptions": (),
     },
     "matrix.inverse/1": {
@@ -194,9 +195,8 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "min_degree": 0,
         "max_degree": 0,
         "max_abs_coefficient": matrix_checks.MAX_ENTRY_ABS,
-        "min_dimension": 2,
+        "min_dimension": matrix_checks.MIN_SQUARE_SIZE,
         "max_dimension": matrix_checks.MAX_SQUARE_SIZE,
-        "requires_general": False,
         "domain_assumptions": (),
     },
     "matrix.lu/1": {
@@ -206,9 +206,8 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "min_degree": 0,
         "max_degree": 0,
         "max_abs_coefficient": matrix_checks.MAX_ENTRY_ABS,
-        "min_dimension": 2,
+        "min_dimension": matrix_checks.MIN_SQUARE_SIZE,
         "max_dimension": matrix_checks.MAX_SQUARE_SIZE,
-        "requires_general": False,
         "domain_assumptions": (),
     },
 }
@@ -277,6 +276,7 @@ class KernelContractSpec:
             "max_abs_coefficient": self.max_abs_coefficient,
             "min_dimension": self.min_dimension,
             "max_dimension": self.max_dimension,
+            "requires_general": self.requires_general,
             "answer_type": self.answer_type,
             "domain_assumptions": list(self.domain_assumptions),
             "required_policy": list(self.required_policy),
@@ -319,6 +319,11 @@ def _build_registry() -> tuple[
         declared = {spec["contract_id"]: spec for spec in module.CONTRACT_SPECS}[
             contract_id
         ]
+        requires_general = _requires_general_answer(declared)
+        if requires_general and metadata["operation"] != "antiderivative":
+            raise RuntimeError(
+                f"{contract_id!r} declares a general answer for a non-antiderivative"
+            )
         registry[contract_id] = KernelContractSpec(
             contract_id=contract_id,
             kind=str(declared["kind"]),
@@ -331,7 +336,7 @@ def _build_registry() -> tuple[
             max_abs_coefficient=metadata["max_abs_coefficient"],
             min_dimension=metadata["min_dimension"],
             max_dimension=metadata["max_dimension"],
-            requires_general=bool(metadata["requires_general"]),
+            requires_general=requires_general,
             required_policy=_REQUIRED_POLICY,
             domain_assumptions=tuple(metadata["domain_assumptions"]),
             module=module,
