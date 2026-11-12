@@ -15,6 +15,7 @@ from test_check_pilot_application import (
 )
 
 from edcraft_validator.application.check_pilot import CheckPilotApplication
+from edcraft_validator.application.check_pilot.contracts import contract_catalogue
 from edcraft_validator.application.check_pilot.models import (
     CheckAuthorProposal,
     CheckPlanProposal,
@@ -96,6 +97,8 @@ def solve_plan(
     *,
     contract_id: str = EQUATION,
     relation: str = "eq",
+    min_degree: int = 1,
+    max_degree: int = 2,
     saved_check_ref: CheckRef | None = None,
     supported: bool = True,
     development_needed: str | None = None,
@@ -108,8 +111,8 @@ def solve_plan(
         goal=StructuredGoal(
             operation="solve",
             relation=relation,
-            min_degree=1,
-            max_degree=2,
+            min_degree=min_degree,
+            max_degree=max_degree,
             max_abs_coefficient=20,
             answer_type="solution_set",
             requires_complete_solution_set=True,
@@ -125,6 +128,42 @@ def equation_provider(**kwargs) -> ScriptedProvider:
         template=solve_template_proposal(),
         **kwargs,
     )
+
+
+def test_model_contract_descriptors_advertise_template_degree_minimum_one():
+    descriptors = {item["contract_id"]: item for item in contract_catalogue()}
+
+    for contract_id in (EQUATION, INEQUALITY):
+        descriptor = descriptors[contract_id]
+        assert descriptor["min_degree"] == 1
+        assert descriptor["check_min_degree"] == 0
+        assert descriptor["max_degree"] == 2
+
+    differentiation = descriptors[DOC]
+    assert differentiation["min_degree"] == 1
+    assert differentiation["check_min_degree"] == 1
+
+
+def test_degree_zero_solve_plan_is_rejected_before_authoring(tmp_path: Path):
+    provider = ScriptedProvider(
+        plan=solve_plan(min_degree=0, max_degree=0),
+        check=solve_check_proposal(),
+        template=solve_template_proposal(),
+    )
+    application = app(tmp_path)
+
+    record = author(
+        application,
+        provider,
+        prompt="Solve the constant equation 3 = 0",
+    )
+
+    assert record.status == "needs_review"
+    assert record.check is None
+    assert record.template is None
+    assert any("minimum degree" in finding for finding in record.findings)
+    assert [call["role"] for call in provider.calls] == ["check-planner"] * 3
+    assert application.list_checks("owner") == []
 
 
 def test_explicit_saved_reference_reuses_exact_check_and_records_selection(
@@ -173,6 +212,9 @@ def test_mixed_catalogue_selects_only_an_applicable_contract_and_scope(
     assert equation.check is not None
     assert equation.reused_check is False
     assert equation.check.check_ref != differentiation.check.check_ref
+    # The stored check scope deliberately covers the constant degree-0 boundary,
+    # even though authored templates start at degree 1.
+    assert equation.check.scope["min_degree"] == 0
     assert len(application.list_checks("owner")) == 2
 
     differentiation_again = author(
@@ -194,6 +236,7 @@ def test_mixed_catalogue_selects_only_an_applicable_contract_and_scope(
     assert equation_again.reused_check is True
     assert equation_again.check is not None
     assert equation_again.check.check_ref == equation.check.check_ref
+    assert equation_again.check.scope["min_degree"] == 0
     assert equation_again.selection is not None
     assert equation_again.selection.contract_id == EQUATION
 

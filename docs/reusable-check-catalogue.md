@@ -35,8 +35,16 @@ The developer-owned contracts live in
 | Contract id | Operation set | Relations | Degree | Answer | Mandatory policy |
 | --- | --- | --- | --- | --- | --- |
 | `polynomial.differentiate/1` | `polynomial-derivative/1` | `none` | 1 to 5 | expression | complete, independent, all options |
-| `polynomial.equation-real/1` | `polynomial-solve-real/1` | `eq` | 0 to 2 | solution set | complete correctness and complete real set, independent, all options |
-| `polynomial.inequality-real/1` | `polynomial-solve-real/1` | `lt`, `le`, `gt`, `ge` | 0 to 2 | solution set | complete correctness and complete real set, independent, all options |
+| `polynomial.equation-real/1` | `polynomial-solve-real/1` | `eq` | authoring 1 to 2; checks 0 to 2 | solution set | complete correctness and complete real set, independent, all options |
+| `polynomial.inequality-real/1` | `polynomial-solve-real/1` | `lt`, `le`, `gt`, `ge` | authoring 1 to 2; checks 0 to 2 | solution set | complete correctness and complete real set, independent, all options |
+
+Solve contracts deliberately keep `scope().min_degree == 0` so checks cover
+constant boundary relations during independent qualification. Planning and
+template authoring start at degree 1: model-facing descriptors advertise
+`min_degree` 1 with a separate `check_min_degree` 0, and
+`applicability_findings` rejects a degree-0 plan before any check or template
+author call. No constant-question template is generated. Existing saved checks
+with a degree-0 scope remain readable and applicable to degree 1–2 templates.
 
 Each `ContractDescriptor` advertises a `scope()` (`ContractScope`) and a
 model-facing `descriptor()`. `StructuredGoal` is the concrete task the planner

@@ -41,6 +41,7 @@ class ContractDescriptor:
     operation_set: str
     relations: tuple[GoalRelation, ...]
     min_degree: int
+    template_min_degree: int
     max_degree: int
     max_abs_coefficient: int
     answer_type: str
@@ -65,7 +66,10 @@ class ContractDescriptor:
             "summary": self.summary,
             "operation": self.operation,
             "relations": list(self.relations),
-            "min_degree": self.min_degree,
+            # Planning and template authoring start at template_min_degree. The
+            # stored check scope may cover lower-degree constant boundary cases.
+            "min_degree": self.template_min_degree,
+            "check_min_degree": self.min_degree,
             "max_degree": self.max_degree,
             "max_abs_coefficient": self.max_abs_coefficient,
             "answer_type": self.answer_type,
@@ -85,6 +89,7 @@ _CONTRACTS: tuple[ContractDescriptor, ...] = (
         operation_set=RECIPE_OPERATION_SET,
         relations=("none",),
         min_degree=1,
+        template_min_degree=1,
         max_degree=5,
         max_abs_coefficient=20,
         answer_type="expression",
@@ -105,6 +110,7 @@ _CONTRACTS: tuple[ContractDescriptor, ...] = (
         operation_set=SOLVE_RECIPE_OPERATION_SET,
         relations=("eq",),
         min_degree=0,
+        template_min_degree=1,
         max_degree=2,
         max_abs_coefficient=20,
         answer_type="solution_set",
@@ -126,6 +132,7 @@ _CONTRACTS: tuple[ContractDescriptor, ...] = (
         operation_set=SOLVE_RECIPE_OPERATION_SET,
         relations=_INEQUALITY_RELATIONS,
         min_degree=0,
+        template_min_degree=1,
         max_degree=2,
         max_abs_coefficient=20,
         answer_type="solution_set",
@@ -250,8 +257,10 @@ def applicability_findings(
             f"contract {contract.contract_id} does not support relation "
             f"{goal.relation!r}"
         )
-    if goal.min_degree < contract.min_degree:
-        findings.append("requested minimum degree is outside the contract")
+    if goal.min_degree < contract.template_min_degree:
+        findings.append(
+            "requested minimum degree is outside the current template authoring range"
+        )
     if goal.max_degree > contract.max_degree:
         findings.append("requested maximum degree is outside the contract")
     if goal.max_abs_coefficient > contract.max_abs_coefficient:

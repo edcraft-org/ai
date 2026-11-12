@@ -247,7 +247,7 @@ def test_applicability_rejects_a_scope_that_omits_mandatory_policy():
     goal = StructuredGoal(
         operation="solve",
         relation="eq",
-        min_degree=0,
+        min_degree=1,
         max_degree=2,
         max_abs_coefficient=20,
         answer_type="solution_set",

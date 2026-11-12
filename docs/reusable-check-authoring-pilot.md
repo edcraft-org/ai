@@ -57,8 +57,15 @@ concern; the AI package accepts a resolved `ModelProvider`.
 | Contract id | Task | Bounds |
 | --- | --- | --- |
 | `polynomial.differentiate/1` | Compare a complete candidate derivative with an independently derived polynomial | degree 1 to 5, integer coefficients in `[-20, 20]` |
-| `polynomial.equation-real/1` | Compare the complete real solution set of `= 0` | degree 0 to 2 (linear/quadratic), bounded integer coefficients |
-| `polynomial.inequality-real/1` | Compare the complete real solution set of `<`, `<=`, `>`, `>=` | degree 0 to 2, bounded integer coefficients |
+| `polynomial.equation-real/1` | Compare the complete real solution set of `= 0` | template degree 1 to 2; check scope also covers constant degree 0, bounded integer coefficients |
+| `polynomial.inequality-real/1` | Compare the complete real solution set of `<`, `<=`, `>`, `>=` | template degree 1 to 2; check scope also covers constant degree 0, bounded integer coefficients |
+
+The planner and template author are advertised a minimum degree of 1, matching
+the linear/quadratic families the renderer can generate. A degree-0 solve plan
+is rejected before any check or template author call. The saved check scope keeps
+a minimum of 0 because independent qualification intentionally samples constant
+boundary relations; those boundary cases are check coverage, not generated
+question templates.
 
 There is no syllabus-topic dispatch. A topic-name request cannot by itself add a
 capability. Unsupported operations such as general integration or LU
@@ -69,7 +76,9 @@ are registered at the developer-owned contract/operation seam described in
 Solve checks compare complete structured solution sets, not root substitution or
 partial answers. Independent qualification covers repeated roots, no-real-root
 cases, negative leading coefficients, empty/all-real outcomes, interval unions
-and endpoint open/closed flags.
+and endpoint open/closed flags. It also includes constant degree-0 boundary
+relations; this broadens check coverage only and does not add constant-question
+generation.
 
 ## Configured provider roles
 
