@@ -505,14 +505,15 @@ def test_generation_shortfall_does_not_claim_domain_exhaustion(tmp_path: Path):
     assert "exhausted" not in joined.lower()
 
 
-def test_max_supported_generation_batch_completes(tmp_path: Path):
+@pytest.mark.parametrize("num_distractors", [3, 5])
+def test_max_supported_generation_batch_completes(tmp_path: Path, num_distractors: int):
     application = app(tmp_path)
     provider = ScriptedProvider(
         template=valid_template_proposal(
             degree=2, constants=list(range(-4, 4)), leading=[1, 2, 3]
         )
     )
-    record = author(application, provider, num_distractors=5)
+    record = author(application, provider, num_distractors=num_distractors)
     assert record.status == "ready"
     application.decide(
         "owner",
@@ -524,7 +525,9 @@ def test_max_supported_generation_batch_completes(tmp_path: Path):
     batch = application.generate("owner", record.template_id, seed=42, quantity=50)
     assert len(batch.questions) == 50
     assert batch.shortfall == 0
-    assert all(len(question.choices) == 6 for question in batch.questions)
+    assert all(
+        len(question.choices) == num_distractors + 1 for question in batch.questions
+    )
     assert len(provider.calls) == 2
 
 
