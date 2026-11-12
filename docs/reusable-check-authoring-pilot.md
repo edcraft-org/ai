@@ -155,15 +155,13 @@ Platform behavior:
 
 ## Local verification
 
-Run focused tests with the worktree source on `PYTHONPATH` so workers import the
-local implementation rather than an installed copy:
+Run focused tests from the repository root with `src` on `PYTHONPATH` so workers
+import the local implementation rather than an installed copy:
 
 ```bash
-PYTHONPATH=/private/tmp/edcraft-check-pilot-worker-hardening/src \
-  /private/tmp/edcraft-review-ai/.venv/bin/pytest -q tests/test_isolated_worker.py
+PYTHONPATH=src uv run pytest -q tests/test_isolated_worker.py
 
-PYTHONPATH=/private/tmp/edcraft-check-pilot-worker-hardening/src \
-  /private/tmp/edcraft-review-ai/.venv/bin/pytest -q \
+PYTHONPATH=src uv run pytest -q \
   tests/test_check_pilot_qualification.py \
   tests/test_check_pilot_template_qualification.py \
   tests/test_check_pilot_application.py \
