@@ -265,6 +265,8 @@ def _kernel_scope_findings(
         findings.append("requested maximum degree is outside the stored check scope")
     if goal.max_abs_coefficient > scope.max_abs_coefficient:
         findings.append("requested coefficient bound is outside the stored check scope")
+    if goal.min_dimension < scope.min_dimension:
+        findings.append("requested minimum dimension is outside the stored check scope")
     if goal.max_dimension > scope.max_dimension:
         findings.append("requested dimension is outside the stored check scope")
     if (
@@ -272,6 +274,13 @@ def _kernel_scope_findings(
         and not goal.requires_general_antiderivative
     ):
         findings.append("stored check scope requires a general antiderivative")
+    if (
+        goal.requires_general_antiderivative
+        and not scope.requires_general_antiderivative
+    ):
+        findings.append(
+            "requested general antiderivative is outside the stored check scope"
+        )
     missing = set(contract.required_policy) - set(scope.required_policy)
     if missing:
         findings.append("stored check policy omits a mandatory contract policy")
@@ -349,8 +358,10 @@ def _kernel_goal_findings(contract: KernelContractSpec, goal: KernelGoal) -> lis
         findings.append("requested maximum degree is outside the contract")
     if not 1 <= goal.max_abs_coefficient <= contract.max_abs_coefficient:
         findings.append("requested coefficient bound is outside the contract")
-    if goal.max_dimension < contract.min_dimension:
-        findings.append("requested dimension is below the contract")
+    if goal.min_dimension < contract.min_dimension:
+        findings.append("requested minimum dimension is below the contract")
+    if goal.min_dimension > goal.max_dimension:
+        findings.append("requested minimum dimension exceeds its maximum")
     if goal.max_dimension > contract.max_dimension:
         findings.append("requested dimension is outside the contract")
     if goal.requires_general_antiderivative and contract.operation != "antiderivative":
@@ -494,7 +505,9 @@ def _kernel_plan_findings(plan: KernelGoal, actual: KernelGoal) -> list[str]:
         findings.append("template degree is above the selected plan")
     if actual.max_abs_coefficient > plan.max_abs_coefficient:
         findings.append("template coefficient bound exceeds the selected plan")
-    if not plan.max_dimension >= actual.max_dimension:
+    if not plan.min_dimension <= actual.min_dimension:
+        findings.append("template dimension is below the selected plan")
+    if actual.max_dimension > plan.max_dimension:
         findings.append("template dimension exceeds the selected plan")
     if plan.requires_general_antiderivative != actual.requires_general_antiderivative:
         findings.append("template antiderivative form does not match the selected plan")

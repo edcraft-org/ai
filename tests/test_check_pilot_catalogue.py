@@ -428,3 +428,154 @@ def test_qualification_budget_exhaustion_is_inconclusive_not_a_counterexample(
         "check-author",
     ]
     assert application.list_checks("owner") == []
+
+
+def test_kernel_registry_metadata_matches_module_exported_constants():
+    from edcraft_validator.application.check_pilot import algebra_checks as algebra
+    from edcraft_validator.application.check_pilot import calculus_checks as calculus
+    from edcraft_validator.application.check_pilot import matrix_checks as matrices
+    from edcraft_validator.application.check_pilot.kernel_registry import (
+        KERNEL_CONTRACT_IDS,
+        kernel_contract,
+    )
+
+    expected = {
+        "polynomial.antiderivative/1": (
+            "antiderivative",
+            "antiderivative",
+            0,
+            calculus.MAX_DEGREE,
+            calculus.MAX_ABS_COEFFICIENT,
+            0,
+            0,
+        ),
+        "polynomial.definite-integral/1": (
+            "definite-integral",
+            "scalar",
+            0,
+            calculus.MAX_DEGREE,
+            calculus.MAX_ABS_COEFFICIENT,
+            0,
+            0,
+        ),
+        "expression.differentiate/1": (
+            "differentiate-expression",
+            "expression",
+            0,
+            0,
+            calculus.MAX_ABS_COEFFICIENT,
+            0,
+            0,
+        ),
+        "polynomial.expand/1": (
+            "expand",
+            "expression",
+            1,
+            algebra.MAX_PROBLEM_DEGREE,
+            algebra.MAX_EXPANDED_COEFFICIENT,
+            0,
+            0,
+        ),
+        "polynomial.factor/1": (
+            "factor",
+            "expression",
+            1,
+            algebra.MAX_FACTOR_DEGREE,
+            algebra.MAX_EXPANDED_COEFFICIENT,
+            0,
+            0,
+        ),
+        "polynomial.complete-square/1": (
+            "complete-square",
+            "expression",
+            2,
+            2,
+            algebra.MAX_EXPANDED_COEFFICIENT,
+            0,
+            0,
+        ),
+        "linear-system.unique/1": (
+            "solve-linear-system",
+            "tuple",
+            0,
+            0,
+            algebra.MAX_SYSTEM_ENTRY,
+            2,
+            2,
+        ),
+        "matrix.multiply/1": (
+            "matrix-multiply",
+            "matrix",
+            0,
+            0,
+            matrices.MAX_ENTRY_ABS,
+            1,
+            max(matrices.MAX_ROWS, matrices.MAX_COLUMNS),
+        ),
+        "matrix.determinant/1": (
+            "matrix-determinant",
+            "scalar",
+            0,
+            0,
+            matrices.MAX_ENTRY_ABS,
+            matrices.MIN_SQUARE_SIZE,
+            matrices.MAX_SQUARE_SIZE,
+        ),
+        "matrix.inverse/1": (
+            "matrix-inverse",
+            "matrix",
+            0,
+            0,
+            matrices.MAX_ENTRY_ABS,
+            matrices.MIN_SQUARE_SIZE,
+            matrices.MAX_SQUARE_SIZE,
+        ),
+        "matrix.lu/1": (
+            "matrix-lu",
+            "lu-decomposition",
+            0,
+            0,
+            matrices.MAX_ENTRY_ABS,
+            matrices.MIN_SQUARE_SIZE,
+            matrices.MAX_SQUARE_SIZE,
+        ),
+    }
+
+    assert set(expected) == set(KERNEL_CONTRACT_IDS)
+    for contract_id, bounds in expected.items():
+        contract = kernel_contract(contract_id)
+        assert contract is not None
+        assert (
+            contract.operation,
+            contract.answer_type,
+            contract.min_degree,
+            contract.max_degree,
+            contract.max_abs_coefficient,
+            contract.min_dimension,
+            contract.max_dimension,
+        ) == bounds
+        expected_assumptions = (
+            ("Every declared symbol is real; positive implies nonzero.",)
+            if contract_id == "expression.differentiate/1"
+            else ()
+        )
+        assert contract.domain_assumptions == expected_assumptions
+
+
+def test_catalogue_exposes_general_antiderivative_only_where_supported():
+    from edcraft_validator.application.check_pilot.kernel_registry import (
+        kernel_contract,
+    )
+
+    descriptors = {item["contract_id"]: item for item in contract_catalogue()}
+    antiderivative = descriptors["polynomial.antiderivative/1"]
+    assert antiderivative["requires_general"] is True
+    contract = kernel_contract("polynomial.antiderivative/1")
+    assert contract is not None
+    assert contract.requires_general is True
+    assert contract.scope().requires_general_antiderivative is True
+
+    for contract_id, descriptor in descriptors.items():
+        if contract_id == "polynomial.antiderivative/1":
+            continue
+        assert descriptor.get("requires_general") is not True

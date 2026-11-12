@@ -56,9 +56,13 @@ Rules:
   complete real solution set; root substitution or a partial set is not
   sufficient.
 - Kernel contracts use `operation`, `answer_type`, `min_degree`, `max_degree`,
-  `max_abs_coefficient`, `max_dimension`, `requires_general_antiderivative` and
-  the contract's exact `domain_assumptions`. Use the bounds and assumptions in
-  the catalogue above; do not widen them.
+  `max_abs_coefficient`, `min_dimension`, `max_dimension`,
+  `requires_general_antiderivative` and the contract's exact
+  `domain_assumptions`. Use the bounds and assumptions in the catalogue above;
+  do not widen them. `min_dimension` and `max_dimension` are inclusive. Express
+  an exact size with `min_dimension` equal to `max_dimension` (for example an
+  exact 3x3 matrix plan uses `min_dimension` 3 and `max_dimension` 3); use a
+  range only when the request allows different sizes.
 - A valid kernel goal example:
 {goal_example}
 - You may return an exact `saved_check_ref` from the owner's catalogue above.
@@ -213,8 +217,9 @@ def _kernel_goal_example() -> str:
         min_degree=spec["min_degree"],
         max_degree=spec["max_degree"],
         max_abs_coefficient=spec["max_abs_coefficient"],
+        min_dimension=spec["min_dimension"],
         max_dimension=spec["max_dimension"],
-        requires_general_antiderivative=False,
+        requires_general_antiderivative=bool(spec["requires_general"]),
         domain_assumptions=list(spec["domain_assumptions"]),
     )
     return _json(goal.model_dump(mode="json"))
@@ -260,8 +265,10 @@ def _family_rule(contract: Contract) -> str:
             "For a kernel contract, return `structured_family` and no `family` "
             "or `solve_family`. Its `problem` must be exactly one closed problem "
             "variant advertised in the response schema, and its `bindings` name "
-            "numeric parameter domains in that problem. A valid example for this "
-            "contract is:\n"
+            "numeric parameter domains in that problem. The concrete problem must "
+            "stay within the goal's inclusive `min_dimension`/`max_dimension` "
+            "bounds; an exact size such as 3x3 means both bounds are 3. A valid "
+            "example for this contract is:\n"
             f"{_kernel_family_example(contract)}"
         )
     if contract.operation == "differentiate":

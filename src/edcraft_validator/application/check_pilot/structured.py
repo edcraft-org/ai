@@ -37,7 +37,6 @@ if TYPE_CHECKING:
     from hypothesis import strategies as st
 
 _METADATA_KEYS = frozenset({"kind", "op", "sym", "variable"})
-_ASSIGNMENT_LIMIT = 4096
 
 
 class StructuredFamilyError(ValueError):
@@ -277,7 +276,7 @@ def problem_goal_findings(
         min_degree=goal.min_degree,
         max_degree=goal.max_degree,
         max_abs_coefficient=goal.max_abs_coefficient,
-        min_dimension=0,
+        min_dimension=goal.min_dimension,
         max_dimension=goal.max_dimension,
     )
     if extent.requires_general != goal.requires_general_antiderivative:
@@ -321,11 +320,13 @@ def sampled_assignments(
 ) -> list[dict[str, int]]:
     """Deterministically sample binding assignments without enumerating huge sets."""
     if not family.bindings:
-        return [{}]
+        return [{}] if limit > 0 else []
     rng = random.Random(seed)
     seen: set[str] = set()
     items: list[dict[str, int]] = []
     for assignment in boundary_assignments(family):
+        if len(items) >= limit:
+            break
         key = json.dumps(assignment, sort_keys=True)
         if key not in seen:
             seen.add(key)
@@ -393,6 +394,7 @@ def structured_family_goal(family: StructuredProblemFamily) -> KernelGoal:
         min_degree=min(extent.min_degree for extent in extents),
         max_degree=max(extent.max_degree for extent in extents),
         max_abs_coefficient=max(extent.max_abs_coefficient for extent in extents),
+        min_dimension=min(extent.min_dimension for extent in extents),
         max_dimension=max(extent.max_dimension for extent in extents),
         requires_general_antiderivative=general.pop(),
         domain_assumptions=list(spec.domain_assumptions),
@@ -419,8 +421,6 @@ def _distinct_distractors(
         except (ValueError, TypeError):
             continue
         if text in rendered:
-            continue
-        if kernel_check_answer(spec.contract_id, problem, wrong):
             continue
         rendered.add(text)
         selected.append(wrong)

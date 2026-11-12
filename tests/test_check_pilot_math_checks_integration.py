@@ -185,6 +185,7 @@ def kernel_plan(contract_id: str) -> CheckPlanProposal:
             min_degree=contract.min_degree,
             max_degree=contract.max_degree,
             max_abs_coefficient=contract.max_abs_coefficient,
+            min_dimension=contract.min_dimension,
             max_dimension=contract.max_dimension,
             requires_general_antiderivative=(
                 contract_id == "polynomial.antiderivative/1"
