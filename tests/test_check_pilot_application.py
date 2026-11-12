@@ -272,10 +272,10 @@ def test_end_to_end_author_approve_generate_and_restart(tmp_path: Path):
         "template-author",
     ]
     assert len({call["prompt_version"] for call in provider.calls}) == 3
-    assert provider.calls[0]["prompt_version"] == "check-planner/1"
+    assert provider.calls[0]["prompt_version"] == "check-planner/2"
     assert provider.calls[0]["schema"] == "check_plan"
-    assert provider.calls[1]["prompt_version"] == "check-author/2"
-    assert provider.calls[2]["prompt_version"] == "template-author/2"
+    assert provider.calls[1]["prompt_version"] == "check-author/3"
+    assert provider.calls[2]["prompt_version"] == "template-author/3"
     assert len(application.list_checks("owner")) == 1
     assert len(application.list_templates("owner")) == 1
 

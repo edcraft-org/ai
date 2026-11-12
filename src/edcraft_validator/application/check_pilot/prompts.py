@@ -30,9 +30,9 @@ from edcraft_validator.application.check_pilot.structured import (
 )
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
 
-PLANNER_PROMPT_VERSION = "check-planner/1"
-CHECK_PROMPT_VERSION = "check-author/2"
-TEMPLATE_PROMPT_VERSION = "template-author/2"
+PLANNER_PROMPT_VERSION = "check-planner/2"
+CHECK_PROMPT_VERSION = "check-author/3"
+TEMPLATE_PROMPT_VERSION = "template-author/3"
 
 PLANNER_SYSTEM_PROMPT = """\
 You are the planning role for a private catalogue of reusable mathematics
@@ -46,6 +46,9 @@ The owner's qualified saved checks:
 {checks}
 
 Rules:
+- Select the check for the mathematical operation, independently of delivery
+  requirements such as question count, multiple-choice formatting or variation.
+  The application handles those after selecting and qualifying the check.
 - For a supported request, return a trusted `contract_id`, a structured `goal`
   and a short `reason`.
 - Polynomial contracts use `operation`, `relation`, exact degree bounds,
@@ -72,6 +75,16 @@ CHECK_SYSTEM_PROMPT = """\
 You are the check author for a private reusable-mathematics catalogue.
 Compose one closed check recipe for the selected trusted contract. The
 application, not you, owns qualification and decides whether it is usable.
+Your recipe validates ONE problem and ONE candidate answer. The full teaching
+request is context; it is not a request to implement the whole authoring flow.
+
+The application separately authors numeric bindings, samples questions, derives
+answers, generates distractors and renders multiple-choice options. It applies
+your recipe to each option itself. These capabilities already exist and do not
+require generation, binding, enumeration or multiple-choice operations inside
+your recipe. The `all_options_checked` policy is enforced by the application
+calling the one-candidate check on every option. Your inputs never include an
+option list or a parameter-domain collection.
 
 Selected contract:
 {contract}
@@ -83,6 +96,11 @@ Trusted typed operation descriptors for this contract:
 {operations}
 
 Recipe rules:
+- Assess `supported` for the selected mathematical validation goal only. Do not
+  report missing generation or parameter-binding operations when the selected
+  mathematical goal is covered by the supplied trusted checking operations.
+- Give the check a mathematical title and explain its correctness condition
+  and supported assumptions in `description`; do not repeat author instructions.
 - Return one closed recipe and no code. The recipe's `operation_set` must be
   `{operation_set}`.
 - Inputs are `problem` and `candidate`. Their Python-side types depend on the
@@ -97,6 +115,8 @@ Recipe rules:
   value: {{"source":"literal","name":null,"value":true}}. Literals never carry
   a name.
 - {output_rule}
+- Set the recipe's `output` to the actual verdict STEP ID, normally `out`.
+  `verdict` is a type, not the output step's name.
 - Use unique step ids and only reference earlier steps. Keep at most 8 steps.
 - Weak operations are listed for completeness but are rejected.
 - If the request cannot be represented, set `supported` to false and explain
@@ -109,6 +129,9 @@ TEMPLATE_SYSTEM_PROMPT = """\
 You are the template author for a private reusable-mathematics catalogue.
 Propose only structured data for the selected trusted contract. The application
 owns question wording, answers, options, qualification and generation.
+You author only a concrete mathematical structure and its numeric variation.
+The application already implements seeded sampling and multiple-choice option
+generation; do not request new check operations for these delivery features.
 
 Selected contract:
 {contract}
