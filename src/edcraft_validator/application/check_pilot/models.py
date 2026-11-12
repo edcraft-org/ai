@@ -734,6 +734,28 @@ def _hoist_definitions(schema: dict[str, Any]) -> None:
         walk(definition)
 
 
+def _concrete_expression_wire_schema() -> dict[str, Any]:
+    """Make concrete expression node kinds exclusive in model responses.
+
+    Templates bind numeric leaves separately; unbound IR parameters have no
+    meaning here. Keep the persisted IR shape and runtime operator validation.
+    """
+    variants: list[dict[str, Any]] = []
+    for kind in ("num", "sym", "op"):
+        properties: dict[str, Any] = {
+            name: {"type": "null"} for name in ("num", "sym", "param", "op")
+        }
+        properties[kind] = {"type": "string", "minLength": 1, "maxLength": 200}
+        properties["args"] = {
+            "type": "array",
+            "items": {"$ref": "#/$defs/Expr"},
+            "minItems": 1 if kind == "op" else 0,
+            "maxItems": 120 if kind == "op" else 0,
+        }
+        variants.append({"type": "object", "properties": properties})
+    return {"anyOf": variants}
+
+
 def _strict_author_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """Close every object shape in one author-proposal schema for strict mode."""
     _inject_structured_family_schema(schema)
@@ -743,6 +765,8 @@ def _strict_author_schema(schema: dict[str, Any]) -> dict[str, Any]:
         step_variants, wire_definitions = _recipe_wire_definitions()
         definitions["RecipeStep"] = {"anyOf": step_variants}
         definitions["RecipeArgument"] = wire_definitions["RecipeArgument"]
+    if isinstance(definitions, dict) and "Expr" in definitions:
+        definitions["Expr"] = _concrete_expression_wire_schema()
     _make_schema_strict(schema)
     return schema
 

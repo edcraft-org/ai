@@ -32,7 +32,7 @@ from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
 
 PLANNER_PROMPT_VERSION = "check-planner/2"
 CHECK_PROMPT_VERSION = "check-author/3"
-TEMPLATE_PROMPT_VERSION = "template-author/3"
+TEMPLATE_PROMPT_VERSION = "template-author/4"
 
 PLANNER_SYSTEM_PROMPT = """\
 You are the planning role for a private catalogue of reusable mathematics
@@ -142,6 +142,10 @@ Structured goal:
 Rules:
 - Return `contract_id` equal to the selected contract id.
 - {family_rule}
+- A concrete expression node has exactly one of `num`, `sym` or `op` set.
+  Set its other node-kind fields to null, including `param`. Numeric and symbol
+  leaves have empty `args`; operator nodes contain their actual child nodes.
+  Vary existing numeric leaves through `bindings`, never unbound IR parameters.
 - Bindings are exact parameter domains, not a question pattern: `path` addresses
   one genuine numeric leaf in the problem (never `kind`, `sym`, `op`, `variable`
   or other metadata), and `values` are 1 to 12 distinct integers within the

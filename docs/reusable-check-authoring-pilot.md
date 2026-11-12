@@ -26,7 +26,7 @@ this facade. The AI-side flow is:
    operations. The application compiles it against the contract's allowlist and
    qualifies it with independent bounded property-based sampling. A passing
    recipe is stored as an immutable, content-addressed private check.
-3. **Template authoring.** `template-author/3` proposes only structured bounded
+3. **Template authoring.** `template-author/4` proposes only structured bounded
    coefficient domains for the selected contract. For differentiation it returns
    a `PolynomialFamily`; for equations or inequalities it returns a `SolveFamily`
    with the requested relation. The application validates the actual structured
@@ -95,7 +95,7 @@ The same resolved `ModelProvider` supplies three distinct structured prompt role
 | --- | --- | --- | --- |
 | check-planner | `check-planner/2` | `check_plan` | `CheckPlanProposal`: contract, structured goal, reason, optional exact saved reference |
 | check-author | `check-author/3` | `check_recipe` | `CheckAuthorProposal`: one-candidate mathematical validator, title and description |
-| template-author | `template-author/3` | `polynomial_family` | `TemplateAuthorProposal`: polynomial/solve/structured family, or development-needed result |
+| template-author | `template-author/4` | `polynomial_family` | `TemplateAuthorProposal`: polynomial/solve/structured family, or development-needed result |
 
 A fresh flow calls planner, check author when needed, then template author. A
 reuse flow calls planner then template author. No provider or model is
