@@ -6,12 +6,11 @@ and isolates memory, while the data crossing the boundary stays JSON-only.
 
 from __future__ import annotations
 
-import json
-import os
-import subprocess
-import sys
 from typing import Any
 
+from edcraft_validator.tools.isolated_process import run_json_worker
+
+WORKER_MODULE = "edcraft_validator.domains.math.validation.worker"
 DEFAULT_VALIDATION_TIMEOUT_SECONDS = 20.0
 
 
@@ -30,41 +29,21 @@ def run_isolated(
 ) -> dict[str, Any]:
     if timeout_seconds <= 0:
         raise ValueError("validation timeout must be positive")
-    serialized = json.dumps(payload, allow_nan=False)
-    environment = dict(os.environ)
-    environment.setdefault("PYTHONUNBUFFERED", "1")
-    try:
-        completed = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "edcraft_validator.domains.math.validation.worker",
-            ],
-            input=serialized,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            env=environment,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise ValidationTimeout(
-            f"math validation exceeded {timeout_seconds:g}s"
-        ) from exc
-    if completed.returncode != 0:
-        raise ValidationWorkerError(
-            f"validation worker exited with {completed.returncode}: "
-            f"{completed.stderr.strip()[:500]}"
-        )
-    try:
-        response = json.loads(completed.stdout)
-    except json.JSONDecodeError as exc:
-        raise ValidationWorkerError("validation worker returned invalid JSON") from exc
-    if not isinstance(response, dict):
-        raise ValidationWorkerError("validation worker returned a non-object")
-    if "error" in response:
-        error = response["error"]
-        raise ValidationWorkerError(
-            f"{error.get('type', 'error')}: {error.get('message', '')}"
-        )
-    return response
+    return run_json_worker(
+        payload,
+        module=WORKER_MODULE,
+        timeout_seconds=timeout_seconds,
+        timeout_error=ValidationTimeout,
+        worker_error=ValidationWorkerError,
+        description="math validation",
+        worker_description="validation worker",
+    )
+
+
+__all__ = [
+    "DEFAULT_VALIDATION_TIMEOUT_SECONDS",
+    "ValidationTimeout",
+    "ValidationWorkerError",
+    "WORKER_MODULE",
+    "run_isolated",
+]
