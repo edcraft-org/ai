@@ -18,10 +18,14 @@ from pathlib import Path
 from typing import Any
 
 from edcraft_validator.application.check_pilot.contracts import (
+    DIFFERENTIATE_CONTRACT,
+    Scope,
     contract_for_scope,
+    get_contract,
     parse_scope,
     scope_applicability_findings,
     template_goal,
+    trusted_contract_scope,
 )
 from edcraft_validator.application.check_pilot.errors import (
     PilotConflict,
@@ -34,6 +38,7 @@ from edcraft_validator.application.check_pilot.models import (
     CheckRecord,
     PilotTemplateDefinition,
     PilotTemplateRecord,
+    PolynomialScope,
 )
 from edcraft_validator.application.check_pilot.operations import (
     RecipeCompileError,
@@ -108,6 +113,13 @@ def template_record_sha256(record: PilotTemplateRecord) -> str:
     return _canonical_sha256(record.model_dump(mode="json", exclude_none=True))
 
 
+def template_evidence_sha256(record: PilotTemplateRecord) -> str:
+    """Hash everything an approval may not change; only ``approval`` is free."""
+    return _canonical_sha256(
+        record.model_dump(mode="json", exclude_none=True, exclude={"approval"})
+    )
+
+
 def _validate_owner(owner_id: str) -> str:
     if (
         not isinstance(owner_id, str)
@@ -143,6 +155,29 @@ def _scan_for_secrets(value: Any) -> None:
             _scan_for_secrets(item)
 
 
+def _validate_trusted_scope(scope: Scope) -> None:
+    """Require a stored scope to match one trusted contract's scope exactly.
+
+    A kernel or contract scope must equal the registry's scope for that
+    contract, so a widened or tampered ``max_dimension``/``max_abs_coefficient``
+    cannot pass merely by naming a known contract id. Legacy v1
+    ``PolynomialScope`` records carry no contract id; they may stay narrower but
+    never wider than the differentiation contract the application supports.
+    """
+    if isinstance(scope, PolynomialScope):
+        contract = get_contract(DIFFERENTIATE_CONTRACT)
+        trusted = contract.scope() if contract is not None else None
+        if (
+            trusted is None
+            or scope.operation != "differentiate"
+            or scope.max_degree > trusted.max_degree
+            or scope.max_abs_coefficient > trusted.max_abs_coefficient
+        ):
+            raise ValueError("legacy scope is outside the supported bounds")
+        return
+    trusted_contract_scope(scope)
+
+
 def _validate_check_record(record: CheckRecord) -> None:
     _validate_created_at(record.created_at)
     _scan_for_secrets(record.provenance)
@@ -150,10 +185,9 @@ def _validate_check_record(record: CheckRecord) -> None:
         raise PilotInputError("only a passed qualification can be stored")
     if record.check_ref.version != "1":
         raise PilotConflict("unsupported stored check version")
-    if contract_for_scope(record.scope) is None:
-        raise PilotConflict("stored check is outside the trusted contract catalogue")
     try:
         scope = parse_scope(record.scope)
+        _validate_trusted_scope(scope)
         definition = CheckRecipeDefinition.model_validate(record.definition)
         compile_recipe(definition, scope=scope)
     except (ValueError, RecipeCompileError) as exc:
@@ -430,17 +464,8 @@ class PilotStore:
                 current = self._read_template(owner, record.template_id)
                 if template_record_sha256(current) != expected_record_sha256:
                     raise PilotConflict("template changed; reload before updating")
-                if (
-                    current.template_sha256 != record.template_sha256
-                    or current.check != record.check
-                    or current.check_qualification != record.check_qualification
-                    or current.template != record.template
-                    or current.qualification != record.qualification
-                    or current.status != record.status
-                    or current.reused_check != record.reused_check
-                    or current.scope != record.scope
-                    or current.provenance != record.provenance
-                    or current.selection != record.selection
+                if template_evidence_sha256(current) != template_evidence_sha256(
+                    record
                 ):
                     raise PilotConflict("an approval may only change the decision")
                 self._atomic_replace(path, self._envelope(owner, record))
@@ -454,5 +479,6 @@ __all__ = [
     "PilotStore",
     "check_content_sha256",
     "template_definition_sha256",
+    "template_evidence_sha256",
     "template_record_sha256",
 ]
