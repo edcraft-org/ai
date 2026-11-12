@@ -1,10 +1,10 @@
 # Reusable check catalogue and authoring pilot
 
 Status: private, source-integrated catalogue for reusable mathematics checks. The
-trusted contracts currently cover bounded univariate real-polynomial
-differentiation and bounded real linear/quadratic equation and inequality
-solution sets. This is not a public sharing feature, and no deployment or
-live-provider verification is claimed here.
+fourteen trusted contracts cover bounded polynomial equations/inequalities,
+algebraic forms, calculus, unique linear systems and exact matrix operations.
+Checks are private. Provider experiments and deployment status are recorded
+separately from this interface documentation.
 
 ## What the flow does
 
@@ -13,7 +13,7 @@ Python facade. The backend owns authentication, provider/profile or BYOK
 resolution, and HTTP error mapping; its `/ai-authoring/check-pilot` routes call
 this facade. The AI-side flow is:
 
-1. **Structured planning.** `check-planner/1` receives the trusted capability
+1. **Structured planning.** `check-planner/2` receives the trusted capability
    descriptors and the owner's qualified saved-check descriptors. It proposes a
    trusted `contract_id`, a structured `StructuredGoal`, and optionally one exact
    saved `CheckRef`. The application, not the model, validates the contract, goal
@@ -22,15 +22,18 @@ this facade. The AI-side flow is:
    incompatible reference fails closed; it is never silently replaced with a
    different task.
 2. **Check authoring when missing.** If no applicable saved check exists,
-   `check-author/2` proposes one closed recipe from advertised versioned typed
+   `check-author/3` proposes one closed recipe from advertised versioned typed
    operations. The application compiles it against the contract's allowlist and
    qualifies it with independent bounded property-based sampling. A passing
    recipe is stored as an immutable, content-addressed private check.
-3. **Template authoring.** `template-author/2` proposes only structured bounded
+3. **Template authoring.** `template-author/3` proposes only structured bounded
    coefficient domains for the selected contract. For differentiation it returns
    a `PolynomialFamily`; for equations or inequalities it returns a `SolveFamily`
    with the requested relation. The application validates the actual structured
-   goal against both the plan and the pinned check scope.
+   goal against both the plan and the pinned check scope. New contracts use a
+   `StructuredProblemFamily`: a closed mathematical problem plus numeric-leaf
+   bindings. Version-3 templates retain the validated requested goal, which is
+   enforced for every sampled/generated instance using domain-owned metadata.
 4. **Reuse.** A suitable saved check is reused (`reused_check=true`) and no
    check-author call is made. A new template remains unreviewed even when its
    check was reused.
@@ -41,9 +44,9 @@ this facade. The AI-side flow is:
    digests. It makes no provider/model calls. The whole batch — bounded sampling,
    key and distractor arithmetic, rendering, independent correctness guards and
    the pinned recipe checks — runs in one disposable JSON worker request. The
-   parent process only validates owner storage, approval, pinned hashes and
-   contract applicability, so no new polynomial or solution-set symbolic work
-   runs on the application host. Sampling is bounded and deduplicated; a
+   parent validates owner storage, approval, pinned hashes, contract applicability
+   and bounded structural/exact metadata. Symbolic execution and the complete
+   question batch run in the worker. Sampling is bounded and deduplicated; a
    shortfall makes no claim that the declared domains are exhausted.
 
 The HTTP contract is unchanged: `POST /templates`, `GET /templates`,
@@ -68,8 +71,12 @@ boundary relations; those boundary cases are check coverage, not generated
 question templates.
 
 There is no syllabus-topic dispatch. A topic-name request cannot by itself add a
-capability. Unsupported operations such as general integration or LU
-decomposition produce actionable development-needed findings. New capabilities
+capability. The eleven additional contracts and their explicit bounds are listed
+in [`reusable-check-catalogue.md`](reusable-check-catalogue.md): polynomial
+antiderivatives/definite integrals, broader differentiation, expansion,
+factorisation, completing the square, unique 2×2 systems and matrix
+multiplication/determinants/inverses/LU. Arbitrary integration, proofs and
+unregistered operations still require developer work. New capabilities
 are registered at the developer-owned contract/operation seam described in
 [`reusable-check-catalogue.md`](reusable-check-catalogue.md).
 
@@ -86,9 +93,9 @@ The same resolved `ModelProvider` supplies three distinct structured prompt role
 
 | Role | Prompt version | Schema | Output |
 | --- | --- | --- | --- |
-| check-planner | `check-planner/1` | `check_plan` | `CheckPlanProposal`: contract, structured goal, reason, optional exact saved reference |
-| check-author | `check-author/2` | `check_recipe` | `CheckAuthorProposal`: trusted recipe, title, description, or development-needed result |
-| template-author | `template-author/2` | `polynomial_family` | `TemplateAuthorProposal`: bounded polynomial family or solve family, or development-needed result |
+| check-planner | `check-planner/2` | `check_plan` | `CheckPlanProposal`: contract, structured goal, reason, optional exact saved reference |
+| check-author | `check-author/3` | `check_recipe` | `CheckAuthorProposal`: one-candidate mathematical validator, title and description |
+| template-author | `template-author/3` | `polynomial_family` | `TemplateAuthorProposal`: polynomial/solve/structured family, or development-needed result |
 
 A fresh flow calls planner, check author when needed, then template author. A
 reuse flow calls planner then template author. No provider or model is
@@ -96,6 +103,14 @@ hard-coded into the pilot. Model credentials are never stored; provenance record
 safe provider/model identifiers, prompt versions, request hashes and bounded
 provider settings. The backend selects the existing configured profile or BYOK
 connection and closes it on every path.
+
+The roles separate mathematical validation from delivery. The check author does
+not implement numeric bindings, MCQ assembly or option enumeration: the
+application calls its single-candidate recipe on each option. Schema errors
+consume the same bounded repair budgets as other authoring failures; transport
+errors fail safely. Slow provider reasoning can dominate request time; the
+existing provider settings, including `SOCLAAS_REASONING_EFFORT`, can be selected
+for an experiment without changing mathematical qualification budgets.
 
 ## Selection metadata
 
@@ -118,16 +133,19 @@ templates require a matching selection.
 
 Check qualification is property-based sampling, not a proof. The independent
 expected answer comes from separate coefficient/discriminant/sign arithmetic,
-not the recipe operation under test. Sampling covers labelled correct and
+recursive calculus rules and exact matrix algorithms rather than the candidate
+checker under test. Wrong-answer construction does not consult the checker and
+remove the false positives it is meant to expose. Sampling covers correct and
 incorrect answers, alternate correct forms, explicit boundary cases and
 non-vacuous mutations (missing root, extra root, flipped inequality, endpoint
 flag changes). Weak always-true/always-false, identity and point-only recipes are
 rejected by compilation. A separate held-out run uses a different seed and salt
 and is not exposed to the author prompt.
 
-Template qualification is separate evidence. It samples declared coefficient
-domains, verifies rendered answers/distractors against the independent guard, and
-executes the pinned recipe. No Cartesian enumeration occurs in the pilot path.
+Template qualification is separate evidence. It samples declared coefficient or
+numeric-binding domains, verifies actual requested-goal constraints and rendered
+answers/distractors, and executes the pinned recipe. No Cartesian enumeration
+occurs in the pilot path.
 
 Defaults and bounds:
 
