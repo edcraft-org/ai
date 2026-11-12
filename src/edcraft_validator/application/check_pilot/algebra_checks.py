@@ -28,21 +28,41 @@ _KINDS = {
     SQUARE: "polynomial-complete-square",
     SYSTEM: "linear-system-unique",
 }
+
+MAX_PROBLEM_DEGREE = 5
+MAX_FACTOR_DEGREE = 2
+MAX_PROBLEM_LITERAL = 20
+MAX_EXPANDED_COEFFICIENT = 1_000
+MAX_SYSTEM_ENTRY = 20
+# Answer literals must cover every value the coefficient oracles can derive from
+# the bounded problem scope: |4ac - b^2| <= 5,000,000 for complete-square and
+# small rational roots for factor. The bound is deliberately explicit and is
+# checked before any candidate reaches SymPy.
+MAX_ANSWER_LITERAL = 10_000_000
+MAX_RATIONAL_TEXT = 32
+MAX_TREE_NODES = 80
+MAX_TREE_DEPTH = 12
+
 CONTRACT_SPECS = [
     {
         "contract_id": EXPAND,
         "kind": _KINDS[EXPAND],
         "title": "Expand and collect a polynomial",
         "summary": (
-            "Equivalent polynomial in collected expanded form, degree at most five."
+            "Equivalent collected polynomial with integer expanded coefficients, "
+            "degree 1..5 and |coefficient| <= 1000. Like terms and hidden "
+            "products must already be collected."
         ),
     },
     {
         "contract_id": FACTOR,
         "kind": _KINDS[FACTOR],
-        "title": "Fully factor a quadratic over the rationals",
+        "title": "Fully factor a linear or quadratic polynomial over the rationals",
         "summary": (
-            "Equivalent product of irreducible rational factors, degree one or two."
+            "Equivalent product of explicit irreducible rational factors, degree "
+            "1..2 and integer expanded coefficients with |coefficient| <= 1000. "
+            "An unchanged expanded polynomial or an identity factor is not "
+            "accepted; repeated roots and non-trivial scalar scalings are."
         ),
     },
     {
@@ -50,8 +70,10 @@ CONTRACT_SPECS = [
         "kind": _KINDS[SQUARE],
         "title": "Complete the square",
         "summary": (
-            "Equivalent quadratic in a*(x-h)^2+k form, "
-            "with monic inner linear expression."
+            "Equivalent quadratic in a*(x-h)^2+k form, with a nonzero numeric "
+            "scalar a and an explicit monic linear inner expression x-h. Degree "
+            "exactly 2 and integer expanded coefficients |c| <= 1000; hidden "
+            "nonlinear cancellations are not accepted."
         ),
     },
     {
@@ -59,7 +81,9 @@ CONTRACT_SPECS = [
         "kind": _KINDS[SYSTEM],
         "title": "Solve a unique two-variable linear system",
         "summary": (
-            "Complete ordered (x,y) tuple for a nonsingular exact 2 by 2 system."
+            "Complete ordered (x,y) tuple for a nonsingular exact 2 by 2 system "
+            "with integer entries in [-20,20]. Singular and larger systems are "
+            "outside this contract."
         ),
     },
 ]
@@ -77,13 +101,20 @@ class AlgebraProblem(_Closed):
 
     @model_validator(mode="after")
     def bounded_polynomial(self) -> AlgebraProblem:
-        coefficients = _coefficients(self.expression, literal_bound=20)
+        coefficients = _coefficients(self.expression, literal_bound=MAX_PROBLEM_LITERAL)
         degree = len(coefficients) - 1
-        if not 1 <= degree <= (5 if self.kind == "polynomial-expand" else 2):
+        limit = (
+            MAX_PROBLEM_DEGREE
+            if self.kind == "polynomial-expand"
+            else MAX_FACTOR_DEGREE
+        )
+        if not 1 <= degree <= limit:
             raise ValueError("polynomial degree is outside this algebra contract")
         if self.kind == "polynomial-complete-square" and degree != 2:
             raise ValueError("completing the square requires a quadratic")
-        if any(abs(value) > 1000 for value in coefficients):
+        if any(value.denominator != 1 for value in coefficients):
+            raise ValueError("algebra contracts require integer expanded coefficients")
+        if any(abs(value) > MAX_EXPANDED_COEFFICIENT for value in coefficients):
             raise ValueError("expanded coefficients exceed the bounded scope")
         return self
 
@@ -98,7 +129,9 @@ class LinearSystemProblem(_Closed):
         if any(len(row) != 2 for row in self.matrix):
             raise ValueError("the matrix must have exactly two rows and columns")
         entries = [value for row in self.matrix for value in row] + self.rhs
-        if any(type(value) is not int or abs(value) > 20 for value in entries):
+        if any(
+            type(value) is not int or abs(value) > MAX_SYSTEM_ENTRY for value in entries
+        ):
             raise ValueError("system coefficients must be integers in [-20,20]")
         a, b = self.matrix[0]
         c, d = self.matrix[1]
@@ -118,14 +151,22 @@ class SystemAnswer(_Closed):
     values: list[str] = Field(min_length=2, max_length=2)
 
 
-def _number(value: str, bound: int = 100_000) -> Fraction:
-    if len(value) > 32:
+def _number(value: object, bound: int = MAX_ANSWER_LITERAL) -> Fraction:
+    if not isinstance(value, str):
+        raise ValueError("numeric leaves must be exact rational strings")
+    if not value or value != value.strip():
+        raise ValueError("numeric literals must not be empty or padded")
+    if len(value) > MAX_RATIONAL_TEXT:
         raise ValueError("exact numeric literals are too long")
     try:
         result = Fraction(value)
     except (ValueError, ZeroDivisionError):
         raise ValueError("only finite exact rational literals are supported") from None
-    if abs(result.numerator) > bound or result.denominator > bound:
+    if (
+        abs(result.numerator) > bound
+        or result.denominator > bound
+        or result.denominator <= 0
+    ):
         raise ValueError("rational literal exceeds the numeric budget")
     return result
 
@@ -155,7 +196,7 @@ def _add(
 def _multiply(
     left: tuple[Fraction, ...], right: tuple[Fraction, ...]
 ) -> tuple[Fraction, ...]:
-    if len(left) + len(right) - 2 > 5:
+    if len(left) + len(right) - 2 > MAX_PROBLEM_DEGREE:
         raise ValueError("polynomial degree exceeds five")
     values = [Fraction(0)] * (len(left) + len(right) - 1)
     for i, a in enumerate(left):
@@ -165,13 +206,13 @@ def _multiply(
 
 
 def _coefficients(
-    expression: Expr, *, literal_bound: int = 100_000
+    expression: Expr, *, literal_bound: int = MAX_ANSWER_LITERAL
 ) -> tuple[Fraction, ...]:
     budget = [0]
 
     def visit(node: Expr, depth: int = 0) -> tuple[Fraction, ...]:
         budget[0] += 1
-        if budget[0] > 80 or depth > 12:
+        if budget[0] > MAX_TREE_NODES or depth > MAX_TREE_DEPTH:
             raise ValueError("polynomial expression exceeds the tree budget")
         if node.num is not None:
             literal = _number(node.num)
@@ -275,7 +316,11 @@ def _factored(coefficients: tuple[Fraction, ...]) -> Expr:
     first, second = (-b + root) / (2 * a), (-b - root) / (2 * a)
 
     def factor(value: Fraction) -> Expr:
-        return _x() if value == 0 else _op("sub", _x(), _n(value))
+        if value == 0:
+            return _x()
+        if value < 0:
+            return _op("add", _x(), _n(-value))
+        return _op("sub", _x(), _n(value))
 
     base = (
         _op("pow", factor(first), _n(2))
@@ -288,92 +333,171 @@ def _factored(coefficients: tuple[Fraction, ...]) -> Expr:
 def _completed(coefficients: tuple[Fraction, ...]) -> Expr:
     c, b, a = coefficients
     offset = b / (2 * a)
-    inner = _x() if not offset else _op("add", _x(), _n(offset))
+    if offset == 0:
+        inner = _x()
+    elif offset > 0:
+        inner = _op("add", _x(), _n(offset))
+    else:
+        inner = _op("sub", _x(), _n(-offset))
     square = _op("pow", inner, _n(2))
     leading = square if a == 1 else _op("mul", _n(a), square)
     constant = c - b * b / (4 * a)
-    return _op("add", leading, _n(constant))
+    return leading if constant == 0 else _op("add", leading, _n(constant))
+
+
+def _integer_value(node: Expr, minimum: int, maximum: int) -> int | None:
+    """Return an exact integer literal in the inclusive range, or ``None``."""
+    if node.num is None:
+        return None
+    try:
+        value = _number(node.num)
+    except ValueError:
+        return None
+    if value.denominator != 1:
+        return None
+    integer = int(value)
+    return integer if minimum <= integer <= maximum else None
+
+
+def _is_number_literal(node: Expr) -> bool:
+    if node.num is None:
+        return False
+    try:
+        _number(node.num)
+    except ValueError:
+        return False
+    return True
+
+
+def _variable_monomial(node: Expr) -> int | None:
+    """Degree of an explicit ``x`` or ``x^k`` (k >= 2) monomial."""
+    if node.sym is not None:
+        return 1 if node.sym == "x" else None
+    if node.op == "pow" and len(node.args) == 2 and node.args[0].sym == "x":
+        return _integer_value(node.args[1], 2, MAX_PROBLEM_DEGREE)
+    return None
 
 
 def _expanded_form(expression: Expr) -> bool:
+    """A collected sum of distinct monomial terms, one explicit term each."""
     exponents: list[int] = []
 
     def term(node: Expr) -> bool:
         if node.op in {"add", "sub"}:
-            return bool(node.args) and all(term(arg) for arg in node.args)
-        coefficients = _coefficients(node)
-        nonzero = [index for index, value in enumerate(coefficients) if value]
-        if len(nonzero) != 1:
-            return False
+            return len(node.args) >= 2 and all(term(arg) for arg in node.args)
         if node.op == "mul":
-            variables = [arg for arg in node.args if len(_coefficients(arg)) > 1]
-            constants = [arg for arg in node.args if len(_coefficients(arg)) == 1]
-            if (
-                len(variables) != 1
-                or len(constants) > 1
-                or any(arg.num is None for arg in constants)
-            ):
+            variables: list[int] = []
+            constants: list[Expr] = []
+            for arg in node.args:
+                degree = _variable_monomial(arg)
+                if degree is not None:
+                    variables.append(degree)
+                elif _is_number_literal(arg):
+                    if _number(arg.num) == 0:
+                        return False
+                    constants.append(arg)
+                else:
+                    return False
+            if len(variables) != 1 or len(constants) > 1:
                 return False
-            base = variables[0]
+            degree = variables[0]
         else:
-            base = node
-        if base.op is not None and not (base.op == "pow" and base.args[0].sym == "x"):
-            return False
-        exponents.append(nonzero[0])
+            degree = _variable_monomial(node)
+            if degree is None:
+                if not _is_number_literal(node) or _number(node.num) == 0:
+                    return False
+                degree = 0
+        exponents.append(degree)
         return True
 
     return term(expression) and len(exponents) == len(set(exponents))
 
 
+def _collect_factors(expression: Expr) -> list[Expr]:
+    """Flatten a product tree so scalar and repeated factors are counted once."""
+    if expression.op != "mul":
+        return [expression]
+    factors: list[Expr] = []
+    for arg in expression.args:
+        factors.extend(_collect_factors(arg))
+    return factors
+
+
 def _factor_form(expression: Expr) -> bool:
-    factors = expression.args if expression.op == "mul" else [expression]
+    factors = _collect_factors(expression)
+    if not factors:
+        return False
     scalar_count = 0
+    scalar_product = Fraction(1)
+    polynomial_count = 0
     for factor in factors:
-        if factor.op == "mul":
-            if not _factor_form(factor):
-                return False
-            continue
-        coefficients = _coefficients(factor)
+        coefficients = _coefficients(factor, literal_bound=MAX_ANSWER_LITERAL)
         if len(coefficients) == 1:
+            if not _is_number_literal(factor):
+                return False
+            scalar_product *= _number(factor.num)
             scalar_count += 1
-            if coefficients[0] in {0, 1} or factor.num is None:
+            continue
+        polynomial_count += 1
+        if factor.op == "pow":
+            if len(factor.args) != 2:
                 return False
-        elif factor.op == "pow":
-            exponent = _number(factor.args[1].num or "0")
-            if (
-                exponent.denominator != 1
-                or not 2 <= exponent <= 5
-                or not _irreducible(_coefficients(factor.args[0]))
-            ):
+            if _integer_value(factor.args[1], 2, MAX_PROBLEM_DEGREE) is None:
                 return False
-        elif not _irreducible(coefficients):
+            base = factor.args[0]
+            base_coefficients = _coefficients(base, literal_bound=MAX_ANSWER_LITERAL)
+            if not _expanded_form(base) or not _irreducible(base_coefficients):
+                return False
+        elif not _expanded_form(factor) or not _irreducible(coefficients):
             return False
-    return scalar_count <= 1
+    if polynomial_count == 0 or scalar_product == 0:
+        return False
+    # Explicit unit scalars are identity-factor evasions; non-trivial products
+    # of scalars are genuine alternative scalings.
+    return not (scalar_count and scalar_product == 1)
+
+
+def _linear_inner(inner: Expr) -> bool:
+    """Accept only the explicit monic linear forms ``x`` or ``x +/- h``."""
+    if inner.sym is not None:
+        return inner.sym == "x"
+    if inner.op not in {"add", "sub"} or len(inner.args) != 2:
+        return False
+    left, right = inner.args
+    if inner.op == "sub":
+        return left.sym == "x" and _is_number_literal(right)
+    return (left.sym == "x" and _is_number_literal(right)) or (
+        right.sym == "x" and _is_number_literal(left)
+    )
 
 
 def _square_form(expression: Expr) -> bool:
-    terms = expression.args if expression.op in {"add", "sub"} else [expression]
-    if len(terms) > 2:
-        return False
+    if expression.op in {"add", "sub"}:
+        terms = expression.args
+        if len(terms) != 2 or not _is_number_literal(terms[1]):
+            return False
+    else:
+        terms = [expression]
     square = terms[0]
-    if len(terms) == 2 and terms[1].num is None:
-        return False
     if square.op == "mul":
-        if (
-            len(square.args) != 2
-            or square.args[0].num is None
-            or _number(square.args[0].num) == 0
-        ):
+        if len(square.args) != 2 or not _is_number_literal(square.args[0]):
+            return False
+        if _number(square.args[0].num) == 0:
             return False
         square = square.args[1]
-    if square.op != "pow" or len(square.args) != 2 or square.args[1].num != "2":
+    if square.op != "pow" or len(square.args) != 2:
         return False
-    inner = _coefficients(square.args[0])
-    return len(inner) == 2 and inner[1] == 1
+    if _integer_value(square.args[1], 2, 2) is None:
+        return False
+    return _linear_inner(square.args[0])
 
 
 def validate_problem(contract_id: str, problem: dict[str, Any]) -> dict[str, Any]:
-    if contract_id not in _KINDS or problem.get("kind") != _KINDS[contract_id]:
+    if contract_id not in _KINDS:
+        raise ValueError("unknown algebra contract")
+    if not isinstance(problem, dict):
+        raise ValueError("a problem must be a JSON object")
+    if problem.get("kind") != _KINDS[contract_id]:
         raise ValueError("problem kind does not match the trusted algebra contract")
     model = LinearSystemProblem if contract_id == SYSTEM else AlgebraProblem
     return model.model_validate(problem).model_dump(mode="json", exclude_none=True)
@@ -392,7 +516,10 @@ def expected_answer(contract_id: str, problem: dict[str, Any]) -> dict[str, Any]
                 str(Fraction(a * f - e * c, determinant)),
             ]
         }
-    coefficients = _coefficients(Expr.model_validate(validated["expression"]))
+    coefficients = _coefficients(
+        Expr.model_validate(validated["expression"]),
+        literal_bound=MAX_PROBLEM_LITERAL,
+    )
     expression = (
         _expanded(coefficients)
         if contract_id == EXPAND
@@ -417,7 +544,7 @@ def check_answer(
             )
             return matrix * vector == sympy.Matrix(validated["rhs"])
         answer = ExpressionAnswer.model_validate(candidate)
-        _coefficients(answer.expression)
+        _coefficients(answer.expression, literal_bound=MAX_ANSWER_LITERAL)
         form = (
             _expanded_form
             if contract_id == EXPAND
@@ -440,12 +567,19 @@ def wrong_answers(
 ) -> list[dict[str, Any]]:
     validated = validate_problem(contract_id, problem)
     if contract_id == SYSTEM:
-        values = [_number(value) for value in answer["values"]]
+        system_answer = SystemAnswer.model_validate(answer)
+        values = [_number(value) for value in system_answer.values]
         return [
             {"values": [str(values[0] + offset), str(values[1])]}
             for offset in range(1, 7)
         ]
-    coefficients = list(_coefficients(Expr.model_validate(validated["expression"])))
+    ExpressionAnswer.model_validate(answer)
+    coefficients = list(
+        _coefficients(
+            Expr.model_validate(validated["expression"]),
+            literal_bound=MAX_PROBLEM_LITERAL,
+        )
+    )
     candidates = []
     for offset in range(1, 7):
         shifted = tuple([coefficients[0] + offset, *coefficients[1:]])
@@ -497,7 +631,7 @@ def render_answer(contract_id: str, candidate: dict[str, Any]) -> str:
             "(" + ", ".join(str(_number(value)) for value in system_answer.values) + ")"
         )
     answer = ExpressionAnswer.model_validate(candidate)
-    _coefficients(answer.expression)
+    _coefficients(answer.expression, literal_bound=MAX_ANSWER_LITERAL)
     return _render_expr(answer.expression)
 
 
@@ -507,21 +641,62 @@ def boundary_problems(contract_id: str) -> list[dict[str, Any]]:
             {"kind": _KINDS[SYSTEM], "matrix": [[2, 1], [1, -1]], "rhs": [5, 1]},
             {"kind": _KINDS[SYSTEM], "matrix": [[0, 2], [-3, 0]], "rhs": [1, -1]},
             {"kind": _KINDS[SYSTEM], "matrix": [[1, 0], [0, 1]], "rhs": [0, 0]},
+            {"kind": _KINDS[SYSTEM], "matrix": [[2, 1], [1, 3]], "rhs": [1, 2]},
+            {"kind": _KINDS[SYSTEM], "matrix": [[20, 1], [19, 1]], "rhs": [20, 19]},
         ]
     if contract_id not in _KINDS:
         raise ValueError("unknown algebra contract")
     polynomials = [
-        (Fraction(-1), Fraction(0), Fraction(1)),
-        (Fraction(1), Fraction(2), Fraction(1)),
-        (Fraction(1), Fraction(0), Fraction(1)),
-        (Fraction(0), Fraction(0), Fraction(-2)),
+        (Fraction(-2), Fraction(0), Fraction(1)),  # x^2 - 2: irreducible
+        (Fraction(1), Fraction(2), Fraction(1)),  # repeated root, zero offset
+        (Fraction(1), Fraction(0), Fraction(1)),  # irreducible, zero linear term
+        (Fraction(0), Fraction(0), Fraction(-2)),  # negative leading coefficient
+        (Fraction(-1), Fraction(0), Fraction(2)),  # 2x^2 - 1
+        (Fraction(-1), Fraction(0), Fraction(1)),  # difference of squares
     ]
+    if contract_id != SQUARE:
+        polynomials.append((Fraction(0), Fraction(3), Fraction(2)))  # 2x + 3
+    expressions = [_expanded(values) for values in polynomials]
+    if contract_id == EXPAND:
+        expressions.append(
+            _expanded(
+                (
+                    Fraction(1),
+                    Fraction(0),
+                    Fraction(0),
+                    Fraction(0),
+                    Fraction(0),
+                    Fraction(1),
+                )
+            )
+        )
+        # The advertised coefficient limit is reachable through small literals.
+        expressions.append(
+            _op(
+                "mul",
+                _n(20),
+                _n(20),
+                _n(Fraction(5, 2)),
+                _op("pow", _x(), _n(2)),
+            )
+        )
+    if contract_id == SQUARE:
+        # b = c = 1000 with a = 1; the oracle constant is -249000, which is
+        # above the old implicit 100000 budget and must still be closed.
+        expressions.append(
+            _op(
+                "add",
+                _op("pow", _x(), _n(2)),
+                _op("mul", _n(20), _n(20), _n(Fraction(5, 2)), _x()),
+                _op("mul", _n(20), _n(20), _n(Fraction(5, 2))),
+            )
+        )
     return [
         {
             "kind": _KINDS[contract_id],
-            "expression": _expanded(values).model_dump(mode="json", exclude_none=True),
+            "expression": expression.model_dump(mode="json", exclude_none=True),
         }
-        for values in polynomials
+        for expression in expressions
     ]
 
 
@@ -546,16 +721,51 @@ def problem_strategy(contract_id: str) -> st.SearchStrategy[dict[str, Any]]:
 
     @st.composite
     def polynomials(draw: st.DrawFn) -> dict[str, Any]:
-        degree = (
-            draw(st.integers(1, 5 if contract_id == EXPAND else 2))
-            if contract_id != SQUARE
-            else 2
-        )
-        values = draw(st.lists(st.integers(-10, 10), min_size=degree, max_size=degree))
-        values.append(draw(st.integers(-10, 10).filter(bool)))
-        expression = _expanded(tuple(Fraction(value) for value in values))
-        if contract_id == EXPAND:
-            expression = _op("mul", _n(2), expression)
+        if contract_id == FACTOR:
+            mode = draw(st.sampled_from(("random", "factored", "linear")))
+            if mode == "linear":
+                expression = _op(
+                    "add",
+                    _op(
+                        "mul",
+                        _n(draw(st.integers(-10, 10).filter(bool))),
+                        _x(),
+                    ),
+                    _n(draw(st.integers(-10, 10))),
+                )
+            elif mode == "factored":
+                # Build the product directly so input literals stay small while
+                # expanded coefficients and repeated roots are exercised.
+                leading = draw(st.integers(-5, 5).filter(bool))
+                first = draw(st.integers(-10, 10))
+                second = draw(st.integers(-10, 10))
+                if first == second:
+                    base = _op("pow", _op("sub", _x(), _n(first)), _n(2))
+                else:
+                    base = _op(
+                        "mul",
+                        _op("sub", _x(), _n(first)),
+                        _op("sub", _x(), _n(second)),
+                    )
+                expression = base if leading == 1 else _op("mul", _n(leading), base)
+            else:
+                values = [
+                    draw(st.integers(-10, 10)),
+                    draw(st.integers(-10, 10)),
+                    draw(st.integers(-10, 10).filter(bool)),
+                ]
+                expression = _expanded(tuple(Fraction(value) for value in values))
+        else:
+            degree = (
+                draw(st.integers(1, MAX_PROBLEM_DEGREE)) if contract_id == EXPAND else 2
+            )
+            values = draw(
+                st.lists(st.integers(-10, 10), min_size=degree, max_size=degree)
+            )
+            values.append(draw(st.integers(-10, 10).filter(bool)))
+            expression = _expanded(tuple(Fraction(value) for value in values))
+            if contract_id == EXPAND:
+                expression = _op("mul", _n(2), expression)
         return {
             "kind": _KINDS[contract_id],
             "expression": expression.model_dump(mode="json", exclude_none=True),
