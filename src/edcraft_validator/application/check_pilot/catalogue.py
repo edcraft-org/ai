@@ -37,7 +37,6 @@ class PlanResolution:
     goal: StructuredGoal | None
     check: CheckRecord | None
     findings: list[str]
-    referenced: bool = False
 
     @property
     def supported(self) -> bool:
@@ -153,7 +152,6 @@ def resolve_plan(
             goal=goal,
             check=check,
             findings=reference_findings,
-            referenced=True,
         )
     return PlanResolution(
         contract=contract,
@@ -165,7 +163,6 @@ def resolve_plan(
             contract_id=contract.contract_id,
         ),
         findings=[],
-        referenced=False,
     )
 
 

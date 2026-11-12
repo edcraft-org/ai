@@ -185,16 +185,6 @@ def contract_id_for_scope(scope: dict[str, Any]) -> str | None:
     return contract.contract_id if contract is not None else None
 
 
-def _scope_for_contract(contract: ContractDescriptor) -> ContractScope:
-    return contract.scope()
-
-
-def _scope_relations(scope: ContractScope | PolynomialScope) -> tuple[str, ...]:
-    if isinstance(scope, ContractScope):
-        return tuple(scope.relations)
-    return ("none",)
-
-
 def _scope_applicability_findings(
     contract: ContractDescriptor,
     scope: ContractScope | PolynomialScope,

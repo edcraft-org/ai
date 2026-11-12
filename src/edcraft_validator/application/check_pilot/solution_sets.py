@@ -12,7 +12,6 @@ from __future__ import annotations
 import random
 import re
 from dataclasses import dataclass
-from fractions import Fraction
 
 import sympy
 
@@ -747,19 +746,11 @@ def solution_set_mutations(
     return ordered[:count]
 
 
-def fraction_text(value: Fraction) -> str:
-    """Render a rational value without floating point."""
-    if value.denominator == 1:
-        return str(value.numerator)
-    return f"{value.numerator}/{value.denominator}"
-
-
 __all__ = [
     "IntervalComponent",
     "SolutionSet",
     "SolutionSetError",
     "compare_endpoints",
-    "fraction_text",
     "normalize",
     "parse_endpoint",
     "question_text",
