@@ -86,6 +86,29 @@ def wrong_recipe() -> CheckRecipeDefinition:
     )
 
 
+def unsupported_recipe() -> CheckRecipeDefinition:
+    return CheckRecipeDefinition(
+        steps=[
+            RecipeStep(
+                id="d1",
+                operation="poly.integrate",
+                version="1",
+                arguments={"polynomial": input_arg("problem")},
+            ),
+            RecipeStep(
+                id="out",
+                operation="poly.equivalent",
+                version="1",
+                arguments={
+                    "expected": step_arg("d1"),
+                    "actual": input_arg("candidate"),
+                },
+            ),
+        ],
+        output="out",
+    )
+
+
 def valid_check_proposal() -> CheckAuthorProposal:
     return CheckAuthorProposal(
         title="Differentiate a bounded polynomial",
@@ -342,6 +365,8 @@ def test_repair_exhaustion_preserves_counterexample_and_no_usable_check(
     assert record.template is None
     assert record.check_qualification is not None
     assert record.check_qualification.status == "failed"
+    assert record.check_qualification.phase == "sampling"
+    assert record.check_qualification.counterexample is not None
     assert any("counterexample" in finding for finding in record.findings)
     assert [call["role"] for call in provider.calls] == ["check-author"] * 3
     assert "counterexample" in provider.calls[1]["messages"][1]["content"]
@@ -368,6 +393,34 @@ def test_provider_error_leaves_error_record_and_no_usable_check(tmp_path: Path):
     assert [item.status for item in application.list_templates("owner")] == ["error"]
     with pytest.raises(PilotConflict):
         application.generate("owner", record.template_id, seed=1, quantity=1)
+
+
+def test_compile_rejection_is_compilation_error_not_sampled_failure(
+    tmp_path: Path,
+):
+    provider = ScriptedProvider(
+        check=CheckAuthorProposal(
+            title="Unsupported integration check",
+            description="This recipe asks for an operation outside the pilot.",
+            recipe=unsupported_recipe(),
+        )
+    )
+    application = app(tmp_path)
+    record = author(application, provider)
+
+    assert record.status == "needs_review"
+    assert record.check is None
+    assert record.template is None
+    assert record.check_qualification is not None
+    qualification = record.check_qualification
+    assert qualification.status == "error"
+    assert qualification.phase == "compilation"
+    assert qualification.accepted_cases == 0
+    assert qualification.execution_calls == 0
+    assert qualification.counterexample is None
+    assert any("Development needed" in finding for finding in record.findings)
+    assert [call["role"] for call in provider.calls] == ["check-author"] * 3
+    assert application.list_checks("owner") == []
 
 
 def test_unsupported_check_capability_is_development_needed(tmp_path: Path):

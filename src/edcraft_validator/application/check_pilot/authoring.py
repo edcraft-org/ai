@@ -148,7 +148,8 @@ def _compile_failure_qualification(
     settings: PilotQualificationSettings, findings: list[str]
 ) -> Qualification:
     return Qualification(
-        status="failed",
+        status="error",
+        phase="compilation",
         accepted_cases=0,
         execution_calls=0,
         seed=0,

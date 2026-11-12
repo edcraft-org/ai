@@ -92,6 +92,7 @@ def test_wrong_pinned_recipe_fails_template_qualification():
         recipe(second_derivative=True), family(), seed=3, settings=settings()
     )
     assert first.status == "failed"
+    assert first.phase == "sampling"
     assert first.counterexample is not None
     assert first.counterexample == second.counterexample
     assert "assignment" in first.counterexample

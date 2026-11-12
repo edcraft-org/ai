@@ -17,7 +17,9 @@ this facade. The AI-side flow is:
    qualifies it with bounded property-based sampling.
 2. **Qualification.** A passing recipe is saved as an immutable, content-addressed
    private check. Compile failures, failed qualification, exhausted repairs,
-   provider failures and worker failures never become usable checks.
+   provider failures and worker failures never become usable checks. Compilation
+   rejections are recorded as an `error` qualification in the `compilation` phase
+   with zero executions and no counterexample; they are not sampled false answers.
 3. **Template authoring.** The template-author prompt proposes only a bounded
    coefficient-domain family. The application validates those domains before use
    and renders wording, answers and distractors itself.
@@ -81,6 +83,18 @@ Defaults and bounds:
 
 Results say "No counterexample found in sampled cases". Passed, failed,
 inconclusive and error are distinct.
+
+Each qualification carries a `phase`:
+
+- `compilation` means the recipe was rejected before any case ran. Status is
+  `error`, `execution_calls` is 0 and `counterexample` is `null`, so this is not a
+  mathematical verdict about the recipe's semantics.
+- `sampling` means bounded property cases ran. Sampled false answers remain
+  `failed` with any shrunk counterexample preserved.
+
+Older records without a `phase` are treated as sampling evidence. Compile
+rejection still leaves the template at the high-level `needs_review` state with
+bounded repair attempts, so an author can correct and resubmit it.
 
 ## Private immutable storage and reuse
 

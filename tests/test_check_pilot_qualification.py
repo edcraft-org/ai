@@ -75,6 +75,7 @@ def settings(**changes) -> PilotQualificationSettings:
 def test_correct_recipe_passes_property_based_qualification():
     result = qualify_recipe(valid_recipe(), seed=17, settings=settings())
     assert result.status == "passed"
+    assert result.phase == "sampling"
     assert result.checking_mode == "property_based"
     assert result.accepted_cases >= 10
     assert result.execution_calls > result.accepted_cases
@@ -99,6 +100,7 @@ def test_second_derivative_fails_with_preserved_shrunk_counterexample():
     first = qualify_recipe(wrong, seed=5, settings=settings())
     second = qualify_recipe(wrong, seed=5, settings=settings())
     assert first.status == "failed"
+    assert first.phase == "sampling"
     assert first.counterexample is not None
     assert first.counterexample == second.counterexample
     assert "expected" in first.counterexample
@@ -127,7 +129,10 @@ def test_always_true_and_always_false_recipes_are_rejected():
     )
     for recipe in (always_true, always_false):
         result = qualify_recipe(recipe, seed=1, settings=settings())
-        assert result.status == "failed"
+        assert result.status == "error"
+        assert result.phase == "compilation"
+        assert result.execution_calls == 0
+        assert result.counterexample is None
         assert result.findings
         assert "verdict" in " ".join(result.findings).lower()
 
@@ -138,7 +143,10 @@ def test_candidate_to_itself_recipe_is_rejected():
         equivalent(input_arg("candidate"), input_arg("candidate")),
     )
     result = qualify_recipe(recipe, seed=1, settings=settings())
-    assert result.status == "failed"
+    assert result.status == "error"
+    assert result.phase == "compilation"
+    assert result.execution_calls == 0
+    assert result.counterexample is None
     assert result.findings
 
 
@@ -165,11 +173,14 @@ def test_small_point_only_check_is_not_sufficient():
         ),
     )
     result = qualify_recipe(recipe, seed=2, settings=settings())
-    assert result.status == "failed"
+    assert result.status == "error"
+    assert result.phase == "compilation"
+    assert result.execution_calls == 0
+    assert result.counterexample is None
     assert any("point" in finding.lower() for finding in result.findings)
 
 
-def test_unknown_operation_is_a_development_needed_failure_not_a_pass():
+def test_unknown_operation_is_a_development_needed_error_not_a_pass():
     recipe = definition(
         RecipeStep(
             id="d1",
@@ -180,9 +191,12 @@ def test_unknown_operation_is_a_development_needed_failure_not_a_pass():
         equivalent(step_arg("d1"), input_arg("candidate")),
     )
     result = qualify_recipe(recipe, seed=1, settings=settings())
-    assert result.status == "failed"
-    assert any("development" in finding.lower() for finding in result.findings)
+    assert result.status == "error"
+    assert result.phase == "compilation"
+    assert result.accepted_cases == 0
+    assert result.execution_calls == 0
     assert result.counterexample is None
+    assert any("development" in finding.lower() for finding in result.findings)
 
 
 def test_budget_exhaustion_is_inconclusive_not_pass():

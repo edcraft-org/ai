@@ -22,6 +22,7 @@ from edcraft_validator.application.check_pilot.models import (
     PilotQualificationSettings,
     PolynomialFamily,
     Qualification,
+    QualificationPhase,
     QualificationStatus,
 )
 from edcraft_validator.application.check_pilot.operations import (
@@ -96,6 +97,7 @@ def _qualification(
     status: QualificationStatus,
     config: PilotQualificationSettings,
     seed_value: int,
+    phase: QualificationPhase = "sampling",
     state: _RunState | None = None,
     findings: list[str] | None = None,
     counterexample: dict[str, Any] | None = None,
@@ -107,6 +109,7 @@ def _qualification(
         accepted = len(state.accepted) if state is not None else 0
     return Qualification(
         status=status,
+        phase=phase,
         accepted_cases=accepted,
         execution_calls=state.execution_calls if state else 0,
         seed=seed_value,
@@ -132,7 +135,8 @@ def _compile_failure(
             else:
                 findings.append(f"recipe did not compile: {finding}")
         return _qualification(
-            status="failed",
+            status="error",
+            phase="compilation",
             config=config,
             seed_value=seed_value,
             findings=findings or ["recipe did not compile"],

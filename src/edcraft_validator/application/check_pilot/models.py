@@ -20,6 +20,7 @@ RENDERER_VERSION: Literal["polynomial-mcq/1"] = "polynomial-mcq/1"
 MAX_RECIPE_CASES = 600
 
 QualificationStatus = Literal["passed", "failed", "inconclusive", "error"]
+QualificationPhase = Literal["compilation", "sampling"]
 TemplateStatus = Literal["ready", "needs_review", "error"]
 ApprovalStatus = Literal["unreviewed", "approved", "rejected"]
 
@@ -40,6 +41,7 @@ class CheckRef(PilotModel):
 
 class Qualification(PilotModel):
     status: QualificationStatus
+    phase: QualificationPhase = "sampling"
     checking_mode: Literal["property_based"] = "property_based"
     accepted_cases: int = Field(ge=0)
     execution_calls: int = Field(ge=0)
