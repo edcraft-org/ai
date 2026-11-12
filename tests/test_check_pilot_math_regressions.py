@@ -28,6 +28,19 @@ def test_inverse_oracle_answer_is_admitted_with_distinct_rational_denominators()
     assert matrices.check_answer("matrix.inverse/1", problem, answer)
 
 
+def test_inverse_answer_budget_covers_coprime_denominators_without_cancellation():
+    problem = {
+        "kind": "matrix_inverse",
+        "matrix": [
+            ["309/97", "-772/89", "-949/83"],
+            ["518/79", "-437/73", "-499/71"],
+            ["-543/67", "-715/61", "508/59"],
+        ],
+    }
+    answer = matrices.expected_answer("matrix.inverse/1", problem)
+    assert matrices.check_answer("matrix.inverse/1", problem, answer)
+
+
 def test_integral_oracle_answer_is_admitted_at_supported_rational_boundary():
     problem = {
         "kind": "polynomial_definite_integral",
