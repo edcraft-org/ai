@@ -139,6 +139,22 @@ class RecipeStep(PilotModel):
     version: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
     arguments: dict[str, RecipeArgument] = Field(min_length=1)
 
+    @model_validator(mode="before")
+    @classmethod
+    def strip_null_argument_placeholders(cls, data: Any) -> Any:
+        """Remove nullable wire placeholders before exact argument validation."""
+        if isinstance(data, dict):
+            arguments = data.get("arguments")
+            if isinstance(arguments, dict):
+                cleaned = {
+                    name: value
+                    for name, value in arguments.items()
+                    if value is not None
+                }
+                if len(cleaned) != len(arguments):
+                    data = {**data, "arguments": cleaned}
+        return data
+
 
 class CheckRecipeDefinition(PilotModel):
     schema_version: Literal["check-recipe/1"] = RECIPE_SCHEMA_VERSION
@@ -192,7 +208,68 @@ class PilotTemplateDefinition(PilotModel):
     family: PolynomialFamily
 
 
-class CheckAuthorProposal(PilotModel):
+def _recipe_argument_names() -> list[str]:
+    """Union of trusted operation input names, imported late to avoid a cycle."""
+    from edcraft_validator.application.check_pilot.operations import (
+        operation_catalogue,
+    )
+
+    names: set[str] = set()
+    for descriptor in operation_catalogue():
+        names.update(descriptor["inputs"])
+    return sorted(names)
+
+
+def _make_schema_strict(node: object) -> None:
+    if isinstance(node, dict):
+        node.pop("default", None)
+        properties = node.get("properties")
+        if isinstance(properties, dict):
+            node["additionalProperties"] = False
+            node["required"] = list(properties)
+        for value in node.values():
+            _make_schema_strict(value)
+    elif isinstance(node, list):
+        for value in node:
+            _make_schema_strict(value)
+
+
+def _strict_author_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Close every object shape in one author-proposal schema for strict mode."""
+    definitions = schema.get("$defs")
+    if isinstance(definitions, dict):
+        step = definitions.get("RecipeStep")
+        if isinstance(step, dict):
+            properties = step.get("properties")
+            if isinstance(properties, dict):
+                names = _recipe_argument_names()
+                properties["arguments"] = {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        name: {
+                            "anyOf": [
+                                {"$ref": "#/$defs/RecipeArgument"},
+                                {"type": "null"},
+                            ]
+                        }
+                        for name in names
+                    },
+                    "required": names,
+                }
+    _make_schema_strict(schema)
+    return schema
+
+
+class _StrictAuthorProposalSchema:
+    """Override applied only to the two model-facing author proposal schemas."""
+
+    @classmethod
+    def model_json_schema(cls, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        return _strict_author_schema(super().model_json_schema(*args, **kwargs))
+
+
+class CheckAuthorProposal(_StrictAuthorProposalSchema, PilotModel):
     supported: bool = True
     development_needed: str | None = Field(default=None, max_length=1000)
     title: str | None = Field(default=None, max_length=200)
@@ -211,7 +288,7 @@ class CheckAuthorProposal(PilotModel):
         return self
 
 
-class TemplateAuthorProposal(PilotModel):
+class TemplateAuthorProposal(_StrictAuthorProposalSchema, PilotModel):
     supported: bool = True
     development_needed: str | None = Field(default=None, max_length=1000)
     family: PolynomialFamily | None = None
