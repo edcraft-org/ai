@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
 import sympy
 
+from edcraft_validator.application.check_pilot.isolation import PilotWorkerTimeout
 from edcraft_validator.application.check_pilot.models import (
     CheckRecipeDefinition,
     PilotQualificationSettings,
@@ -207,3 +209,29 @@ def test_budget_exhaustion_is_inconclusive_not_pass():
     )
     assert result.status == "inconclusive"
     assert any("budget" in finding.lower() for finding in result.findings)
+
+
+def test_worker_failure_and_success_evidence_share_static_versions(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    success = qualify_recipe(valid_recipe(), seed=17, settings=settings())
+    assert success.status == "passed"
+
+    def timeout(*args, **kwargs):
+        raise PilotWorkerTimeout("worker exceeded its hard limit")
+
+    monkeypatch.setattr(
+        "edcraft_validator.application.check_pilot.qualification.run_pilot_isolated",
+        timeout,
+    )
+    failure = qualify_recipe(valid_recipe(), seed=17, settings=settings())
+
+    assert failure.status == "error"
+    assert "hard" in failure.findings[0]
+    assert failure.versions
+    assert failure.versions == {
+        key: value
+        for key, value in success.versions.items()
+        if key in failure.versions
+    }
+    assert set(success.versions) - set(failure.versions) == {"hypothesis", "python"}

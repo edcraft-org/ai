@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import math
-from importlib.metadata import version as package_version
 from typing import Any
 
 from edcraft_validator.application.check_pilot.isolation import (
@@ -14,8 +13,6 @@ from edcraft_validator.application.check_pilot.isolation import (
 )
 from edcraft_validator.application.check_pilot.models import (
     MAX_RECIPE_CASES,
-    RENDERER_VERSION,
-    SOLVE_RENDERER_VERSION,
     CheckRecipeDefinition,
     ContractScope,
     PilotQualificationSettings,
@@ -30,22 +27,7 @@ from edcraft_validator.application.check_pilot.polynomial import (
     Polynomial,
     render_polynomial,
 )
-
-
-def _static_versions() -> dict[str, str]:
-    return {
-        "check_pilot": "1",
-        "differentiation": "sympy",
-        "sympy": package_version("sympy"),
-        "oracle": "coefficient-arithmetic/1",
-        "polynomial_oracle": "coefficient-arithmetic/1",
-        "solution_oracle": "discriminant-sign/1",
-        "recipe_compiler": "1",
-        "renderer": RENDERER_VERSION,
-        "solve_renderer": SOLVE_RENDERER_VERSION,
-        "question_builder": RENDERER_VERSION,
-        "solve_question_builder": SOLVE_RENDERER_VERSION,
-    }
+from edcraft_validator.application.check_pilot.versions import static_versions
 
 
 def _worker_failure(
@@ -64,7 +46,7 @@ def _worker_failure(
         timeout_seconds=settings.timeout_seconds,
         counterexample=None,
         findings=[message],
-        versions=_static_versions(),
+        versions=static_versions(),
     )
 
 

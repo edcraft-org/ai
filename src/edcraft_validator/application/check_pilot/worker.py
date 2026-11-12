@@ -8,7 +8,6 @@ import random
 import sys
 import time
 from dataclasses import dataclass, field
-from importlib.metadata import version as package_version
 from typing import Any
 
 import hypothesis
@@ -24,8 +23,6 @@ from edcraft_validator.application.check_pilot.contracts import (
 )
 from edcraft_validator.application.check_pilot.models import (
     MAX_RECIPE_CASES,
-    RENDERER_VERSION,
-    SOLVE_RENDERER_VERSION,
     SUPPORTED_SCOPE,
     CheckRecipeDefinition,
     CheckRef,
@@ -72,6 +69,7 @@ from edcraft_validator.application.check_pilot.solution_sets import (
     solution_set_mutations,
     solve_relation_independently,
 )
+from edcraft_validator.application.check_pilot.versions import static_versions
 
 
 class _BudgetExceeded(BaseException):
@@ -106,17 +104,7 @@ class _RunState:
 
 def _versions() -> dict[str, str]:
     return {
-        "check_pilot": "1",
-        "differentiation": "sympy",
-        "sympy": package_version("sympy"),
-        "oracle": "coefficient-arithmetic/1",
-        "polynomial_oracle": "coefficient-arithmetic/1",
-        "solution_oracle": "discriminant-sign/1",
-        "recipe_compiler": "1",
-        "renderer": RENDERER_VERSION,
-        "solve_renderer": SOLVE_RENDERER_VERSION,
-        "question_builder": RENDERER_VERSION,
-        "solve_question_builder": SOLVE_RENDERER_VERSION,
+        **static_versions(),
         "hypothesis": hypothesis.__version__,
         "python": platform.python_version(),
     }
