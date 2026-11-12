@@ -9,18 +9,30 @@ No topic label is ever translated into a capability.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeGuard
 
+from edcraft_validator.application.check_pilot.kernel_registry import (
+    KernelContractSpec,
+    kernel_contract,
+    kernel_contract_specs,
+)
 from edcraft_validator.application.check_pilot.models import (
+    KERNEL_SCOPE_SCHEMA_VERSION,
     RECIPE_OPERATION_SET,
     SOLVE_RECIPE_OPERATION_SET,
+    STRUCTURED_RECIPE_OPERATION_SET,
     ContractScope,
     GoalRelation,
+    KernelContractScope,
+    KernelGoal,
     PilotTemplateDefinition,
     PolynomialFamily,
     PolynomialScope,
     SolveFamily,
     StructuredGoal,
+)
+from edcraft_validator.application.check_pilot.structured import (
+    structured_family_goal,
 )
 
 DIFFERENTIATE_CONTRACT = "polynomial.differentiate/1"
@@ -65,6 +77,7 @@ class ContractDescriptor:
             "title": self.title,
             "summary": self.summary,
             "operation": self.operation,
+            "operation_set": self.operation_set,
             "relations": list(self.relations),
             # Planning and template authoring start at template_min_degree. The
             # stored check scope may cover lower-degree constant boundary cases.
@@ -75,6 +88,11 @@ class ContractDescriptor:
             "answer_type": self.answer_type,
             "required_policy": list(self.required_policy),
         }
+
+
+Contract = ContractDescriptor | KernelContractSpec
+Scope = ContractScope | KernelContractScope | PolynomialScope
+Goal = StructuredGoal | KernelGoal
 
 
 _CONTRACTS: tuple[ContractDescriptor, ...] = (
@@ -144,30 +162,63 @@ _CONTRACTS: tuple[ContractDescriptor, ...] = (
         ),
     ),
 )
-_CONTRACT_INDEX = {contract.contract_id: contract for contract in _CONTRACTS}
+_CONTRACT_INDEX: dict[str, Contract] = {
+    contract.contract_id: contract for contract in _CONTRACTS
+}
+_CONTRACT_INDEX.update({spec.contract_id: spec for spec in kernel_contract_specs()})
 
 
 def contract_catalogue() -> list[dict[str, Any]]:
     """Model-facing trusted capability descriptors."""
-    return [contract.descriptor() for contract in _CONTRACTS]
+    contracts: list[Contract] = [*_CONTRACTS, *kernel_contract_specs()]
+    return [contract.descriptor() for contract in contracts]
 
 
-def get_contract(contract_id: str | None) -> ContractDescriptor | None:
+def get_contract(contract_id: str | None) -> Contract | None:
     if not isinstance(contract_id, str):
         return None
     return _CONTRACT_INDEX.get(contract_id)
 
 
-def trusted_contract_scope(scope: ContractScope) -> ContractScope:
+def is_kernel_contract(
+    contract: Contract | None,
+) -> TypeGuard[KernelContractSpec]:
+    return isinstance(contract, KernelContractSpec)
+
+
+def trusted_contract_scope(scope: Scope) -> Scope:
     """Return the scope only when it is exactly one trusted contract's scope."""
-    contract = get_contract(scope.contract_id)
-    if contract is None or contract.scope() != scope:
+    if isinstance(scope, KernelContractScope):
+        spec = kernel_contract(scope.contract_id)
+        if spec is None or spec.scope() != scope:
+            raise ValueError("recipe scope is not a trusted kernel contract scope")
+        return scope
+    if isinstance(scope, PolynomialScope):
+        if scope.operation != "differentiate":
+            raise ValueError("recipe scope is not a trusted contract scope")
+        contract = get_contract(DIFFERENTIATE_CONTRACT)
+    else:
+        contract = get_contract(scope.contract_id)
+    if (
+        contract is None
+        or isinstance(contract, KernelContractSpec)
+        or contract.scope() != scope
+    ):
         raise ValueError("recipe scope is not a trusted contract scope")
     return scope
 
 
-def contract_for_scope(scope: dict[str, Any]) -> ContractDescriptor | None:
+def contract_for_scope(scope: dict[str, Any]) -> Contract | None:
     """Resolve a stored scope, including legacy v1 differentiation scopes."""
+    if scope.get("schema_version") == KERNEL_SCOPE_SCHEMA_VERSION:
+        try:
+            kernel_scope = KernelContractScope.model_validate(scope)
+        except ValueError:
+            return None
+        spec = kernel_contract(kernel_scope.contract_id)
+        if spec is None or spec.scope() != kernel_scope:
+            return None
+        return spec
     contract_id = scope.get("contract_id")
     if isinstance(contract_id, str):
         return get_contract(contract_id)
@@ -185,12 +236,67 @@ def contract_id_for_scope(scope: dict[str, Any]) -> str | None:
     return contract.contract_id if contract is not None else None
 
 
-def _scope_applicability_findings(
-    contract: ContractDescriptor,
-    scope: ContractScope | PolynomialScope,
-    goal: StructuredGoal,
+def parse_scope(scope: dict[str, Any]) -> Scope:
+    """Parse one stored or proposed scope into its closed model."""
+    if not isinstance(scope, dict):
+        raise ValueError("stored check scope must be an object")
+    if scope.get("schema_version") == KERNEL_SCOPE_SCHEMA_VERSION:
+        return KernelContractScope.model_validate(scope)
+    if "contract_id" in scope:
+        return ContractScope.model_validate(scope)
+    return PolynomialScope.model_validate(scope)
+
+
+def _kernel_scope_findings(
+    contract: KernelContractSpec,
+    scope: KernelContractScope,
+    goal: KernelGoal,
 ) -> list[str]:
     findings: list[str] = []
+    if scope.contract_id != contract.contract_id:
+        findings.append("stored check scope names a different contract")
+    if scope.operation != contract.operation:
+        findings.append("stored check operation does not cover the requested task")
+    if scope.answer_type != contract.answer_type:
+        findings.append("stored check answer type does not cover the request")
+    if goal.min_degree < scope.min_degree:
+        findings.append("requested minimum degree is outside the stored check scope")
+    if goal.max_degree > scope.max_degree:
+        findings.append("requested maximum degree is outside the stored check scope")
+    if goal.max_abs_coefficient > scope.max_abs_coefficient:
+        findings.append("requested coefficient bound is outside the stored check scope")
+    if goal.max_dimension > scope.max_dimension:
+        findings.append("requested dimension is outside the stored check scope")
+    if (
+        scope.requires_general_antiderivative
+        and not goal.requires_general_antiderivative
+    ):
+        findings.append("stored check scope requires a general antiderivative")
+    missing = set(contract.required_policy) - set(scope.required_policy)
+    if missing:
+        findings.append("stored check policy omits a mandatory contract policy")
+    extra = set(scope.required_policy) - set(contract.required_policy)
+    if extra:
+        findings.append("stored check policy is outside the trusted contract")
+    if set(goal.domain_assumptions) != set(scope.domain_assumptions):
+        findings.append("requested domain assumptions do not match the stored scope")
+    return findings
+
+
+def _scope_applicability_findings(
+    contract: Contract,
+    scope: Scope,
+    goal: Goal,
+) -> list[str]:
+    findings: list[str] = []
+    if isinstance(contract, KernelContractSpec):
+        if not isinstance(scope, KernelContractScope) or not isinstance(
+            goal, KernelGoal
+        ):
+            return ["kernel contracts require a kernel scope and kernel goal"]
+        return _kernel_scope_findings(contract, scope, goal)
+    if isinstance(goal, KernelGoal) or isinstance(scope, KernelContractScope):
+        return ["the stored scope does not belong to this kernel contract"]
     if isinstance(scope, ContractScope):
         if scope.contract_id != contract.contract_id:
             findings.append("stored check scope names a different contract")
@@ -229,12 +335,41 @@ def _scope_applicability_findings(
     return findings
 
 
-def applicability_findings(
-    contract: ContractDescriptor | None, goal: StructuredGoal
-) -> list[str]:
+def _kernel_goal_findings(contract: KernelContractSpec, goal: KernelGoal) -> list[str]:
+    findings: list[str] = []
+    if goal.operation != contract.operation:
+        findings.append(
+            f"contract {contract.contract_id} requires operation {contract.operation}"
+        )
+    if goal.answer_type != contract.answer_type:
+        findings.append("requested answer type is outside the contract")
+    if goal.min_degree < contract.min_degree:
+        findings.append("requested minimum degree is outside the contract")
+    if goal.max_degree > contract.max_degree:
+        findings.append("requested maximum degree is outside the contract")
+    if not 1 <= goal.max_abs_coefficient <= contract.max_abs_coefficient:
+        findings.append("requested coefficient bound is outside the contract")
+    if goal.max_dimension < contract.min_dimension:
+        findings.append("requested dimension is below the contract")
+    if goal.max_dimension > contract.max_dimension:
+        findings.append("requested dimension is outside the contract")
+    if goal.requires_general_antiderivative and contract.operation != "antiderivative":
+        findings.append("only antiderivative plans can require a general answer")
+    if set(goal.domain_assumptions) != set(contract.domain_assumptions):
+        findings.append("requested domain assumptions do not match the contract")
+    return findings
+
+
+def applicability_findings(contract: Contract | None, goal: Goal) -> list[str]:
     """Validate a model-proposed goal against the trusted contract alone."""
     if contract is None:
         return ["the proposed check contract is not trusted"]
+    if isinstance(contract, KernelContractSpec):
+        if not isinstance(goal, KernelGoal):
+            return ["kernel contracts require a kernel goal"]
+        return _kernel_goal_findings(contract, goal)
+    if isinstance(goal, KernelGoal):
+        return ["the kernel goal does not belong to this contract"]
     findings: list[str] = []
     if goal.subject != "univariate-real-polynomial" or goal.domain != "real":
         findings.append("only bounded real univariate polynomial tasks are supported")
@@ -265,9 +400,7 @@ def applicability_findings(
     return findings
 
 
-def scope_applicability_findings(
-    scope: dict[str, Any], goal: StructuredGoal
-) -> list[str]:
+def scope_applicability_findings(scope: dict[str, Any], goal: Goal) -> list[str]:
     """Check that one stored check scope covers a concrete structured goal."""
     contract = contract_for_scope(scope)
     if contract is None:
@@ -276,8 +409,10 @@ def scope_applicability_findings(
     if findings:
         return findings
     try:
-        parsed: ContractScope | PolynomialScope
-        if "contract_id" in scope:
+        parsed: Scope
+        if scope.get("schema_version") == KERNEL_SCOPE_SCHEMA_VERSION:
+            parsed = parse_scope(scope)
+        elif "contract_id" in scope:
             parsed = ContractScope.model_validate(scope)
         else:
             parsed = PolynomialScope.model_validate(scope)
@@ -286,8 +421,10 @@ def scope_applicability_findings(
     return _scope_applicability_findings(contract, parsed, goal)
 
 
-def template_goal(definition: PilotTemplateDefinition) -> StructuredGoal:
+def template_goal(definition: PilotTemplateDefinition) -> Goal:
     """Derive the actual structured goal of a concrete template definition."""
+    if definition.structured_family is not None:
+        return structured_family_goal(definition.structured_family)
     if definition.solve_family is not None:
         solve_family = definition.solve_family
         return StructuredGoal(
@@ -318,10 +455,12 @@ def _family_bound(family: PolynomialFamily | SolveFamily) -> int:
     )
 
 
-def plan_covers_template_findings(
-    plan_goal: StructuredGoal, actual: StructuredGoal
-) -> list[str]:
+def plan_covers_template_findings(plan_goal: Goal, actual: Goal) -> list[str]:
     """A concrete template must stay inside the plan the model just described."""
+    if isinstance(plan_goal, KernelGoal) or isinstance(actual, KernelGoal):
+        if not isinstance(plan_goal, KernelGoal) or not isinstance(actual, KernelGoal):
+            return ["template task does not match the selected plan"]
+        return _kernel_plan_findings(plan_goal, actual)
     findings: list[str] = []
     if plan_goal.operation != actual.operation:
         findings.append("template task does not match the selected plan")
@@ -343,16 +482,47 @@ def plan_covers_template_findings(
     return findings
 
 
+def _kernel_plan_findings(plan: KernelGoal, actual: KernelGoal) -> list[str]:
+    findings: list[str] = []
+    if plan.operation != actual.operation:
+        findings.append("template task does not match the selected plan")
+    if plan.answer_type != actual.answer_type:
+        findings.append("template answer type does not match the selected plan")
+    if not plan.min_degree <= actual.min_degree:
+        findings.append("template degree is below the selected plan")
+    if actual.max_degree > plan.max_degree:
+        findings.append("template degree is above the selected plan")
+    if actual.max_abs_coefficient > plan.max_abs_coefficient:
+        findings.append("template coefficient bound exceeds the selected plan")
+    if not plan.max_dimension >= actual.max_dimension:
+        findings.append("template dimension exceeds the selected plan")
+    if plan.requires_general_antiderivative != actual.requires_general_antiderivative:
+        findings.append("template antiderivative form does not match the selected plan")
+    if set(plan.domain_assumptions) != set(actual.domain_assumptions):
+        findings.append("template domain assumptions do not match the selected plan")
+    return findings
+
+
 def scope_from_recipe_operation_set(
     operation_set: str, *, contract_id: str | None = None
-) -> ContractScope:
+) -> Scope:
     """Trusted scope for standalone recipe execution.
 
     Differentiation defaults to the differentiation contract and solve recipes
     default to the equation contract. An inequality recipe must name its
     inequality contract explicitly; a relation outside the selected contract is
     rejected by execution rather than answered with a fabricated verdict.
+    Structured recipes must name their kernel contract explicitly.
     """
+    if operation_set == STRUCTURED_RECIPE_OPERATION_SET:
+        if contract_id is None:
+            raise ValueError("structured recipes must name their trusted contract")
+        contract = get_contract(contract_id)
+        if not isinstance(contract, KernelContractSpec):
+            raise ValueError(
+                "requested check contract is not a trusted kernel contract"
+            )
+        return contract.scope()
     if contract_id is None:
         contract_id = (
             EQUATION_CONTRACT
@@ -360,7 +530,7 @@ def scope_from_recipe_operation_set(
             else DIFFERENTIATE_CONTRACT
         )
     contract = get_contract(contract_id)
-    if contract is None:
+    if contract is None or isinstance(contract, KernelContractSpec):
         raise ValueError("requested check contract is not trusted")
     if contract.operation_set != operation_set:
         raise ValueError("check contract does not match the recipe operation set")
@@ -371,12 +541,17 @@ __all__ = [
     "DIFFERENTIATE_CONTRACT",
     "EQUATION_CONTRACT",
     "INEQUALITY_CONTRACT",
+    "Contract",
     "ContractDescriptor",
+    "Goal",
+    "Scope",
     "applicability_findings",
     "contract_catalogue",
     "contract_for_scope",
     "contract_id_for_scope",
     "get_contract",
+    "is_kernel_contract",
+    "parse_scope",
     "plan_covers_template_findings",
     "scope_applicability_findings",
     "scope_from_recipe_operation_set",

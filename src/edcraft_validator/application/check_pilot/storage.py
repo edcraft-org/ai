@@ -19,6 +19,7 @@ from typing import Any
 
 from edcraft_validator.application.check_pilot.contracts import (
     contract_for_scope,
+    parse_scope,
     scope_applicability_findings,
     template_goal,
 )
@@ -31,10 +32,8 @@ from edcraft_validator.application.check_pilot.models import (
     CHECK_SCHEMA_VERSION,
     CheckRecipeDefinition,
     CheckRecord,
-    ContractScope,
     PilotTemplateDefinition,
     PilotTemplateRecord,
-    PolynomialScope,
 )
 from edcraft_validator.application.check_pilot.operations import (
     RecipeCompileError,
@@ -154,11 +153,7 @@ def _validate_check_record(record: CheckRecord) -> None:
     if contract_for_scope(record.scope) is None:
         raise PilotConflict("stored check is outside the trusted contract catalogue")
     try:
-        scope: PolynomialScope | ContractScope
-        if "contract_id" in record.scope:
-            scope = ContractScope.model_validate(record.scope)
-        else:
-            scope = PolynomialScope.model_validate(record.scope)
+        scope = parse_scope(record.scope)
         definition = CheckRecipeDefinition.model_validate(record.definition)
         compile_recipe(definition, scope=scope)
     except (ValueError, RecipeCompileError) as exc:
@@ -215,7 +210,10 @@ def _validate_template_record(record: PilotTemplateRecord) -> None:
         ):
             raise PilotConflict("a template cannot pin an unqualified check")
     _validate_selection(record)
-    if definition is not None and definition.schema_version == "pilot-template/2":
+    if definition is not None and definition.schema_version in {
+        "pilot-template/2",
+        "pilot-template/3",
+    }:
         contract = contract_for_scope(record.check.scope) if record.check else None
         if contract is None or contract.contract_id != definition.contract_id:
             raise PilotConflict("stored template requires its matching check contract")
@@ -235,7 +233,7 @@ def _validate_template_record(record: PilotTemplateRecord) -> None:
     if (
         record.status == "ready"
         and definition is not None
-        and definition.schema_version == "pilot-template/2"
+        and definition.schema_version in {"pilot-template/2", "pilot-template/3"}
         and record.selection is None
     ):
         raise PilotConflict("a ready structured template requires a selection")

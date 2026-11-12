@@ -15,6 +15,7 @@ from edcraft_validator.application.check_pilot.models import (
     MAX_RECIPE_CASES,
     CheckRecipeDefinition,
     ContractScope,
+    KernelContractScope,
     PilotQualificationSettings,
     PilotTemplateDefinition,
     PolynomialRelation,
@@ -87,7 +88,7 @@ def qualify_recipe(
     *,
     seed: int,
     settings: PilotQualificationSettings | None = None,
-    scope: PolynomialScope | ContractScope | None = None,
+    scope: PolynomialScope | ContractScope | KernelContractScope | None = None,
 ) -> Qualification:
     """Qualify a check recipe against an independent coefficient oracle."""
     selected = settings or PilotQualificationSettings()
@@ -113,7 +114,7 @@ def qualify_template(
     *,
     seed: int,
     settings: PilotQualificationSettings | None = None,
-    scope: PolynomialScope | ContractScope | None = None,
+    scope: PolynomialScope | ContractScope | KernelContractScope | None = None,
 ) -> Qualification:
     """Qualify a reusable family separately from check qualification."""
     selected = settings or PilotQualificationSettings()
@@ -158,15 +159,21 @@ def qualify_structured_template(
     )
 
 
-def _serialize_problem(problem: Polynomial | PolynomialRelation) -> dict[str, Any]:
+def _serialize_problem(
+    problem: Polynomial | PolynomialRelation | dict[str, Any],
+) -> dict[str, Any]:
+    if isinstance(problem, dict):
+        return problem
     if isinstance(problem, PolynomialRelation):
         return {"kind": "relation", "relation": problem.model_dump(mode="json")}
     return {"kind": "polynomial", "text": render_polynomial(problem)}
 
 
 def _serialize_candidate(
-    candidate: Polynomial | RealSolutionSet,
+    candidate: Polynomial | RealSolutionSet | dict[str, Any],
 ) -> dict[str, Any]:
+    if isinstance(candidate, dict):
+        return candidate
     if isinstance(candidate, RealSolutionSet):
         return {
             "kind": "solution_set",
@@ -177,10 +184,10 @@ def _serialize_candidate(
 
 def execute_recipe_isolated(
     definition: CheckRecipeDefinition,
-    problem: Polynomial | PolynomialRelation,
-    candidate: Polynomial | RealSolutionSet,
+    problem: Polynomial | PolynomialRelation | dict[str, Any],
+    candidate: Polynomial | RealSolutionSet | dict[str, Any],
     *,
-    scope: PolynomialScope | ContractScope | None = None,
+    scope: PolynomialScope | ContractScope | KernelContractScope | None = None,
     timeout_seconds: float = 10.0,
 ) -> RecipeExecutionResult:
     """Run the same validated recipe implementation used by the pilot."""
@@ -200,9 +207,14 @@ def execute_recipe_isolated(
 
 def execute_recipe_cases_isolated(
     definition: CheckRecipeDefinition,
-    cases: list[tuple[Polynomial | PolynomialRelation, Polynomial | RealSolutionSet]],
+    cases: list[
+        tuple[
+            Polynomial | PolynomialRelation | dict[str, Any],
+            Polynomial | RealSolutionSet | dict[str, Any],
+        ]
+    ],
     *,
-    scope: PolynomialScope | ContractScope | None = None,
+    scope: PolynomialScope | ContractScope | KernelContractScope | None = None,
     timeout_seconds: float = 10.0,
 ) -> list[RecipeExecutionResult]:
     """Validate one generated batch in a single disposable interpreter."""

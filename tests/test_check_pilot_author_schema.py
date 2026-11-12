@@ -24,13 +24,6 @@ from edcraft_validator.llm.openai_compatible_provider import (
 )
 
 
-def argument_names() -> list[str]:
-    names: set[str] = set()
-    for descriptor in operation_catalogue():
-        names.update(descriptor["inputs"])
-    return sorted(names)
-
-
 def object_shapes(value: object):
     if isinstance(value, dict):
         if value.get("type") == "object" or "properties" in value:
@@ -67,10 +60,6 @@ def argument(source: str, *, name: str | None = None, value: object = None) -> d
     return {"source": source, "name": name, "value": value}
 
 
-def placeholders(**values: dict) -> dict:
-    return {name: values.get(name) for name in argument_names()}
-
-
 def check_payload() -> dict[str, object]:
     return {
         "supported": True,
@@ -85,18 +74,18 @@ def check_payload() -> dict[str, object]:
                     "id": "d1",
                     "operation": "poly.differentiate",
                     "version": "1",
-                    "arguments": placeholders(
-                        polynomial=argument("input", name="problem")
-                    ),
+                    "arguments": {
+                        "polynomial": argument("input", name="problem"),
+                    },
                 },
                 {
                     "id": "out",
                     "operation": "poly.equivalent",
                     "version": "1",
-                    "arguments": placeholders(
-                        expected=argument("step", name="d1"),
-                        actual=argument("input", name="candidate"),
-                    ),
+                    "arguments": {
+                        "expected": argument("step", name="d1"),
+                        "actual": argument("input", name="candidate"),
+                    },
                 },
             ],
             "output": "out",
@@ -151,21 +140,49 @@ def test_author_proposal_schema_is_closed_and_fully_required(model) -> None:
 
     assert_strict_object_shapes(schema)
     if model is CheckAuthorProposal:
-        step = schema["$defs"]["RecipeStep"]
-        arguments = step["properties"]["arguments"]
-        names = argument_names()
-        assert arguments["type"] == "object"
-        assert arguments["additionalProperties"] is False
-        assert set(arguments["properties"]) == set(names)
-        assert arguments["required"] == names
-        for property_schema in arguments["properties"].values():
-            assert {"$ref": "#/$defs/RecipeArgument"} in property_schema["anyOf"]
-            assert {"type": "null"} in property_schema["anyOf"]
+        variants = schema["$defs"]["RecipeStep"]["anyOf"]
+        operations = {
+            descriptor["id"]: descriptor for descriptor in operation_catalogue()
+        }
+        assert {
+            variant["properties"]["operation"]["const"] for variant in variants
+        } == (set(operations))
+        for variant in variants:
+            descriptor = operations[variant["properties"]["operation"]["const"]]
+            arguments = variant["properties"]["arguments"]
+            assert variant["additionalProperties"] is False
+            assert set(variant["required"]) == {
+                "id",
+                "operation",
+                "version",
+                "arguments",
+            }
+            assert arguments["type"] == "object"
+            assert arguments["additionalProperties"] is False
+            assert set(arguments["properties"]) == set(descriptor["inputs"])
+            assert arguments["required"] == sorted(descriptor["inputs"])
+            for property_schema in arguments["properties"].values():
+                assert property_schema == {"$ref": "#/$defs/RecipeArgument"}
         recipe_argument = schema["$defs"]["RecipeArgument"]
-        assert set(recipe_argument["required"]) == {"source", "name", "value"}
+        variants = recipe_argument["anyOf"]
+        assert [variant["properties"]["source"]["const"] for variant in variants] == [
+            "input",
+            "step",
+            "literal",
+        ]
+        for variant in variants[:2]:
+            assert variant["properties"]["value"] == {"type": "null"}
+            assert variant["properties"]["name"]["type"] == "string"
+        literal = variants[2]
+        assert literal["properties"]["name"] == {"type": "null"}
+        assert literal["properties"]["value"]["anyOf"] == [
+            {"type": "integer"},
+            {"type": "boolean"},
+            {"type": "string"},
+        ]
 
 
-def test_closed_payload_with_null_placeholders_compiles_and_qualifies() -> None:
+def test_closed_payload_with_exact_arguments_compiles_and_qualifies() -> None:
     proposal = CheckAuthorProposal.model_validate_json(json.dumps(check_payload()))
 
     assert isinstance(proposal, CheckAuthorProposal)
@@ -219,9 +236,16 @@ def test_provider_sends_closed_author_schema_and_normalizes_placeholders(
     wire_schema = response_format["json_schema"]["schema"]
     assert wire_schema == CheckAuthorProposal.model_json_schema()
     assert_strict_object_shapes(wire_schema)
-    wire_arguments = wire_schema["$defs"]["RecipeStep"]["properties"]["arguments"]
-    assert wire_arguments["additionalProperties"] is False
-    assert set(wire_arguments["required"]) == set(wire_arguments["properties"])
+    wire_steps = wire_schema["$defs"]["RecipeStep"]["anyOf"]
+    assert all(
+        variant["properties"]["arguments"]["additionalProperties"] is False
+        for variant in wire_steps
+    )
+    assert all(
+        set(variant["properties"]["arguments"]["required"])
+        == set(variant["properties"]["arguments"]["properties"])
+        for variant in wire_steps
+    )
 
 
 def test_template_author_proposal_still_round_trips_through_provider(

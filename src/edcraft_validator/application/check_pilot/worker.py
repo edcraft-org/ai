@@ -19,15 +19,26 @@ from edcraft_validator.application.check_pilot.batch_generation import (
     generate_batch as build_generation_batch,
 )
 from edcraft_validator.application.check_pilot.contracts import (
+    parse_scope,
     scope_from_recipe_operation_set,
     trusted_contract_scope,
 )
+from edcraft_validator.application.check_pilot.kernel_registry import (
+    kernel_boundary_problems,
+    kernel_contract,
+    kernel_expected_answer,
+    kernel_problem_strategy,
+    kernel_wrong_answers,
+)
 from edcraft_validator.application.check_pilot.models import (
     MAX_RECIPE_CASES,
+    STRUCTURED_RECIPE_OPERATION_SET,
     SUPPORTED_SCOPE,
     CheckRecipeDefinition,
     CheckRef,
     ContractScope,
+    KernelContractScope,
+    KernelGoal,
     PilotQualificationSettings,
     PilotTemplateDefinition,
     PolynomialFamily,
@@ -39,6 +50,7 @@ from edcraft_validator.application.check_pilot.models import (
     RealSolutionSet,
     RelationKind,
     SolveFamily,
+    StructuredProblemFamily,
 )
 from edcraft_validator.application.check_pilot.operations import (
     CompiledRecipe,
@@ -70,6 +82,19 @@ from edcraft_validator.application.check_pilot.solution_sets import (
     solution_set_mutations,
     solve_relation_independently,
 )
+from edcraft_validator.application.check_pilot.structured import (
+    StructuredFamilyError,
+    boundary_assignments,
+    family_assignment_count,
+    problem_goal_findings,
+    problem_scope_findings,
+)
+from edcraft_validator.application.check_pilot.structured import (
+    build_instance as build_structured_instance,
+)
+from edcraft_validator.application.check_pilot.structured import (
+    guard_instance as guard_structured_instance,
+)
 from edcraft_validator.application.check_pilot.versions import static_versions
 
 
@@ -88,7 +113,7 @@ class _RunState:
     config: PilotQualificationSettings
     started: float = field(default_factory=time.perf_counter)
     execution_calls: int = 0
-    accepted: set[tuple[object, ...]] = field(default_factory=set)
+    accepted: set[tuple[object, ...] | str] = field(default_factory=set)
 
     @property
     def deadline(self) -> float:
@@ -145,7 +170,7 @@ def _compile_failure(
     definition: Any,
     config: PilotQualificationSettings,
     seed_value: int,
-    scope: PolynomialScope | ContractScope | None = None,
+    scope: PolynomialScope | ContractScope | KernelContractScope | None = None,
 ) -> Qualification | None:
     try:
         compile_recipe(
@@ -342,12 +367,15 @@ def _run_recipe_property(
 
 def _scope_from_payload(
     payload: dict[str, Any], definition: CheckRecipeDefinition
-) -> PolynomialScope | ContractScope:
+) -> PolynomialScope | ContractScope | KernelContractScope:
     raw = payload.get("scope")
     if isinstance(raw, dict):
-        if "contract_id" in raw:
-            return trusted_contract_scope(ContractScope.model_validate(raw))
-        return PolynomialScope.model_validate(raw)
+        parsed = parse_scope(raw)
+        if isinstance(parsed, (ContractScope, KernelContractScope)):
+            return trusted_contract_scope(parsed)
+        return parsed
+    if definition.operation_set == STRUCTURED_RECIPE_OPERATION_SET:
+        raise ValueError("structured recipes must provide their trusted kernel scope")
     return scope_from_recipe_operation_set(definition.operation_set)
 
 
@@ -503,6 +531,106 @@ def _run_solve_recipe_property(
     )
 
 
+def _run_structured_recipe_property(
+    *,
+    compiled: CompiledRecipe,
+    scope: KernelContractScope,
+    state: _RunState,
+    seed_value: int,
+    max_examples: int,
+    salt: int,
+    expose_counterexample: bool,
+    include_boundaries: bool,
+) -> tuple[dict[str, Any] | None, Qualification | None]:
+    contract_id = scope.contract_id
+
+    def check_case(problem: dict[str, Any]) -> None:
+        state.reserve()
+        key = json.dumps(problem, sort_keys=True)
+        if key in state.accepted:
+            return
+        try:
+            validated = kernel_contract(contract_id)
+            if validated is None:
+                raise _CaseFailure(
+                    {"reason": "the kernel contract is not trusted", "problem": problem}
+                )
+            findings = problem_scope_findings(scope, problem)
+            if findings:
+                raise _CaseFailure({"reason": findings[0], "problem": problem})
+            expected = kernel_expected_answer(contract_id, problem)
+        except _CaseFailure:
+            raise
+        except (ValueError, TypeError) as exc:
+            raise _CaseFailure(
+                {
+                    "reason": f"kernel rejected the sampled problem: {str(exc)[:200]}",
+                    "problem": problem,
+                }
+            ) from None
+        state.reserve()
+        result = execute_recipe(compiled, problem, expected)
+        if not result.verdict:
+            raise _CaseFailure(
+                {
+                    "reason": "correct answer rejected",
+                    "problem": result.problem,
+                    "expected": result.expected,
+                    "candidate": result.candidate,
+                }
+            )
+        try:
+            wrongs = kernel_wrong_answers(contract_id, problem, expected)
+        except (ValueError, TypeError) as exc:
+            raise _CaseFailure(
+                {
+                    "reason": f"kernel could not build wrong answers: {str(exc)[:200]}",
+                    "problem": result.problem,
+                }
+            ) from None
+        distinct: list[dict[str, Any]] = []
+        seen = {json.dumps(expected, sort_keys=True)}
+        for wrong in wrongs:
+            marker = json.dumps(wrong, sort_keys=True)
+            if marker in seen:
+                continue
+            seen.add(marker)
+            distinct.append(wrong)
+        if len(distinct) < 2:
+            raise _CaseFailure(
+                {
+                    "reason": "could not build distinct wrong answers",
+                    "problem": result.problem,
+                }
+            )
+        offset = salt % len(distinct)
+        distinct = distinct[offset:] + distinct[:offset]
+        for wrong in distinct:
+            state.reserve()
+            result = execute_recipe(compiled, problem, wrong)
+            if result.verdict:
+                raise _CaseFailure(
+                    {
+                        "reason": "wrong answer accepted",
+                        "problem": result.problem,
+                        "expected": result.expected,
+                        "candidate": result.candidate,
+                    }
+                )
+        state.accepted.add(key)
+
+    return _run_property(
+        state=state,
+        seed_value=seed_value,
+        max_examples=max_examples,
+        expose_counterexample=expose_counterexample,
+        include_boundaries=include_boundaries,
+        strategy=kernel_problem_strategy(contract_id),
+        boundary_cases=lambda: kernel_boundary_problems(contract_id),
+        check_case=check_case,
+    )
+
+
 def qualify_recipe_payload(payload: dict[str, Any]) -> Qualification:
     config = PilotQualificationSettings.model_validate(payload.get("settings", {}))
     seed_value = int(payload.get("seed", 0))
@@ -515,8 +643,21 @@ def qualify_recipe_payload(payload: dict[str, Any]) -> Qualification:
         return failure
     compiled = compile_recipe(definition, scope=scope)
     state = _RunState(config)
+    structured_property = isinstance(scope, KernelContractScope)
     solve_property = isinstance(scope, ContractScope) and scope.operation == "solve"
-    if solve_property:
+    if structured_property:
+        assert isinstance(scope, KernelContractScope)
+        _, outcome = _run_structured_recipe_property(
+            compiled=compiled,
+            scope=scope,
+            state=state,
+            seed_value=seed_value,
+            max_examples=config.max_examples,
+            salt=0,
+            expose_counterexample=True,
+            include_boundaries=True,
+        )
+    elif solve_property:
         assert isinstance(scope, ContractScope)
         _, outcome = _run_solve_recipe_property(
             compiled=compiled,
@@ -540,7 +681,19 @@ def qualify_recipe_payload(payload: dict[str, Any]) -> Qualification:
         )
     if outcome is not None:
         return outcome
-    if solve_property:
+    if structured_property:
+        assert isinstance(scope, KernelContractScope)
+        _, held_out = _run_structured_recipe_property(
+            compiled=compiled,
+            scope=scope,
+            state=state,
+            seed_value=seed_value + 7919,
+            max_examples=max(4, config.max_examples // 2),
+            salt=104_729,
+            expose_counterexample=False,
+            include_boundaries=False,
+        )
+    elif solve_property:
         assert isinstance(scope, ContractScope)
         _, held_out = _run_solve_recipe_property(
             compiled=compiled,
@@ -726,6 +879,145 @@ def _solve_template_qualification(
     )
 
 
+def _structured_family_strategy(
+    family: StructuredProblemFamily,
+) -> st.SearchStrategy[dict[str, int]]:
+    return st.fixed_dictionaries(
+        {binding.path: st.sampled_from(binding.values) for binding in family.bindings}
+    )
+
+
+def _structured_template_qualification(
+    *,
+    compiled: CompiledRecipe,
+    family: StructuredProblemFamily,
+    scope: KernelContractScope,
+    goal: KernelGoal,
+    config: PilotQualificationSettings,
+    seed_value: int,
+) -> Qualification:
+    state = _RunState(config)
+
+    def check_case(assignment: dict[str, int]) -> None:
+        state.reserve()
+        key = json.dumps(assignment, sort_keys=True)
+        if key in state.accepted:
+            return
+        try:
+            instance = build_structured_instance(
+                family, assignment, seed=seed_value, scope=scope
+            )
+        except (StructuredFamilyError, ValueError) as exc:
+            raise _CaseFailure(
+                {
+                    "reason": f"structured renderer rejected the assignment: {exc}",
+                    "assignment": assignment,
+                }
+            ) from None
+        guard_findings = guard_structured_instance(
+            instance,
+            contract_id=family.contract_id,
+            num_distractors=family.num_distractors,
+            scope=scope,
+        )
+        if guard_findings:
+            raise _CaseFailure(
+                {
+                    "reason": guard_findings[0],
+                    "assignment": assignment,
+                    "expected": instance.answer,
+                    "choices": list(instance.choices),
+                }
+            )
+        goal_findings = problem_goal_findings(
+            family.contract_id, goal, instance.problem
+        )
+        if goal_findings:
+            raise _CaseFailure(
+                {
+                    "reason": goal_findings[0],
+                    "assignment": assignment,
+                    "expected": instance.answer,
+                    "choices": list(instance.choices),
+                }
+            )
+        state.reserve()
+        result = execute_recipe(compiled, instance.problem, instance.expected)
+        if not result.verdict:
+            raise _CaseFailure(
+                {
+                    "reason": "pinned recipe rejected the correct answer",
+                    "assignment": assignment,
+                    "expected": result.expected,
+                    "candidate": instance.answer,
+                }
+            )
+        for distractor in instance.distractors:
+            state.reserve()
+            result = execute_recipe(compiled, instance.problem, distractor)
+            if result.verdict:
+                raise _CaseFailure(
+                    {
+                        "reason": "pinned recipe accepted a distractor",
+                        "assignment": assignment,
+                        "expected": result.expected,
+                        "candidate": result.candidate,
+                    }
+                )
+        state.accepted.add(key)
+
+    @seed(seed_value)
+    @settings(
+        max_examples=config.max_examples,
+        deadline=None,
+        database=None,
+        report_multiple_bugs=False,
+        phases=(Phase.explicit, Phase.generate, Phase.shrink),
+        suppress_health_check=[HealthCheck.too_slow],
+    )
+    @given(assignment=_structured_family_strategy(family))
+    def wrapped(assignment: dict[str, int]) -> None:
+        check_case(assignment)
+
+    for assignment in reversed(boundary_assignments(family)):
+        wrapped = example(assignment=assignment)(wrapped)
+    try:
+        wrapped()
+    except _BudgetExceeded:
+        return _qualification(
+            status="inconclusive",
+            config=config,
+            seed_value=seed_value,
+            state=state,
+            findings=["template qualification budget was exhausted before a verdict"],
+        )
+    except _CaseFailure as exc:
+        return _qualification(
+            status="failed",
+            config=config,
+            seed_value=seed_value,
+            state=state,
+            findings=[f"counterexample: {exc.counterexample.get('reason', 'failed')}"],
+            counterexample=exc.counterexample,
+        )
+    minimum = min(2, max(1, family_assignment_count(family)))
+    if len(state.accepted) < minimum:
+        return _qualification(
+            status="inconclusive",
+            config=config,
+            seed_value=seed_value,
+            state=state,
+            findings=["not enough sampled family assignments were accepted"],
+        )
+    return _qualification(
+        status="passed",
+        config=config,
+        seed_value=seed_value,
+        state=state,
+        findings=["No counterexample found in sampled cases"],
+    )
+
+
 def qualify_template_payload(payload: dict[str, Any]) -> Qualification:
     config = PilotQualificationSettings.model_validate(payload.get("settings", {}))
     seed_value = int(payload.get("seed", 0))
@@ -735,12 +1027,30 @@ def qualify_template_payload(payload: dict[str, Any]) -> Qualification:
     template_data = payload.get("template")
     if isinstance(template_data, dict):
         template = PilotTemplateDefinition.model_validate(template_data)
-        scope: PolynomialScope | ContractScope = template.scope
+        scope: PolynomialScope | ContractScope | KernelContractScope = template.scope
         failure = _compile_failure(definition, config, seed_value, scope)
         if failure is not None:
             return failure
         compiled = compile_recipe(definition, scope=scope)
+        if template.structured_family is not None:
+            assert isinstance(scope, KernelContractScope)
+            if template.goal is None:
+                return _qualification(
+                    status="error",
+                    config=config,
+                    seed_value=seed_value,
+                    findings=["version 3 templates require a validated goal"],
+                )
+            return _structured_template_qualification(
+                compiled=compiled,
+                family=template.structured_family,
+                scope=scope,
+                goal=template.goal,
+                config=config,
+                seed_value=seed_value,
+            )
         if template.solve_family is not None:
+            assert isinstance(scope, ContractScope)
             return _solve_template_qualification(
                 compiled=compiled,
                 family=template.solve_family,
@@ -891,12 +1201,27 @@ def _deserialize_candidate(value: Any) -> Polynomial | RealSolutionSet:
     raise ValueError("recipe candidate must be a polynomial or solution-set payload")
 
 
+def _execution_inputs(
+    definition: CheckRecipeDefinition, payload: dict[str, Any]
+) -> tuple[object, object]:
+    if definition.operation_set == STRUCTURED_RECIPE_OPERATION_SET:
+        problem = payload.get("problem")
+        candidate = payload.get("candidate")
+        if not isinstance(problem, dict) or not isinstance(candidate, dict):
+            raise ValueError(
+                "structured recipe problems and candidates must be objects"
+            )
+        return problem, candidate
+    return _deserialize_problem(payload["problem"]), _deserialize_candidate(
+        payload["candidate"]
+    )
+
+
 def execute_recipe_payload(payload: dict[str, Any]) -> dict[str, Any]:
     definition = CheckRecipeDefinition.model_validate(payload["definition"])
     scope = _scope_from_payload(payload, definition)
     compiled = compile_recipe(definition, scope=scope)
-    problem = _deserialize_problem(payload["problem"])
-    candidate = _deserialize_candidate(payload["candidate"])
+    problem, candidate = _execution_inputs(definition, payload)
     result = execute_recipe(compiled, problem, candidate)
     return {"result": result.model_dump(mode="json")}
 
@@ -912,8 +1237,7 @@ def execute_recipe_cases_payload(payload: dict[str, Any]) -> dict[str, Any]:
     for case in cases:
         if not isinstance(case, dict):
             raise ValueError("each recipe case must be an object")
-        problem = _deserialize_problem(case["problem"])
-        candidate = _deserialize_candidate(case["candidate"])
+        problem, candidate = _execution_inputs(definition, case)
         results.append(
             execute_recipe(compiled, problem, candidate).model_dump(mode="json")
         )

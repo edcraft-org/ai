@@ -85,7 +85,11 @@ def _solution_set(value: str | dict[str, Any]) -> RealSolutionSet:
 
 def _problem_value(
     definition: CheckRecipeDefinition, value: str | dict[str, Any]
-) -> Polynomial | PolynomialRelation:
+) -> Polynomial | PolynomialRelation | dict[str, Any]:
+    if definition.operation_set == "structured-check/1":
+        if not isinstance(value, dict):
+            raise ValueError("structured kernel problems require an object")
+        return value
     if definition.operation_set == "polynomial-solve-real/1":
         return _relation(value)
     return _polynomial(value)
@@ -93,7 +97,11 @@ def _problem_value(
 
 def _candidate_value(
     definition: CheckRecipeDefinition, value: str | dict[str, Any]
-) -> Polynomial | RealSolutionSet:
+) -> Polynomial | RealSolutionSet | dict[str, Any]:
+    if definition.operation_set == "structured-check/1":
+        if not isinstance(value, dict):
+            raise ValueError("structured kernel candidates require an object")
+        return value
     if definition.operation_set == "polynomial-solve-real/1":
         return _solution_set(value)
     return _polynomial(value)
@@ -135,8 +143,10 @@ def register_check_pilot_tools(server: FastMCP) -> None:
             "Run one trusted closed check recipe. Differentiation recipes accept "
             "bounded polynomial text for both values. Solve recipes accept one "
             "structured polynomial relation and one structured complete real "
-            "solution set. The default solve contract covers equations only; "
-            "inequality execution must name the trusted inequality contract. "
+            "solution set. Structured kernel recipes accept one closed problem "
+            "object and one closed candidate-answer object and must name their "
+            "trusted kernel contract. The default solve contract covers equations "
+            "only; inequality execution must name the trusted inequality contract. "
             "Compilation validates operation ids, versions, argument/output types "
             "and step references; the recipe then runs in a disposable interpreter "
             "with a hard wall-clock limit. No model-authored code is executed and "
@@ -147,18 +157,29 @@ def register_check_pilot_tools(server: FastMCP) -> None:
         definition: CheckRecipeDefinition,
         problem: Annotated[
             str | dict[str, Any],
-            Field(description="Polynomial text or structured solve relation data."),
+            Field(
+                description=(
+                    "Polynomial text, structured solve relation data, or one "
+                    "closed kernel problem object."
+                )
+            ),
         ],
         candidate: Annotated[
             str | dict[str, Any],
-            Field(description="Polynomial text or structured solution-set data."),
+            Field(
+                description=(
+                    "Polynomial text, structured solution-set data, or one "
+                    "closed kernel candidate-answer object."
+                )
+            ),
         ],
         contract_id: Annotated[
             str | None,
             Field(
                 description=(
-                    "Optional trusted contract id. Defaults to differentiation "
-                    "or the equation contract for solve recipes."
+                    "Optional trusted contract id. Required for structured kernel "
+                    "recipes. Defaults to differentiation or the equation contract "
+                    "for legacy recipes."
                 )
             ),
         ] = None,

@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from edcraft_validator.application.check_pilot.contracts import (
-    ContractDescriptor,
+    Contract,
+    Goal,
     applicability_findings,
     contract_id_for_scope,
     get_contract,
@@ -23,7 +24,6 @@ from edcraft_validator.application.check_pilot.models import (
     CheckPlanProposal,
     CheckRecord,
     CheckRef,
-    StructuredGoal,
 )
 from edcraft_validator.application.check_pilot.storage import PilotStore
 
@@ -33,8 +33,8 @@ SelectionSource = Literal["saved", "authored"]
 
 @dataclass(frozen=True, slots=True)
 class PlanResolution:
-    contract: ContractDescriptor | None
-    goal: StructuredGoal | None
+    contract: Contract | None
+    goal: Goal | None
     check: CheckRecord | None
     findings: list[str]
 
@@ -70,7 +70,7 @@ def find_applicable_check(
     store: PilotStore,
     owner_id: str,
     *,
-    goal: StructuredGoal,
+    goal: Goal,
     contract_id: str,
 ) -> CheckRecord | None:
     """Newest qualified check whose concrete scope covers the goal."""
@@ -90,8 +90,8 @@ def _resolve_reference(
     owner_id: str,
     reference: CheckRef,
     *,
-    contract: ContractDescriptor,
-    goal: StructuredGoal,
+    contract: Contract,
+    goal: Goal,
 ) -> tuple[CheckRecord | None, list[str]]:
     try:
         record = store.get_check(owner_id, reference.check_id)

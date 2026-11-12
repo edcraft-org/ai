@@ -13,13 +13,23 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from edcraft_validator.application.check_pilot.kernel_registry import (
+    kernel_check_answer,
+    kernel_contract,
+    kernel_expected_answer,
+    kernel_render_answer,
+    kernel_render_problem,
+    kernel_validate_problem,
+)
 from edcraft_validator.application.check_pilot.models import (
     RECIPE_OPERATION_SET,
     SOLVE_RECIPE_OPERATION_SET,
+    STRUCTURED_RECIPE_OPERATION_SET,
     SUPPORTED_SCOPE,
     CheckRecipeDefinition,
     ContractScope,
     GoalRelation,
+    KernelContractScope,
     PolynomialRelation,
     PolynomialScope,
     RealSolutionSet,
@@ -42,6 +52,10 @@ from edcraft_validator.application.check_pilot.solution_sets import (
     solution_set_from_model,
     solve_relation_via_sympy,
 )
+from edcraft_validator.application.check_pilot.structured import (
+    extent_scope_findings,
+    problem_extent,
+)
 
 ValueType = Literal[
     "polynomial",
@@ -51,6 +65,9 @@ ValueType = Literal[
     "boolean",
     "relation",
     "real_solution_set",
+    "structured_problem",
+    "structured_answer",
+    "structured_candidate",
 ]
 OperationExecutor = Callable[[dict[str, object]], object]
 LEGACY_INPUT_TYPES: dict[str, ValueType] = {
@@ -60,6 +77,10 @@ LEGACY_INPUT_TYPES: dict[str, ValueType] = {
 SOLVE_INPUT_TYPES: dict[str, ValueType] = {
     "problem": "relation",
     "candidate": "real_solution_set",
+}
+STRUCTURED_INPUT_TYPES: dict[str, ValueType] = {
+    "problem": "structured_problem",
+    "candidate": "structured_candidate",
 }
 
 
@@ -123,6 +144,28 @@ def _execute_set_equal(resolved: dict[str, object]) -> object:
     if not isinstance(expected, SolutionSet) or not isinstance(actual, SolutionSet):
         raise RecipeCompileError(["set.equal requires solution-set values"])
     return sets_equal(expected, actual)
+
+
+def _structured_contract(resolved: dict[str, object]) -> str:
+    contract_id = resolved.get("_contract_id")
+    if not isinstance(contract_id, str):
+        raise RecipeCompileError(["structured operation has no kernel contract"])
+    return contract_id
+
+
+def _execute_structured_expected(resolved: dict[str, object]) -> object:
+    problem = resolved["problem"]
+    if not isinstance(problem, dict):
+        raise RecipeCompileError(["structured.expected requires an object problem"])
+    return kernel_expected_answer(_structured_contract(resolved), problem)
+
+
+def _execute_structured_accepts(resolved: dict[str, object]) -> object:
+    problem = resolved["problem"]
+    candidate = resolved["candidate"]
+    if not isinstance(problem, dict) or not isinstance(candidate, dict):
+        return False
+    return kernel_check_answer(_structured_contract(resolved), problem, candidate)
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,6 +286,36 @@ _OPERATIONS = (
         weak_reason=None,
         execute=_execute_set_equal,
     ),
+    OperationDescriptor(
+        id="structured.expected",
+        version="1",
+        operation_set=STRUCTURED_RECIPE_OPERATION_SET,
+        inputs=(("problem", "structured_problem"),),
+        output="structured_answer",
+        summary=(
+            "Derive the expected answer for one trusted kernel problem with the "
+            "contract's independent oracle."
+        ),
+        weak_reason=None,
+        execute=_execute_structured_expected,
+    ),
+    OperationDescriptor(
+        id="structured.accepts",
+        version="1",
+        operation_set=STRUCTURED_RECIPE_OPERATION_SET,
+        inputs=(
+            ("expected", "structured_answer"),
+            ("problem", "structured_problem"),
+            ("candidate", "structured_candidate"),
+        ),
+        output="verdict",
+        summary=(
+            "Check a candidate answer directly against the trusted kernel checker, "
+            "independently of the oracle step."
+        ),
+        weak_reason=None,
+        execute=_execute_structured_accepts,
+    ),
 )
 _OPERATION_INDEX = {(item.id, item.version): item for item in _OPERATIONS}
 MAX_RECIPE_STEPS = 8
@@ -266,6 +339,10 @@ class CompiledRecipe:
     relations: tuple[GoalRelation, ...]
     max_degree: int
     max_abs_coefficient: int
+    contract_id: str | None = None
+    min_degree: int = 0
+    min_dimension: int = 0
+    max_dimension: int = 0
 
 
 def operation_catalogue(operation_set: str | None = None) -> list[dict[str, Any]]:
@@ -343,7 +420,11 @@ def _check_literal(argument: RecipeArgument, expected: ValueType, step_id: str) 
         )
 
 
-def _scope_operation_set(scope: PolynomialScope | ContractScope) -> str:
+def _scope_operation_set(
+    scope: PolynomialScope | ContractScope | KernelContractScope,
+) -> str:
+    if isinstance(scope, KernelContractScope):
+        return STRUCTURED_RECIPE_OPERATION_SET
     if isinstance(scope, ContractScope):
         if scope.operation == "solve":
             return SOLVE_RECIPE_OPERATION_SET
@@ -354,9 +435,9 @@ def _scope_operation_set(scope: PolynomialScope | ContractScope) -> str:
 def compile_recipe(
     definition: CheckRecipeDefinition,
     *,
-    scope: PolynomialScope | ContractScope = SUPPORTED_SCOPE,
+    scope: PolynomialScope | ContractScope | KernelContractScope = SUPPORTED_SCOPE,
 ) -> CompiledRecipe:
-    if scope.variable != "x":
+    if isinstance(scope, PolynomialScope) and scope.variable != "x":
         raise RecipeCompileError(["the pilot supports variable x only"])
     operation_set = _scope_operation_set(scope)
     if definition.operation_set != operation_set:
@@ -369,11 +450,12 @@ def compile_recipe(
     if len(all_step_ids) != len(definition.steps):
         raise RecipeCompileError(["recipe step ids must be unique (duplicate id)"])
 
-    input_types = (
-        SOLVE_INPUT_TYPES
-        if operation_set == SOLVE_RECIPE_OPERATION_SET
-        else LEGACY_INPUT_TYPES
-    )
+    if operation_set == SOLVE_RECIPE_OPERATION_SET:
+        input_types = SOLVE_INPUT_TYPES
+    elif operation_set == STRUCTURED_RECIPE_OPERATION_SET:
+        input_types = STRUCTURED_INPUT_TYPES
+    else:
+        input_types = LEGACY_INPUT_TYPES
     step_types: dict[str, ValueType] = {}
     step_operations: dict[str, str] = {}
     weak: list[str] = []
@@ -440,46 +522,73 @@ def compile_recipe(
         step for step in definition.steps if step.id == definition.output
     )
     expected_argument = output_step.arguments["expected"]
-    actual_argument = output_step.arguments["actual"]
-    if operation_set == SOLVE_RECIPE_OPERATION_SET:
-        if output_step.operation != "set.equal":
+    if operation_set == STRUCTURED_RECIPE_OPERATION_SET:
+        problem_argument = output_step.arguments["problem"]
+        candidate_argument = output_step.arguments["candidate"]
+        if output_step.operation != "structured.accepts":
             raise RecipeCompileError(
                 [
-                    "recipe output must compare a complete real solution set "
-                    "with the candidate set"
+                    "recipe output must check the candidate with the trusted "
+                    "contract kernel"
                 ]
             )
         if expected_argument.source != "step" or not expected_argument.name:
             raise RecipeCompileError(
-                ["expected must reference a prior complete solution-set step"]
+                ["expected must reference a prior kernel oracle step"]
             )
-        if step_operations.get(expected_argument.name) != "relation.solve_real":
+        if step_operations.get(expected_argument.name) != "structured.expected":
             raise RecipeCompileError(
-                [
-                    "expected must be the output of relation.solve_real; root "
-                    "substitution or a partial check is not sufficient"
-                ]
+                ["expected must be the output of structured.expected"]
             )
-        if actual_argument.source != "input" or actual_argument.name != "candidate":
-            raise RecipeCompileError(["actual must reference the candidate input"])
+        if problem_argument.source != "input" or problem_argument.name != "problem":
+            raise RecipeCompileError(["the kernel problem must be the problem input"])
+        if (
+            candidate_argument.source != "input"
+            or candidate_argument.name != "candidate"
+        ):
+            raise RecipeCompileError(["candidate must reference the candidate input"])
     else:
-        if output_step.operation != "poly.equivalent":
-            raise RecipeCompileError(
-                ["recipe output must compare a differentiate result with the candidate"]
-            )
-        if expected_argument.source != "step" or not expected_argument.name:
-            raise RecipeCompileError(
-                ["expected must reference a prior differentiate result"]
-            )
-        if step_operations.get(expected_argument.name) != "poly.differentiate":
-            raise RecipeCompileError(
-                ["expected must be the output of a differentiate step"]
-            )
-        if actual_argument.source != "input" or actual_argument.name != "candidate":
-            raise RecipeCompileError(["actual must reference the candidate input"])
+        actual_argument = output_step.arguments["actual"]
+        if operation_set == SOLVE_RECIPE_OPERATION_SET:
+            if output_step.operation != "set.equal":
+                raise RecipeCompileError(
+                    [
+                        "recipe output must compare a complete real solution set "
+                        "with the candidate set"
+                    ]
+                )
+            if expected_argument.source != "step" or not expected_argument.name:
+                raise RecipeCompileError(
+                    ["expected must reference a prior complete solution-set step"]
+                )
+            if step_operations.get(expected_argument.name) != "relation.solve_real":
+                raise RecipeCompileError(
+                    [
+                        "expected must be the output of relation.solve_real; root "
+                        "substitution or a partial check is not sufficient"
+                    ]
+                )
+            if actual_argument.source != "input" or actual_argument.name != "candidate":
+                raise RecipeCompileError(["actual must reference the candidate input"])
+        else:
+            if output_step.operation != "poly.equivalent":
+                raise RecipeCompileError(
+                    [
+                        "recipe output must compare a differentiate result with "
+                        "the candidate"
+                    ]
+                )
+            if expected_argument.source != "step" or not expected_argument.name:
+                raise RecipeCompileError(
+                    ["expected must reference a prior differentiate result"]
+                )
+            if step_operations.get(expected_argument.name) != "poly.differentiate":
+                raise RecipeCompileError(
+                    ["expected must be the output of a differentiate step"]
+                )
+            if actual_argument.source != "input" or actual_argument.name != "candidate":
+                raise RecipeCompileError(["actual must reference the candidate input"])
 
-    max_degree = scope.max_degree
-    max_abs = scope.max_abs_coefficient
     relations: tuple[GoalRelation, ...]
     if isinstance(scope, ContractScope):
         relations = tuple(scope.relations)
@@ -491,8 +600,22 @@ def compile_recipe(
         sha256=recipe_sha256(definition),
         operation_set=operation_set,
         relations=relations,
-        max_degree=max_degree,
-        max_abs_coefficient=max_abs,
+        max_degree=scope.max_degree,
+        max_abs_coefficient=scope.max_abs_coefficient,
+        contract_id=(
+            scope.contract_id if isinstance(scope, KernelContractScope) else None
+        ),
+        min_degree=(
+            scope.min_degree
+            if isinstance(scope, (ContractScope, KernelContractScope))
+            else 0
+        ),
+        min_dimension=(
+            scope.min_dimension if isinstance(scope, KernelContractScope) else 0
+        ),
+        max_dimension=(
+            scope.max_dimension if isinstance(scope, KernelContractScope) else 0
+        ),
     )
 
 
@@ -510,11 +633,13 @@ def _resolve(
     return argument.value
 
 
-def _render_expected(value: object) -> str:
+def _render_expected(value: object, contract_id: str | None = None) -> str:
     if isinstance(value, Polynomial):
         return render_polynomial(value)
     if isinstance(value, SolutionSet):
         return render_solution_set(value)
+    if isinstance(value, dict) and contract_id is not None:
+        return kernel_render_answer(contract_id, value)
     raise RecipeCompileError(["recipe expected value has no renderer"])
 
 
@@ -538,6 +663,8 @@ def execute_recipe(
             )
             for name in descriptor.input_types()
         }
+        if compiled.contract_id is not None:
+            resolved["_contract_id"] = compiled.contract_id
         values[step.id] = descriptor.execute(resolved)
     verdict = values[compiled.definition.output]
     if type(verdict) is not bool:
@@ -545,7 +672,7 @@ def execute_recipe(
     expected_value = values[compiled.expected_step_id]
     return RecipeExecutionResult(
         verdict=verdict,
-        expected=_render_expected(expected_value),
+        expected=_render_expected(expected_value, compiled.contract_id),
         problem=problem_text,
         candidate=candidate_text,
         recipe_sha256=compiled.sha256,
@@ -566,6 +693,45 @@ def _validated_execution_inputs(
     problem: object,
     candidate: object,
 ) -> tuple[object, object, str, str]:
+    if compiled.operation_set == STRUCTURED_RECIPE_OPERATION_SET:
+        contract_id = compiled.contract_id
+        if contract_id is None:
+            raise RecipeCompileError(["structured recipe has no kernel contract"])
+        if not isinstance(problem, dict):
+            raise RecipeCompileError(["structured recipes require an object problem"])
+        if not isinstance(candidate, dict):
+            raise RecipeCompileError(["structured recipes require an object candidate"])
+        try:
+            kernel_validate_problem(contract_id, problem)
+            spec = kernel_contract(contract_id)
+            if spec is None:
+                raise RecipeCompileError(["unknown kernel contract"])
+            extent = problem_extent(spec, problem)
+        except ValueError as exc:
+            raise RecipeCompileError([str(exc)[:300]]) from None
+        findings = extent_scope_findings(
+            extent,
+            min_degree=compiled.min_degree,
+            max_degree=compiled.max_degree,
+            max_abs_coefficient=compiled.max_abs_coefficient,
+            min_dimension=compiled.min_dimension,
+            max_dimension=compiled.max_dimension,
+        )
+        if findings:
+            raise RecipeCompileError(findings)
+        candidate_text: str
+        try:
+            candidate_text = kernel_render_answer(contract_id, candidate)
+        except (ValueError, TypeError):
+            candidate_text = json.dumps(
+                candidate, sort_keys=True, separators=(",", ":")
+            )
+        return (
+            problem,
+            candidate,
+            kernel_render_problem(contract_id, problem),
+            candidate_text,
+        )
     if compiled.operation_set == SOLVE_RECIPE_OPERATION_SET:
         if not isinstance(problem, PolynomialRelation):
             raise RecipeCompileError(["solve recipes require relation data"])

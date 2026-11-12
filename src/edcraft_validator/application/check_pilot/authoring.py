@@ -17,30 +17,37 @@ from edcraft_validator.application.check_pilot.catalogue import (
     resolve_plan,
 )
 from edcraft_validator.application.check_pilot.contracts import (
-    ContractDescriptor,
+    Contract,
+    Goal,
     plan_covers_template_findings,
     scope_applicability_findings,
     template_goal,
 )
 from edcraft_validator.application.check_pilot.errors import PilotError
+from edcraft_validator.application.check_pilot.kernel_registry import (
+    KernelContractSpec,
+)
 from edcraft_validator.application.check_pilot.models import (
     CHECK_SCHEMA_VERSION,
     RENDERER_VERSION,
     SOLVE_RENDERER_VERSION,
+    STRUCTURED_RENDERER_VERSION,
     TEMPLATE_SCHEMA_VERSION_V2,
+    TEMPLATE_SCHEMA_VERSION_V3,
     CheckAuthorProposal,
     CheckPlanProposal,
     CheckRecipeDefinition,
     CheckRecord,
     CheckRef,
     CheckSelection,
+    KernelGoal,
     PilotQualificationSettings,
     PilotTemplateDefinition,
     PilotTemplateRecord,
     PolynomialFamily,
     Qualification,
     SolveFamily,
-    StructuredGoal,
+    StructuredProblemFamily,
     TemplateAuthorProposal,
     TemplateStatus,
 )
@@ -68,12 +75,17 @@ from edcraft_validator.application.check_pilot.storage import (
     template_definition_sha256,
 )
 from edcraft_validator.llm.llm_contracts import ModelProvider
+from edcraft_validator.llm.llm_errors import GenerationSchemaError
 
 MAX_CHECK_REPAIRS = 2
 MAX_PLAN_REPAIRS = 2
 MAX_TEMPLATE_REPAIRS = 2
 _SAFE_PROVIDER_ERROR = (
     "The authoring model could not produce a usable structured response."
+)
+_SAFE_SCHEMA_ERROR = (
+    "The authoring model could not produce a schema-valid structured response "
+    "after bounded repair attempts."
 )
 _SAFE_WORKER_ERROR = "Qualification failed safely; no check was stored."
 _SAFE_STORAGE_ERROR = "The qualified result could not be stored safely."
@@ -99,8 +111,8 @@ class CheckAuthoringOutcome:
 @dataclass(frozen=True, slots=True)
 class PlanOutcome:
     proposal: CheckPlanProposal | None
-    contract: ContractDescriptor | None
-    goal: StructuredGoal | None
+    contract: Contract | None
+    goal: Goal | None
     check: CheckRecord | None
     status: TemplateStatus
     findings: list[str]
@@ -112,6 +124,24 @@ def _now() -> str:
 
 def _request_sha256(prompt: str) -> str:
     return hashlib.sha256(prompt.encode()).hexdigest()
+
+
+def _schema_error_feedback(stage: str) -> dict[str, Any]:
+    """Bounded, application-authored repair hint for one schema rejection.
+
+    Provider error text and raw model output stay out of the next prompt so a
+    failed structured response cannot leak untrusted data or held-out cases.
+    """
+    return {
+        "stage": stage,
+        "findings": ["the previous response did not match the closed schema"],
+        "guidance": (
+            "Return only advertised fields. Declare each recipe step with one "
+            "registered operation and exactly that operation's argument names. "
+            "Input and step arguments use a name and a null value; literal "
+            "arguments use a null name and a non-null value."
+        ),
+    }
 
 
 def _author_provenance(
@@ -203,7 +233,7 @@ def _check_provenance(
     prompt: str,
     repair_attempts: int,
     seed: int,
-    contract: ContractDescriptor,
+    contract: Contract,
 ) -> dict[str, Any]:
     return {
         **_author_provenance("check-author", provider, CHECK_PROMPT_VERSION),
@@ -221,7 +251,7 @@ def _check_provenance(
 def _make_check(
     proposal: CheckAuthorProposal,
     *,
-    contract: ContractDescriptor,
+    contract: Contract,
     provider: ModelProvider,
     prompt: str,
     repair_attempts: int,
@@ -278,6 +308,18 @@ def _plan_with_repairs(
                     feedback=feedback,
                 )
             )
+        except GenerationSchemaError:
+            if attempt >= MAX_PLAN_REPAIRS:
+                return PlanOutcome(
+                    proposal=None,
+                    contract=None,
+                    goal=None,
+                    check=None,
+                    status="error",
+                    findings=[_SAFE_SCHEMA_ERROR],
+                )
+            feedback = _schema_error_feedback("plan")
+            continue
         except Exception:
             return PlanOutcome(
                 proposal=None,
@@ -329,8 +371,8 @@ def author_check(
     prompt: str,
     provider: ModelProvider,
     settings: PilotQualificationSettings,
-    contract: ContractDescriptor,
-    goal: StructuredGoal,
+    contract: Contract,
+    goal: Goal,
 ) -> CheckAuthoringOutcome:
     feedback: dict[str, Any] | None = None
     last_qualification: Qualification | None = None
@@ -345,6 +387,16 @@ def author_check(
                     feedback=feedback,
                 )
             )
+        except GenerationSchemaError:
+            if attempt >= MAX_CHECK_REPAIRS:
+                return CheckAuthoringOutcome(
+                    check=None,
+                    qualification=last_qualification,
+                    status="error",
+                    findings=[_SAFE_SCHEMA_ERROR],
+                )
+            feedback = _schema_error_feedback("check")
+            continue
         except Exception:
             return CheckAuthoringOutcome(
                 check=None,
@@ -465,7 +517,7 @@ def _template_provenance(
     template_digest: str,
     check_sha256: str,
     seed: int,
-    contract: ContractDescriptor,
+    contract: Contract,
     source: Literal["saved", "authored"],
     repair_attempts: int = 0,
 ) -> dict[str, Any]:
@@ -534,13 +586,41 @@ def _validation_findings(exc: ValidationError) -> list[str]:
 def _template_definition_from_proposal(
     proposal: TemplateAuthorProposal,
     *,
-    contract: ContractDescriptor,
-    goal: StructuredGoal,
+    contract: Contract,
+    goal: Goal,
     num_distractors: int,
 ) -> tuple[PilotTemplateDefinition | None, list[str]]:
     if proposal.contract_id != contract.contract_id:
         return None, ["the template proposal must preserve the selected contract id"]
-    if contract.operation == "differentiate":
+    if isinstance(contract, KernelContractSpec):
+        if not isinstance(goal, KernelGoal):
+            return None, ["a kernel contract requires a kernel plan goal"]
+        if (
+            proposal.structured_family is None
+            or proposal.family is not None
+            or proposal.solve_family is not None
+        ):
+            return None, [
+                "a kernel contract requires exactly one structured problem family"
+            ]
+        try:
+            structured_family = StructuredProblemFamily.model_validate(
+                {
+                    **proposal.structured_family.model_dump(mode="json"),
+                    "num_distractors": num_distractors,
+                }
+            )
+        except ValidationError as exc:
+            return None, _validation_findings(exc)
+        definition = PilotTemplateDefinition(
+            schema_version=TEMPLATE_SCHEMA_VERSION_V3,
+            renderer_version=STRUCTURED_RENDERER_VERSION,
+            scope=contract.scope(),
+            contract_id=contract.contract_id,
+            structured_family=structured_family,
+            goal=goal,
+        )
+    elif contract.operation == "differentiate":
         if proposal.family is None or proposal.solve_family is not None:
             return None, [
                 "a differentiation contract requires exactly one polynomial family"
@@ -591,8 +671,8 @@ def _author_template_proposal(
     prompt: str,
     provider: ModelProvider,
     check: CheckRecord,
-    contract: ContractDescriptor,
-    goal: StructuredGoal,
+    contract: Contract,
+    goal: Goal,
     num_distractors: int,
 ) -> tuple[
     PilotTemplateDefinition | None,
@@ -614,6 +694,11 @@ def _author_template_proposal(
                     feedback=feedback,
                 )
             )
+        except GenerationSchemaError:
+            if attempt >= MAX_TEMPLATE_REPAIRS:
+                return None, last_proposal, "error", [_SAFE_SCHEMA_ERROR]
+            feedback = _schema_error_feedback("template")
+            continue
         except Exception:
             return None, last_proposal, "error", [_SAFE_PROVIDER_ERROR]
         if not isinstance(proposal, TemplateAuthorProposal):

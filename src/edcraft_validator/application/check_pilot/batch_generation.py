@@ -3,11 +3,12 @@
 The application process only validates owner storage, approval, hashes and
 contract applicability. Sampling, symbolic rendering/guarding, recipe
 compilation and every recipe verdict run here in one disposable interpreter, so
-no new polynomial/solution-set arithmetic reaches the application host.
+no new polynomial/solution-set/kernel arithmetic reaches the application host.
 """
 
 from __future__ import annotations
 
+import json
 import random
 
 from edcraft_validator.application.check_pilot.models import (
@@ -15,13 +16,16 @@ from edcraft_validator.application.check_pilot.models import (
     MAX_RECIPE_CASES,
     CheckRecipeDefinition,
     CheckRef,
+    ContractScope,
+    KernelContractScope,
+    KernelGoal,
     PilotBatch,
     PilotQuestion,
     PilotTemplateDefinition,
     PolynomialFamily,
-    PolynomialRelation,
-    RealSolutionSet,
+    PolynomialScope,
     SolveFamily,
+    StructuredProblemFamily,
 )
 from edcraft_validator.application.check_pilot.operations import (
     CompiledRecipe,
@@ -30,7 +34,6 @@ from edcraft_validator.application.check_pilot.operations import (
     execute_recipe,
 )
 from edcraft_validator.application.check_pilot.polynomial import (
-    Polynomial,
     parse_polynomial,
 )
 from edcraft_validator.application.check_pilot.question import (
@@ -45,13 +48,30 @@ from edcraft_validator.application.check_pilot.question import (
 from edcraft_validator.application.check_pilot.solution_sets import (
     solution_set_model,
 )
+from edcraft_validator.application.check_pilot.structured import (
+    StructuredFamilyError,
+    StructuredGeneratedInstance,
+    problem_goal_findings,
+    sampled_assignments,
+)
+from edcraft_validator.application.check_pilot.structured import (
+    build_instance as build_structured_instance,
+)
+from edcraft_validator.application.check_pilot.structured import (
+    guard_instance as guard_structured_instance,
+)
+
+Generated = GeneratedInstance | SolveGeneratedInstance | StructuredGeneratedInstance
+Family = PolynomialFamily | SolveFamily | StructuredProblemFamily
 
 
 class BatchGenerationError(RuntimeError):
     """The validated request cannot produce a complete, safe batch."""
 
 
-def _family(definition: PilotTemplateDefinition) -> PolynomialFamily | SolveFamily:
+def _family(definition: PilotTemplateDefinition) -> Family:
+    if definition.structured_family is not None:
+        return definition.structured_family
     if definition.solve_family is not None:
         return definition.solve_family
     if definition.family is None:
@@ -59,15 +79,47 @@ def _family(definition: PilotTemplateDefinition) -> PolynomialFamily | SolveFami
     return definition.family
 
 
-def _sample_instances(
-    family: PolynomialFamily | SolveFamily,
+def _sample_structured_instances(
+    family: StructuredProblemFamily,
     *,
     seed: int,
     quantity: int,
-) -> tuple[list[GeneratedInstance | SolveGeneratedInstance], int]:
+) -> tuple[list[Generated], int]:
+    instances: list[Generated] = []
+    seen: set[str] = set()
+    skipped = 0
+    assignments = sampled_assignments(
+        family, seed=seed, limit=max(quantity * 4, quantity)
+    )
+    for attempt, assignment in enumerate(assignments):
+        if len(instances) >= quantity:
+            break
+        try:
+            instance = build_structured_instance(
+                family, assignment, seed=seed + attempt
+            )
+        except (StructuredFamilyError, ValueError):
+            skipped += 1
+            continue
+        marker = json.dumps(instance.problem, sort_keys=True)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        instances.append(instance)
+    return instances, skipped
+
+
+def _sample_instances(
+    family: Family,
+    *,
+    seed: int,
+    quantity: int,
+) -> tuple[list[Generated], int]:
+    if isinstance(family, StructuredProblemFamily):
+        return _sample_structured_instances(family, seed=seed, quantity=quantity)
     rng = random.Random(seed)
     seen: set[tuple[int, ...]] = set()
-    instances: list[GeneratedInstance | SolveGeneratedInstance] = []
+    instances: list[Generated] = []
     skipped = 0
     max_attempts = max(50, quantity * 20)
     for attempt in range(max_attempts):
@@ -81,8 +133,8 @@ def _sample_instances(
         seen.add(coefficients)
         try:
             if isinstance(family, SolveFamily):
-                instance: GeneratedInstance | SolveGeneratedInstance = (
-                    build_solve_instance(family, coefficients, seed=seed + attempt)
+                instance: Generated = build_solve_instance(
+                    family, coefficients, seed=seed + attempt
                 )
             else:
                 instance = build_instance(family, coefficients, seed=seed + attempt)
@@ -94,36 +146,55 @@ def _sample_instances(
 
 
 def _guard(
-    instance: GeneratedInstance | SolveGeneratedInstance,
+    instance: Generated,
     *,
-    family: PolynomialFamily | SolveFamily,
+    family: Family,
+    scope: PolynomialScope | ContractScope | KernelContractScope,
+    goal: KernelGoal | None,
 ) -> list[str]:
+    if isinstance(instance, StructuredGeneratedInstance):
+        if not isinstance(family, StructuredProblemFamily) or not isinstance(
+            scope, KernelContractScope
+        ):
+            return ["structured instance has no kernel family and scope"]
+        findings = guard_structured_instance(
+            instance,
+            contract_id=family.contract_id,
+            num_distractors=family.num_distractors,
+            scope=scope,
+        )
+        if findings:
+            return findings
+        if goal is None:
+            return ["structured instance has no validated goal"]
+        return problem_goal_findings(
+            family.contract_id,
+            goal,
+            instance.problem,
+        )
     if isinstance(instance, SolveGeneratedInstance):
         return guard_solve_instance(instance, num_distractors=family.num_distractors)
     return guard_instance(instance, num_distractors=family.num_distractors)
 
 
 def _recipe_cases(
-    instance: GeneratedInstance | SolveGeneratedInstance,
-) -> list[
-    tuple[
-        Polynomial | PolynomialRelation,
-        Polynomial | RealSolutionSet,
-    ]
-]:
-    cases: list[
-        tuple[
-            Polynomial | PolynomialRelation,
-            Polynomial | RealSolutionSet,
-        ]
-    ]
-    if isinstance(instance, SolveGeneratedInstance):
-        cases = [(instance.relation, solution_set_model(instance.expected))]
+    instance: Generated,
+) -> list[tuple[object, object]]:
+    if isinstance(instance, StructuredGeneratedInstance):
+        cases: list[tuple[object, object]] = [(instance.problem, instance.expected)]
         cases.extend(
+            (instance.problem, distractor) for distractor in instance.distractors
+        )
+        return cases
+    if isinstance(instance, SolveGeneratedInstance):
+        solution_cases: list[tuple[object, object]] = [
+            (instance.relation, solution_set_model(instance.expected))
+        ]
+        solution_cases.extend(
             (instance.relation, solution_set_model(distractor))
             for distractor in instance.distractors
         )
-        return cases
+        return solution_cases
     cases = [(instance.problem, instance.expected)]
     for index, choice in enumerate(instance.choices):
         if index == instance.correct_index:
@@ -134,7 +205,7 @@ def _recipe_cases(
 
 def _check_verdicts(
     compiled: CompiledRecipe,
-    instances: list[GeneratedInstance | SolveGeneratedInstance],
+    instances: list[Generated],
 ) -> None:
     for instance in instances:
         cases = _recipe_cases(instance)
@@ -181,7 +252,12 @@ def generate_batch(
 
     instances, skipped = _sample_instances(family, seed=seed, quantity=quantity)
     for instance in instances:
-        if _guard(instance, family=family):
+        if _guard(
+            instance,
+            family=family,
+            scope=template.scope,
+            goal=template.goal,
+        ):
             raise BatchGenerationError(
                 "a generated instance failed the independent correctness guard; "
                 "no questions were returned"
@@ -222,7 +298,7 @@ def generate_batch(
         findings.append(
             f"Generated {len(questions)} unique instance(s) for requested "
             f"{quantity} after bounded sampling. No claim is made about "
-            "untested parts of the declared coefficient domains."
+            "untested parts of the declared parameter domains."
         )
     return PilotBatch(
         template_id=template_id,
