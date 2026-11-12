@@ -28,6 +28,17 @@ MAX_PAYLOAD_BYTES = 8 * 1024 * 1024
 MAX_STDERR_CHARS = 500
 MAX_ERROR_MESSAGE_CHARS = 1000
 
+
+class CodedWorkerError(RuntimeError):
+    """Worker failure that may carry an explicit boundary error code.
+
+    Subclassing opts an error type into receiving the worker's ``code`` field,
+    so transport failures and untyped callers are unaffected.
+    """
+
+    code: str | None = None
+
+
 _MODULE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$")
 _RUNTIME_ENVIRONMENT_NAMES = frozenset(
     {
@@ -183,14 +194,15 @@ def run_json_worker(
             error_type = "error"
             message = str(error)[:MAX_ERROR_MESSAGE_CHARS]
         failure = worker_error(f"{error_type}: {message}")
-        if code:
-            failure.code = code  # type: ignore[attr-defined]
+        if code and isinstance(failure, CodedWorkerError):
+            failure.code = code
         raise failure
     return response
 
 
 __all__ = [
     "BOOTSTRAP_MODULE",
+    "CodedWorkerError",
     "DEFAULT_MEMORY_LIMIT_BYTES",
     "MAX_PAYLOAD_BYTES",
     "apply_resource_limits",

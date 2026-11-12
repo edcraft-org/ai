@@ -130,7 +130,7 @@ def register_check_pilot_tools(server: FastMCP) -> None:
         except PilotWorkerError as exc:
             code = (
                 "RECIPE_INVALID"
-                if getattr(exc, "code", None) == "RECIPE_INVALID"
+                if exc.code == "RECIPE_INVALID"
                 else "RECIPE_WORKER_ERROR"
             )
             return _error(started, code, str(exc)[:500])
