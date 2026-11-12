@@ -132,6 +132,18 @@ def test_scope_and_candidate_boundaries_fail_closed():
         checks.validate_problem(contract, tampered)
 
 
+def test_intermediate_arithmetic_is_bounded_before_cancellation():
+    huge = n(20)
+    for _ in range(3):
+        huge = op("pow", huge, n(5))
+    expression = op("add", x(), op("sub", huge, huge))
+    with pytest.raises(ValueError, match="arithmetic budget"):
+        checks.validate_problem(
+            "polynomial.expand/1",
+            {"kind": "polynomial-expand", "expression": expression},
+        )
+
+
 @settings(max_examples=35, deadline=None)
 @given(checks.problem_strategy("polynomial.factor/1"))
 def test_factoring_independent_oracle_agrees_with_checker(problem):

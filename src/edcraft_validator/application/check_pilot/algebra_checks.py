@@ -131,6 +131,11 @@ def _number(value: str, bound: int = 100_000) -> Fraction:
 
 
 def _trim(values: list[Fraction]) -> tuple[Fraction, ...]:
+    if any(
+        value.numerator.bit_length() > 128 or value.denominator.bit_length() > 128
+        for value in values
+    ):
+        raise ValueError("polynomial expression exceeds the arithmetic budget")
     while len(values) > 1 and values[-1] == 0:
         values.pop()
     return tuple(values)
