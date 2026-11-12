@@ -466,6 +466,41 @@ def validate_problem(contract_id: str, problem: dict[str, Any]) -> dict[str, Any
     return _problem_dump(parsed)
 
 
+def problem_extent(contract_id: str, problem: dict[str, Any]) -> dict[str, int | bool]:
+    """Return mathematical degree and exact numeric budgets for one problem."""
+    validated = validate_problem(contract_id, problem)
+    values: list[Fraction] = []
+    degree = 0
+    if "coefficients" in validated:
+        coefficients = [Fraction(value) for value in validated["coefficients"]]
+        while len(coefficients) > 1 and coefficients[-1] == 0:
+            coefficients.pop()
+        degree = len(coefficients) - 1
+        values.extend(coefficients)
+        for key in ("lower", "upper"):
+            if key in validated:
+                values.append(Fraction(validated[key]))
+    else:
+        nodes = [Expr.model_validate(validated["expression"])]
+        while nodes:
+            node = nodes.pop()
+            if node.num is not None:
+                values.append(Fraction(node.num))
+            nodes.extend(node.args)
+    bound = max(
+        (max(abs(value.numerator), value.denominator) for value in values),
+        default=1,
+    )
+    return {
+        "min_degree": degree,
+        "max_degree": degree,
+        "max_abs_coefficient": max(1, bound),
+        "min_dimension": 0,
+        "max_dimension": 0,
+        "requires_general": bool(validated.get("general", False)),
+    }
+
+
 def _parse_coefficients(problem: dict[str, Any]) -> list[Fraction]:
     return [Fraction(value) for value in problem["coefficients"]]
 
@@ -1303,6 +1338,7 @@ __all__ = [
     "boundary_problems",
     "check_answer",
     "expected_answer",
+    "problem_extent",
     "problem_strategy",
     "render_answer",
     "render_problem",

@@ -503,6 +503,28 @@ def validate_problem(contract_id: str, problem: dict[str, Any]) -> dict[str, Any
     return model.model_validate(problem).model_dump(mode="json", exclude_none=True)
 
 
+def problem_extent(contract_id: str, problem: dict[str, Any]) -> dict[str, int | bool]:
+    """Describe the actual polynomial or system, including cancellations."""
+    validated = validate_problem(contract_id, problem)
+    if contract_id == SYSTEM:
+        entries = [value for row in validated["matrix"] for value in row]
+        entries.extend(validated["rhs"])
+        degree, dimension = 0, 2
+        bound = max(abs(value) for value in entries)
+    else:
+        coefficients = _coefficients(Expr.model_validate(validated["expression"]))
+        degree, dimension = len(coefficients) - 1, 0
+        bound = max(abs(int(value)) for value in coefficients)
+    return {
+        "min_degree": degree,
+        "max_degree": degree,
+        "max_abs_coefficient": max(1, bound),
+        "min_dimension": dimension,
+        "max_dimension": dimension,
+        "requires_general": False,
+    }
+
+
 def expected_answer(contract_id: str, problem: dict[str, Any]) -> dict[str, Any]:
     validated = validate_problem(contract_id, problem)
     if contract_id == SYSTEM:

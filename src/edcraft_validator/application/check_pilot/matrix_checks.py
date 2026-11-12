@@ -539,6 +539,27 @@ def validate_problem(contract_id: str, problem: dict[str, Any]) -> dict[str, Any
     return parsed.model_dump(mode="json")
 
 
+def problem_extent(contract_id: str, problem: dict[str, Any]) -> dict[str, int | bool]:
+    """Describe exact entry budgets and the actual matrix dimensions."""
+    validated = validate_problem(contract_id, problem)
+    matrices = [
+        validated[key] for key in ("matrix", "left", "right") if key in validated
+    ]
+    dimensions = [size for matrix in matrices for size in (len(matrix), len(matrix[0]))]
+    entries = [
+        Fraction(value) for matrix in matrices for row in matrix for value in row
+    ]
+    bound = max(max(abs(value.numerator), value.denominator) for value in entries)
+    return {
+        "min_degree": 0,
+        "max_degree": 0,
+        "max_abs_coefficient": max(1, bound),
+        "min_dimension": min(dimensions),
+        "max_dimension": max(dimensions),
+        "requires_general": False,
+    }
+
+
 def expected_answer(contract_id: str, problem: dict[str, Any]) -> dict[str, Any]:
     validated = validate_problem(contract_id, problem)
     if contract_id == MULTIPLY_CONTRACT:
@@ -1021,6 +1042,7 @@ __all__ = [
     "boundary_problems",
     "check_answer",
     "expected_answer",
+    "problem_extent",
     "problem_strategy",
     "render_answer",
     "render_problem",
