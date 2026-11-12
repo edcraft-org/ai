@@ -933,6 +933,12 @@ def _render_polynomial(coefficients: list[str], variable: str) -> str:
     return "".join(pieces)
 
 
+def _render_grouped(expr: Expr) -> str:
+    """Render a child, parenthesising a top-level sum where precedence needs it."""
+    rendered = _render_expr(expr)
+    return f"({rendered})" if expr.op == "add" else rendered
+
+
 def _render_expr(expr: Expr) -> str:
     if expr.num is not None:
         return expr.num
@@ -943,9 +949,9 @@ def _render_expr(expr: Expr) -> str:
     if op == "add":
         return " + ".join(_render_expr(arg) for arg in expr.args)
     if op == "mul":
-        return " * ".join(_render_expr(arg) for arg in expr.args)
+        return " * ".join(_render_grouped(arg) for arg in expr.args)
     if op == "sub":
-        return f"({_render_expr(expr.args[0])} - {_render_expr(expr.args[1])})"
+        return f"({_render_expr(expr.args[0])} - {_render_grouped(expr.args[1])})"
     if op == "div":
         return f"({_render_expr(expr.args[0])})/({_render_expr(expr.args[1])})"
     if op == "pow":

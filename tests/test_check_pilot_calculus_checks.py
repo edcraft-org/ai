@@ -10,6 +10,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+import sympy as sp
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
@@ -26,6 +27,47 @@ CONTRACT_KINDS = {
 }
 
 ALL_CONTRACTS = tuple(CONTRACT_KINDS)
+
+
+@given(coefficient=st.integers(min_value=-6, max_value=6))
+@settings(max_examples=13, deadline=None)
+def test_rendered_product_rule_preserves_mathematical_grouping(coefficient):
+    problem = _differentiate_problem(
+        _op(
+            "mul",
+            _num(coefficient),
+            _sym("x"),
+            _op("exp", _op("mul", _num(2), _sym("x"))),
+        )
+    )
+    answer = calculus.expected_answer(DIFFERENTIATE, problem)
+    rendered = calculus.render_answer(DIFFERENTIATE, answer)
+    x = sp.Symbol("x", real=True)
+    # Parse only our trusted renderer output, never external/model-authored text.
+    displayed_value = sp.sympify(rendered.replace("^", "**"), locals={"x": x})
+    mathematical_answer = coefficient * sp.exp(2 * x) * (1 + 2 * x)
+    assert sp.simplify(displayed_value - mathematical_answer) == 0
+
+
+def test_rendered_question_preserves_a_sum_inside_a_product():
+    problem = _differentiate_problem(
+        _op("mul", _op("add", _sym("x"), _num(1)), _op("exp", _sym("x")))
+    )
+    assert "(x + 1) * exp(x)" in calculus.render_problem(DIFFERENTIATE, problem)
+
+
+def test_rendered_answer_preserves_a_sum_inside_a_product():
+    answer = _differentiate_answer(
+        _op("mul", _op("add", _sym("x"), _num(1)), _sym("x"))
+    )
+    assert calculus.render_answer(DIFFERENTIATE, answer) == "(x + 1) * x"
+
+
+def test_rendered_difference_preserves_a_sum_inside_the_subtrahend():
+    problem = _differentiate_problem(
+        _op("sub", _sym("x"), _op("add", _sym("x"), _num(1)))
+    )
+    assert "(x - (x + 1))" in calculus.render_problem(DIFFERENTIATE, problem)
 
 
 def _num(value: object) -> dict[str, str]:
