@@ -101,6 +101,32 @@ def test_derivative_validation_bounds_arithmetic_before_constant_cancellation():
         calculus.validate_problem("expression.differentiate/1", problem)
 
 
+@pytest.mark.parametrize("operation", ["log", "div"])
+def test_subtracting_positive_expressions_does_not_prove_a_domain(operation):
+    # Positive x does not make 1-(x-1) positive or nonzero: it vanishes at 2.
+    denominator = {
+        "op": "sub",
+        "args": [
+            {"num": "1"},
+            {"op": "sub", "args": [{"sym": "x"}, {"num": "1"}]},
+        ],
+    }
+    expression = (
+        {"op": "log", "args": [denominator]}
+        if operation == "log"
+        else {"op": "div", "args": [{"num": "1"}, denominator]}
+    )
+    with pytest.raises(ValueError):
+        calculus.validate_problem(
+            "expression.differentiate/1",
+            {
+                "kind": "expression_differentiate",
+                "expression": expression,
+                "symbols": [{"name": "x", "positive": True, "nonzero": True}],
+            },
+        )
+
+
 @pytest.mark.parametrize("module", [calculus, matrices])
 def test_qualification_mutations_do_not_consult_the_checker(module, monkeypatch):
     """A faulty checker must not erase the negative cases that would expose it."""

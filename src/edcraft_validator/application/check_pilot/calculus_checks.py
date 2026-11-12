@@ -346,13 +346,22 @@ def _sign_facts(
             return (-1, True)
         return (None, False)
     if op == "sub":
-        left, right = (_sign_facts(child, assumptions) for child in expr.args)
-        if left[0] is not None and right[0] is not None:
-            difference = left[0] - right[0]
+        if all(child.num is not None for child in expr.args):
+            difference = _parse_rational(
+                expr.args[0].num, label="literal"
+            ) - _parse_rational(expr.args[1].num, label="literal")
             return (
                 0 if difference == 0 else (1 if difference > 0 else -1),
                 difference != 0,
             )
+        left, right = (_sign_facts(child, assumptions) for child in expr.args)
+        if right[0] == 0:
+            return left
+        if left[0] == 0:
+            return (None if right[0] is None else -right[0], right[1])
+        if left[0] is not None and right[0] == -left[0]:
+            return (left[0], True)
+        # Equal signs carry no information about relative magnitudes.
         return (None, False)
     if op == "mul":
         facts = [_sign_facts(child, assumptions) for child in expr.args]
