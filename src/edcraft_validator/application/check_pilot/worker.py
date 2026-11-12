@@ -15,15 +15,26 @@ import hypothesis
 from hypothesis import HealthCheck, Phase, example, given, seed, settings
 from hypothesis import strategies as st
 
+from edcraft_validator.application.check_pilot.contracts import (
+    scope_from_recipe_operation_set,
+)
 from edcraft_validator.application.check_pilot.models import (
     MAX_RECIPE_CASES,
     RENDERER_VERSION,
+    SOLVE_RENDERER_VERSION,
+    SUPPORTED_SCOPE,
     CheckRecipeDefinition,
+    ContractScope,
     PilotQualificationSettings,
+    PilotTemplateDefinition,
     PolynomialFamily,
+    PolynomialRelation,
+    PolynomialScope,
     Qualification,
     QualificationPhase,
     QualificationStatus,
+    RealSolutionSet,
+    SolveFamily,
 )
 from edcraft_validator.application.check_pilot.operations import (
     CompiledRecipe,
@@ -42,9 +53,19 @@ from edcraft_validator.application.check_pilot.polynomial import (
 from edcraft_validator.application.check_pilot.question import (
     QuestionBuildError,
     build_instance,
+    build_solve_instance,
     guard_instance,
+    guard_solve_instance,
 )
 from edcraft_validator.application.check_pilot.seeds import coefficient_seed
+from edcraft_validator.application.check_pilot.solution_sets import (
+    SolutionSetError,
+    render_relation,
+    render_solution_set,
+    solution_set_model,
+    solution_set_mutations,
+    solve_relation_independently,
+)
 
 
 class _BudgetExceeded(BaseException):
@@ -84,9 +105,12 @@ def _versions() -> dict[str, str]:
         "sympy": package_version("sympy"),
         "oracle": "coefficient-arithmetic/1",
         "polynomial_oracle": "coefficient-arithmetic/1",
+        "solution_oracle": "discriminant-sign/1",
         "recipe_compiler": "1",
         "renderer": RENDERER_VERSION,
+        "solve_renderer": SOLVE_RENDERER_VERSION,
         "question_builder": RENDERER_VERSION,
+        "solve_question_builder": SOLVE_RENDERER_VERSION,
         "hypothesis": hypothesis.__version__,
         "python": platform.python_version(),
     }
@@ -123,10 +147,16 @@ def _qualification(
 
 
 def _compile_failure(
-    definition: Any, config: PilotQualificationSettings, seed_value: int
+    definition: Any,
+    config: PilotQualificationSettings,
+    seed_value: int,
+    scope: PolynomialScope | ContractScope | None = None,
 ) -> Qualification | None:
     try:
-        compile_recipe(CheckRecipeDefinition.model_validate(definition))
+        compile_recipe(
+            CheckRecipeDefinition.model_validate(definition),
+            scope=scope or SUPPORTED_SCOPE,
+        )
     except RecipeCompileError as exc:
         findings = []
         for finding in exc.findings:
@@ -290,37 +320,252 @@ def _run_recipe_property(
     return None, None
 
 
+def _scope_from_payload(
+    payload: dict[str, Any], definition: CheckRecipeDefinition
+) -> PolynomialScope | ContractScope:
+    raw = payload.get("scope")
+    if isinstance(raw, dict):
+        if "contract_id" in raw:
+            return ContractScope.model_validate(raw)
+        return PolynomialScope.model_validate(raw)
+    return scope_from_recipe_operation_set(definition.operation_set)
+
+
+def _solve_relation_strategy(
+    scope: ContractScope,
+) -> st.SearchStrategy[PolynomialRelation]:
+    relations = [item for item in scope.relations if item != "none"]
+    if not relations:
+        relations = ["eq"]
+    bound = scope.max_abs_coefficient
+
+    def for_degree(relation: str, degree: int) -> st.SearchStrategy[PolynomialRelation]:
+        return st.lists(
+            st.integers(min_value=-bound, max_value=bound),
+            min_size=degree + 1,
+            max_size=degree + 1,
+        ).map(
+            lambda values: PolynomialRelation(
+                relation=relation,
+                coefficients=[
+                    *values[:-1],
+                    values[-1] if values[-1] != 0 else 1,
+                ],
+            )
+        )
+
+    return st.sampled_from(relations).flatmap(
+        lambda relation: st.integers(min_value=0, max_value=scope.max_degree).flatmap(
+            lambda degree: for_degree(relation, degree)
+        )
+    )
+
+
+def _solve_boundary_relations(scope: ContractScope) -> list[PolynomialRelation]:
+    relations = [item for item in scope.relations if item != "none"]
+    desired: list[tuple[str, list[int]]] = []
+    for relation in relations:
+        if relation == "eq":
+            desired.extend(
+                [
+                    (relation, [-4, 0, 1]),
+                    (relation, [1, -2, 1]),
+                    (relation, [1, 0, 1]),
+                    (relation, [2, -4]),
+                    (relation, [0, 0, 0]),
+                    (relation, [3]),
+                ]
+            )
+        else:
+            desired.extend(
+                [
+                    (relation, [-4, 0, 1]),
+                    (relation, [1, -2, 1]),
+                    (relation, [1, 0, 1]),
+                    (relation, [-1, 0, 1]),
+                    (relation, [2, -4]),
+                    (relation, [0, 0, 0]),
+                    (relation, [1]),
+                ]
+            )
+    items: list[PolynomialRelation] = []
+    seen: set[str] = set()
+    for relation, coefficients in desired:
+        model = PolynomialRelation(relation=relation, coefficients=coefficients)
+        key = json.dumps(model.model_dump(mode="json"), sort_keys=True)
+        if key not in seen:
+            seen.add(key)
+            items.append(model)
+    return items
+
+
+def _run_solve_recipe_property(
+    *,
+    compiled: CompiledRecipe,
+    scope: ContractScope,
+    state: _RunState,
+    seed_value: int,
+    max_examples: int,
+    salt: int,
+    expose_counterexample: bool,
+    include_boundaries: bool,
+) -> tuple[dict[str, Any] | None, Qualification | None]:
+    def check_case(relation: PolynomialRelation) -> None:
+        state.reserve()
+        key = (relation.relation, tuple(relation.coefficients))
+        if key in state.accepted:
+            return
+        coefficients = tuple(relation.coefficients)
+        try:
+            expected = solve_relation_independently(relation.relation, coefficients)
+        except SolutionSetError as exc:
+            raise _CaseFailure(
+                {
+                    "reason": f"independent oracle rejected the relation: {exc}",
+                    "problem": render_relation(relation.relation, coefficients),
+                }
+            ) from None
+        state.reserve()
+        correct = solution_set_model(expected)
+        result = execute_recipe(compiled, relation, correct)
+        if not result.verdict:
+            raise _CaseFailure(
+                {
+                    "reason": "correct complete solution set rejected",
+                    "problem": result.problem,
+                    "expected": result.expected,
+                    "candidate": result.candidate,
+                }
+            )
+        rng = random.Random(coefficient_seed(seed_value, coefficients, salt=salt))
+        wrongs = solution_set_mutations(
+            relation.relation, coefficients, expected, 3, rng=rng
+        )
+        if len(wrongs) < 2:
+            raise _CaseFailure(
+                {
+                    "reason": "could not build distinct wrong solution sets",
+                    "problem": render_relation(relation.relation, coefficients),
+                }
+            )
+        for wrong in wrongs:
+            state.reserve()
+            wrong_model = solution_set_model(wrong)
+            result = execute_recipe(compiled, relation, wrong_model)
+            if result.verdict:
+                raise _CaseFailure(
+                    {
+                        "reason": "wrong solution set accepted",
+                        "problem": result.problem,
+                        "expected": result.expected,
+                        "candidate": render_solution_set(wrong)[:200],
+                    }
+                )
+        state.accepted.add(key)
+
+    @seed(seed_value)
+    @settings(
+        max_examples=max_examples,
+        deadline=None,
+        database=None,
+        report_multiple_bugs=False,
+        phases=(Phase.explicit, Phase.generate, Phase.shrink),
+        suppress_health_check=[HealthCheck.too_slow],
+    )
+    @given(relation=_solve_relation_strategy(scope))
+    def wrapped(relation: PolynomialRelation) -> None:
+        check_case(relation)
+
+    if include_boundaries:
+        for relation in reversed(_solve_boundary_relations(scope)):
+            wrapped = example(relation=relation)(wrapped)
+    try:
+        wrapped()
+    except _BudgetExceeded:
+        return None, _qualification(
+            status="inconclusive",
+            config=state.config,
+            seed_value=seed_value,
+            state=state,
+            findings=["qualification budget was exhausted before a verdict"],
+        )
+    except _CaseFailure as exc:
+        counterexample = exc.counterexample if expose_counterexample else None
+        finding = (
+            "held-out evaluation did not confirm the recipe"
+            if not expose_counterexample
+            else f"counterexample: {exc.counterexample.get('reason', 'case failed')}"
+        )
+        return counterexample or {"withheld": True}, _qualification(
+            status="failed",
+            config=state.config,
+            seed_value=seed_value,
+            state=state,
+            findings=[finding],
+            counterexample=counterexample,
+        )
+    return None, None
+
+
 def qualify_recipe_payload(payload: dict[str, Any]) -> Qualification:
     config = PilotQualificationSettings.model_validate(payload.get("settings", {}))
     seed_value = int(payload.get("seed", 0))
     if seed_value < 0:
         seed_value = 0
-    definition = payload.get("definition")
-    failure = _compile_failure(definition, config, seed_value)
+    definition = CheckRecipeDefinition.model_validate(payload.get("definition"))
+    scope = _scope_from_payload(payload, definition)
+    failure = _compile_failure(definition, config, seed_value, scope)
     if failure is not None:
         return failure
-    compiled = compile_recipe(CheckRecipeDefinition.model_validate(definition))
+    compiled = compile_recipe(definition, scope=scope)
     state = _RunState(config)
-    _, outcome = _run_recipe_property(
-        compiled=compiled,
-        state=state,
-        seed_value=seed_value,
-        max_examples=config.max_examples,
-        salt=0,
-        expose_counterexample=True,
-        include_boundaries=True,
-    )
+    solve_property = isinstance(scope, ContractScope) and scope.operation == "solve"
+    if solve_property:
+        assert isinstance(scope, ContractScope)
+        _, outcome = _run_solve_recipe_property(
+            compiled=compiled,
+            scope=scope,
+            state=state,
+            seed_value=seed_value,
+            max_examples=config.max_examples,
+            salt=0,
+            expose_counterexample=True,
+            include_boundaries=True,
+        )
+    else:
+        _, outcome = _run_recipe_property(
+            compiled=compiled,
+            state=state,
+            seed_value=seed_value,
+            max_examples=config.max_examples,
+            salt=0,
+            expose_counterexample=True,
+            include_boundaries=True,
+        )
     if outcome is not None:
         return outcome
-    _, held_out = _run_recipe_property(
-        compiled=compiled,
-        state=state,
-        seed_value=seed_value + 7919,
-        max_examples=max(4, config.max_examples // 2),
-        salt=104_729,
-        expose_counterexample=False,
-        include_boundaries=False,
-    )
+    if solve_property:
+        assert isinstance(scope, ContractScope)
+        _, held_out = _run_solve_recipe_property(
+            compiled=compiled,
+            scope=scope,
+            state=state,
+            seed_value=seed_value + 7919,
+            max_examples=max(4, config.max_examples // 2),
+            salt=104_729,
+            expose_counterexample=False,
+            include_boundaries=False,
+        )
+    else:
+        _, held_out = _run_recipe_property(
+            compiled=compiled,
+            state=state,
+            seed_value=seed_value + 7919,
+            max_examples=max(4, config.max_examples // 2),
+            salt=104_729,
+            expose_counterexample=False,
+            include_boundaries=False,
+        )
     if held_out is not None:
         return held_out
     if len(state.accepted) < 2:
@@ -364,17 +609,153 @@ def _family_boundaries(family: PolynomialFamily) -> list[dict[str, int]]:
     return list(unique.values())
 
 
+def _solve_template_qualification(
+    *,
+    compiled: CompiledRecipe,
+    family: SolveFamily,
+    config: PilotQualificationSettings,
+    seed_value: int,
+) -> Qualification:
+    state = _RunState(config)
+
+    def check_case(assignment: dict[str, int]) -> None:
+        state.reserve()
+        coefficients = tuple(
+            assignment[f"a{domain.exponent}"] for domain in family.coefficients
+        )
+        key = (family.relation, coefficients)
+        if key in state.accepted:
+            return
+        try:
+            instance = build_solve_instance(family, coefficients, seed=seed_value)
+        except QuestionBuildError as exc:
+            raise _CaseFailure(
+                {
+                    "reason": f"renderer rejected the assignment: {exc}",
+                    "assignment": assignment,
+                }
+            ) from None
+        guard_findings = guard_solve_instance(
+            instance, num_distractors=family.num_distractors
+        )
+        if guard_findings:
+            raise _CaseFailure(
+                {
+                    "reason": guard_findings[0],
+                    "assignment": assignment,
+                    "expected": instance.answer,
+                    "choices": list(instance.choices),
+                }
+            )
+        state.reserve()
+        result = execute_recipe(
+            compiled, instance.relation, solution_set_model(instance.expected)
+        )
+        if not result.verdict:
+            raise _CaseFailure(
+                {
+                    "reason": "pinned recipe rejected the correct solution set",
+                    "assignment": assignment,
+                    "expected": result.expected,
+                    "candidate": instance.answer,
+                }
+            )
+        for distractor in instance.distractors:
+            state.reserve()
+            candidate = solution_set_model(distractor)
+            result = execute_recipe(compiled, instance.relation, candidate)
+            if result.verdict:
+                raise _CaseFailure(
+                    {
+                        "reason": "pinned recipe accepted a wrong solution set",
+                        "assignment": assignment,
+                        "expected": result.expected,
+                        "candidate": render_solution_set(distractor)[:200],
+                    }
+                )
+        state.accepted.add(key)
+
+    @seed(seed_value)
+    @settings(
+        max_examples=config.max_examples,
+        deadline=None,
+        database=None,
+        report_multiple_bugs=False,
+        phases=(Phase.explicit, Phase.generate, Phase.shrink),
+        suppress_health_check=[HealthCheck.too_slow],
+    )
+    @given(assignment=_family_strategy(family))
+    def wrapped(assignment: dict[str, int]) -> None:
+        check_case(assignment)
+
+    for assignment in reversed(_family_boundaries(family)):
+        wrapped = example(assignment=assignment)(wrapped)
+    try:
+        wrapped()
+    except _BudgetExceeded:
+        return _qualification(
+            status="inconclusive",
+            config=config,
+            seed_value=seed_value,
+            state=state,
+            findings=["template qualification budget was exhausted before a verdict"],
+        )
+    except _CaseFailure as exc:
+        return _qualification(
+            status="failed",
+            config=config,
+            seed_value=seed_value,
+            state=state,
+            findings=[f"counterexample: {exc.counterexample.get('reason', 'failed')}"],
+            counterexample=exc.counterexample,
+        )
+    if len(state.accepted) < 2:
+        return _qualification(
+            status="inconclusive",
+            config=config,
+            seed_value=seed_value,
+            state=state,
+            findings=["not enough sampled family assignments were accepted"],
+        )
+    return _qualification(
+        status="passed",
+        config=config,
+        seed_value=seed_value,
+        state=state,
+        findings=["No counterexample found in sampled cases"],
+    )
+
+
 def qualify_template_payload(payload: dict[str, Any]) -> Qualification:
     config = PilotQualificationSettings.model_validate(payload.get("settings", {}))
     seed_value = int(payload.get("seed", 0))
     if seed_value < 0:
         seed_value = 0
-    definition = payload.get("definition")
-    failure = _compile_failure(definition, config, seed_value)
-    if failure is not None:
-        return failure
-    compiled = compile_recipe(CheckRecipeDefinition.model_validate(definition))
-    family = PolynomialFamily.model_validate(payload["family"])
+    definition = CheckRecipeDefinition.model_validate(payload.get("definition"))
+    template_data = payload.get("template")
+    if isinstance(template_data, dict):
+        template = PilotTemplateDefinition.model_validate(template_data)
+        scope: PolynomialScope | ContractScope = template.scope
+        failure = _compile_failure(definition, config, seed_value, scope)
+        if failure is not None:
+            return failure
+        compiled = compile_recipe(definition, scope=scope)
+        if template.solve_family is not None:
+            return _solve_template_qualification(
+                compiled=compiled,
+                family=template.solve_family,
+                config=config,
+                seed_value=seed_value,
+            )
+        family = template.family
+        assert family is not None
+    else:
+        scope = _scope_from_payload(payload, definition)
+        failure = _compile_failure(definition, config, seed_value, scope)
+        if failure is not None:
+            return failure
+        compiled = compile_recipe(definition, scope=scope)
+        family = PolynomialFamily.model_validate(payload["family"])
     state = _RunState(config)
 
     def check_case(assignment: dict[str, int]) -> None:
@@ -482,11 +863,40 @@ def qualify_template_payload(payload: dict[str, Any]) -> Qualification:
     )
 
 
+def _deserialize_problem(value: Any) -> Polynomial | PolynomialRelation:
+    if isinstance(value, str):
+        return parse_polynomial(value)
+    if isinstance(value, dict):
+        kind = value.get("kind")
+        if kind == "polynomial":
+            return parse_polynomial(value.get("text", ""))
+        if kind == "relation":
+            return PolynomialRelation.model_validate(value.get("relation"))
+        if "relation" in value and "coefficients" in value:
+            return PolynomialRelation.model_validate(value)
+    raise ValueError("recipe problem must be a polynomial or relation payload")
+
+
+def _deserialize_candidate(value: Any) -> Polynomial | RealSolutionSet:
+    if isinstance(value, str):
+        return parse_polynomial(value)
+    if isinstance(value, dict):
+        kind = value.get("kind")
+        if kind == "polynomial":
+            return parse_polynomial(value.get("text", ""))
+        if kind == "solution_set":
+            return RealSolutionSet.model_validate(value.get("solution_set"))
+        if "components" in value:
+            return RealSolutionSet.model_validate(value)
+    raise ValueError("recipe candidate must be a polynomial or solution-set payload")
+
+
 def execute_recipe_payload(payload: dict[str, Any]) -> dict[str, Any]:
     definition = CheckRecipeDefinition.model_validate(payload["definition"])
-    compiled = compile_recipe(definition)
-    problem = parse_polynomial(payload["problem"])
-    candidate = parse_polynomial(payload["candidate"])
+    scope = scope_from_recipe_operation_set(definition.operation_set)
+    compiled = compile_recipe(definition, scope=scope)
+    problem = _deserialize_problem(payload["problem"])
+    candidate = _deserialize_candidate(payload["candidate"])
     result = execute_recipe(compiled, problem, candidate)
     return {"result": result.model_dump(mode="json")}
 
@@ -496,11 +906,14 @@ def execute_recipe_cases_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(cases, list) or len(cases) > MAX_RECIPE_CASES:
         raise ValueError(f"recipe cases must be a list of at most {MAX_RECIPE_CASES}")
     definition = CheckRecipeDefinition.model_validate(payload["definition"])
-    compiled = compile_recipe(definition)
+    scope = scope_from_recipe_operation_set(definition.operation_set)
+    compiled = compile_recipe(definition, scope=scope)
     results = []
     for case in cases:
-        problem = parse_polynomial(case["problem"])
-        candidate = parse_polynomial(case["candidate"])
+        if not isinstance(case, dict):
+            raise ValueError("each recipe case must be an object")
+        problem = _deserialize_problem(case["problem"])
+        candidate = _deserialize_candidate(case["candidate"])
         results.append(
             execute_recipe(compiled, problem, candidate).model_dump(mode="json")
         )

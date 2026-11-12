@@ -14,15 +14,36 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 CHECK_SCHEMA_VERSION: Literal["check-pilot/1"] = "check-pilot/1"
 RECIPE_SCHEMA_VERSION: Literal["check-recipe/1"] = "check-recipe/1"
 FAMILY_SCHEMA_VERSION: Literal["polynomial-family/1"] = "polynomial-family/1"
+SOLVE_FAMILY_SCHEMA_VERSION: Literal["polynomial-solve-family/1"] = (
+    "polynomial-solve-family/1"
+)
 TEMPLATE_SCHEMA_VERSION: Literal["pilot-template/1"] = "pilot-template/1"
+TEMPLATE_SCHEMA_VERSION_V2: Literal["pilot-template/2"] = "pilot-template/2"
 RECIPE_OPERATION_SET: Literal["polynomial-derivative/1"] = "polynomial-derivative/1"
+SOLVE_RECIPE_OPERATION_SET: Literal["polynomial-solve-real/1"] = (
+    "polynomial-solve-real/1"
+)
 RENDERER_VERSION: Literal["polynomial-mcq/1"] = "polynomial-mcq/1"
+SOLVE_RENDERER_VERSION: Literal["polynomial-solve-mcq/1"] = "polynomial-solve-mcq/1"
+SCOPE_SCHEMA_VERSION: Literal["check-scope/2"] = "check-scope/2"
 MAX_RECIPE_CASES = 600
+MAX_SOLVE_DEGREE = 2
+MAX_RELATION_COEFFICIENT = 1000
+MAX_SET_COMPONENTS = 8
+MAX_ENDPOINT_LENGTH = 80
 
 QualificationStatus = Literal["passed", "failed", "inconclusive", "error"]
 QualificationPhase = Literal["compilation", "sampling"]
 TemplateStatus = Literal["ready", "needs_review", "error"]
 ApprovalStatus = Literal["unreviewed", "approved", "rejected"]
+RelationKind = Literal["eq", "lt", "le", "gt", "ge"]
+GoalRelation = Literal["none", "eq", "lt", "le", "gt", "ge"]
+RequiredPolicy = Literal[
+    "complete_correctness",
+    "complete_real_solution_set",
+    "independent_correctness",
+    "all_options_checked",
+]
 
 
 class PilotModel(BaseModel):
@@ -65,6 +86,15 @@ class CheckRecord(PilotModel):
     created_at: str = Field(min_length=1)
 
 
+class CheckSelection(PilotModel):
+    """Additive UI metadata for the contract chosen for one template."""
+
+    contract_id: str = Field(min_length=1, max_length=120)
+    reason: str = Field(min_length=1, max_length=2000)
+    source: Literal["saved", "authored"]
+    check_ref: CheckRef | None = None
+
+
 class PilotTemplateRecord(PilotModel):
     template_id: str = Field(pattern=r"^tpl_[0-9a-f]{16,64}$")
     template_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -81,6 +111,7 @@ class PilotTemplateRecord(PilotModel):
     scope: dict[str, Any] | None = None
     provenance: dict[str, Any] | None = None
     check_qualification: Qualification | None = None
+    selection: CheckSelection | None = None
 
 
 class PilotQuestion(PilotModel):
@@ -117,6 +148,108 @@ class PolynomialScope(PilotModel):
 
 
 SUPPORTED_SCOPE = PolynomialScope()
+
+
+class ContractScope(PilotModel):
+    """Contract-level scope stored on new immutable check records."""
+
+    schema_version: Literal["check-scope/2"] = SCOPE_SCHEMA_VERSION
+    contract_id: str = Field(min_length=1, max_length=120)
+    subject: Literal["univariate-real-polynomial"] = "univariate-real-polynomial"
+    operation: Literal["differentiate", "solve"]
+    variable: Literal["x"] = "x"
+    relations: list[GoalRelation] = Field(min_length=1, max_length=6)
+    min_degree: int = Field(ge=0, le=5)
+    max_degree: int = Field(ge=0, le=5)
+    max_abs_coefficient: int = Field(ge=1, le=1000)
+    domain: Literal["real"] = "real"
+    answer_type: Literal["expression", "solution_set"]
+    required_policy: list[RequiredPolicy] = Field(min_length=1, max_length=5)
+
+    @model_validator(mode="after")
+    def require_ordered_bounds(self) -> ContractScope:
+        if self.min_degree > self.max_degree:
+            raise ValueError("min_degree must not exceed max_degree")
+        if len(set(self.relations)) != len(self.relations):
+            raise ValueError("scope relations must be unique")
+        return self
+
+
+class StructuredGoal(PilotModel):
+    """The mathematical task a plan or template actually asks for."""
+
+    subject: Literal["univariate-real-polynomial"] = "univariate-real-polynomial"
+    operation: Literal["differentiate", "solve"]
+    variable: Literal["x"] = "x"
+    relation: GoalRelation = "none"
+    min_degree: int = Field(ge=0, le=5)
+    max_degree: int = Field(ge=0, le=5)
+    max_abs_coefficient: int = Field(ge=1, le=1000)
+    domain: Literal["real"] = "real"
+    answer_type: Literal["expression", "solution_set"]
+    requires_complete_solution_set: bool = False
+
+    @model_validator(mode="after")
+    def require_ordered_bounds(self) -> StructuredGoal:
+        if self.min_degree > self.max_degree:
+            raise ValueError("min_degree must not exceed max_degree")
+        if self.operation == "differentiate":
+            if self.relation != "none" or self.answer_type != "expression":
+                raise ValueError("differentiate goals use relation none and expression")
+            if self.requires_complete_solution_set:
+                raise ValueError("differentiate goals do not request solution sets")
+        else:
+            if self.relation == "none" or self.answer_type != "solution_set":
+                raise ValueError("solve goals use a relation and solution_set answer")
+        return self
+
+
+class PolynomialRelation(PilotModel):
+    """A bounded real polynomial relation in ascending coefficient order."""
+
+    relation: RelationKind
+    coefficients: list[int] = Field(min_length=1, max_length=MAX_SOLVE_DEGREE + 1)
+    variable: Literal["x"] = "x"
+
+    @model_validator(mode="after")
+    def require_bounded_coefficients(self) -> PolynomialRelation:
+        if any(type(value) is not int for value in self.coefficients):
+            raise ValueError("relation coefficients must be integers")
+        if any(abs(value) > MAX_RELATION_COEFFICIENT for value in self.coefficients):
+            raise ValueError("relation coefficients are out of bounds")
+        if not any(self.coefficients):
+            # The zero polynomial is still a valid constant relation.
+            return self
+        return self
+
+
+class RealSetComponent(PilotModel):
+    """One exact point or interval of a real solution-set union."""
+
+    lower: str | None = Field(default=None, max_length=MAX_ENDPOINT_LENGTH)
+    upper: str | None = Field(default=None, max_length=MAX_ENDPOINT_LENGTH)
+    lower_closed: bool = True
+    upper_closed: bool = True
+
+    @model_validator(mode="after")
+    def require_consistent_infinite_flags(self) -> RealSetComponent:
+        if self.lower is None and self.upper is None:
+            if self.lower_closed or self.upper_closed:
+                raise ValueError("an all-real interval is unbounded at both ends")
+            return self
+        if self.lower is None and self.lower_closed:
+            raise ValueError("an unbounded lower endpoint must be open")
+        if self.upper is None and self.upper_closed:
+            raise ValueError("an unbounded upper endpoint must be open")
+        return self
+
+
+class RealSolutionSet(PilotModel):
+    """Closed data for a complete real solution set; empty means no solutions."""
+
+    components: list[RealSetComponent] = Field(
+        default_factory=list, max_length=MAX_SET_COMPONENTS
+    )
 
 
 class RecipeArgument(PilotModel):
@@ -161,7 +294,9 @@ class RecipeStep(PilotModel):
 
 class CheckRecipeDefinition(PilotModel):
     schema_version: Literal["check-recipe/1"] = RECIPE_SCHEMA_VERSION
-    operation_set: Literal["polynomial-derivative/1"] = RECIPE_OPERATION_SET
+    operation_set: Literal["polynomial-derivative/1", "polynomial-solve-real/1"] = (
+        RECIPE_OPERATION_SET
+    )
     steps: list[RecipeStep] = Field(min_length=1, max_length=8)
     output: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_]{0,31}$")
 
@@ -178,6 +313,27 @@ class CoefficientDomain(PilotModel):
             raise ValueError("coefficient values are bounded to [-20, 20]")
         if len(set(self.values)) != len(self.values):
             raise ValueError("coefficient domain values must be unique")
+        return self
+
+
+class SolveFamily(PilotModel):
+    schema_version: Literal["polynomial-solve-family/1"] = SOLVE_FAMILY_SCHEMA_VERSION
+    variable: Literal["x"] = "x"
+    relation: RelationKind
+    degree: int = Field(ge=1, le=MAX_SOLVE_DEGREE)
+    coefficients: list[CoefficientDomain] = Field(min_length=2, max_length=3)
+    num_distractors: int = Field(default=3, ge=1, le=5)
+
+    @model_validator(mode="after")
+    def require_complete_bounded_domains(self) -> SolveFamily:
+        exponents = [domain.exponent for domain in self.coefficients]
+        if exponents != list(range(self.degree + 1)):
+            raise ValueError(
+                "coefficient domains must declare each exponent from 0 to degree"
+            )
+        leading = self.coefficients[-1]
+        if 0 in leading.values:
+            raise ValueError("the leading coefficient domain must not contain zero")
         return self
 
 
@@ -205,10 +361,40 @@ class PolynomialFamily(PilotModel):
 
 
 class PilotTemplateDefinition(PilotModel):
-    schema_version: Literal["pilot-template/1"] = TEMPLATE_SCHEMA_VERSION
-    renderer_version: Literal["polynomial-mcq/1"] = RENDERER_VERSION
-    scope: PolynomialScope = SUPPORTED_SCOPE
-    family: PolynomialFamily
+    schema_version: Literal["pilot-template/1", "pilot-template/2"] = (
+        TEMPLATE_SCHEMA_VERSION
+    )
+    renderer_version: Literal["polynomial-mcq/1", "polynomial-solve-mcq/1"] = (
+        RENDERER_VERSION
+    )
+    scope: PolynomialScope | ContractScope = SUPPORTED_SCOPE
+    contract_id: str | None = Field(default=None, max_length=120)
+    family: PolynomialFamily | None = None
+    solve_family: SolveFamily | None = None
+
+    @model_validator(mode="after")
+    def require_one_supported_payload(self) -> PilotTemplateDefinition:
+        if self.schema_version == "pilot-template/1":
+            if self.contract_id is not None or self.solve_family is not None:
+                raise ValueError("legacy templates use only a polynomial family")
+            if self.family is None or not isinstance(self.scope, PolynomialScope):
+                raise ValueError("legacy templates require a polynomial family")
+            if self.renderer_version != RENDERER_VERSION:
+                raise ValueError("legacy templates use the polynomial renderer")
+            return self
+        if not self.contract_id:
+            raise ValueError("version 2 templates require a contract id")
+        if not isinstance(self.scope, ContractScope):
+            raise ValueError("version 2 templates require a contract scope")
+        if self.scope.contract_id != self.contract_id:
+            raise ValueError("template contract id must match its scope")
+        if (self.family is None) == (self.solve_family is None):
+            raise ValueError("version 2 templates require exactly one family kind")
+        if self.family is not None and self.scope.operation != "differentiate":
+            raise ValueError("polynomial families require a differentiate contract")
+        if self.solve_family is not None and self.scope.operation != "solve":
+            raise ValueError("solve families require a solve contract")
+        return self
 
 
 def _recipe_argument_names() -> list[str]:
@@ -294,16 +480,46 @@ class CheckAuthorProposal(_StrictAuthorProposalSchema, PilotModel):
         return self
 
 
+class CheckPlanProposal(_StrictAuthorProposalSchema, PilotModel):
+    supported: bool = True
+    development_needed: str | None = Field(default=None, max_length=1000)
+    contract_id: str | None = Field(default=None, max_length=120)
+    goal: StructuredGoal | None = None
+    reason: str = Field(default="", max_length=2000)
+    saved_check_ref: CheckRef | None = None
+
+    @model_validator(mode="after")
+    def require_supported_plan(self) -> CheckPlanProposal:
+        if self.supported:
+            if not self.contract_id or self.goal is None:
+                raise ValueError(
+                    "a supported plan requires a contract id and structured goal"
+                )
+            if not self.reason.strip():
+                raise ValueError("a supported plan requires a reason")
+        elif not (self.development_needed or "").strip():
+            raise ValueError("an unsupported plan requires development_needed")
+        return self
+
+
 class TemplateAuthorProposal(_StrictAuthorProposalSchema, PilotModel):
     supported: bool = True
     development_needed: str | None = Field(default=None, max_length=1000)
+    contract_id: str | None = Field(default=None, max_length=120)
+    reason: str = Field(default="", max_length=2000)
     family: PolynomialFamily | None = None
+    solve_family: SolveFamily | None = None
 
     @model_validator(mode="after")
     def require_supported_payload(self) -> TemplateAuthorProposal:
-        if self.supported and self.family is None:
-            raise ValueError("a supported template proposal requires a family")
-        if not self.supported and not (self.development_needed or "").strip():
+        if self.supported:
+            if (self.family is None) == (self.solve_family is None):
+                raise ValueError(
+                    "a supported template proposal requires exactly one family"
+                )
+            if self.solve_family is not None and not self.contract_id:
+                raise ValueError("solve templates require a contract id")
+        elif not (self.development_needed or "").strip():
             raise ValueError("an unsupported proposal requires development_needed")
         return self
 
@@ -332,12 +548,20 @@ __all__ = [
     "ApprovalStatus",
     "CHECK_SCHEMA_VERSION",
     "CheckAuthorProposal",
+    "CheckPlanProposal",
     "CheckRecipeDefinition",
     "CheckRecord",
     "CheckRef",
+    "CheckSelection",
     "CoefficientDomain",
+    "ContractScope",
     "FAMILY_SCHEMA_VERSION",
+    "GoalRelation",
+    "MAX_ENDPOINT_LENGTH",
     "MAX_RECIPE_CASES",
+    "MAX_RELATION_COEFFICIENT",
+    "MAX_SET_COMPONENTS",
+    "MAX_SOLVE_DEGREE",
     "PilotBatch",
     "PilotModel",
     "PilotQualificationSettings",
@@ -345,17 +569,29 @@ __all__ = [
     "PilotTemplateDefinition",
     "PilotTemplateRecord",
     "PolynomialFamily",
+    "PolynomialRelation",
     "PolynomialScope",
     "Qualification",
     "QualificationStatus",
     "RECIPE_OPERATION_SET",
     "RECIPE_SCHEMA_VERSION",
     "RENDERER_VERSION",
+    "RealSetComponent",
+    "RealSolutionSet",
     "RecipeArgument",
     "RecipeExecutionResult",
     "RecipeStep",
+    "RelationKind",
+    "RequiredPolicy",
+    "SCOPE_SCHEMA_VERSION",
+    "SOLVE_FAMILY_SCHEMA_VERSION",
+    "SOLVE_RECIPE_OPERATION_SET",
+    "SOLVE_RENDERER_VERSION",
     "SUPPORTED_SCOPE",
+    "SolveFamily",
+    "StructuredGoal",
     "TEMPLATE_SCHEMA_VERSION",
+    "TEMPLATE_SCHEMA_VERSION_V2",
     "TemplateAuthorProposal",
     "TemplateStatus",
 ]

@@ -85,7 +85,7 @@ def template_definition_sha256(
     definition: PilotTemplateDefinition | dict[str, Any],
 ) -> str:
     value = (
-        definition.model_dump(mode="json")
+        definition.model_dump(mode="json", exclude_none=True)
         if isinstance(definition, PilotTemplateDefinition)
         else definition
     )
@@ -93,7 +93,10 @@ def template_definition_sha256(
 
 
 def template_record_sha256(record: PilotTemplateRecord) -> str:
-    return _canonical_sha256(record.model_dump(mode="json"))
+    # ``exclude_none`` keeps the frozen v1 bytes (and its compare-and-swap hash)
+    # stable after additive optional diagnostics were introduced. Legacy records
+    # only contain non-null values for the fields they actually stored.
+    return _canonical_sha256(record.model_dump(mode="json", exclude_none=True))
 
 
 def _validate_owner(owner_id: str) -> str:

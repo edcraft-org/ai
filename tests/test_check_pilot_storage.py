@@ -282,3 +282,72 @@ def test_empty_template_digest_is_stable_for_error_records(tmp_path: Path):
     )
     store.save_template("owner", record)
     assert store.get_template("owner", record.template_id) == record
+
+
+LEGACY_TEMPLATE = {
+    "schema_version": "pilot-template/1",
+    "renderer_version": "polynomial-mcq/1",
+    "scope": {
+        "subject": "univariate-real-polynomial",
+        "operation": "differentiate",
+        "variable": "x",
+        "max_degree": 5,
+        "max_abs_coefficient": 20,
+    },
+    "family": {
+        "schema_version": "polynomial-family/1",
+        "variable": "x",
+        "degree": 2,
+        "coefficients": [
+            {"exponent": 0, "values": [-3, -1, 0, 2]},
+            {"exponent": 1, "values": [-2, 0, 1, 2]},
+            {"exponent": 2, "values": [1, 2, 3]},
+        ],
+        "num_distractors": 3,
+    },
+}
+
+
+def _canonical(value) -> str:
+    import hashlib
+
+    return hashlib.sha256(
+        json.dumps(
+            value, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode()
+    ).hexdigest()
+
+
+def test_legacy_v1_template_and_record_hashes_survive_additive_fields():
+    definition = PilotTemplateDefinition.model_validate(LEGACY_TEMPLATE)
+    assert definition.model_dump(mode="json", exclude_none=True) == LEGACY_TEMPLATE
+    assert template_definition_sha256(definition) == _canonical(LEGACY_TEMPLATE)
+    # This digest is the frozen pre-catalogue value stored in the backend fixture.
+    assert (
+        template_definition_sha256(definition)
+        == "cad86505c18298d465e932e6cae78f6344fa572c96ed39bc4df9504e6cb0acac"
+    )
+
+    legacy_record = {
+        "template_id": "tpl_" + "a" * 24,
+        "template_sha256": template_definition_sha256(definition),
+        "prompt": "Differentiate a polynomial",
+        "status": "ready",
+        "approval": "approved",
+        "reused_check": False,
+        "check": check_record().model_dump(mode="json"),
+        "template": LEGACY_TEMPLATE,
+        "qualification": qualification().model_dump(mode="json"),
+        "findings": [],
+        "created_at": datetime.now(UTC).isoformat(),
+        "scope": LEGACY_TEMPLATE["scope"],
+        "provenance": {"role": "template-author"},
+    }
+    parsed = PilotTemplateRecord.model_validate(legacy_record)
+    assert parsed.selection is None
+    # Additive null diagnostics are not part of the canonical reloaded hash.
+    assert template_record_sha256(parsed) == template_record_sha256(
+        PilotTemplateRecord.model_validate(
+            parsed.model_dump(mode="json", exclude_none=True)
+        )
+    )

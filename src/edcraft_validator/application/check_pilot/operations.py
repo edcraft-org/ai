@@ -14,23 +14,51 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from edcraft_validator.application.check_pilot.models import (
+    RECIPE_OPERATION_SET,
+    SOLVE_RECIPE_OPERATION_SET,
     SUPPORTED_SCOPE,
     CheckRecipeDefinition,
+    ContractScope,
+    PolynomialRelation,
     PolynomialScope,
+    RealSolutionSet,
     RecipeArgument,
     RecipeExecutionResult,
+    RelationKind,
 )
 from edcraft_validator.application.check_pilot.polynomial import (
     Polynomial,
     derivative_via_sympy,
     render_polynomial,
 )
+from edcraft_validator.application.check_pilot.solution_sets import (
+    SolutionSet,
+    SolutionSetError,
+    relation_data,
+    render_relation,
+    render_solution_set,
+    sets_equal,
+    solution_set_from_model,
+    solve_relation_via_sympy,
+)
 
-ValueType = Literal["polynomial", "candidate", "integer", "verdict", "boolean"]
+ValueType = Literal[
+    "polynomial",
+    "candidate",
+    "integer",
+    "verdict",
+    "boolean",
+    "relation",
+    "real_solution_set",
+]
 OperationExecutor = Callable[[dict[str, object]], object]
-INPUT_TYPES: dict[str, ValueType] = {
+LEGACY_INPUT_TYPES: dict[str, ValueType] = {
     "problem": "polynomial",
     "candidate": "candidate",
+}
+SOLVE_INPUT_TYPES: dict[str, ValueType] = {
+    "problem": "relation",
+    "candidate": "real_solution_set",
 }
 
 
@@ -69,10 +97,38 @@ def _execute_constant_verdict(resolved: dict[str, object]) -> object:
     return bool(resolved["value"])
 
 
+def _require_relation(
+    value: object,
+) -> tuple[RelationKind, tuple[int, ...]]:
+    if not isinstance(value, PolynomialRelation):
+        raise RecipeCompileError(["operation expected relation data"])
+    try:
+        return relation_data(value)
+    except SolutionSetError as exc:
+        raise RecipeCompileError([str(exc)]) from None
+
+
+def _execute_solve_real(resolved: dict[str, object]) -> object:
+    relation, coefficients = _require_relation(resolved["problem"])
+    try:
+        return solve_relation_via_sympy(relation, coefficients)
+    except SolutionSetError as exc:
+        raise RecipeCompileError([f"solution set is unavailable: {exc}"]) from None
+
+
+def _execute_set_equal(resolved: dict[str, object]) -> object:
+    expected = resolved["expected"]
+    actual = resolved["actual"]
+    if not isinstance(expected, SolutionSet) or not isinstance(actual, SolutionSet):
+        raise RecipeCompileError(["set.equal requires solution-set values"])
+    return sets_equal(expected, actual)
+
+
 @dataclass(frozen=True, slots=True)
 class OperationDescriptor:
     id: str
     version: str
+    operation_set: str
     inputs: tuple[tuple[str, ValueType], ...]
     output: ValueType
     summary: str
@@ -87,6 +143,7 @@ _OPERATIONS = (
     OperationDescriptor(
         id="poly.differentiate",
         version="1",
+        operation_set=RECIPE_OPERATION_SET,
         inputs=(("polynomial", "polynomial"),),
         output="polynomial",
         summary="Differentiate one bounded univariate polynomial exactly.",
@@ -96,6 +153,7 @@ _OPERATIONS = (
     OperationDescriptor(
         id="poly.identity",
         version="1",
+        operation_set=RECIPE_OPERATION_SET,
         inputs=(("polynomial", "polynomial"),),
         output="polynomial",
         summary="Return its input unchanged (weak; never sufficient).",
@@ -107,6 +165,7 @@ _OPERATIONS = (
     OperationDescriptor(
         id="poly.evaluate_at",
         version="1",
+        operation_set=RECIPE_OPERATION_SET,
         inputs=(("polynomial", "polynomial"), ("point", "integer")),
         output="integer",
         summary="Evaluate at one integer point (weak; never sufficient).",
@@ -118,6 +177,7 @@ _OPERATIONS = (
     OperationDescriptor(
         id="poly.equivalent",
         version="1",
+        operation_set=RECIPE_OPERATION_SET,
         inputs=(("expected", "polynomial"), ("actual", "candidate")),
         output="verdict",
         summary=(
@@ -130,6 +190,7 @@ _OPERATIONS = (
     OperationDescriptor(
         id="number.equal",
         version="1",
+        operation_set=RECIPE_OPERATION_SET,
         inputs=(("left", "integer"), ("right", "integer")),
         output="verdict",
         summary="Compare two integers (weak; never sufficient).",
@@ -142,6 +203,7 @@ _OPERATIONS = (
     OperationDescriptor(
         id="verdict.constant",
         version="1",
+        operation_set=RECIPE_OPERATION_SET,
         inputs=(("value", "boolean"),),
         output="verdict",
         summary="Return a fixed verdict (weak; never sufficient).",
@@ -150,6 +212,35 @@ _OPERATIONS = (
             "comparing a differentiate result"
         ),
         execute=_execute_constant_verdict,
+    ),
+    OperationDescriptor(
+        id="relation.solve_real",
+        version="1",
+        operation_set=SOLVE_RECIPE_OPERATION_SET,
+        inputs=(("problem", "relation"),),
+        output="real_solution_set",
+        summary=(
+            "Compute the complete real solution set of a bounded linear or "
+            "quadratic relation with a separate trusted SymPy solver."
+        ),
+        weak_reason=None,
+        execute=_execute_solve_real,
+    ),
+    OperationDescriptor(
+        id="set.equal",
+        version="1",
+        operation_set=SOLVE_RECIPE_OPERATION_SET,
+        inputs=(
+            ("expected", "real_solution_set"),
+            ("actual", "real_solution_set"),
+        ),
+        output="verdict",
+        summary=(
+            "Compare the complete independently derived real solution set with "
+            "the candidate set, including every union component and endpoint flag."
+        ),
+        weak_reason=None,
+        execute=_execute_set_equal,
     ),
 )
 _OPERATION_INDEX = {(item.id, item.version): item for item in _OPERATIONS}
@@ -170,9 +261,13 @@ class CompiledRecipe:
     definition: CheckRecipeDefinition
     expected_step_id: str
     sha256: str
+    contract_id: str
+    operation_set: str
+    max_degree: int
+    max_abs_coefficient: int
 
 
-def operation_catalogue() -> list[dict[str, Any]]:
+def operation_catalogue(operation_set: str | None = None) -> list[dict[str, Any]]:
     """Model-facing descriptors for the check-author prompt."""
     return [
         {
@@ -183,6 +278,7 @@ def operation_catalogue() -> list[dict[str, Any]]:
             "summary": item.summary,
         }
         for item in _OPERATIONS
+        if operation_set is None or item.operation_set == operation_set
     ]
 
 
@@ -200,6 +296,7 @@ def recipe_sha256(definition: CheckRecipeDefinition) -> str:
 def _argument_type(
     argument: RecipeArgument,
     *,
+    input_types: dict[str, ValueType],
     step_types: dict[str, ValueType],
     all_step_ids: set[str],
     seen_step_ids: set[str],
@@ -207,11 +304,11 @@ def _argument_type(
     step_id: str,
 ) -> ValueType:
     if argument.source == "input":
-        if argument.name not in INPUT_TYPES:
+        if argument.name not in input_types:
             raise RecipeCompileError(
                 [f"argument {argument_name!r} on {step_id!r} names an unknown input"]
             )
-        return INPUT_TYPES[argument.name]
+        return input_types[argument.name]
     if argument.source == "step":
         name = argument.name or ""
         if name in seen_step_ids:
@@ -245,19 +342,43 @@ def _check_literal(argument: RecipeArgument, expected: ValueType, step_id: str) 
         )
 
 
+def _scope_operation_set(scope: PolynomialScope | ContractScope) -> str:
+    if isinstance(scope, ContractScope):
+        if scope.operation == "solve":
+            return SOLVE_RECIPE_OPERATION_SET
+        return RECIPE_OPERATION_SET
+    return RECIPE_OPERATION_SET
+
+
+def _scope_contract_id(scope: PolynomialScope | ContractScope) -> str:
+    if isinstance(scope, ContractScope):
+        return scope.contract_id
+    return "polynomial.differentiate/1"
+
+
 def compile_recipe(
     definition: CheckRecipeDefinition,
     *,
-    scope: PolynomialScope = SUPPORTED_SCOPE,
+    scope: PolynomialScope | ContractScope = SUPPORTED_SCOPE,
 ) -> CompiledRecipe:
-    if scope.operation != "differentiate" or scope.variable != "x":
-        raise RecipeCompileError(["the pilot supports differentiate on x only"])
+    if scope.variable != "x":
+        raise RecipeCompileError(["the pilot supports variable x only"])
+    operation_set = _scope_operation_set(scope)
+    if definition.operation_set != operation_set:
+        raise RecipeCompileError(
+            ["recipe operation set does not match the trusted check contract"]
+        )
     if len(definition.steps) > MAX_RECIPE_STEPS:
         raise RecipeCompileError(["recipe has too many steps"])
     all_step_ids = {step.id for step in definition.steps}
     if len(all_step_ids) != len(definition.steps):
         raise RecipeCompileError(["recipe step ids must be unique (duplicate id)"])
 
+    input_types = (
+        SOLVE_INPUT_TYPES
+        if operation_set == SOLVE_RECIPE_OPERATION_SET
+        else LEGACY_INPUT_TYPES
+    )
     step_types: dict[str, ValueType] = {}
     step_operations: dict[str, str] = {}
     weak: list[str] = []
@@ -271,6 +392,10 @@ def compile_recipe(
                     f"{step.version!r} is development needed"
                 ],
                 unknown_capability=True,
+            )
+        if descriptor.operation_set != operation_set:
+            raise RecipeCompileError(
+                [f"operation {step.operation!r} is outside the selected check contract"]
             )
         expected_arguments = descriptor.input_types()
         if set(step.arguments) != set(expected_arguments):
@@ -287,6 +412,7 @@ def compile_recipe(
                 continue
             actual_type = _argument_type(
                 argument,
+                input_types=input_types,
                 step_types=step_types,
                 all_step_ids=all_step_ids,
                 seen_step_ids=set(step_types),
@@ -318,35 +444,63 @@ def compile_recipe(
     output_step = next(
         step for step in definition.steps if step.id == definition.output
     )
-    if output_step.operation != "poly.equivalent":
-        raise RecipeCompileError(
-            ["recipe output must compare a differentiate result with the candidate"]
-        )
     expected_argument = output_step.arguments["expected"]
     actual_argument = output_step.arguments["actual"]
-    if expected_argument.source != "step" or not expected_argument.name:
-        raise RecipeCompileError(
-            ["expected must reference a prior differentiate result"]
-        )
-    if step_operations.get(expected_argument.name) != "poly.differentiate":
-        raise RecipeCompileError(
-            ["expected must be the output of a differentiate step"]
-        )
-    if actual_argument.source != "input" or actual_argument.name != "candidate":
-        raise RecipeCompileError(["actual must reference the candidate input"])
+    if operation_set == SOLVE_RECIPE_OPERATION_SET:
+        if output_step.operation != "set.equal":
+            raise RecipeCompileError(
+                [
+                    "recipe output must compare a complete real solution set "
+                    "with the candidate set"
+                ]
+            )
+        if expected_argument.source != "step" or not expected_argument.name:
+            raise RecipeCompileError(
+                ["expected must reference a prior complete solution-set step"]
+            )
+        if step_operations.get(expected_argument.name) != "relation.solve_real":
+            raise RecipeCompileError(
+                [
+                    "expected must be the output of relation.solve_real; root "
+                    "substitution or a partial check is not sufficient"
+                ]
+            )
+        if actual_argument.source != "input" or actual_argument.name != "candidate":
+            raise RecipeCompileError(["actual must reference the candidate input"])
+    else:
+        if output_step.operation != "poly.equivalent":
+            raise RecipeCompileError(
+                ["recipe output must compare a differentiate result with the candidate"]
+            )
+        if expected_argument.source != "step" or not expected_argument.name:
+            raise RecipeCompileError(
+                ["expected must reference a prior differentiate result"]
+            )
+        if step_operations.get(expected_argument.name) != "poly.differentiate":
+            raise RecipeCompileError(
+                ["expected must be the output of a differentiate step"]
+            )
+        if actual_argument.source != "input" or actual_argument.name != "candidate":
+            raise RecipeCompileError(["actual must reference the candidate input"])
 
+    max_degree = scope.max_degree
+    max_abs = scope.max_abs_coefficient
     return CompiledRecipe(
         definition=definition,
         expected_step_id=expected_argument.name,
         sha256=recipe_sha256(definition),
+        contract_id=_scope_contract_id(scope),
+        operation_set=operation_set,
+        max_degree=max_degree,
+        max_abs_coefficient=max_abs,
     )
 
 
 def _resolve(
     argument: RecipeArgument,
     *,
-    problem: Polynomial,
-    candidate: Polynomial,
+    problem: object,
+    candidate: object,
     values: dict[str, object],
 ) -> object:
     if argument.source == "input":
@@ -356,19 +510,62 @@ def _resolve(
     return argument.value
 
 
+def _render_expected(value: object) -> str:
+    if isinstance(value, Polynomial):
+        return render_polynomial(value)
+    if isinstance(value, SolutionSet):
+        return render_solution_set(value)
+    raise RecipeCompileError(["recipe expected value has no renderer"])
+
+
 def execute_recipe(
     compiled: CompiledRecipe,
-    problem: Polynomial,
-    candidate: Polynomial,
+    problem: object,
+    candidate: object,
 ) -> RecipeExecutionResult:
+    if compiled.operation_set == SOLVE_RECIPE_OPERATION_SET:
+        if not isinstance(problem, PolynomialRelation):
+            raise RecipeCompileError(["solve recipes require relation data"])
+        if not isinstance(candidate, RealSolutionSet):
+            raise RecipeCompileError(
+                ["solve recipes require a structured real solution set"]
+            )
+        if len(problem.coefficients) > compiled.max_degree + 1:
+            raise RecipeCompileError(["relation degree is outside the check scope"])
+        if any(
+            abs(value) > compiled.max_abs_coefficient for value in problem.coefficients
+        ):
+            raise RecipeCompileError(
+                ["relation coefficient is outside the check scope"]
+            )
+        problem_value: object = problem
+        candidate_value: object = solution_set_from_model(candidate)
+        problem_text = render_relation(*relation_data(problem))
+        candidate_text = render_solution_set(candidate_value)
+    else:
+        if not isinstance(problem, Polynomial) or not isinstance(candidate, Polynomial):
+            raise RecipeCompileError(["differentiate recipes require polynomials"])
+        if problem.degree > compiled.max_degree:
+            raise RecipeCompileError(["polynomial degree is outside the check scope"])
+        if any(
+            abs(value) > compiled.max_abs_coefficient for value in problem.coefficients
+        ):
+            raise RecipeCompileError(
+                ["polynomial coefficient is outside the check scope"]
+            )
+        problem_value = problem
+        candidate_value = candidate
+        problem_text = render_polynomial(problem)
+        candidate_text = render_polynomial(candidate)
+
     values: dict[str, object] = {}
     for step in compiled.definition.steps:
         descriptor = _OPERATION_INDEX[(step.operation, step.version)]
         resolved = {
             name: _resolve(
                 step.arguments[name],
-                problem=problem,
-                candidate=candidate,
+                problem=problem_value,
+                candidate=candidate_value,
                 values=values,
             )
             for name in descriptor.input_types()
@@ -378,12 +575,11 @@ def execute_recipe(
     if type(verdict) is not bool:
         raise RecipeCompileError(["recipe output did not produce a verdict"])
     expected_value = values[compiled.expected_step_id]
-    expected = _require_polynomial(expected_value)
     return RecipeExecutionResult(
         verdict=verdict,
-        expected=render_polynomial(expected),
-        problem=render_polynomial(problem),
-        candidate=render_polynomial(candidate),
+        expected=_render_expected(expected_value),
+        problem=problem_text,
+        candidate=candidate_text,
         recipe_sha256=compiled.sha256,
     )
 

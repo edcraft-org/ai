@@ -15,9 +15,15 @@ from edcraft_validator.application.check_pilot.isolation import (
 from edcraft_validator.application.check_pilot.models import (
     MAX_RECIPE_CASES,
     RENDERER_VERSION,
+    SOLVE_RENDERER_VERSION,
     CheckRecipeDefinition,
+    ContractScope,
     PilotQualificationSettings,
+    PilotTemplateDefinition,
+    PolynomialRelation,
+    PolynomialScope,
     Qualification,
+    RealSolutionSet,
     RecipeExecutionResult,
 )
 from edcraft_validator.application.check_pilot.polynomial import (
@@ -33,9 +39,12 @@ def _static_versions() -> dict[str, str]:
         "sympy": package_version("sympy"),
         "oracle": "coefficient-arithmetic/1",
         "polynomial_oracle": "coefficient-arithmetic/1",
+        "solution_oracle": "discriminant-sign/1",
         "recipe_compiler": "1",
         "renderer": RENDERER_VERSION,
+        "solve_renderer": SOLVE_RENDERER_VERSION,
         "question_builder": RENDERER_VERSION,
+        "solve_question_builder": SOLVE_RENDERER_VERSION,
     }
 
 
@@ -96,17 +105,21 @@ def qualify_recipe(
     *,
     seed: int,
     settings: PilotQualificationSettings | None = None,
+    scope: PolynomialScope | ContractScope | None = None,
 ) -> Qualification:
     """Qualify a check recipe against an independent coefficient oracle."""
     selected = settings or PilotQualificationSettings()
     seed_value = _seed(seed)
+    payload: dict[str, Any] = {
+        "operation": "qualify_recipe",
+        "definition": definition.model_dump(mode="json"),
+        "seed": seed_value,
+        "settings": selected.model_dump(mode="json"),
+    }
+    if scope is not None:
+        payload["scope"] = scope.model_dump(mode="json")
     return _run_qualification(
-        {
-            "operation": "qualify_recipe",
-            "definition": definition.model_dump(mode="json"),
-            "seed": seed_value,
-            "settings": selected.model_dump(mode="json"),
-        },
+        payload,
         seed=seed_value,
         settings=selected,
     )
@@ -118,27 +131,72 @@ def qualify_template(
     *,
     seed: int,
     settings: PilotQualificationSettings | None = None,
+    scope: PolynomialScope | ContractScope | None = None,
 ) -> Qualification:
     """Qualify a reusable family separately from check qualification."""
     selected = settings or PilotQualificationSettings()
     seed_value = _seed(seed)
+    payload: dict[str, Any] = {
+        "operation": "qualify_template",
+        "definition": definition.model_dump(mode="json"),
+        "family": family.model_dump(mode="json"),
+        "seed": seed_value,
+        "settings": selected.model_dump(mode="json"),
+    }
+    if scope is not None:
+        payload["scope"] = scope.model_dump(mode="json")
     return _run_qualification(
-        {
-            "operation": "qualify_template",
-            "definition": definition.model_dump(mode="json"),
-            "family": family.model_dump(mode="json"),
-            "seed": seed_value,
-            "settings": selected.model_dump(mode="json"),
-        },
+        payload,
         seed=seed_value,
         settings=selected,
     )
 
 
+def qualify_structured_template(
+    definition: CheckRecipeDefinition,
+    template: PilotTemplateDefinition,
+    *,
+    seed: int,
+    settings: PilotQualificationSettings | None = None,
+) -> Qualification:
+    """Qualify a version-2 structured template with its pinned contract."""
+    selected = settings or PilotQualificationSettings()
+    seed_value = _seed(seed)
+    payload = {
+        "operation": "qualify_template",
+        "definition": definition.model_dump(mode="json"),
+        "template": template.model_dump(mode="json", exclude_none=True),
+        "seed": seed_value,
+        "settings": selected.model_dump(mode="json"),
+    }
+    return _run_qualification(
+        payload,
+        seed=seed_value,
+        settings=selected,
+    )
+
+
+def _serialize_problem(problem: Polynomial | PolynomialRelation) -> dict[str, Any]:
+    if isinstance(problem, PolynomialRelation):
+        return {"kind": "relation", "relation": problem.model_dump(mode="json")}
+    return {"kind": "polynomial", "text": render_polynomial(problem)}
+
+
+def _serialize_candidate(
+    candidate: Polynomial | RealSolutionSet,
+) -> dict[str, Any]:
+    if isinstance(candidate, RealSolutionSet):
+        return {
+            "kind": "solution_set",
+            "solution_set": candidate.model_dump(mode="json"),
+        }
+    return {"kind": "polynomial", "text": render_polynomial(candidate)}
+
+
 def execute_recipe_isolated(
     definition: CheckRecipeDefinition,
-    problem: Polynomial,
-    candidate: Polynomial,
+    problem: Polynomial | PolynomialRelation,
+    candidate: Polynomial | RealSolutionSet,
     *,
     timeout_seconds: float = 10.0,
 ) -> RecipeExecutionResult:
@@ -149,8 +207,8 @@ def execute_recipe_isolated(
         {
             "operation": "execute_recipe",
             "definition": definition.model_dump(mode="json"),
-            "problem": render_polynomial(problem),
-            "candidate": render_polynomial(candidate),
+            "problem": _serialize_problem(problem),
+            "candidate": _serialize_candidate(candidate),
         },
         timeout_seconds=timeout_seconds,
     )
@@ -159,7 +217,7 @@ def execute_recipe_isolated(
 
 def execute_recipe_cases_isolated(
     definition: CheckRecipeDefinition,
-    cases: list[tuple[Polynomial, Polynomial]],
+    cases: list[tuple[Polynomial | PolynomialRelation, Polynomial | RealSolutionSet]],
     *,
     timeout_seconds: float = 10.0,
 ) -> list[RecipeExecutionResult]:
@@ -174,8 +232,8 @@ def execute_recipe_cases_isolated(
             "definition": definition.model_dump(mode="json"),
             "cases": [
                 {
-                    "problem": render_polynomial(problem),
-                    "candidate": render_polynomial(candidate),
+                    "problem": _serialize_problem(problem),
+                    "candidate": _serialize_candidate(candidate),
                 }
                 for problem, candidate in cases
             ],
@@ -201,5 +259,6 @@ __all__ = [
     "execute_recipe_isolated",
     "qualification_seed",
     "qualify_recipe",
+    "qualify_structured_template",
     "qualify_template",
 ]
