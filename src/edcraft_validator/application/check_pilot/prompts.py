@@ -87,8 +87,15 @@ Recipe rules:
   `{operation_set}`.
 - Inputs are `problem` and `candidate`. Their Python-side types depend on the
   operation set; never invent an input type or operation.
-- Step arguments are objects: {{"source":"input","name":"problem"}},
-  {{"source":"step","name":"d1"}}, or {{"source":"literal","value":true}}.
+- Each step must name exactly one registered operation and version, and its
+  `arguments` must contain exactly that operation's input names. Never add
+  unused argument names or nullable placeholder keys for other operations.
+- Input and step arguments are written with a name and a JSON null value:
+  {{"source":"input","name":"problem","value":null}},
+  {{"source":"step","name":"d1","value":null}}.
+- Literal arguments have a null name and a non-null integer, boolean or string
+  value: {{"source":"literal","name":null,"value":true}}. Literals never carry
+  a name.
 - {output_rule}
 - Use unique step ids and only reference earlier steps. Keep at most 8 steps.
 - Weak operations are listed for completeness but are rejected.
