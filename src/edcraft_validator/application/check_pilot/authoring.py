@@ -6,7 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import ValidationError
@@ -82,6 +82,19 @@ def _now() -> str:
 
 def _request_sha256(prompt: str) -> str:
     return hashlib.sha256(prompt.encode()).hexdigest()
+
+
+def _author_provenance(
+    role: Literal["check-author", "template-author"],
+    provider: ModelProvider,
+    prompt_version: str,
+) -> dict[str, Any]:
+    return {
+        "role": role,
+        "provider": str(provider.provider),
+        "model": str(provider.model),
+        "prompt_version": prompt_version,
+    }
 
 
 def _safe_settings(provider: ModelProvider) -> dict[str, Any]:
@@ -160,10 +173,7 @@ def _check_provenance(
     seed: int,
 ) -> dict[str, Any]:
     return {
-        "role": "check-author",
-        "provider": str(provider.provider),
-        "model": str(provider.model),
-        "prompt_version": CHECK_PROMPT_VERSION,
+        **_author_provenance("check-author", provider, CHECK_PROMPT_VERSION),
         "provider_settings": _safe_settings(provider),
         "request_sha256": _request_sha256(prompt),
         "request_length": len(prompt),
@@ -356,10 +366,7 @@ def _template_provenance(
     repair_attempts: int = 0,
 ) -> dict[str, Any]:
     return {
-        "role": "template-author",
-        "provider": str(provider.provider),
-        "model": str(provider.model),
-        "prompt_version": TEMPLATE_PROMPT_VERSION,
+        **_author_provenance("template-author", provider, TEMPLATE_PROMPT_VERSION),
         "provider_settings": _safe_settings(provider),
         "request_sha256": _request_sha256(prompt),
         "request_length": len(prompt),
@@ -435,12 +442,9 @@ def author_template_flow(
                 findings=outcome.findings,
                 check=None,
                 check_qualification=outcome.qualification,
-                provenance={
-                    "role": "check-author",
-                    "provider": str(provider.provider),
-                    "model": str(provider.model),
-                    "prompt_version": CHECK_PROMPT_VERSION,
-                },
+                provenance=_author_provenance(
+                    "check-author", provider, CHECK_PROMPT_VERSION
+                ),
                 reused_check=False,
             )
             return store.save_template(owner_id, record)
@@ -458,12 +462,9 @@ def author_template_flow(
             findings=[_SAFE_PROVIDER_ERROR],
             check=check,
             check_qualification=check_qualification,
-            provenance={
-                "role": "template-author",
-                "provider": str(provider.provider),
-                "model": str(provider.model),
-                "prompt_version": TEMPLATE_PROMPT_VERSION,
-            },
+            provenance=_author_provenance(
+                "template-author", provider, TEMPLATE_PROMPT_VERSION
+            ),
             reused_check=reused_check,
         )
         return store.save_template(owner_id, record)
@@ -474,12 +475,9 @@ def author_template_flow(
             findings=[_SAFE_PROVIDER_ERROR],
             check=check,
             check_qualification=check_qualification,
-            provenance={
-                "role": "template-author",
-                "provider": str(provider.provider),
-                "model": str(provider.model),
-                "prompt_version": TEMPLATE_PROMPT_VERSION,
-            },
+            provenance=_author_provenance(
+                "template-author", provider, TEMPLATE_PROMPT_VERSION
+            ),
             reused_check=reused_check,
         )
         return store.save_template(owner_id, record)

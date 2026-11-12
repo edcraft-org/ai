@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -26,26 +27,46 @@ from edcraft_validator.application.check_pilot.polynomial import (
 )
 
 ValueType = Literal["polynomial", "candidate", "integer", "verdict", "boolean"]
+OperationExecutor = Callable[[dict[str, object]], object]
 INPUT_TYPES: dict[str, ValueType] = {
     "problem": "polynomial",
     "candidate": "candidate",
 }
-WEAK_OPERATIONS = {
-    "poly.identity": (
-        "identity recipes cannot establish a derivative and are candidate-to-itself"
-    ),
-    "verdict.constant": (
-        "constant verdict recipes are always-true or always-false instead of "
-        "comparing a differentiate result"
-    ),
-    "poly.evaluate_at": (
-        "point sampling cannot establish polynomial equivalence in this pilot"
-    ),
-    "number.equal": (
-        "point sampling or number comparison cannot establish polynomial "
-        "equivalence in this pilot"
-    ),
-}
+
+
+def _require_polynomial(value: object) -> Polynomial:
+    if not isinstance(value, Polynomial):
+        raise RecipeCompileError(["operation expected polynomial data"])
+    return value
+
+
+def _execute_differentiate(resolved: dict[str, object]) -> object:
+    return derivative_via_sympy(_require_polynomial(resolved["polynomial"]))
+
+
+def _execute_identity(resolved: dict[str, object]) -> object:
+    return _require_polynomial(resolved["polynomial"])
+
+
+def _execute_evaluate_at(resolved: dict[str, object]) -> object:
+    point = resolved["point"]
+    if type(point) is not int:
+        raise RecipeCompileError(["evaluation point must be an integer"])
+    return _require_polynomial(resolved["polynomial"]).evaluate(point)
+
+
+def _execute_equivalent(resolved: dict[str, object]) -> object:
+    return _require_polynomial(resolved["expected"]) == _require_polynomial(
+        resolved["actual"]
+    )
+
+
+def _execute_number_equal(resolved: dict[str, object]) -> object:
+    return resolved["left"] == resolved["right"]
+
+
+def _execute_constant_verdict(resolved: dict[str, object]) -> object:
+    return bool(resolved["value"])
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +76,8 @@ class OperationDescriptor:
     inputs: tuple[tuple[str, ValueType], ...]
     output: ValueType
     summary: str
+    weak_reason: str | None
+    execute: OperationExecutor
 
     def input_types(self) -> dict[str, ValueType]:
         return dict(self.inputs)
@@ -67,6 +90,8 @@ _OPERATIONS = (
         inputs=(("polynomial", "polynomial"),),
         output="polynomial",
         summary="Differentiate one bounded univariate polynomial exactly.",
+        weak_reason=None,
+        execute=_execute_differentiate,
     ),
     OperationDescriptor(
         id="poly.identity",
@@ -74,6 +99,10 @@ _OPERATIONS = (
         inputs=(("polynomial", "polynomial"),),
         output="polynomial",
         summary="Return its input unchanged (weak; never sufficient).",
+        weak_reason=(
+            "identity recipes cannot establish a derivative and are candidate-to-itself"
+        ),
+        execute=_execute_identity,
     ),
     OperationDescriptor(
         id="poly.evaluate_at",
@@ -81,6 +110,10 @@ _OPERATIONS = (
         inputs=(("polynomial", "polynomial"), ("point", "integer")),
         output="integer",
         summary="Evaluate at one integer point (weak; never sufficient).",
+        weak_reason=(
+            "point sampling cannot establish polynomial equivalence in this pilot"
+        ),
+        execute=_execute_evaluate_at,
     ),
     OperationDescriptor(
         id="poly.equivalent",
@@ -91,6 +124,8 @@ _OPERATIONS = (
             "Compare a derived expected polynomial with the parsed candidate "
             "polynomial over all coefficients."
         ),
+        weak_reason=None,
+        execute=_execute_equivalent,
     ),
     OperationDescriptor(
         id="number.equal",
@@ -98,6 +133,11 @@ _OPERATIONS = (
         inputs=(("left", "integer"), ("right", "integer")),
         output="verdict",
         summary="Compare two integers (weak; never sufficient).",
+        weak_reason=(
+            "point sampling or number comparison cannot establish polynomial "
+            "equivalence in this pilot"
+        ),
+        execute=_execute_number_equal,
     ),
     OperationDescriptor(
         id="verdict.constant",
@@ -105,6 +145,11 @@ _OPERATIONS = (
         inputs=(("value", "boolean"),),
         output="verdict",
         summary="Return a fixed verdict (weak; never sufficient).",
+        weak_reason=(
+            "constant verdict recipes are always-true or always-false instead of "
+            "comparing a differentiate result"
+        ),
+        execute=_execute_constant_verdict,
     ),
 )
 _OPERATION_INDEX = {(item.id, item.version): item for item in _OPERATIONS}
@@ -215,6 +260,7 @@ def compile_recipe(
 
     step_types: dict[str, ValueType] = {}
     step_operations: dict[str, str] = {}
+    weak: list[str] = []
     for step in definition.steps:
         key = (step.operation, step.version)
         descriptor = _OPERATION_INDEX.get(key)
@@ -258,17 +304,14 @@ def compile_recipe(
                 )
         step_types[step.id] = descriptor.output
         step_operations[step.id] = step.operation
+        if descriptor.weak_reason is not None:
+            weak.append(descriptor.weak_reason)
 
     if definition.output not in step_types:
         raise RecipeCompileError(["recipe output names an unknown step"])
     if step_types[definition.output] != "verdict":
         raise RecipeCompileError(["recipe output must be a verdict"])
 
-    weak = [
-        WEAK_OPERATIONS[step.operation]
-        for step in definition.steps
-        if step.operation in WEAK_OPERATIONS
-    ]
     if weak:
         raise RecipeCompileError(sorted(set(weak)))
 
@@ -313,36 +356,6 @@ def _resolve(
     return argument.value
 
 
-def _execute_step(
-    operation: str,
-    resolved: dict[str, object],
-) -> object:
-    if operation == "poly.differentiate":
-        return derivative_via_sympy(_require_polynomial(resolved["polynomial"]))
-    if operation == "poly.identity":
-        return _require_polynomial(resolved["polynomial"])
-    if operation == "poly.evaluate_at":
-        point = resolved["point"]
-        if type(point) is not int:
-            raise RecipeCompileError(["evaluation point must be an integer"])
-        return _require_polynomial(resolved["polynomial"]).evaluate(point)
-    if operation == "poly.equivalent":
-        return _require_polynomial(resolved["expected"]) == _require_polynomial(
-            resolved["actual"]
-        )
-    if operation == "number.equal":
-        return resolved["left"] == resolved["right"]
-    if operation == "verdict.constant":
-        return bool(resolved["value"])
-    raise RecipeCompileError([f"unsupported operation {operation!r}"])
-
-
-def _require_polynomial(value: object) -> Polynomial:
-    if not isinstance(value, Polynomial):
-        raise RecipeCompileError(["operation expected polynomial data"])
-    return value
-
-
 def execute_recipe(
     compiled: CompiledRecipe,
     problem: Polynomial,
@@ -360,7 +373,7 @@ def execute_recipe(
             )
             for name in descriptor.input_types()
         }
-        values[step.id] = _execute_step(step.operation, resolved)
+        values[step.id] = descriptor.execute(resolved)
     verdict = values[compiled.definition.output]
     if type(verdict) is not bool:
         raise RecipeCompileError(["recipe output did not produce a verdict"])

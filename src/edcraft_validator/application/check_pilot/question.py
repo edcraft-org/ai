@@ -13,6 +13,7 @@ from edcraft_validator.application.check_pilot.polynomial import (
     render_polynomial,
     semantic_mutations,
 )
+from edcraft_validator.application.check_pilot.seeds import coefficient_seed
 
 MIN_CHOICES = 2
 
@@ -52,13 +53,6 @@ def validate_assignment(
         raise QuestionBuildError("the leading coefficient must be nonzero")
 
 
-def _instance_seed(seed: int, coefficients: tuple[int, ...]) -> int:
-    value = seed & 0x7FFF_FFFF
-    for coefficient in coefficients:
-        value = (value * 131 + coefficient + 10_007) & 0xFFFF_FFFF_FFFF_FFFF
-    return value
-
-
 def build_instance(
     family: PolynomialFamily,
     coefficients: tuple[int, ...],
@@ -75,7 +69,7 @@ def build_instance(
     required = family.num_distractors if num_distractors is None else num_distractors
     if required < 1:
         raise QuestionBuildError("at least one distractor is required")
-    rng = random.Random(_instance_seed(seed, coefficients))
+    rng = random.Random(coefficient_seed(seed, coefficients))
     wrong_values = semantic_mutations(expected, required, rng=rng)
     if len(wrong_values) < required:
         raise QuestionBuildError(

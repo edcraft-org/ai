@@ -43,6 +43,7 @@ from edcraft_validator.application.check_pilot.question import (
     build_instance,
     guard_instance,
 )
+from edcraft_validator.application.check_pilot.seeds import coefficient_seed
 
 
 class _BudgetExceeded(BaseException):
@@ -166,13 +167,6 @@ def _boundary_polynomials() -> list[Polynomial]:
     return [Polynomial.from_coefficients(value) for value in values]
 
 
-def _case_seed(seed_value: int, coefficients: tuple[int, ...], salt: int) -> int:
-    value = (seed_value + salt) & 0x7FFF_FFFF
-    for coefficient in coefficients:
-        value = (value * 131 + coefficient + 10_007) & 0xFFFF_FFFF_FFFF_FFFF
-    return value
-
-
 def _run_recipe_property(
     *,
     compiled: CompiledRecipe,
@@ -190,7 +184,7 @@ def _run_recipe_property(
             return
         expected = derivative_via_coefficients(polynomial)
         correct_forms = alternate_polynomial_forms(expected)
-        rng = random.Random(_case_seed(seed_value, coefficients, salt))
+        rng = random.Random(coefficient_seed(seed_value, coefficients, salt=salt))
         wrongs = semantic_mutations(expected, 3, rng=rng)
         if len(wrongs) < 2:
             raise _CaseFailure(
