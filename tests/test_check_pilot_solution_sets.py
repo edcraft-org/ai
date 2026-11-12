@@ -218,8 +218,10 @@ def test_isolated_execution_requires_an_explicit_inequality_scope():
 
 def test_isolated_execution_rejects_a_handbuilt_contract_scope():
     problem, candidate = inequality_case()
-    handbuilt = get_contract(INEQUALITY_CONTRACT).scope().model_copy(
-        update={"relations": ["eq"]}
+    handbuilt = (
+        get_contract(INEQUALITY_CONTRACT)
+        .scope()
+        .model_copy(update={"relations": ["eq"]})
     )
 
     with pytest.raises(PilotWorkerError, match="not a trusted contract scope"):

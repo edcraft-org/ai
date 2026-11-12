@@ -230,8 +230,6 @@ def test_worker_failure_and_success_evidence_share_static_versions(
     assert "hard" in failure.findings[0]
     assert failure.versions
     assert failure.versions == {
-        key: value
-        for key, value in success.versions.items()
-        if key in failure.versions
+        key: value for key, value in success.versions.items() if key in failure.versions
     }
     assert set(success.versions) - set(failure.versions) == {"hypothesis", "python"}

@@ -594,9 +594,7 @@ def _validated_execution_inputs(
         raise RecipeCompileError(["differentiate recipes require polynomials"])
     if problem.degree > compiled.max_degree:
         raise RecipeCompileError(["polynomial degree is outside the check scope"])
-    if any(
-        abs(value) > compiled.max_abs_coefficient for value in problem.coefficients
-    ):
+    if any(abs(value) > compiled.max_abs_coefficient for value in problem.coefficients):
         raise RecipeCompileError(["polynomial coefficient is outside the check scope"])
     return (
         problem,
