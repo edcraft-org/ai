@@ -224,10 +224,10 @@ def execute_recipe_cases_isolated(
     if scope is not None:
         payload["scope"] = scope.model_dump(mode="json")
     response = run_pilot_isolated(payload, timeout_seconds=timeout_seconds)
-    payload = response.get("results")
-    if not isinstance(payload, list):
+    results = response.get("results")
+    if not isinstance(results, list):
         raise PilotWorkerError("pilot worker returned no recipe results")
-    return [RecipeExecutionResult.model_validate(item) for item in payload]
+    return [RecipeExecutionResult.model_validate(item) for item in results]
 
 
 def qualification_seed(*parts: str) -> int:
