@@ -15,7 +15,8 @@ this facade. The AI-side flow is:
 
 1. **Structured planning.** `check-planner/2` receives the trusted capability
    descriptors and the owner's qualified saved-check descriptors. It proposes a
-   trusted `contract_id`, a structured `StructuredGoal`, and optionally one exact
+   trusted `contract_id`, a `StructuredGoal` for the original polynomial checks
+   or `KernelGoal` for the new contracts, and optionally one exact
    saved `CheckRef`. The application, not the model, validates the contract, goal
    and reference. If the reference is omitted, the application may select the
    newest applicable qualified check. An explicit unknown, foreign, stale or
@@ -27,7 +28,7 @@ this facade. The AI-side flow is:
    qualifies it with independent bounded property-based sampling. A passing
    recipe is stored as an immutable, content-addressed private check.
 3. **Template authoring.** `template-author/4` proposes only structured bounded
-   coefficient domains for the selected contract. For differentiation it returns
+   parameter domains for the selected contract. For polynomial differentiation it returns
    a `PolynomialFamily`; for equations or inequalities it returns a `SolveFamily`
    with the requested relation. The application validates the actual structured
    goal against both the plan and the pinned check scope. New contracts use a
@@ -204,7 +205,10 @@ identically. They are never rewritten into version-2 records.
 `check_pilot_execute_recipe` is the one stable MCP adapter. It accepts a closed
 recipe definition plus one problem and candidate. Differentiation recipes accept
 bounded polynomial text. Solve recipes accept one structured `PolynomialRelation`
-and one structured `RealSolutionSet`. An optional `contract_id` selects the
+and one structured `RealSolutionSet`. Structured kernel recipes accept a closed
+problem object and candidate object validated by the selected domain kernel;
+they require an explicit `contract_id`. For the original recipes, an optional
+`contract_id` selects the
 trusted contract; differentiation defaults to its contract and solve defaults to
 the equation contract, so inequality execution must explicitly name
 `polynomial.inequality-real/1`. Compilation validates operation ids, versions,

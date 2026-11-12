@@ -29,16 +29,15 @@ CONTRACT_KINDS = {
 ALL_CONTRACTS = tuple(CONTRACT_KINDS)
 
 
+@pytest.mark.parametrize("nested", [False, True])
 @given(coefficient=st.integers(min_value=-6, max_value=6))
 @settings(max_examples=13, deadline=None)
-def test_rendered_product_rule_preserves_mathematical_grouping(coefficient):
+def test_rendered_product_rule_preserves_mathematical_grouping(coefficient, nested):
+    factors = [_sym("x"), _op("exp", _op("mul", _num(2), _sym("x")))]
     problem = _differentiate_problem(
-        _op(
-            "mul",
-            _num(coefficient),
-            _sym("x"),
-            _op("exp", _op("mul", _num(2), _sym("x"))),
-        )
+        _op("mul", _num(coefficient), _op("mul", *factors))
+        if nested
+        else _op("mul", _num(coefficient), *factors)
     )
     answer = calculus.expected_answer(DIFFERENTIATE, problem)
     rendered = calculus.render_answer(DIFFERENTIATE, answer)
