@@ -82,6 +82,25 @@ def test_differentiation_renders_nonzero_domain_assumption():
     assert any(marker in text for marker in ("!= 0", "≠ 0", "nonzero", "non-zero"))
 
 
+def test_derivative_validation_bounds_arithmetic_before_constant_cancellation():
+    huge = {"num": "20"}
+    for _ in range(3):
+        huge = {"op": "pow", "args": [huge, {"num": "5"}]}
+    problem = {
+        "kind": "expression_differentiate",
+        "expression": {
+            "op": "mul",
+            "args": [
+                {"sym": "x"},
+                {"op": "sub", "args": [huge, huge]},
+            ],
+        },
+        "symbols": [{"name": "x", "positive": False, "nonzero": False}],
+    }
+    with pytest.raises(ValueError, match="arithmetic budget"):
+        calculus.validate_problem("expression.differentiate/1", problem)
+
+
 @pytest.mark.parametrize("module", [calculus, matrices])
 def test_qualification_mutations_do_not_consult_the_checker(module, monkeypatch):
     """A faulty checker must not erase the negative cases that would expose it."""

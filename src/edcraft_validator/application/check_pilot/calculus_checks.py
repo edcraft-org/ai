@@ -43,6 +43,7 @@ MAX_EXPRESSION_DEPTH = 16
 MAX_SYMBOLS = 4
 MAX_POWER = 12
 MAX_RATIONAL_TEXT = 200
+MAX_ARITHMETIC_BITS = 256
 
 ANTIDERIVATIVE_CONTRACT = "polynomial.antiderivative/1"
 DEFINITE_INTEGRAL_CONTRACT = "polynomial.definite-integral/1"
@@ -646,8 +647,17 @@ def check_answer(
     raise ValueError(f"unknown calculus contract {contract_id!r}")
 
 
+def _bounded_fraction(value: Fraction) -> Fraction:
+    if (
+        value.numerator.bit_length() > MAX_ARITHMETIC_BITS
+        or value.denominator.bit_length() > MAX_ARITHMETIC_BITS
+    ):
+        raise ValueError("expression exceeds the exact arithmetic budget")
+    return value
+
+
 def _num(value: Fraction | int) -> Expr:
-    return Expr(num=str(Fraction(value)))
+    return Expr(num=str(_bounded_fraction(Fraction(value))))
 
 
 def _sym(name: str) -> Expr:
@@ -666,7 +676,7 @@ def _simplify(expr: Expr) -> Expr:
         constant = Fraction(0)
         for child in (_simplify(arg) for arg in expr.args):
             if child.num is not None:
-                constant += Fraction(child.num)
+                constant = _bounded_fraction(constant + Fraction(child.num))
             elif child.op == "add":
                 terms.extend(child.args)
             else:
@@ -683,7 +693,7 @@ def _simplify(expr: Expr) -> Expr:
         constant = Fraction(1)
         for child in (_simplify(arg) for arg in expr.args):
             if child.num is not None:
-                constant *= Fraction(child.num)
+                constant = _bounded_fraction(constant * Fraction(child.num))
             elif child.op == "mul":
                 factors.extend(child.args)
             else:
@@ -725,7 +735,13 @@ def _simplify(expr: Expr) -> Expr:
         if exponent == 1:
             return base
         if base.num is not None:
-            return _num(Fraction(base.num) ** exponent)
+            value = Fraction(base.num)
+            if (
+                value.numerator.bit_length() * abs(exponent) > MAX_ARITHMETIC_BITS
+                or value.denominator.bit_length() * abs(exponent) > MAX_ARITHMETIC_BITS
+            ):
+                raise ValueError("expression exceeds the exact arithmetic budget")
+            return _num(value**exponent)
         return Expr(op="pow", args=[base, _num(exponent)])
     return Expr(op=expr.op, args=[_simplify(arg) for arg in expr.args])
 
