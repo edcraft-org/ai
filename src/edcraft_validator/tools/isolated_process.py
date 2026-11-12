@@ -174,13 +174,18 @@ def run_json_worker(
         raise worker_error(f"{worker_label} returned a non-object")
     if "error" in response:
         error = response["error"]
+        code = ""
         if isinstance(error, dict):
             error_type = str(error.get("type", "error"))[:100]
             message = str(error.get("message", ""))[:MAX_ERROR_MESSAGE_CHARS]
+            code = str(error.get("code", ""))[:100]
         else:
             error_type = "error"
             message = str(error)[:MAX_ERROR_MESSAGE_CHARS]
-        raise worker_error(f"{error_type}: {message}")
+        failure = worker_error(f"{error_type}: {message}")
+        if code:
+            failure.code = code  # type: ignore[attr-defined]
+        raise failure
     return response
 
 

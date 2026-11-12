@@ -30,6 +30,10 @@ from edcraft_validator.application.check_pilot.polynomial import (
 )
 from edcraft_validator.application.check_pilot.versions import static_versions
 
+RecipeProblem = Polynomial | PolynomialRelation | str | dict[str, Any]
+RecipeCandidate = Polynomial | RealSolutionSet | str | dict[str, Any]
+Scope = PolynomialScope | ContractScope | KernelContractScope
+
 
 def _worker_failure(
     *,
@@ -159,20 +163,16 @@ def qualify_structured_template(
     )
 
 
-def _serialize_problem(
-    problem: Polynomial | PolynomialRelation | dict[str, Any],
-) -> dict[str, Any]:
-    if isinstance(problem, dict):
+def _serialize_problem(problem: RecipeProblem) -> str | dict[str, Any]:
+    if isinstance(problem, (str, dict)):
         return problem
     if isinstance(problem, PolynomialRelation):
         return {"kind": "relation", "relation": problem.model_dump(mode="json")}
     return {"kind": "polynomial", "text": render_polynomial(problem)}
 
 
-def _serialize_candidate(
-    candidate: Polynomial | RealSolutionSet | dict[str, Any],
-) -> dict[str, Any]:
-    if isinstance(candidate, dict):
+def _serialize_candidate(candidate: RecipeCandidate) -> str | dict[str, Any]:
+    if isinstance(candidate, (str, dict)):
         return candidate
     if isinstance(candidate, RealSolutionSet):
         return {
@@ -182,39 +182,56 @@ def _serialize_candidate(
     return {"kind": "polynomial", "text": render_polynomial(candidate)}
 
 
+def _definition_payload(
+    definition: CheckRecipeDefinition | dict[str, Any],
+) -> dict[str, Any]:
+    if isinstance(definition, CheckRecipeDefinition):
+        return definition.model_dump(mode="json")
+    return definition
+
+
 def execute_recipe_isolated(
-    definition: CheckRecipeDefinition,
-    problem: Polynomial | PolynomialRelation | dict[str, Any],
-    candidate: Polynomial | RealSolutionSet | dict[str, Any],
+    definition: CheckRecipeDefinition | dict[str, Any],
+    problem: RecipeProblem,
+    candidate: RecipeCandidate,
     *,
-    scope: PolynomialScope | ContractScope | KernelContractScope | None = None,
+    scope: Scope | None = None,
+    contract_id: str | None = None,
     timeout_seconds: float = 10.0,
 ) -> RecipeExecutionResult:
-    """Run the same validated recipe implementation used by the pilot."""
+    """Run the same validated recipe implementation used by the pilot.
+
+    The caller may pass raw JSON-compatible payloads. Parsing, kernel
+    validation and recipe compilation all happen inside the isolated worker,
+    never in the calling process.
+    """
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError("recipe timeout must be finite and positive")
     payload: dict[str, Any] = {
         "operation": "execute_recipe",
-        "definition": definition.model_dump(mode="json"),
+        "definition": _definition_payload(definition),
         "problem": _serialize_problem(problem),
         "candidate": _serialize_candidate(candidate),
     }
     if scope is not None:
         payload["scope"] = scope.model_dump(mode="json")
+    elif contract_id is not None:
+        payload["contract_id"] = contract_id
     response = run_pilot_isolated(payload, timeout_seconds=timeout_seconds)
     return RecipeExecutionResult.model_validate(response["result"])
 
 
 def execute_recipe_cases_isolated(
-    definition: CheckRecipeDefinition,
+    definition: CheckRecipeDefinition | dict[str, Any],
     cases: list[
         tuple[
-            Polynomial | PolynomialRelation | dict[str, Any],
-            Polynomial | RealSolutionSet | dict[str, Any],
+            RecipeProblem,
+            RecipeCandidate,
         ]
     ],
     *,
-    scope: PolynomialScope | ContractScope | KernelContractScope | None = None,
+    scope: Scope | None = None,
+    contract_id: str | None = None,
     timeout_seconds: float = 10.0,
 ) -> list[RecipeExecutionResult]:
     """Validate one generated batch in a single disposable interpreter."""
@@ -224,7 +241,7 @@ def execute_recipe_cases_isolated(
         raise ValueError(f"a batch may contain at most {MAX_RECIPE_CASES} recipe cases")
     payload: dict[str, Any] = {
         "operation": "execute_recipe_cases",
-        "definition": definition.model_dump(mode="json"),
+        "definition": _definition_payload(definition),
         "cases": [
             {
                 "problem": _serialize_problem(problem),
@@ -235,6 +252,8 @@ def execute_recipe_cases_isolated(
     }
     if scope is not None:
         payload["scope"] = scope.model_dump(mode="json")
+    elif contract_id is not None:
+        payload["contract_id"] = contract_id
     response = run_pilot_isolated(payload, timeout_seconds=timeout_seconds)
     results = response.get("results")
     if not isinstance(results, list):

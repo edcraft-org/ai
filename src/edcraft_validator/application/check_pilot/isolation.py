@@ -15,7 +15,13 @@ class PilotWorkerTimeout(TimeoutError):
 
 
 class PilotWorkerError(RuntimeError):
-    """The isolated pilot worker failed before returning a report."""
+    """The isolated pilot worker failed before returning a report.
+
+    ``code`` carries an explicit boundary error code from the worker envelope,
+    such as ``RECIPE_INVALID``; transport failures leave it unset.
+    """
+
+    code: str | None = None
 
 
 def run_pilot_isolated(

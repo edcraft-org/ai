@@ -346,7 +346,12 @@ class CompiledRecipe:
 
 
 def operation_catalogue(operation_set: str | None = None) -> list[dict[str, Any]]:
-    """Model-facing descriptors for the check-author prompt."""
+    """Model-facing descriptors for the check-author prompt.
+
+    Only operations that can actually compile are advertised. Weak operations
+    remain registered so the compiler can explain why a proposed step is
+    rejected, but they are never presented as authoring options.
+    """
     return [
         {
             "id": item.id,
@@ -356,7 +361,8 @@ def operation_catalogue(operation_set: str | None = None) -> list[dict[str, Any]
             "summary": item.summary,
         }
         for item in _OPERATIONS
-        if operation_set is None or item.operation_set == operation_set
+        if item.weak_reason is None
+        and (operation_set is None or item.operation_set == operation_set)
     ]
 
 
