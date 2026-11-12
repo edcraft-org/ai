@@ -34,6 +34,7 @@ from edcraft_validator.application.check_pilot.models import (
     STRUCTURED_RENDERER_VERSION,
     TEMPLATE_SCHEMA_VERSION_V2,
     TEMPLATE_SCHEMA_VERSION_V3,
+    ApprovalStatus,
     CheckAuthorProposal,
     CheckPlanProposal,
     CheckRecipeDefinition,
@@ -542,6 +543,26 @@ def _template_id(prompt: str, template_digest: str, check_sha256: str) -> str:
     return f"tpl_{identity[:24]}"
 
 
+def _failure_approval(
+    *, status: TemplateStatus, qualification: Qualification | None
+) -> ApprovalStatus:
+    """Decide whether saved failure evidence is final or retryable.
+
+    A failed or inconclusive check/template qualification is deterministic
+    evidence against the draft, so the record is marked ``rejected`` while its
+    status and findings stay for inspection. Provider, schema, worker, timeout
+    and unsupported-plan failures stay ``unreviewed`` so a retry can succeed.
+    """
+    if status == "error":
+        return "unreviewed"
+    if qualification is not None and qualification.status in {
+        "failed",
+        "inconclusive",
+    }:
+        return "rejected"
+    return "unreviewed"
+
+
 def _record_failure(
     *,
     prompt: str,
@@ -560,7 +581,7 @@ def _record_failure(
         template_sha256=NULL_TEMPLATE_SHA256,
         prompt=prompt,
         status=status,
-        approval="unreviewed",
+        approval=_failure_approval(status=status, qualification=check_qualification),
         reused_check=reused_check,
         check=check,
         template=None,
@@ -926,7 +947,7 @@ def author_template_flow(
         template_sha256=template_digest,
         prompt=prompt,
         status=status,
-        approval="unreviewed",
+        approval=_failure_approval(status=status, qualification=qualification),
         reused_check=reused_check,
         check=check,
         template=definition.model_dump(mode="json", exclude_none=True),

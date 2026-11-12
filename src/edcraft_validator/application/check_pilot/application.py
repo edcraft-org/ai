@@ -99,7 +99,7 @@ class CheckPilotApplication:
         template_id: str,
         *,
         template_sha256: str,
-        check_sha256: str,
+        check_sha256: str | None = None,
         decision: Literal["approved", "rejected"],
     ) -> PilotTemplateRecord:
         _validate_owner(owner_id)
@@ -109,16 +109,18 @@ class CheckPilotApplication:
             template_sha256
         ):
             raise PilotInputError("template_sha256 must be a lowercase sha256")
-        if not isinstance(check_sha256, str) or not _SHA256.fullmatch(check_sha256):
-            raise PilotInputError("check_sha256 must be a lowercase sha256")
         record = self.store.get_template(owner_id, template_id)
-        if record.check is None:
-            raise PilotConflict("this template has no qualified check to approve")
         if record.template_sha256 != template_sha256:
             raise PilotConflict("template changed; reload before deciding")
-        if record.check.check_ref.sha256 != check_sha256:
-            raise PilotConflict("check changed; reload before deciding")
         if decision == "approved":
+            # Approval pins the exact qualified check; rejection only needs the
+            # current template, so a draft whose check failed can still be closed.
+            if not isinstance(check_sha256, str) or not _SHA256.fullmatch(check_sha256):
+                raise PilotInputError("check_sha256 must be a lowercase sha256")
+            if record.check is None:
+                raise PilotConflict("this template has no qualified check to approve")
+            if record.check.check_ref.sha256 != check_sha256:
+                raise PilotConflict("check changed; reload before deciding")
             if (
                 record.status != "ready"
                 or record.qualification is None
