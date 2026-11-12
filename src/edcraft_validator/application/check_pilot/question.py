@@ -32,6 +32,10 @@ class GeneratedInstance:
     parameters: dict[str, int | str]
     distractors: tuple[str, ...]
 
+    @property
+    def answer(self) -> str:
+        return render_polynomial(self.expected)
+
 
 def validate_assignment(
     family: PolynomialFamily, coefficients: tuple[int, ...]
