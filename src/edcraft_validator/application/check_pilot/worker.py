@@ -15,6 +15,9 @@ import hypothesis
 from hypothesis import HealthCheck, Phase, example, given, seed, settings
 from hypothesis import strategies as st
 
+from edcraft_validator.application.check_pilot.batch_generation import (
+    generate_batch as build_generation_batch,
+)
 from edcraft_validator.application.check_pilot.contracts import (
     scope_from_recipe_operation_set,
 )
@@ -24,6 +27,7 @@ from edcraft_validator.application.check_pilot.models import (
     SOLVE_RENDERER_VERSION,
     SUPPORTED_SCOPE,
     CheckRecipeDefinition,
+    CheckRef,
     ContractScope,
     PilotQualificationSettings,
     PilotTemplateDefinition,
@@ -34,6 +38,7 @@ from edcraft_validator.application.check_pilot.models import (
     QualificationPhase,
     QualificationStatus,
     RealSolutionSet,
+    RelationKind,
     SolveFamily,
 )
 from edcraft_validator.application.check_pilot.operations import (
@@ -83,7 +88,7 @@ class _RunState:
     config: PilotQualificationSettings
     started: float = field(default_factory=time.perf_counter)
     execution_calls: int = 0
-    accepted: set[tuple[int, ...]] = field(default_factory=set)
+    accepted: set[tuple[object, ...]] = field(default_factory=set)
 
     @property
     def deadline(self) -> float:
@@ -334,12 +339,17 @@ def _scope_from_payload(
 def _solve_relation_strategy(
     scope: ContractScope,
 ) -> st.SearchStrategy[PolynomialRelation]:
-    relations = [item for item in scope.relations if item != "none"]
+    relations: list[RelationKind] = []
+    for item in scope.relations:
+        if item != "none":
+            relations.append(item)
     if not relations:
         relations = ["eq"]
     bound = scope.max_abs_coefficient
 
-    def for_degree(relation: str, degree: int) -> st.SearchStrategy[PolynomialRelation]:
+    def for_degree(
+        relation: RelationKind, degree: int
+    ) -> st.SearchStrategy[PolynomialRelation]:
         return st.lists(
             st.integers(min_value=-bound, max_value=bound),
             min_size=degree + 1,
@@ -362,8 +372,11 @@ def _solve_relation_strategy(
 
 
 def _solve_boundary_relations(scope: ContractScope) -> list[PolynomialRelation]:
-    relations = [item for item in scope.relations if item != "none"]
-    desired: list[tuple[str, list[int]]] = []
+    relations: list[RelationKind] = []
+    for item in scope.relations:
+        if item != "none":
+            relations.append(item)
+    desired: list[tuple[RelationKind, list[int]]] = []
     for relation in relations:
         if relation == "eq":
             desired.extend(
@@ -585,7 +598,9 @@ def qualify_recipe_payload(payload: dict[str, Any]) -> Qualification:
     )
 
 
-def _family_strategy(family: PolynomialFamily) -> st.SearchStrategy[dict[str, int]]:
+def _family_strategy(
+    family: PolynomialFamily | SolveFamily,
+) -> st.SearchStrategy[dict[str, int]]:
     return st.fixed_dictionaries(
         {
             f"a{domain.exponent}": st.sampled_from(domain.values)
@@ -594,7 +609,9 @@ def _family_strategy(family: PolynomialFamily) -> st.SearchStrategy[dict[str, in
     )
 
 
-def _family_boundaries(family: PolynomialFamily) -> list[dict[str, int]]:
+def _family_boundaries(
+    family: PolynomialFamily | SolveFamily,
+) -> list[dict[str, int]]:
     base = {f"a{domain.exponent}": domain.values[0] for domain in family.coefficients}
     last = {f"a{domain.exponent}": domain.values[-1] for domain in family.coefficients}
     examples = [base, last]
@@ -920,6 +937,25 @@ def execute_recipe_cases_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return {"results": results}
 
 
+def generate_batch_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    template_id = payload.get("template_id")
+    seed = payload.get("seed")
+    quantity = payload.get("quantity")
+    if not isinstance(template_id, str) or not template_id:
+        raise ValueError("generation requires a template id")
+    if type(seed) is not int or type(quantity) is not int:
+        raise ValueError("generation seed and quantity must be integers")
+    batch = build_generation_batch(
+        template_id=template_id,
+        seed=seed,
+        quantity=quantity,
+        definition=CheckRecipeDefinition.model_validate(payload.get("definition")),
+        template=PilotTemplateDefinition.model_validate(payload.get("template")),
+        check_ref=CheckRef.model_validate(payload.get("check_ref")),
+    )
+    return {"batch": batch.model_dump(mode="json")}
+
+
 def _run(payload: dict[str, Any]) -> dict[str, Any]:
     operation = payload.get("operation")
     if operation == "qualify_recipe":
@@ -933,6 +969,8 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
         return execute_recipe_payload(payload)
     if operation == "execute_recipe_cases":
         return execute_recipe_cases_payload(payload)
+    if operation == "generate_batch":
+        return generate_batch_payload(payload)
     raise ValueError(f"unknown pilot operation {operation!r}")
 
 

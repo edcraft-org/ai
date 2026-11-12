@@ -539,9 +539,10 @@ def execute_recipe(
                 ["relation coefficient is outside the check scope"]
             )
         problem_value: object = problem
-        candidate_value: object = solution_set_from_model(candidate)
+        solution = solution_set_from_model(candidate)
+        candidate_value: object = solution
         problem_text = render_relation(*relation_data(problem))
-        candidate_text = render_solution_set(candidate_value)
+        candidate_text = render_solution_set(solution)
     else:
         if not isinstance(problem, Polynomial) or not isinstance(candidate, Polynomial):
             raise RecipeCompileError(["differentiate recipes require polynomials"])

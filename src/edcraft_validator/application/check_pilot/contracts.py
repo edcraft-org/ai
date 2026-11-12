@@ -282,24 +282,24 @@ def scope_applicability_findings(
 def template_goal(definition: PilotTemplateDefinition) -> StructuredGoal:
     """Derive the actual structured goal of a concrete template definition."""
     if definition.solve_family is not None:
-        family = definition.solve_family
+        solve_family = definition.solve_family
         return StructuredGoal(
             operation="solve",
-            relation=family.relation,
-            min_degree=family.degree,
-            max_degree=family.degree,
-            max_abs_coefficient=_family_bound(family),
+            relation=solve_family.relation,
+            min_degree=solve_family.degree,
+            max_degree=solve_family.degree,
+            max_abs_coefficient=_family_bound(solve_family),
             answer_type="solution_set",
             requires_complete_solution_set=True,
         )
-    family = definition.family
-    assert family is not None
+    polynomial_family = definition.family
+    assert polynomial_family is not None
     return StructuredGoal(
         operation="differentiate",
         relation="none",
-        min_degree=family.degree,
-        max_degree=family.degree,
-        max_abs_coefficient=_family_bound(family),
+        min_degree=polynomial_family.degree,
+        max_degree=polynomial_family.degree,
+        max_abs_coefficient=_family_bound(polynomial_family),
         answer_type="expression",
     )
 

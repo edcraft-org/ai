@@ -1,7 +1,9 @@
-# Reusable check-authoring pilot
+# Reusable check catalogue and authoring pilot
 
-Status: private, source-integrated pilot for univariate real-polynomial
-differentiation. It is not a public sharing feature, and no deployment or
+Status: private, source-integrated catalogue for reusable mathematics checks. The
+trusted contracts currently cover bounded univariate real-polynomial
+differentiation and bounded real linear/quadratic equation and inequality
+solution sets. This is not a public sharing feature, and no deployment or
 live-provider verification is claimed here.
 
 ## What the flow does
@@ -11,75 +13,133 @@ Python facade. The backend owns authentication, provider/profile or BYOK
 resolution, and HTTP error mapping; its `/ai-authoring/check-pilot` routes call
 this facade. The AI-side flow is:
 
-1. **Check authoring.** The check-author prompt receives trusted operation
-   descriptors and may propose one closed recipe plus a title and explanation.
-   The application compiles it against an allowlist of typed operations, then
-   qualifies it with bounded property-based sampling.
-2. **Qualification.** A passing recipe is saved as an immutable, content-addressed
-   private check. Compile failures, failed qualification, exhausted repairs,
-   provider failures and worker failures never become usable checks. Compilation
-   rejections are recorded as an `error` qualification in the `compilation` phase
-   with zero executions and no counterexample; they are not sampled false answers.
-3. **Template authoring.** The template-author prompt proposes only a bounded
-   coefficient-domain family. The application validates those domains before use
-   and renders wording, answers and distractors itself.
-4. **Reuse.** If the owner already has a passed check for the required scope and
-   operation set, the check is reused (`reused_check=true`) and no check-author
-   model call is made.
+1. **Structured planning.** `check-planner/1` receives the trusted capability
+   descriptors and the owner's qualified saved-check descriptors. It proposes a
+   trusted `contract_id`, a structured `StructuredGoal`, and optionally one exact
+   saved `CheckRef`. The application, not the model, validates the contract, goal
+   and reference. If the reference is omitted, the application may select the
+   newest applicable qualified check. An explicit unknown, foreign, stale or
+   incompatible reference fails closed; it is never silently replaced with a
+   different task.
+2. **Check authoring when missing.** If no applicable saved check exists,
+   `check-author/2` proposes one closed recipe from advertised versioned typed
+   operations. The application compiles it against the contract's allowlist and
+   qualifies it with independent bounded property-based sampling. A passing
+   recipe is stored as an immutable, content-addressed private check.
+3. **Template authoring.** `template-author/2` proposes only structured bounded
+   coefficient domains for the selected contract. For differentiation it returns
+   a `PolynomialFamily`; for equations or inequalities it returns a `SolveFamily`
+   with the requested relation. The application validates the actual structured
+   goal against both the plan and the pinned check scope.
+4. **Reuse.** A suitable saved check is reused (`reused_check=true`) and no
+   check-author call is made. A new template remains unreviewed even when its
+   check was reused.
 5. **Approval.** An educator explicitly approves a `ready` template using the
    current template and check digests. Rejection is separate from check
    qualification.
 6. **Generation.** Seeded generation requires the matching approval and pinned
-   digests. It makes no provider/model calls. Each emitted instance is guarded by
-   application-owned correctness/distractor logic and the same pinned recipe.
-   Sampling is bounded and deduplicated; a shortfall makes no claim that the
-   declared domains are exhausted.
+   digests. It makes no provider/model calls. The whole batch — bounded sampling,
+   key and distractor arithmetic, rendering, independent correctness guards and
+   the pinned recipe checks — runs in one disposable JSON worker request. The
+   parent process only validates owner storage, approval, pinned hashes and
+   contract applicability, so no new polynomial or solution-set symbolic work
+   runs on the application host. Sampling is bounded and deduplicated; a
+   shortfall makes no claim that the declared domains are exhausted.
 
-The HTTP contract is `POST /templates`, `GET /templates`,
+The HTTP contract is unchanged: `POST /templates`, `GET /templates`,
 `GET /templates/{template_id}`, `GET /checks`, `GET /checks/{check_id}`,
 `POST /templates/{template_id}/approval` and
 `POST /templates/{template_id}/generate`. Provider selection remains a backend
 concern; the AI package accepts a resolved `ModelProvider`.
 
+## Trusted contracts
+
+| Contract id | Task | Bounds |
+| --- | --- | --- |
+| `polynomial.differentiate/1` | Compare a complete candidate derivative with an independently derived polynomial | degree 1 to 5, integer coefficients in `[-20, 20]` |
+| `polynomial.equation-real/1` | Compare the complete real solution set of `= 0` | degree 0 to 2 (linear/quadratic), bounded integer coefficients |
+| `polynomial.inequality-real/1` | Compare the complete real solution set of `<`, `<=`, `>`, `>=` | degree 0 to 2, bounded integer coefficients |
+
+There is no syllabus-topic dispatch. A topic-name request cannot by itself add a
+capability. Unsupported operations such as general integration or LU
+decomposition produce actionable development-needed findings. New capabilities
+are registered at the developer-owned contract/operation seam described in
+[`reusable-check-catalogue.md`](reusable-check-catalogue.md).
+
+Solve checks compare complete structured solution sets, not root substitution or
+partial answers. Independent qualification covers repeated roots, no-real-root
+cases, negative leading coefficients, empty/all-real outcomes, interval unions
+and endpoint open/closed flags.
+
 ## Configured provider roles
 
-The same resolved `ModelProvider` supplies two distinct structured prompt roles:
+The same resolved `ModelProvider` supplies three distinct structured prompt roles:
 
-| Role | Prompt version | Output |
-| --- | --- | --- |
-| check-author | `check-author/1` | `CheckAuthorProposal`: trusted recipe, title, description, or development-needed result |
-| template-author | `template-author/1` | `TemplateAuthorProposal`: bounded coefficient domains, or development-needed result |
+| Role | Prompt version | Schema | Output |
+| --- | --- | --- | --- |
+| check-planner | `check-planner/1` | `check_plan` | `CheckPlanProposal`: contract, structured goal, reason, optional exact saved reference |
+| check-author | `check-author/2` | `check_recipe` | `CheckAuthorProposal`: trusted recipe, title, description, or development-needed result |
+| template-author | `template-author/2` | `polynomial_family` | `TemplateAuthorProposal`: bounded polynomial family or solve family, or development-needed result |
 
-No provider or model is hard-coded into the pilot. Model credentials are never
-stored; provenance records safe provider/model identifiers, prompt versions,
-request hashes and bounded provider settings. The backend selects the existing
-configured profile or BYOK connection and closes it on every path.
+A fresh flow calls planner, check author when needed, then template author. A
+reuse flow calls planner then template author. No provider or model is
+hard-coded into the pilot. Model credentials are never stored; provenance records
+safe provider/model identifiers, prompt versions, request hashes and bounded
+provider settings. The backend selects the existing configured profile or BYOK
+connection and closes it on every path.
+
+## Selection metadata
+
+New records expose optional additive `selection` metadata for the backend/UI:
+
+```json
+{
+  "contract_id": "polynomial.inequality-real/1",
+  "reason": "The request asks for a complete real inequality solution set.",
+  "source": "saved",
+  "check_ref": {"check_id": "chk_...", "version": "1", "sha256": "..."}
+}
+```
+
+`source` is `saved` or `authored`; `check_ref` is the exact pinned qualified
+check. Failed drafts may omit `selection` or store `null`. Ready version-2
+templates require a matching selection.
 
 ## Qualification evidence and limits
 
 Check qualification is property-based sampling, not a proof. The independent
-expected derivative comes from coefficient arithmetic, not the same
-differentiation call under test. Sampling covers labelled correct and incorrect
-answers, alternate correct forms, explicit boundary polynomials and non-vacuous
-semantic mutations. Weak always-true/always-false, identity and point-only
-recipes are rejected by compilation. A separate held-out run uses a different
-seed and salt and is not exposed to the author prompt.
+expected answer comes from separate coefficient/discriminant/sign arithmetic,
+not the recipe operation under test. Sampling covers labelled correct and
+incorrect answers, alternate correct forms, explicit boundary cases and
+non-vacuous mutations (missing root, extra root, flipped inequality, endpoint
+flag changes). Weak always-true/always-false, identity and point-only recipes are
+rejected by compilation. A separate held-out run uses a different seed and salt
+and is not exposed to the author prompt.
 
 Template qualification is separate evidence. It samples declared coefficient
-domains, verifies rendered answers/distractors, and executes the pinned recipe.
-No Cartesian enumeration occurs in the pilot path.
+domains, verifies rendered answers/distractors against the independent guard, and
+executes the pinned recipe. No Cartesian enumeration occurs in the pilot path.
 
 Defaults and bounds:
 
 - Property-based examples: 50 default, 4 to 200.
 - Execution calls: 1200 default, 1 to 10,000.
 - Worker wall-clock timeout: 20 seconds default, at most 120 seconds.
+- Planner repairs: at most 2 after the initial proposal.
 - Check repairs: at most 2 after the initial proposal.
+- Template repairs: at most 2 after the initial proposal.
 - Generated batch: quantity 1 to 100; at most 600 recipe cases per worker call.
+  The generation worker has a 45-second wall-clock timeout, leaving margin inside
+  the 60-second frontend generation budget and the 180-second backend request
+  budget.
 - Recipe: at most 8 steps over the closed operation set.
-- Family: degree 1 to 5, coefficient values in `[-20, 20]`, at most 10,000,000
-  declared assignments; generation samples rather than enumerating them.
-- Polynomial text: 200 characters and 120 tokens in the closed parser.
+- Differentiation family: degree 1 to 5, coefficient values in `[-20, 20]`, at
+  most 10,000,000 declared assignments; generation samples rather than
+  enumerating them.
+- Solve family: degree 1 to 2, one coefficient domain per exponent, nonzero
+  leading domain, relation fixed by the plan.
+- Polynomial text: 200 characters and 120 tokens in the closed parser. Structured
+  solve payloads are bounded before parsing.
 
 Results say "No counterexample found in sampled cases". Passed, failed,
 inconclusive and error are distinct.
@@ -106,18 +166,22 @@ record hash. Approval and generation reject stale template/check digests.
 Another owner cannot list, read, reuse, approve or generate these private
 artifacts.
 
-Reuse requires the same supported scope, operation set and a passed qualification.
-A reused check still produces a new unreviewed template and requires its own
-template qualification and approval.
+Saved-check reuse requires the same trusted contract and a stored scope that
+covers the concrete structured goal, relation, degree bounds, coefficient bound,
+answer type and mandatory policies. Legacy version-1 differentiation records
+remain readable, keep their original bytes and hashes, and replay seeded batches
+identically. They are never rewritten into version-2 records.
 
 ## MCP adapter
 
 `check_pilot_execute_recipe` is the one stable MCP adapter. It accepts a closed
-recipe definition plus one bounded problem/candidate polynomial and returns tool
-evidence. It uses the same recipe compiler and isolated executor as the
-application. It has no owner or library parameter: owner resolution and library
-access stay in the application, so a model-supplied owner string cannot grant
-access.
+recipe definition plus one problem and candidate. Differentiation recipes accept
+bounded polynomial text. Solve recipes accept one structured `PolynomialRelation`
+and one structured `RealSolutionSet`. Compilation validates operation ids,
+versions, argument/output types and step references before execution. It uses
+the same isolated executor as the application. It has no owner or library
+parameter: owner resolution and library access stay in the application, so a
+model-supplied owner string cannot grant access.
 
 ## Isolated worker boundary
 
@@ -126,6 +190,15 @@ Both the existing math-validation worker and the pilot worker use
 The selected worker module is an application-owned constant, never model input.
 The parent applies one wall-clock timeout and maps non-zero exits, invalid JSON,
 non-object responses and error envelopes to each caller's public exception type.
+
+Qualification, one-recipe MCP execution and whole-batch generation all cross this
+boundary. A generation request carries the validated pinned template, recipe and
+check reference plus the seed and quantity. The worker samples, renders, guards
+and executes the pinned recipe for every key and distractor, then returns the
+complete `PilotBatch` JSON. A timeout or error returns no partial batch; the
+parent raises a safe conflict. Consequently the child wall-clock/CPU/address-space
+limits cover the new symbolic generation path as well as recipe checking, and no
+claim is made about symbolic generation work happening on the parent.
 
 A tiny trusted bootstrap applies hard resource limits before importing the worker
 module. The child environment is allowlisted to interpreter/runtime inputs such
@@ -149,7 +222,8 @@ Platform behavior:
 
 `CheckPilotApplication(root, *, qualification_settings=None)` exposes
 `author_template`, `list_checks`, `get_check`, `list_templates`, `get_template`,
-`decide` and `generate`. Methods return Pydantic models; use
+`decide` and `generate`. `find_applicable_check` is also exported for
+application-owned lookup. Methods return Pydantic models; use
 `model_dump(mode="json")` on the wire. Safe exceptions are `PilotNotFound`,
 `PilotConflict` and `PilotInputError`; callers map them to 404, 409 and 422.
 
@@ -162,12 +236,17 @@ import the local implementation rather than an installed copy:
 PYTHONPATH=src uv run pytest -q tests/test_isolated_worker.py
 
 PYTHONPATH=src uv run pytest -q \
-  tests/test_check_pilot_qualification.py \
-  tests/test_check_pilot_template_qualification.py \
   tests/test_check_pilot_application.py \
-  tests/test_check_pilot_storage.py \
   tests/test_check_pilot_author_schema.py \
-  tests/test_math_validation.py tests/test_math_tool_errors.py \
+  tests/test_check_pilot_boundaries.py \
+  tests/test_check_pilot_catalogue.py \
+  tests/test_check_pilot_compiler.py \
+  tests/test_check_pilot_legacy_replay.py \
+  tests/test_check_pilot_qualification.py \
+  tests/test_check_pilot_solution_sets.py \
+  tests/test_check_pilot_solve_flow.py \
+  tests/test_check_pilot_storage.py \
+  tests/test_check_pilot_template_qualification.py \
   tests/test_mcp_server.py
 ```
 
@@ -178,8 +257,10 @@ and are not required to verify this pilot's local flow.
 ## Known limitations
 
 - Property-based passes are sampled evidence, not universal correctness proof.
-- The supported scope is deliberately narrow: univariate real polynomials in
-  `x`, degree at most 5, bounded integer coefficients.
+- The supported scope is deliberately bounded: real univariate polynomials in
+  `x`; differentiation to degree 5; equations and inequalities to degree 2.
+- The independent solve oracle is limited to the documented linear/quadratic
+  arithmetic; unsupported relations or higher degrees are development-needed.
 - macOS does not enforce the Linux address-space limit through this path; rely on
   the wall-clock and CPU limits there.
 - This document does not claim public publication, deployment or live-model

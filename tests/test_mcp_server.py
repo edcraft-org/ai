@@ -123,6 +123,47 @@ def derivative_recipe() -> dict:
     }
 
 
+def solve_recipe() -> dict:
+    return {
+        "operation_set": "polynomial-solve-real/1",
+        "steps": [
+            {
+                "id": "s1",
+                "operation": "relation.solve_real",
+                "version": "1",
+                "arguments": {"problem": {"source": "input", "name": "problem"}},
+            },
+            {
+                "id": "out",
+                "operation": "set.equal",
+                "version": "1",
+                "arguments": {
+                    "expected": {"source": "step", "name": "s1"},
+                    "actual": {"source": "input", "name": "candidate"},
+                },
+            },
+        ],
+        "output": "out",
+    }
+
+
+def solution_set(*values: str) -> dict:
+    return {
+        "kind": "solution_set",
+        "solution_set": {
+            "components": [
+                {
+                    "lower": value,
+                    "upper": value,
+                    "lower_closed": True,
+                    "upper_closed": True,
+                }
+                for value in values
+            ]
+        },
+    }
+
+
 async def test_check_pilot_recipe_adapter_uses_isolated_executor():
     server = create_validation_server()
     accepted = await call_tool(
@@ -172,6 +213,73 @@ async def test_check_pilot_recipe_adapter_uses_isolated_executor():
     )
     assert invalid["status"] == "error"
     assert invalid["findings"][0]["code"] == "RECIPE_INVALID"
+
+
+async def test_check_pilot_recipe_adapter_dispatches_structured_solve_sets():
+    server = create_validation_server()
+    problem = {
+        "kind": "relation",
+        "relation": {"relation": "eq", "coefficients": [-1, 0, 1]},
+    }
+    accepted = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": solve_recipe(),
+            "problem": problem,
+            "candidate": solution_set("-1", "1"),
+        },
+    )
+    assert accepted["status"] == "passed"
+    assert accepted["details"]["verdict"] is True
+    assert accepted["details"]["problem"] == "x^2 - 1 = 0"
+
+    reversed_order = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": solve_recipe(),
+            "problem": problem,
+            "candidate": solution_set("1", "-1"),
+        },
+    )
+    assert reversed_order["status"] == "passed"
+
+    rejected = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": solve_recipe(),
+            "problem": problem,
+            "candidate": solution_set("1"),
+        },
+    )
+    assert rejected["status"] == "failed"
+    assert rejected["findings"][0]["code"] == "RECIPE_REJECTED_CANDIDATE"
+
+    malformed = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": solve_recipe(),
+            "problem": problem,
+            "candidate": {
+                "kind": "solution_set",
+                "solution_set": {
+                    "components": [
+                        {
+                            "lower": None,
+                            "upper": None,
+                            "lower_closed": True,
+                            "upper_closed": True,
+                        }
+                    ]
+                },
+            },
+        },
+    )
+    assert malformed["status"] == "error"
+    assert malformed["findings"][0]["code"] == "RECIPE_INVALID"
 
 
 async def test_structure_and_feature_tools_are_independently_callable():

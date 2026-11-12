@@ -2,25 +2,34 @@
 
 from __future__ import annotations
 
+import json
 import time
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastmcp import FastMCP
 from pydantic import Field
 
+from edcraft_validator.application.check_pilot.contracts import (
+    scope_from_recipe_operation_set,
+)
 from edcraft_validator.application.check_pilot.isolation import (
     PilotWorkerError,
     PilotWorkerTimeout,
 )
 from edcraft_validator.application.check_pilot.models import (
     CheckRecipeDefinition,
+    PolynomialRelation,
+    RealSolutionSet,
     RecipeExecutionResult,
 )
 from edcraft_validator.application.check_pilot.operations import (
     RecipeCompileError,
     compile_recipe,
 )
-from edcraft_validator.application.check_pilot.polynomial import parse_polynomial
+from edcraft_validator.application.check_pilot.polynomial import (
+    Polynomial,
+    parse_polynomial,
+)
 from edcraft_validator.application.check_pilot.qualification import (
     execute_recipe_isolated,
 )
@@ -31,6 +40,76 @@ CHECK_PILOT_TOOL_VERSION = "1"
 DEFAULT_RECIPE_TIMEOUT_SECONDS = 10.0
 MAX_RECIPE_TIMEOUT_SECONDS = 30.0
 MAX_POLYNOMIAL_LENGTH = 2000
+MAX_STRUCTURED_PAYLOAD_LENGTH = 8000
+
+
+def _polynomial(value: str | dict[str, Any]) -> Polynomial:
+    text: object
+    if isinstance(value, str):
+        text = value
+    elif isinstance(value, dict) and value.get("kind") == "polynomial":
+        text = value.get("text")
+    else:
+        raise ValueError("differentiation problems require polynomial text")
+    if not isinstance(text, str) or not 1 <= len(text) <= MAX_POLYNOMIAL_LENGTH:
+        raise ValueError(
+            f"polynomial text must be 1 to {MAX_POLYNOMIAL_LENGTH} characters"
+        )
+    return parse_polynomial(text)
+
+
+def _relation(value: str | dict[str, Any]) -> PolynomialRelation:
+    if not isinstance(value, dict):
+        raise ValueError("solve problems require structured relation data")
+    payload: Any = value
+    if value.get("kind") == "relation":
+        payload = value.get("relation")
+    try:
+        return PolynomialRelation.model_validate(payload)
+    except ValueError as exc:
+        raise ValueError(f"invalid structured relation: {exc}") from exc
+
+
+def _solution_set(value: str | dict[str, Any]) -> RealSolutionSet:
+    if not isinstance(value, dict):
+        raise ValueError("solve candidates require structured solution-set data")
+    payload: Any = value
+    if value.get("kind") == "solution_set":
+        payload = value.get("solution_set")
+    try:
+        return RealSolutionSet.model_validate(payload)
+    except ValueError as exc:
+        raise ValueError(f"invalid structured solution set: {exc}") from exc
+
+
+def _problem_value(
+    definition: CheckRecipeDefinition, value: str | dict[str, Any]
+) -> Polynomial | PolynomialRelation:
+    if definition.operation_set == "polynomial-solve-real/1":
+        return _relation(value)
+    return _polynomial(value)
+
+
+def _candidate_value(
+    definition: CheckRecipeDefinition, value: str | dict[str, Any]
+) -> Polynomial | RealSolutionSet:
+    if definition.operation_set == "polynomial-solve-real/1":
+        return _solution_set(value)
+    return _polynomial(value)
+
+
+def _bounded(value: str | dict[str, Any]) -> None:
+    if isinstance(value, str):
+        if not 1 <= len(value) <= MAX_POLYNOMIAL_LENGTH:
+            raise ValueError(
+                f"problem and candidate text must be 1 to {MAX_POLYNOMIAL_LENGTH} "
+                "characters"
+            )
+        return
+    if not isinstance(value, dict):
+        raise ValueError("problem and candidate must be text or structured data")
+    if len(json.dumps(value, allow_nan=False)) > MAX_STRUCTURED_PAYLOAD_LENGTH:
+        raise ValueError("structured problem or candidate data is too large")
 
 
 def register_check_pilot_tools(server: FastMCP) -> None:
@@ -52,19 +131,25 @@ def register_check_pilot_tools(server: FastMCP) -> None:
             "openWorldHint": False,
         },
         description=(
-            "Run one trusted closed check recipe against a bounded polynomial "
-            "problem and candidate answer. Compilation validates operation ids, "
-            "versions, argument/output types and step references; the recipe is "
-            "then executed in a disposable interpreter with a hard wall-clock "
-            "limit. No model-authored code is executed and no check library or "
-            "owner record is accessed."
+            "Run one trusted closed check recipe. Differentiation recipes accept "
+            "bounded polynomial text for both values. Solve recipes accept one "
+            "structured polynomial relation and one structured complete real "
+            "solution set. Compilation validates operation ids, versions, "
+            "argument/output types and step references; the recipe then runs in "
+            "a disposable interpreter with a hard wall-clock limit. No "
+            "model-authored code is executed and no check library or owner "
+            "record is accessed."
         ),
     )
     async def check_pilot_execute_recipe(
         definition: CheckRecipeDefinition,
-        problem: Annotated[str, Field(min_length=1, max_length=MAX_POLYNOMIAL_LENGTH)],
+        problem: Annotated[
+            str | dict[str, Any],
+            Field(description="Polynomial text or structured solve relation data."),
+        ],
         candidate: Annotated[
-            str, Field(min_length=1, max_length=MAX_POLYNOMIAL_LENGTH)
+            str | dict[str, Any],
+            Field(description="Polynomial text or structured solution-set data."),
         ],
         timeout_seconds: Annotated[
             float, Field(gt=0, le=MAX_RECIPE_TIMEOUT_SECONDS)
@@ -72,11 +157,14 @@ def register_check_pilot_tools(server: FastMCP) -> None:
     ) -> ToolEvidence:
         started = time.perf_counter()
         try:
-            compile_recipe(definition)
+            scope = scope_from_recipe_operation_set(definition.operation_set)
+            compile_recipe(definition, scope=scope)
+            _bounded(problem)
+            _bounded(candidate)
             result = execute_recipe_isolated(
                 definition,
-                parse_polynomial(problem),
-                parse_polynomial(candidate),
+                _problem_value(definition, problem),
+                _candidate_value(definition, candidate),
                 timeout_seconds=timeout_seconds,
             )
         except RecipeCompileError as exc:

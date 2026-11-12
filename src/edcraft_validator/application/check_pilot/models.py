@@ -27,6 +27,7 @@ RENDERER_VERSION: Literal["polynomial-mcq/1"] = "polynomial-mcq/1"
 SOLVE_RENDERER_VERSION: Literal["polynomial-solve-mcq/1"] = "polynomial-solve-mcq/1"
 SCOPE_SCHEMA_VERSION: Literal["check-scope/2"] = "check-scope/2"
 MAX_RECIPE_CASES = 600
+MAX_GENERATION_QUANTITY = 100
 MAX_SOLVE_DEGREE = 2
 MAX_RELATION_COEFFICIENT = 1000
 MAX_SET_COMPONENTS = 8
@@ -558,6 +559,7 @@ __all__ = [
     "FAMILY_SCHEMA_VERSION",
     "GoalRelation",
     "MAX_ENDPOINT_LENGTH",
+    "MAX_GENERATION_QUANTITY",
     "MAX_RECIPE_CASES",
     "MAX_RELATION_COEFFICIENT",
     "MAX_SET_COMPONENTS",

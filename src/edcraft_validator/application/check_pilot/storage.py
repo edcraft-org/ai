@@ -17,6 +17,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from edcraft_validator.application.check_pilot.contracts import (
+    contract_for_scope,
+    scope_applicability_findings,
+    template_goal,
+)
 from edcraft_validator.application.check_pilot.errors import (
     PilotConflict,
     PilotInputError,
@@ -26,9 +31,14 @@ from edcraft_validator.application.check_pilot.models import (
     CHECK_SCHEMA_VERSION,
     CheckRecipeDefinition,
     CheckRecord,
+    ContractScope,
     PilotTemplateDefinition,
     PilotTemplateRecord,
     PolynomialScope,
+)
+from edcraft_validator.application.check_pilot.operations import (
+    RecipeCompileError,
+    compile_recipe,
 )
 
 _CHECK_ID = re.compile(r"^chk_[0-9a-f]{16,64}$")
@@ -141,10 +151,17 @@ def _validate_check_record(record: CheckRecord) -> None:
         raise PilotInputError("only a passed qualification can be stored")
     if record.check_ref.version != "1":
         raise PilotConflict("unsupported stored check version")
+    if contract_for_scope(record.scope) is None:
+        raise PilotConflict("stored check is outside the trusted contract catalogue")
     try:
-        scope = PolynomialScope.model_validate(record.scope)
-        CheckRecipeDefinition.model_validate(record.definition)
-    except ValueError as exc:
+        scope: PolynomialScope | ContractScope
+        if "contract_id" in record.scope:
+            scope = ContractScope.model_validate(record.scope)
+        else:
+            scope = PolynomialScope.model_validate(record.scope)
+        definition = CheckRecipeDefinition.model_validate(record.definition)
+        compile_recipe(definition, scope=scope)
+    except (ValueError, RecipeCompileError) as exc:
         raise PilotConflict("stored check is outside the pilot scope") from exc
     digest = check_content_sha256(
         title=record.title,
@@ -156,9 +173,30 @@ def _validate_check_record(record: CheckRecord) -> None:
         raise PilotConflict("stored check failed integrity validation")
 
 
+def _validate_selection(record: PilotTemplateRecord) -> None:
+    selection = record.selection
+    if selection is None:
+        return
+    if record.check is None or selection.check_ref != record.check.check_ref:
+        raise PilotConflict("stored template selection does not pin its check")
+    if record.template is None:
+        # Failed drafts may still record the contract/check they selected; the
+        # exact template contract is only validated when a template exists.
+        return
+    try:
+        definition = PilotTemplateDefinition.model_validate(record.template)
+    except ValueError as exc:
+        raise PilotConflict("stored template is outside the pilot scope") from exc
+    if "contract_id" not in record.template:
+        raise PilotConflict("legacy templates cannot carry a contract selection")
+    if selection.contract_id != definition.contract_id:
+        raise PilotConflict("stored template selection names a different contract")
+
+
 def _validate_template_record(record: PilotTemplateRecord) -> None:
     _validate_created_at(record.created_at)
     _scan_for_secrets(record.provenance or {})
+    definition: PilotTemplateDefinition | None = None
     if record.template is None:
         if record.template_sha256 != NULL_TEMPLATE_SHA256:
             raise PilotConflict("stored template failed integrity validation")
@@ -171,6 +209,22 @@ def _validate_template_record(record: PilotTemplateRecord) -> None:
             raise PilotConflict("stored template failed integrity validation")
     if record.check is not None:
         _validate_check_record(record.check)
+        if (
+            record.check_qualification is not None
+            and record.check_qualification.status != "passed"
+        ):
+            raise PilotConflict("a template cannot pin an unqualified check")
+    _validate_selection(record)
+    if definition is not None and definition.schema_version == "pilot-template/2":
+        contract = contract_for_scope(record.check.scope) if record.check else None
+        if contract is None or contract.contract_id != definition.contract_id:
+            raise PilotConflict("stored template requires its matching check contract")
+        conflicts = scope_applicability_findings(
+            record.check.scope if record.check is not None else {},
+            template_goal(definition),
+        )
+        if conflicts:
+            raise PilotConflict("stored template check does not cover its scope")
     if record.status == "ready" and (
         record.check is None
         or record.template is None
@@ -178,6 +232,13 @@ def _validate_template_record(record: PilotTemplateRecord) -> None:
         or record.qualification.status != "passed"
     ):
         raise PilotConflict("a ready template requires qualified evidence")
+    if (
+        record.status == "ready"
+        and definition is not None
+        and definition.schema_version == "pilot-template/2"
+        and record.selection is None
+    ):
+        raise PilotConflict("a ready structured template requires a selection")
 
 
 class PilotStore:
@@ -374,10 +435,14 @@ class PilotStore:
                 if (
                     current.template_sha256 != record.template_sha256
                     or current.check != record.check
+                    or current.check_qualification != record.check_qualification
                     or current.template != record.template
                     or current.qualification != record.qualification
                     or current.status != record.status
                     or current.reused_check != record.reused_check
+                    or current.scope != record.scope
+                    or current.provenance != record.provenance
+                    or current.selection != record.selection
                 ):
                     raise PilotConflict("an approval may only change the decision")
                 self._atomic_replace(path, self._envelope(owner, record))

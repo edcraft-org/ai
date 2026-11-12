@@ -1,7 +1,14 @@
-"""Reusable private check-authoring pilot (polynomial differentiation)."""
+"""Reusable private check-authoring pilot and catalogue."""
 
 from edcraft_validator.application.check_pilot.application import (
     CheckPilotApplication,
+    find_applicable_check,
+)
+from edcraft_validator.application.check_pilot.contracts import (
+    DIFFERENTIATE_CONTRACT,
+    EQUATION_CONTRACT,
+    INEQUALITY_CONTRACT,
+    ContractDescriptor,
 )
 from edcraft_validator.application.check_pilot.errors import (
     PilotConflict,
@@ -11,37 +18,60 @@ from edcraft_validator.application.check_pilot.errors import (
 )
 from edcraft_validator.application.check_pilot.models import (
     CheckAuthorProposal,
+    CheckPlanProposal,
     CheckRecipeDefinition,
     CheckRecord,
     CheckRef,
+    CheckSelection,
     CoefficientDomain,
+    ContractScope,
     PilotBatch,
     PilotQuestion,
+    PilotTemplateDefinition,
     PilotTemplateRecord,
     PolynomialFamily,
+    PolynomialRelation,
     Qualification,
+    RealSetComponent,
+    RealSolutionSet,
     RecipeArgument,
     RecipeStep,
+    SolveFamily,
+    StructuredGoal,
     TemplateAuthorProposal,
 )
 
 __all__ = [
+    "DIFFERENTIATE_CONTRACT",
+    "EQUATION_CONTRACT",
+    "INEQUALITY_CONTRACT",
     "CheckAuthorProposal",
     "CheckPilotApplication",
+    "CheckPlanProposal",
     "CheckRecipeDefinition",
     "CheckRecord",
     "CheckRef",
+    "CheckSelection",
     "CoefficientDomain",
+    "ContractDescriptor",
+    "ContractScope",
     "PilotBatch",
     "PilotConflict",
     "PilotError",
     "PilotInputError",
     "PilotNotFound",
     "PilotQuestion",
+    "PilotTemplateDefinition",
     "PilotTemplateRecord",
     "PolynomialFamily",
+    "PolynomialRelation",
     "Qualification",
+    "RealSetComponent",
+    "RealSolutionSet",
     "RecipeArgument",
     "RecipeStep",
+    "SolveFamily",
+    "StructuredGoal",
     "TemplateAuthorProposal",
+    "find_applicable_check",
 ]

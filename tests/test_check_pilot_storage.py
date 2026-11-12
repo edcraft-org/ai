@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from edcraft_validator.application.check_pilot.contracts import get_contract
 from edcraft_validator.application.check_pilot.errors import (
     PilotConflict,
     PilotInputError,
@@ -18,6 +19,7 @@ from edcraft_validator.application.check_pilot.models import (
     CheckRecipeDefinition,
     CheckRecord,
     CheckRef,
+    CheckSelection,
     PilotTemplateDefinition,
     PilotTemplateRecord,
     Qualification,
@@ -351,3 +353,79 @@ def test_legacy_v1_template_and_record_hashes_survive_additive_fields():
             parsed.model_dump(mode="json", exclude_none=True)
         )
     )
+
+
+def contract_template_record(
+    check: CheckRecord, selection: CheckSelection | None
+) -> PilotTemplateRecord:
+    contract = get_contract("polynomial.differentiate/1")
+    assert contract is not None
+    definition = PilotTemplateDefinition(
+        schema_version="pilot-template/2",
+        contract_id=contract.contract_id,
+        scope=contract.scope(),
+        family=template_definition().family,
+    )
+    return PilotTemplateRecord(
+        template_id="tpl_" + "b" * 24,
+        template_sha256=template_definition_sha256(definition),
+        prompt="A structured differentiation template",
+        status="ready",
+        approval="unreviewed",
+        reused_check=False,
+        check=check,
+        template=definition.model_dump(mode="json", exclude_none=True),
+        qualification=qualification(),
+        findings=[],
+        created_at=datetime.now(UTC).isoformat(),
+        scope=definition.scope.model_dump(mode="json", exclude_none=True),
+        provenance={"role": "template-author"},
+        check_qualification=qualification(),
+        selection=selection,
+    )
+
+
+def selection_for(check: CheckRecord, *, contract_id: str | None = None):
+    return CheckSelection(
+        contract_id=contract_id or "polynomial.differentiate/1",
+        reason="The trusted differentiation contract covers this request.",
+        source="authored",
+        check_ref=check.check_ref,
+    )
+
+
+def test_ready_structured_template_requires_selection(tmp_path: Path):
+    store = PilotStore(tmp_path)
+    check = check_record()
+    record = contract_template_record(check, None)
+    with pytest.raises(PilotConflict, match="selection"):
+        store.save_template("owner", record)
+
+
+def test_selection_must_name_its_contract_and_pin_its_check(tmp_path: Path):
+    store = PilotStore(tmp_path)
+    check = check_record()
+
+    wrong_contract = contract_template_record(
+        check, selection_for(check, contract_id="polynomial.equation-real/1")
+    )
+    with pytest.raises(PilotConflict, match="different contract"):
+        store.save_template("owner", wrong_contract)
+
+    wrong_check = selection_for(check).model_copy(
+        update={"check_ref": check.check_ref.model_copy(update={"sha256": "f" * 64})}
+    )
+    mismatched = contract_template_record(check, wrong_check)
+    with pytest.raises(PilotConflict, match="does not pin"):
+        store.save_template("owner", mismatched)
+
+
+def test_valid_selection_round_trips_with_the_template(tmp_path: Path):
+    store = PilotStore(tmp_path)
+    check = check_record()
+    selection = selection_for(check)
+    record = contract_template_record(check, selection)
+    store.save_template("owner", record)
+    assert store.get_template("owner", record.template_id) == record
+    assert record.template is not None
+    assert record.template["contract_id"] == "polynomial.differentiate/1"

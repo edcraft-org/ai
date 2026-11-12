@@ -1,4 +1,4 @@
-"""Check-author and template-author orchestration with bounded repairs."""
+"""Structured planning, catalogue reuse, and bounded check/template authoring."""
 
 from __future__ import annotations
 
@@ -11,20 +11,36 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
+from edcraft_validator.application.check_pilot.catalogue import (
+    find_applicable_check,
+    qualified_check_descriptors,
+    resolve_plan,
+)
+from edcraft_validator.application.check_pilot.contracts import (
+    ContractDescriptor,
+    plan_covers_template_findings,
+    scope_applicability_findings,
+    template_goal,
+)
 from edcraft_validator.application.check_pilot.errors import PilotError
 from edcraft_validator.application.check_pilot.models import (
     CHECK_SCHEMA_VERSION,
-    RECIPE_OPERATION_SET,
-    SUPPORTED_SCOPE,
+    RENDERER_VERSION,
+    SOLVE_RENDERER_VERSION,
+    TEMPLATE_SCHEMA_VERSION_V2,
     CheckAuthorProposal,
+    CheckPlanProposal,
     CheckRecipeDefinition,
     CheckRecord,
     CheckRef,
+    CheckSelection,
     PilotQualificationSettings,
     PilotTemplateDefinition,
     PilotTemplateRecord,
     PolynomialFamily,
     Qualification,
+    SolveFamily,
+    StructuredGoal,
     TemplateAuthorProposal,
     TemplateStatus,
 )
@@ -34,14 +50,16 @@ from edcraft_validator.application.check_pilot.operations import (
 )
 from edcraft_validator.application.check_pilot.prompts import (
     CHECK_PROMPT_VERSION,
+    PLANNER_PROMPT_VERSION,
     TEMPLATE_PROMPT_VERSION,
     build_check_generation_request,
+    build_plan_generation_request,
     build_template_generation_request,
 )
 from edcraft_validator.application.check_pilot.qualification import (
     qualification_seed,
     qualify_recipe,
-    qualify_template,
+    qualify_structured_template,
 )
 from edcraft_validator.application.check_pilot.storage import (
     NULL_TEMPLATE_SHA256,
@@ -52,6 +70,8 @@ from edcraft_validator.application.check_pilot.storage import (
 from edcraft_validator.llm.llm_contracts import ModelProvider
 
 MAX_CHECK_REPAIRS = 2
+MAX_PLAN_REPAIRS = 2
+MAX_TEMPLATE_REPAIRS = 2
 _SAFE_PROVIDER_ERROR = (
     "The authoring model could not produce a usable structured response."
 )
@@ -76,6 +96,16 @@ class CheckAuthoringOutcome:
     findings: list[str]
 
 
+@dataclass(frozen=True, slots=True)
+class PlanOutcome:
+    proposal: CheckPlanProposal | None
+    contract: ContractDescriptor | None
+    goal: StructuredGoal | None
+    check: CheckRecord | None
+    status: TemplateStatus
+    findings: list[str]
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -85,7 +115,7 @@ def _request_sha256(prompt: str) -> str:
 
 
 def _author_provenance(
-    role: Literal["check-author", "template-author"],
+    role: Literal["check-planner", "check-author", "template-author"],
     provider: ModelProvider,
     prompt_version: str,
 ) -> dict[str, Any]:
@@ -162,6 +192,7 @@ def _compile_failure_qualification(
             "check_pilot": "1",
             "recipe_compiler": "1",
             "polynomial_oracle": "coefficient-arithmetic/1",
+            "solution_oracle": "discriminant-sign/1",
         },
     )
 
@@ -172,6 +203,7 @@ def _check_provenance(
     prompt: str,
     repair_attempts: int,
     seed: int,
+    contract: ContractDescriptor,
 ) -> dict[str, Any]:
     return {
         **_author_provenance("check-author", provider, CHECK_PROMPT_VERSION),
@@ -181,12 +213,15 @@ def _check_provenance(
         "repair_attempts": repair_attempts,
         "qualification_seed": seed,
         "contract": CHECK_SCHEMA_VERSION,
+        "contract_id": contract.contract_id,
+        "operation_set": contract.operation_set,
     }
 
 
 def _make_check(
     proposal: CheckAuthorProposal,
     *,
+    contract: ContractDescriptor,
     provider: ModelProvider,
     prompt: str,
     repair_attempts: int,
@@ -194,7 +229,7 @@ def _make_check(
     qualification: Qualification,
 ) -> CheckRecord:
     assert proposal.recipe is not None and proposal.title and proposal.description
-    scope = SUPPORTED_SCOPE.model_dump(mode="json")
+    scope = contract.scope().model_dump(mode="json")
     definition = proposal.recipe.model_dump(mode="json")
     digest = check_content_sha256(
         title=proposal.title,
@@ -218,21 +253,73 @@ def _make_check(
             prompt=prompt,
             repair_attempts=repair_attempts,
             seed=seed,
+            contract=contract,
         ),
         created_at=_now(),
     )
 
 
-def find_applicable_check(store: PilotStore, owner_id: str) -> CheckRecord | None:
-    expected_scope = SUPPORTED_SCOPE.model_dump(mode="json")
-    for record in reversed(store.list_checks(owner_id)):
-        if (
-            record.scope == expected_scope
-            and record.definition.get("operation_set") == RECIPE_OPERATION_SET
-            and record.qualification.status == "passed"
-        ):
-            return record
-    return None
+def _plan_with_repairs(
+    store: PilotStore,
+    owner_id: str,
+    *,
+    prompt: str,
+    provider: ModelProvider,
+) -> PlanOutcome:
+    feedback: dict[str, Any] | None = None
+    checks = qualified_check_descriptors(store.list_checks(owner_id))
+    last: PlanOutcome | None = None
+    for attempt in range(MAX_PLAN_REPAIRS + 1):
+        try:
+            proposal = provider.generate(
+                build_plan_generation_request(
+                    prompt,
+                    checks=checks,
+                    feedback=feedback,
+                )
+            )
+        except Exception:
+            return PlanOutcome(
+                proposal=None,
+                contract=None,
+                goal=None,
+                check=None,
+                status="error",
+                findings=[_SAFE_PROVIDER_ERROR],
+            )
+        if not isinstance(proposal, CheckPlanProposal):
+            return PlanOutcome(
+                proposal=None,
+                contract=None,
+                goal=None,
+                check=None,
+                status="error",
+                findings=[_SAFE_PROVIDER_ERROR],
+            )
+        resolution = resolve_plan(store, owner_id, proposal)
+        last = PlanOutcome(
+            proposal=proposal,
+            contract=resolution.contract,
+            goal=resolution.goal,
+            check=resolution.check,
+            status="ready" if resolution.supported else "needs_review",
+            findings=resolution.findings,
+        )
+        if resolution.supported:
+            return last
+        if not proposal.supported or attempt >= MAX_PLAN_REPAIRS:
+            return last
+        feedback = {
+            "stage": "plan",
+            "findings": resolution.findings[:4],
+            "contract_id": proposal.contract_id,
+            "goal": (
+                proposal.goal.model_dump(mode="json")
+                if proposal.goal is not None
+                else None
+            ),
+        }
+    raise AssertionError("bounded plan repair loop must return")
 
 
 def author_check(
@@ -242,13 +329,21 @@ def author_check(
     prompt: str,
     provider: ModelProvider,
     settings: PilotQualificationSettings,
+    contract: ContractDescriptor,
+    goal: StructuredGoal,
 ) -> CheckAuthoringOutcome:
     feedback: dict[str, Any] | None = None
     last_qualification: Qualification | None = None
+    scope = contract.scope()
     for attempt in range(MAX_CHECK_REPAIRS + 1):
         try:
             proposal = provider.generate(
-                build_check_generation_request(prompt, feedback=feedback)
+                build_check_generation_request(
+                    prompt,
+                    contract=contract,
+                    goal=goal,
+                    feedback=feedback,
+                )
             )
         except Exception:
             return CheckAuthoringOutcome(
@@ -276,7 +371,7 @@ def author_check(
         try:
             recipe = proposal.recipe
             assert recipe is not None
-            compiled = compile_recipe(recipe)
+            compiled = compile_recipe(recipe, scope=scope)
         except RecipeCompileError as exc:
             findings = [
                 (
@@ -301,11 +396,17 @@ def author_check(
             }
             continue
 
-        seed = qualification_seed(compiled.sha256, RECIPE_OPERATION_SET)
-        last_qualification = qualify_recipe(recipe, seed=seed, settings=settings)
+        seed = qualification_seed(compiled.sha256, contract.operation_set)
+        last_qualification = qualify_recipe(
+            recipe,
+            seed=seed,
+            settings=settings,
+            scope=scope,
+        )
         if last_qualification.status == "passed":
             check = _make_check(
                 proposal,
+                contract=contract,
                 provider=provider,
                 prompt=prompt,
                 repair_attempts=attempt,
@@ -364,6 +465,8 @@ def _template_provenance(
     template_digest: str,
     check_sha256: str,
     seed: int,
+    contract: ContractDescriptor,
+    source: Literal["saved", "authored"],
     repair_attempts: int = 0,
 ) -> dict[str, Any]:
     return {
@@ -375,6 +478,8 @@ def _template_provenance(
         "check_sha256": check_sha256,
         "qualification_seed": seed,
         "repair_attempts": repair_attempts,
+        "contract_id": contract.contract_id,
+        "selection_source": source,
     }
 
 
@@ -394,6 +499,8 @@ def _record_failure(
     check_qualification: Qualification | None,
     provenance: dict[str, Any],
     reused_check: bool,
+    scope: dict[str, Any] | None,
+    selection: CheckSelection | None,
 ) -> PilotTemplateRecord:
     check_sha = check.check_ref.sha256 if check is not None else "0" * 64
     return PilotTemplateRecord(
@@ -408,10 +515,135 @@ def _record_failure(
         qualification=None,
         findings=[finding[:1000] for finding in findings[:20]],
         created_at=_now(),
-        scope=SUPPORTED_SCOPE.model_dump(mode="json"),
+        scope=scope,
         provenance=provenance,
         check_qualification=check_qualification,
+        selection=selection,
     )
+
+
+def _validation_findings(exc: ValidationError) -> list[str]:
+    findings: list[str] = []
+    for error in exc.errors()[:4]:
+        location = ".".join(str(part) for part in error.get("loc", ()))
+        message = str(error.get("msg", "invalid value"))
+        findings.append(f"{location}: {message}" if location else message)
+    return findings or ["the structured family is invalid"]
+
+
+def _template_definition_from_proposal(
+    proposal: TemplateAuthorProposal,
+    *,
+    contract: ContractDescriptor,
+    goal: StructuredGoal,
+    num_distractors: int,
+) -> tuple[PilotTemplateDefinition | None, list[str]]:
+    if proposal.contract_id != contract.contract_id:
+        return None, ["the template proposal must preserve the selected contract id"]
+    if contract.operation == "differentiate":
+        if proposal.family is None or proposal.solve_family is not None:
+            return None, [
+                "a differentiation contract requires exactly one polynomial family"
+            ]
+        try:
+            family = PolynomialFamily.model_validate(
+                {
+                    **proposal.family.model_dump(mode="json"),
+                    "num_distractors": num_distractors,
+                }
+            )
+        except ValidationError as exc:
+            return None, _validation_findings(exc)
+        definition = PilotTemplateDefinition(
+            schema_version=TEMPLATE_SCHEMA_VERSION_V2,
+            renderer_version=RENDERER_VERSION,
+            scope=contract.scope(),
+            contract_id=contract.contract_id,
+            family=family,
+        )
+    else:
+        if proposal.solve_family is None or proposal.family is not None:
+            return None, [
+                "a solve contract requires exactly one structured solve family"
+            ]
+        try:
+            solve_family = SolveFamily.model_validate(
+                {
+                    **proposal.solve_family.model_dump(mode="json"),
+                    "num_distractors": num_distractors,
+                }
+            )
+        except ValidationError as exc:
+            return None, _validation_findings(exc)
+        definition = PilotTemplateDefinition(
+            schema_version=TEMPLATE_SCHEMA_VERSION_V2,
+            renderer_version=SOLVE_RENDERER_VERSION,
+            scope=contract.scope(),
+            contract_id=contract.contract_id,
+            solve_family=solve_family,
+        )
+    findings = plan_covers_template_findings(goal, template_goal(definition))
+    return (definition if not findings else None), findings
+
+
+def _author_template_proposal(
+    *,
+    prompt: str,
+    provider: ModelProvider,
+    check: CheckRecord,
+    contract: ContractDescriptor,
+    goal: StructuredGoal,
+    num_distractors: int,
+) -> tuple[
+    PilotTemplateDefinition | None,
+    TemplateAuthorProposal | None,
+    TemplateStatus,
+    list[str],
+]:
+    feedback: dict[str, Any] | None = None
+    last_proposal: TemplateAuthorProposal | None = None
+    for attempt in range(MAX_TEMPLATE_REPAIRS + 1):
+        try:
+            proposal = provider.generate(
+                build_template_generation_request(
+                    prompt,
+                    check=check,
+                    contract=contract,
+                    goal=goal,
+                    num_distractors=num_distractors,
+                    feedback=feedback,
+                )
+            )
+        except Exception:
+            return None, last_proposal, "error", [_SAFE_PROVIDER_ERROR]
+        if not isinstance(proposal, TemplateAuthorProposal):
+            return None, last_proposal, "error", [_SAFE_PROVIDER_ERROR]
+        last_proposal = proposal
+        if not proposal.supported:
+            development = (proposal.development_needed or "").strip()[:1000]
+            return (
+                None,
+                proposal,
+                "needs_review",
+                [f"Development needed: {development}"],
+            )
+        definition, findings = _template_definition_from_proposal(
+            proposal,
+            contract=contract,
+            goal=goal,
+            num_distractors=num_distractors,
+        )
+        if definition is not None:
+            return definition, proposal, "ready", []
+        if attempt >= MAX_TEMPLATE_REPAIRS:
+            return None, proposal, "needs_review", findings
+        feedback = {
+            "stage": "template",
+            "findings": findings[:4],
+            "contract_id": contract.contract_id,
+            "goal": goal.model_dump(mode="json"),
+        }
+    raise AssertionError("bounded template repair loop must return")
 
 
 def author_template_flow(
@@ -423,7 +655,43 @@ def author_template_flow(
     num_distractors: int,
     settings: PilotQualificationSettings,
 ) -> PilotTemplateRecord:
-    check = find_applicable_check(store, owner_id)
+    plan = _plan_with_repairs(
+        store,
+        owner_id,
+        prompt=prompt,
+        provider=provider,
+    )
+    if plan.status != "ready" or plan.contract is None or plan.goal is None:
+        scope = (
+            plan.contract.scope().model_dump(mode="json")
+            if plan.contract is not None
+            else None
+        )
+        record = _record_failure(
+            prompt=prompt,
+            status=plan.status,
+            findings=plan.findings,
+            check=None,
+            check_qualification=None,
+            provenance={
+                **_author_provenance("check-planner", provider, PLANNER_PROMPT_VERSION),
+                "provider_settings": _safe_settings(provider),
+                "request_sha256": _request_sha256(prompt),
+                "request_length": len(prompt),
+                "contract_id": (
+                    plan.proposal.contract_id if plan.proposal is not None else None
+                ),
+            },
+            reused_check=False,
+            scope=scope,
+            selection=None,
+        )
+        return store.save_template(owner_id, record)
+
+    contract = plan.contract
+    goal = plan.goal
+    reason = plan.proposal.reason if plan.proposal is not None else ""
+    check = plan.check
     reused_check = check is not None
     check_qualification = check.qualification if check is not None else None
     if check is None:
@@ -433,6 +701,8 @@ def author_template_flow(
             prompt=prompt,
             provider=provider,
             settings=settings,
+            contract=contract,
+            goal=goal,
         )
         check = outcome.check
         check_qualification = outcome.qualification
@@ -443,51 +713,42 @@ def author_template_flow(
                 findings=outcome.findings,
                 check=None,
                 check_qualification=outcome.qualification,
-                provenance=_author_provenance(
-                    "check-author", provider, CHECK_PROMPT_VERSION
-                ),
+                provenance={
+                    **_author_provenance(
+                        "check-author", provider, CHECK_PROMPT_VERSION
+                    ),
+                    "provider_settings": _safe_settings(provider),
+                    "request_sha256": _request_sha256(prompt),
+                    "request_length": len(prompt),
+                    "contract_id": contract.contract_id,
+                },
                 reused_check=False,
+                scope=contract.scope().model_dump(mode="json"),
+                selection=None,
             )
             return store.save_template(owner_id, record)
 
-    try:
-        proposal = provider.generate(
-            build_template_generation_request(
-                prompt, check=check, num_distractors=num_distractors
-            )
-        )
-    except Exception:
-        record = _record_failure(
+    selection = CheckSelection(
+        contract_id=contract.contract_id,
+        reason=reason or "trusted contract selected by the application",
+        source="saved" if reused_check else "authored",
+        check_ref=check.check_ref,
+    )
+    definition, proposal, template_status, template_findings = (
+        _author_template_proposal(
             prompt=prompt,
-            status="error",
-            findings=[_SAFE_PROVIDER_ERROR],
+            provider=provider,
             check=check,
-            check_qualification=check_qualification,
-            provenance=_author_provenance(
-                "template-author", provider, TEMPLATE_PROMPT_VERSION
-            ),
-            reused_check=reused_check,
+            contract=contract,
+            goal=goal,
+            num_distractors=num_distractors,
         )
-        return store.save_template(owner_id, record)
-    if not isinstance(proposal, TemplateAuthorProposal):
+    )
+    if definition is None:
         record = _record_failure(
             prompt=prompt,
-            status="error",
-            findings=[_SAFE_PROVIDER_ERROR],
-            check=check,
-            check_qualification=check_qualification,
-            provenance=_author_provenance(
-                "template-author", provider, TEMPLATE_PROMPT_VERSION
-            ),
-            reused_check=reused_check,
-        )
-        return store.save_template(owner_id, record)
-    if not proposal.supported:
-        development = (proposal.development_needed or "").strip()[:1000]
-        record = _record_failure(
-            prompt=prompt,
-            status="needs_review",
-            findings=[f"Development needed: {development}"],
+            status=template_status,
+            findings=template_findings,
             check=check,
             check_qualification=check_qualification,
             provenance=_template_provenance(
@@ -496,30 +757,23 @@ def author_template_flow(
                 template_digest=NULL_TEMPLATE_SHA256,
                 check_sha256=check.check_ref.sha256,
                 seed=0,
+                contract=contract,
+                source=selection.source,
             ),
             reused_check=reused_check,
+            scope=contract.scope().model_dump(mode="json"),
+            selection=selection,
         )
         return store.save_template(owner_id, record)
 
-    try:
-        family = PolynomialFamily.model_validate(
-            {
-                **(proposal.family.model_dump(mode="json") if proposal.family else {}),
-                "num_distractors": num_distractors,
-            }
-        )
-        definition = PilotTemplateDefinition(
-            scope=SUPPORTED_SCOPE,
-            family=family,
-        )
-    except ValidationError:
+    actual = template_goal(definition)
+    findings = plan_covers_template_findings(goal, actual)
+    findings.extend(scope_applicability_findings(check.scope, actual))
+    if findings:
         record = _record_failure(
             prompt=prompt,
             status="needs_review",
-            findings=[
-                "Development needed: the declared coefficient domains are outside "
-                "the supported bounded polynomial family."
-            ],
+            findings=findings,
             check=check,
             check_qualification=check_qualification,
             provenance=_template_provenance(
@@ -528,8 +782,12 @@ def author_template_flow(
                 template_digest=NULL_TEMPLATE_SHA256,
                 check_sha256=check.check_ref.sha256,
                 seed=0,
+                contract=contract,
+                source=selection.source,
             ),
             reused_check=reused_check,
+            scope=definition.scope.model_dump(mode="json", exclude_none=True),
+            selection=selection,
         )
         return store.save_template(owner_id, record)
 
@@ -550,26 +808,33 @@ def author_template_flow(
                 template_digest=template_digest,
                 check_sha256=check.check_ref.sha256,
                 seed=seed,
+                contract=contract,
+                source=selection.source,
             ),
             reused_check=reused_check,
+            scope=definition.scope.model_dump(mode="json", exclude_none=True),
+            selection=selection,
         )
         return store.save_template(owner_id, record)
 
-    qualification = qualify_template(
+    qualification = qualify_structured_template(
         recipe,
-        family,
+        definition,
         seed=seed,
         settings=settings,
     )
     if qualification.status == "passed":
         status: TemplateStatus = "ready"
-        findings: list[str] = []
+        status_findings: list[str] = []
     elif qualification.status == "error":
         status = "error"
-        findings = [_SAFE_WORKER_ERROR, *_public_check_findings(qualification)]
+        status_findings = [
+            _SAFE_WORKER_ERROR,
+            *_public_check_findings(qualification),
+        ]
     else:
         status = "needs_review"
-        findings = _public_check_findings(qualification) or [
+        status_findings = _public_check_findings(qualification) or [
             f"template qualification {qualification.status}"
         ]
     record = PilotTemplateRecord(
@@ -580,19 +845,23 @@ def author_template_flow(
         approval="unreviewed",
         reused_check=reused_check,
         check=check,
-        template=definition.model_dump(mode="json"),
+        template=definition.model_dump(mode="json", exclude_none=True),
         qualification=qualification,
-        findings=[finding[:1000] for finding in findings[:20]],
+        findings=[finding[:1000] for finding in status_findings[:20]],
         created_at=_now(),
-        scope=SUPPORTED_SCOPE.model_dump(mode="json"),
+        scope=definition.scope.model_dump(mode="json", exclude_none=True),
         provenance=_template_provenance(
             provider,
             prompt=prompt,
             template_digest=template_digest,
             check_sha256=check.check_ref.sha256,
             seed=seed,
+            contract=contract,
+            source=selection.source,
+            repair_attempts=0,
         ),
         check_qualification=check_qualification,
+        selection=selection,
     )
     return store.save_template(owner_id, record)
 
@@ -600,6 +869,9 @@ def author_template_flow(
 __all__ = [
     "CheckAuthoringOutcome",
     "MAX_CHECK_REPAIRS",
+    "MAX_PLAN_REPAIRS",
+    "MAX_TEMPLATE_REPAIRS",
+    "PlanOutcome",
     "author_check",
     "author_template_flow",
     "find_applicable_check",

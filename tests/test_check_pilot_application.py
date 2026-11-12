@@ -15,13 +15,16 @@ from edcraft_validator.application.check_pilot import (
 )
 from edcraft_validator.application.check_pilot.models import (
     CheckAuthorProposal,
+    CheckPlanProposal,
     CheckRecipeDefinition,
+    CheckRef,
     CoefficientDomain,
     PilotQualificationSettings,
     PolynomialFamily,
     Qualification,
     RecipeArgument,
     RecipeStep,
+    StructuredGoal,
     TemplateAuthorProposal,
 )
 
@@ -149,7 +152,29 @@ def valid_template_proposal(
     leading: list[int] | None = None,
 ) -> TemplateAuthorProposal:
     return TemplateAuthorProposal(
-        family=family(degree=degree, constants=constants, leading=leading)
+        contract_id="polynomial.differentiate/1",
+        family=family(degree=degree, constants=constants, leading=leading),
+    )
+
+
+def valid_plan(
+    *,
+    min_degree: int = 1,
+    max_degree: int = 5,
+    saved_check_ref: CheckRef | None = None,
+) -> CheckPlanProposal:
+    return CheckPlanProposal(
+        contract_id="polynomial.differentiate/1",
+        reason="The request asks for a complete polynomial derivative.",
+        goal=StructuredGoal(
+            operation="differentiate",
+            relation="none",
+            min_degree=min_degree,
+            max_degree=max_degree,
+            max_abs_coefficient=20,
+            answer_type="expression",
+        ),
+        saved_check_ref=saved_check_ref,
     )
 
 
@@ -160,11 +185,13 @@ class ScriptedProvider:
     def __init__(
         self,
         *,
+        plan=None,
         check=None,
         template=None,
         check_errors: int = 0,
         template_errors: int = 0,
     ) -> None:
+        self.plan = plan or valid_plan()
         self.check = check or valid_check_proposal()
         self.template = template or valid_template_proposal()
         self.check_errors = check_errors
@@ -175,11 +202,12 @@ class ScriptedProvider:
         return {"mode": "scripted", "reasoning_effort": "none"}
 
     def generate(self, request):
-        role = (
-            "check-author"
-            if request.prompt_version.startswith("check-author")
-            else "template-author"
-        )
+        if request.prompt_version.startswith("check-planner"):
+            role = "check-planner"
+        elif request.prompt_version.startswith("check-author"):
+            role = "check-author"
+        else:
+            role = "template-author"
         self.calls.append(
             {
                 "role": role,
@@ -188,6 +216,8 @@ class ScriptedProvider:
                 "messages": request.messages,
             }
         )
+        if role == "check-planner":
+            return self.plan() if callable(self.plan) else self.plan
         if role == "check-author":
             if self.check_errors:
                 self.check_errors -= 1
@@ -237,10 +267,15 @@ def test_end_to_end_author_approve_generate_and_restart(tmp_path: Path):
     assert record.check_qualification is not None
     assert record.check_qualification.status == "passed"
     assert [call["role"] for call in provider.calls] == [
+        "check-planner",
         "check-author",
         "template-author",
     ]
-    assert len({call["prompt_version"] for call in provider.calls}) == 2
+    assert len({call["prompt_version"] for call in provider.calls}) == 3
+    assert provider.calls[0]["prompt_version"] == "check-planner/1"
+    assert provider.calls[0]["schema"] == "check_plan"
+    assert provider.calls[1]["prompt_version"] == "check-author/2"
+    assert provider.calls[2]["prompt_version"] == "template-author/2"
     assert len(application.list_checks("owner")) == 1
     assert len(application.list_templates("owner")) == 1
 
@@ -273,7 +308,7 @@ def test_end_to_end_author_approve_generate_and_restart(tmp_path: Path):
     assert approved.approval == "approved"
     batch = application.generate("owner", record.template_id, seed=42, quantity=5)
     assert batch.requested_quantity == 5
-    assert len(provider.calls) == 2
+    assert len(provider.calls) == 3
     assert batch.shortfall == 0
     assert len(batch.questions) == 5
     assert len({question.expression for question in batch.questions}) == 5
@@ -308,7 +343,10 @@ def test_second_template_reuses_check_without_check_author_call(tmp_path: Path):
     assert second.reused_check is True
     assert second.check is not None and first.check is not None
     assert second.check.check_ref == first.check.check_ref
-    assert [call["role"] for call in second_provider.calls] == ["template-author"]
+    assert [call["role"] for call in second_provider.calls] == [
+        "check-planner",
+        "template-author",
+    ]
     assert len(application.list_checks("owner")) == 1
 
     with pytest.raises(PilotNotFound):
@@ -341,6 +379,7 @@ def test_second_template_reuses_check_without_check_author_call(tmp_path: Path):
     assert other.check is not None
     assert other.check.check_ref != first.check.check_ref
     assert [call["role"] for call in other_provider.calls] == [
+        "check-planner",
         "check-author",
         "template-author",
     ]
@@ -368,9 +407,14 @@ def test_repair_exhaustion_preserves_counterexample_and_no_usable_check(
     assert record.check_qualification.phase == "sampling"
     assert record.check_qualification.counterexample is not None
     assert any("counterexample" in finding for finding in record.findings)
-    assert [call["role"] for call in provider.calls] == ["check-author"] * 3
-    assert "counterexample" in provider.calls[1]["messages"][1]["content"]
+    assert [call["role"] for call in provider.calls] == [
+        "check-planner",
+        "check-author",
+        "check-author",
+        "check-author",
+    ]
     assert "counterexample" in provider.calls[2]["messages"][1]["content"]
+    assert "counterexample" in provider.calls[3]["messages"][1]["content"]
     assert application.list_checks("owner") == []
     assert [item.status for item in application.list_templates("owner")] == [
         "needs_review"
@@ -388,7 +432,10 @@ def test_provider_error_leaves_error_record_and_no_usable_check(tmp_path: Path):
     assert record.check is None
     assert record.check_qualification is None
     assert record.findings
-    assert [call["role"] for call in provider.calls] == ["check-author"]
+    assert [call["role"] for call in provider.calls] == [
+        "check-planner",
+        "check-author",
+    ]
     assert application.list_checks("owner") == []
     assert [item.status for item in application.list_templates("owner")] == ["error"]
     with pytest.raises(PilotConflict):
@@ -419,7 +466,12 @@ def test_compile_rejection_is_compilation_error_not_sampled_failure(
     assert qualification.execution_calls == 0
     assert qualification.counterexample is None
     assert any("Development needed" in finding for finding in record.findings)
-    assert [call["role"] for call in provider.calls] == ["check-author"] * 3
+    assert [call["role"] for call in provider.calls] == [
+        "check-planner",
+        "check-author",
+        "check-author",
+        "check-author",
+    ]
     assert application.list_checks("owner") == []
 
 
@@ -434,7 +486,10 @@ def test_unsupported_check_capability_is_development_needed(tmp_path: Path):
     assert record.status == "needs_review"
     assert record.check is None
     assert any("Development needed" in finding for finding in record.findings)
-    assert [call["role"] for call in provider.calls] == ["check-author"]
+    assert [call["role"] for call in provider.calls] == [
+        "check-planner",
+        "check-author",
+    ]
 
 
 def test_unsupported_template_keeps_qualified_check_but_blocks_approval(
@@ -477,6 +532,7 @@ def test_template_provider_error_keeps_qualified_check_but_no_template(
     assert record.check is not None
     assert record.check.qualification.status == "passed"
     assert [call["role"] for call in provider.calls] == [
+        "check-planner",
         "check-author",
         "template-author",
     ]
@@ -504,7 +560,7 @@ def test_template_qualification_failure_is_separate_evidence(
             versions={"question_builder": "polynomial-mcq/1"},
         )
 
-    monkeypatch.setattr(module, "qualify_template", failed_template)
+    monkeypatch.setattr(module, "qualify_structured_template", failed_template)
     application = app(tmp_path)
     record = author(application, ScriptedProvider())
     assert record.status == "needs_review"
@@ -581,7 +637,7 @@ def test_max_supported_generation_batch_completes(tmp_path: Path, num_distractor
     assert all(
         len(question.choices) == num_distractors + 1 for question in batch.questions
     )
-    assert len(provider.calls) == 2
+    assert len(provider.calls) == 3
 
 
 def test_input_validation_and_unapproved_owner_operations(tmp_path: Path):
