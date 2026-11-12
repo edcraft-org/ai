@@ -164,6 +164,35 @@ def solution_set(*values: str) -> dict:
     }
 
 
+def inequality_solution_set(
+    *,
+    lower: str | None,
+    upper: str | None,
+    lower_closed: bool,
+    upper_closed: bool,
+) -> dict:
+    return {
+        "kind": "solution_set",
+        "solution_set": {
+            "components": [
+                {
+                    "lower": lower,
+                    "upper": upper,
+                    "lower_closed": lower_closed,
+                    "upper_closed": upper_closed,
+                }
+            ]
+        },
+    }
+
+
+def inequality_problem() -> dict:
+    return {
+        "kind": "relation",
+        "relation": {"relation": "gt", "coefficients": [-1, 1]},
+    }
+
+
 async def test_check_pilot_recipe_adapter_uses_isolated_executor():
     server = create_validation_server()
     accepted = await call_tool(
@@ -280,6 +309,72 @@ async def test_check_pilot_recipe_adapter_dispatches_structured_solve_sets():
     )
     assert malformed["status"] == "error"
     assert malformed["findings"][0]["code"] == "RECIPE_INVALID"
+
+
+async def test_check_pilot_recipe_adapter_requires_an_explicit_inequality_contract():
+    server = create_validation_server()
+    problem = inequality_problem()
+    candidate = inequality_solution_set(
+        lower="1",
+        upper=None,
+        lower_closed=False,
+        upper_closed=False,
+    )
+
+    default_scope = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": solve_recipe(),
+            "problem": problem,
+            "candidate": candidate,
+        },
+    )
+    assert default_scope["status"] == "error"
+    assert default_scope["findings"][0]["code"] == "RECIPE_INVALID"
+    assert "verdict" not in default_scope["details"]
+
+    explicit = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": solve_recipe(),
+            "problem": problem,
+            "candidate": candidate,
+            "contract_id": "polynomial.inequality-real/1",
+        },
+    )
+    assert explicit["status"] == "passed"
+    assert explicit["details"]["verdict"] is True
+    assert explicit["details"]["problem"] == "x - 1 > 0"
+
+    wrong_scope = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": solve_recipe(),
+            "problem": problem,
+            "candidate": candidate,
+            "contract_id": "polynomial.equation-real/1",
+        },
+    )
+    assert wrong_scope["status"] == "error"
+    assert wrong_scope["findings"][0]["code"] == "RECIPE_INVALID"
+    assert "verdict" not in wrong_scope["details"]
+
+    unknown = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": solve_recipe(),
+            "problem": problem,
+            "candidate": candidate,
+            "contract_id": "polynomial.inequality-complex/1",
+        },
+    )
+    assert unknown["status"] == "error"
+    assert unknown["findings"][0]["code"] == "RECIPE_INVALID"
+    assert "verdict" not in unknown["details"]
 
 
 async def test_structure_and_feature_tools_are_independently_callable():

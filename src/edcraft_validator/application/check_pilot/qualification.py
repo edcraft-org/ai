@@ -198,20 +198,21 @@ def execute_recipe_isolated(
     problem: Polynomial | PolynomialRelation,
     candidate: Polynomial | RealSolutionSet,
     *,
+    scope: PolynomialScope | ContractScope | None = None,
     timeout_seconds: float = 10.0,
 ) -> RecipeExecutionResult:
     """Run the same validated recipe implementation used by the pilot."""
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError("recipe timeout must be finite and positive")
-    response = run_pilot_isolated(
-        {
-            "operation": "execute_recipe",
-            "definition": definition.model_dump(mode="json"),
-            "problem": _serialize_problem(problem),
-            "candidate": _serialize_candidate(candidate),
-        },
-        timeout_seconds=timeout_seconds,
-    )
+    payload: dict[str, Any] = {
+        "operation": "execute_recipe",
+        "definition": definition.model_dump(mode="json"),
+        "problem": _serialize_problem(problem),
+        "candidate": _serialize_candidate(candidate),
+    }
+    if scope is not None:
+        payload["scope"] = scope.model_dump(mode="json")
+    response = run_pilot_isolated(payload, timeout_seconds=timeout_seconds)
     return RecipeExecutionResult.model_validate(response["result"])
 
 
@@ -219,6 +220,7 @@ def execute_recipe_cases_isolated(
     definition: CheckRecipeDefinition,
     cases: list[tuple[Polynomial | PolynomialRelation, Polynomial | RealSolutionSet]],
     *,
+    scope: PolynomialScope | ContractScope | None = None,
     timeout_seconds: float = 10.0,
 ) -> list[RecipeExecutionResult]:
     """Validate one generated batch in a single disposable interpreter."""
@@ -226,20 +228,20 @@ def execute_recipe_cases_isolated(
         raise ValueError("recipe timeout must be finite and positive")
     if len(cases) > MAX_RECIPE_CASES:
         raise ValueError(f"a batch may contain at most {MAX_RECIPE_CASES} recipe cases")
-    response = run_pilot_isolated(
-        {
-            "operation": "execute_recipe_cases",
-            "definition": definition.model_dump(mode="json"),
-            "cases": [
-                {
-                    "problem": _serialize_problem(problem),
-                    "candidate": _serialize_candidate(candidate),
-                }
-                for problem, candidate in cases
-            ],
-        },
-        timeout_seconds=timeout_seconds,
-    )
+    payload: dict[str, Any] = {
+        "operation": "execute_recipe_cases",
+        "definition": definition.model_dump(mode="json"),
+        "cases": [
+            {
+                "problem": _serialize_problem(problem),
+                "candidate": _serialize_candidate(candidate),
+            }
+            for problem, candidate in cases
+        ],
+    }
+    if scope is not None:
+        payload["scope"] = scope.model_dump(mode="json")
+    response = run_pilot_isolated(payload, timeout_seconds=timeout_seconds)
     payload = response.get("results")
     if not isinstance(payload, list):
         raise PilotWorkerError("pilot worker returned no recipe results")

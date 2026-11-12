@@ -177,11 +177,15 @@ identically. They are never rewritten into version-2 records.
 `check_pilot_execute_recipe` is the one stable MCP adapter. It accepts a closed
 recipe definition plus one problem and candidate. Differentiation recipes accept
 bounded polynomial text. Solve recipes accept one structured `PolynomialRelation`
-and one structured `RealSolutionSet`. Compilation validates operation ids,
-versions, argument/output types and step references before execution. It uses
-the same isolated executor as the application. It has no owner or library
-parameter: owner resolution and library access stay in the application, so a
-model-supplied owner string cannot grant access.
+and one structured `RealSolutionSet`. An optional `contract_id` selects the
+trusted contract; differentiation defaults to its contract and solve defaults to
+the equation contract, so inequality execution must explicitly name
+`polynomial.inequality-real/1`. Compilation validates operation ids, versions,
+argument/output types, step references and relation/scope applicability before
+execution; an out-of-contract relation returns `RECIPE_INVALID` without a
+mathematical verdict. It uses the same isolated executor as the application. It
+has no owner or library parameter: owner resolution and library access stay in
+the application, so a model-supplied owner string cannot grant access.
 
 ## Isolated worker boundary
 

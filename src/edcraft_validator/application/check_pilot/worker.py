@@ -20,6 +20,7 @@ from edcraft_validator.application.check_pilot.batch_generation import (
 )
 from edcraft_validator.application.check_pilot.contracts import (
     scope_from_recipe_operation_set,
+    trusted_contract_scope,
 )
 from edcraft_validator.application.check_pilot.models import (
     MAX_RECIPE_CASES,
@@ -331,7 +332,7 @@ def _scope_from_payload(
     raw = payload.get("scope")
     if isinstance(raw, dict):
         if "contract_id" in raw:
-            return ContractScope.model_validate(raw)
+            return trusted_contract_scope(ContractScope.model_validate(raw))
         return PolynomialScope.model_validate(raw)
     return scope_from_recipe_operation_set(definition.operation_set)
 
@@ -910,7 +911,7 @@ def _deserialize_candidate(value: Any) -> Polynomial | RealSolutionSet:
 
 def execute_recipe_payload(payload: dict[str, Any]) -> dict[str, Any]:
     definition = CheckRecipeDefinition.model_validate(payload["definition"])
-    scope = scope_from_recipe_operation_set(definition.operation_set)
+    scope = _scope_from_payload(payload, definition)
     compiled = compile_recipe(definition, scope=scope)
     problem = _deserialize_problem(payload["problem"])
     candidate = _deserialize_candidate(payload["candidate"])
@@ -923,7 +924,7 @@ def execute_recipe_cases_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(cases, list) or len(cases) > MAX_RECIPE_CASES:
         raise ValueError(f"recipe cases must be a list of at most {MAX_RECIPE_CASES}")
     definition = CheckRecipeDefinition.model_validate(payload["definition"])
-    scope = scope_from_recipe_operation_set(definition.operation_set)
+    scope = _scope_from_payload(payload, definition)
     compiled = compile_recipe(definition, scope=scope)
     results = []
     for case in cases:

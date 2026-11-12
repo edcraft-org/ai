@@ -106,6 +106,14 @@ handles repeated roots, negative leading coefficients, empty/all-real sets,
 unions and open/closed endpoints. Candidate endpoints are parsed with a closed
 grammar, not `eval` or `parse_expr`.
 
+Standalone execution uses one trusted `ContractDescriptor.scope()`. The default
+solve scope is the equation contract, so inequality execution must explicitly
+select `polynomial.inequality-real/1`; differentiation uses its own default
+contract. Compiled recipes retain the contract relation set, and execution
+rejects a relation outside it (or data outside the degree/coefficient bounds)
+before any solver runs. A scope error therefore returns error evidence, not a
+mathematical verdict.
+
 ## Structured templates
 
 Version-2 templates use `pilot-template/2` with a `ContractScope` and exactly one

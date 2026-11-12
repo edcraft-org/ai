@@ -151,6 +151,14 @@ def get_contract(contract_id: str | None) -> ContractDescriptor | None:
     return _CONTRACT_INDEX.get(contract_id)
 
 
+def trusted_contract_scope(scope: ContractScope) -> ContractScope:
+    """Return the scope only when it is exactly one trusted contract's scope."""
+    contract = get_contract(scope.contract_id)
+    if contract is None or contract.scope() != scope:
+        raise ValueError("recipe scope is not a trusted contract scope")
+    return scope
+
+
 def contract_for_scope(scope: dict[str, Any]) -> ContractDescriptor | None:
     """Resolve a stored scope, including legacy v1 differentiation scopes."""
     contract_id = scope.get("contract_id")
@@ -336,26 +344,27 @@ def plan_covers_template_findings(
     return findings
 
 
-def scope_from_recipe_operation_set(operation_set: str) -> ContractScope:
-    """Default scope for a standalone recipe invoked through the MCP adapter."""
-    if operation_set == SOLVE_RECIPE_OPERATION_SET:
-        return ContractScope(
-            contract_id=EQUATION_CONTRACT,
-            operation="solve",
-            relations=["eq", "lt", "le", "gt", "ge"],
-            min_degree=0,
-            max_degree=2,
-            max_abs_coefficient=20,
-            answer_type="solution_set",
-            required_policy=[
-                "complete_correctness",
-                "complete_real_solution_set",
-                "independent_correctness",
-                "all_options_checked",
-            ],
+def scope_from_recipe_operation_set(
+    operation_set: str, *, contract_id: str | None = None
+) -> ContractScope:
+    """Trusted scope for standalone recipe execution.
+
+    Differentiation defaults to the differentiation contract and solve recipes
+    default to the equation contract. An inequality recipe must name its
+    inequality contract explicitly; a relation outside the selected contract is
+    rejected by execution rather than answered with a fabricated verdict.
+    """
+    if contract_id is None:
+        contract_id = (
+            EQUATION_CONTRACT
+            if operation_set == SOLVE_RECIPE_OPERATION_SET
+            else DIFFERENTIATE_CONTRACT
         )
-    contract = get_contract(DIFFERENTIATE_CONTRACT)
-    assert contract is not None
+    contract = get_contract(contract_id)
+    if contract is None:
+        raise ValueError("requested check contract is not trusted")
+    if contract.operation_set != operation_set:
+        raise ValueError("check contract does not match the recipe operation set")
     return contract.scope()
 
 
@@ -373,4 +382,5 @@ __all__ = [
     "scope_applicability_findings",
     "scope_from_recipe_operation_set",
     "template_goal",
+    "trusted_contract_scope",
 ]

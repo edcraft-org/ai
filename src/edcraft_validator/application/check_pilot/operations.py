@@ -19,6 +19,7 @@ from edcraft_validator.application.check_pilot.models import (
     SUPPORTED_SCOPE,
     CheckRecipeDefinition,
     ContractScope,
+    GoalRelation,
     PolynomialRelation,
     PolynomialScope,
     RealSolutionSet,
@@ -261,8 +262,8 @@ class CompiledRecipe:
     definition: CheckRecipeDefinition
     expected_step_id: str
     sha256: str
-    contract_id: str
     operation_set: str
+    relations: tuple[GoalRelation, ...]
     max_degree: int
     max_abs_coefficient: int
 
@@ -348,12 +349,6 @@ def _scope_operation_set(scope: PolynomialScope | ContractScope) -> str:
             return SOLVE_RECIPE_OPERATION_SET
         return RECIPE_OPERATION_SET
     return RECIPE_OPERATION_SET
-
-
-def _scope_contract_id(scope: PolynomialScope | ContractScope) -> str:
-    if isinstance(scope, ContractScope):
-        return scope.contract_id
-    return "polynomial.differentiate/1"
 
 
 def compile_recipe(
@@ -485,12 +480,17 @@ def compile_recipe(
 
     max_degree = scope.max_degree
     max_abs = scope.max_abs_coefficient
+    relations: tuple[GoalRelation, ...]
+    if isinstance(scope, ContractScope):
+        relations = tuple(scope.relations)
+    else:
+        relations = ("none",)
     return CompiledRecipe(
         definition=definition,
         expected_step_id=expected_argument.name,
         sha256=recipe_sha256(definition),
-        contract_id=_scope_contract_id(scope),
         operation_set=operation_set,
+        relations=relations,
         max_degree=max_degree,
         max_abs_coefficient=max_abs,
     )
@@ -523,42 +523,9 @@ def execute_recipe(
     problem: object,
     candidate: object,
 ) -> RecipeExecutionResult:
-    if compiled.operation_set == SOLVE_RECIPE_OPERATION_SET:
-        if not isinstance(problem, PolynomialRelation):
-            raise RecipeCompileError(["solve recipes require relation data"])
-        if not isinstance(candidate, RealSolutionSet):
-            raise RecipeCompileError(
-                ["solve recipes require a structured real solution set"]
-            )
-        if len(problem.coefficients) > compiled.max_degree + 1:
-            raise RecipeCompileError(["relation degree is outside the check scope"])
-        if any(
-            abs(value) > compiled.max_abs_coefficient for value in problem.coefficients
-        ):
-            raise RecipeCompileError(
-                ["relation coefficient is outside the check scope"]
-            )
-        problem_value: object = problem
-        solution = solution_set_from_model(candidate)
-        candidate_value: object = solution
-        problem_text = render_relation(*relation_data(problem))
-        candidate_text = render_solution_set(solution)
-    else:
-        if not isinstance(problem, Polynomial) or not isinstance(candidate, Polynomial):
-            raise RecipeCompileError(["differentiate recipes require polynomials"])
-        if problem.degree > compiled.max_degree:
-            raise RecipeCompileError(["polynomial degree is outside the check scope"])
-        if any(
-            abs(value) > compiled.max_abs_coefficient for value in problem.coefficients
-        ):
-            raise RecipeCompileError(
-                ["polynomial coefficient is outside the check scope"]
-            )
-        problem_value = problem
-        candidate_value = candidate
-        problem_text = render_polynomial(problem)
-        candidate_text = render_polynomial(candidate)
-
+    problem_value, candidate_value, problem_text, candidate_text = (
+        _validated_execution_inputs(compiled, problem, candidate)
+    )
     values: dict[str, object] = {}
     for step in compiled.definition.steps:
         descriptor = _OPERATION_INDEX[(step.operation, step.version)]
@@ -585,6 +552,60 @@ def execute_recipe(
     )
 
 
+def validate_execution_inputs(
+    compiled: CompiledRecipe,
+    problem: object,
+    candidate: object,
+) -> None:
+    """Reject out-of-contract data without running any recipe operation."""
+    _validated_execution_inputs(compiled, problem, candidate)
+
+
+def _validated_execution_inputs(
+    compiled: CompiledRecipe,
+    problem: object,
+    candidate: object,
+) -> tuple[object, object, str, str]:
+    if compiled.operation_set == SOLVE_RECIPE_OPERATION_SET:
+        if not isinstance(problem, PolynomialRelation):
+            raise RecipeCompileError(["solve recipes require relation data"])
+        if not isinstance(candidate, RealSolutionSet):
+            raise RecipeCompileError(
+                ["solve recipes require a structured real solution set"]
+            )
+        if problem.relation not in compiled.relations:
+            raise RecipeCompileError(["relation is outside the check contract"])
+        if len(problem.coefficients) > compiled.max_degree + 1:
+            raise RecipeCompileError(["relation degree is outside the check scope"])
+        if any(
+            abs(value) > compiled.max_abs_coefficient for value in problem.coefficients
+        ):
+            raise RecipeCompileError(
+                ["relation coefficient is outside the check scope"]
+            )
+        solution = solution_set_from_model(candidate)
+        return (
+            problem,
+            solution,
+            render_relation(*relation_data(problem)),
+            render_solution_set(solution),
+        )
+    if not isinstance(problem, Polynomial) or not isinstance(candidate, Polynomial):
+        raise RecipeCompileError(["differentiate recipes require polynomials"])
+    if problem.degree > compiled.max_degree:
+        raise RecipeCompileError(["polynomial degree is outside the check scope"])
+    if any(
+        abs(value) > compiled.max_abs_coefficient for value in problem.coefficients
+    ):
+        raise RecipeCompileError(["polynomial coefficient is outside the check scope"])
+    return (
+        problem,
+        candidate,
+        render_polynomial(problem),
+        render_polynomial(candidate),
+    )
+
+
 __all__ = [
     "CompiledRecipe",
     "MAX_RECIPE_STEPS",
@@ -594,4 +615,5 @@ __all__ = [
     "execute_recipe",
     "operation_catalogue",
     "recipe_sha256",
+    "validate_execution_inputs",
 ]

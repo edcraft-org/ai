@@ -25,6 +25,7 @@ from edcraft_validator.application.check_pilot.models import (
 from edcraft_validator.application.check_pilot.operations import (
     RecipeCompileError,
     compile_recipe,
+    validate_execution_inputs,
 )
 from edcraft_validator.application.check_pilot.polynomial import (
     Polynomial,
@@ -134,11 +135,12 @@ def register_check_pilot_tools(server: FastMCP) -> None:
             "Run one trusted closed check recipe. Differentiation recipes accept "
             "bounded polynomial text for both values. Solve recipes accept one "
             "structured polynomial relation and one structured complete real "
-            "solution set. Compilation validates operation ids, versions, "
-            "argument/output types and step references; the recipe then runs in "
-            "a disposable interpreter with a hard wall-clock limit. No "
-            "model-authored code is executed and no check library or owner "
-            "record is accessed."
+            "solution set. The default solve contract covers equations only; "
+            "inequality execution must name the trusted inequality contract. "
+            "Compilation validates operation ids, versions, argument/output types "
+            "and step references; the recipe then runs in a disposable interpreter "
+            "with a hard wall-clock limit. No model-authored code is executed and "
+            "no check library or owner record is accessed."
         ),
     )
     async def check_pilot_execute_recipe(
@@ -151,20 +153,36 @@ def register_check_pilot_tools(server: FastMCP) -> None:
             str | dict[str, Any],
             Field(description="Polynomial text or structured solution-set data."),
         ],
+        contract_id: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Optional trusted contract id. Defaults to differentiation "
+                    "or the equation contract for solve recipes."
+                )
+            ),
+        ] = None,
         timeout_seconds: Annotated[
             float, Field(gt=0, le=MAX_RECIPE_TIMEOUT_SECONDS)
         ] = DEFAULT_RECIPE_TIMEOUT_SECONDS,
     ) -> ToolEvidence:
         started = time.perf_counter()
         try:
-            scope = scope_from_recipe_operation_set(definition.operation_set)
-            compile_recipe(definition, scope=scope)
+            scope = scope_from_recipe_operation_set(
+                definition.operation_set,
+                contract_id=contract_id,
+            )
+            compiled = compile_recipe(definition, scope=scope)
             _bounded(problem)
             _bounded(candidate)
+            problem_value = _problem_value(definition, problem)
+            candidate_value = _candidate_value(definition, candidate)
+            validate_execution_inputs(compiled, problem_value, candidate_value)
             result = execute_recipe_isolated(
                 definition,
-                _problem_value(definition, problem),
-                _candidate_value(definition, candidate),
+                problem_value,
+                candidate_value,
+                scope=scope,
                 timeout_seconds=timeout_seconds,
             )
         except RecipeCompileError as exc:
