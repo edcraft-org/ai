@@ -19,6 +19,7 @@ from edcraft_validator.application.check_pilot.models import (
     PilotQualificationSettings,
     PolynomialFamily,
     Qualification,
+    QualificationStatus,
 )
 from edcraft_validator.application.check_pilot.operations import (
     CompiledRecipe,
@@ -84,7 +85,7 @@ def _versions() -> dict[str, str]:
 
 def _qualification(
     *,
-    status: str,
+    status: QualificationStatus,
     config: PilotQualificationSettings,
     seed_value: int,
     state: _RunState | None = None,

@@ -11,12 +11,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-CHECK_SCHEMA_VERSION = "check-pilot/1"
-RECIPE_SCHEMA_VERSION = "check-recipe/1"
-FAMILY_SCHEMA_VERSION = "polynomial-family/1"
-TEMPLATE_SCHEMA_VERSION = "pilot-template/1"
-RECIPE_OPERATION_SET = "polynomial-derivative/1"
-RENDERER_VERSION = "polynomial-mcq/1"
+CHECK_SCHEMA_VERSION: Literal["check-pilot/1"] = "check-pilot/1"
+RECIPE_SCHEMA_VERSION: Literal["check-recipe/1"] = "check-recipe/1"
+FAMILY_SCHEMA_VERSION: Literal["polynomial-family/1"] = "polynomial-family/1"
+TEMPLATE_SCHEMA_VERSION: Literal["pilot-template/1"] = "pilot-template/1"
+RECIPE_OPERATION_SET: Literal["polynomial-derivative/1"] = "polynomial-derivative/1"
+RENDERER_VERSION: Literal["polynomial-mcq/1"] = "polynomial-mcq/1"
 
 QualificationStatus = Literal["passed", "failed", "inconclusive", "error"]
 TemplateStatus = Literal["ready", "needs_review", "error"]
@@ -266,7 +266,10 @@ class _StrictAuthorProposalSchema:
 
     @classmethod
     def model_json_schema(cls, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        return _strict_author_schema(super().model_json_schema(*args, **kwargs))
+        # The concrete model supplies model_json_schema; this mixin is only ever
+        # used as a base class alongside PilotModel.
+        schema = super().model_json_schema(*args, **kwargs)  # type: ignore[misc]
+        return _strict_author_schema(schema)
 
 
 class CheckAuthorProposal(_StrictAuthorProposalSchema, PilotModel):
