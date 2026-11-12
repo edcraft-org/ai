@@ -37,6 +37,8 @@ GENERIC MODE (`item`)
   `university.derivative`.
 - `item.parameters` declares one to six named parameters. Values are exact
   decimal or rational strings, for example "2", "-3", "1/2". Never use floats.
+  Keep the product of the declared value counts at or below 512; a larger
+  family cannot be swept exhaustively and is reported as inconclusive.
 - `item.body` is one typed item with parameter placeholders. Its `symbols`
   declare every variable. `givens` contain relations, domain facts or finite
   data sets. `goal.kind` is one of evaluate, solve, simplify, factor, expand,

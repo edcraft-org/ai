@@ -80,7 +80,7 @@ class MathSpecRequest(BaseModel):
     template: MathTemplateSpec | None = None
     candidate: MathTemplateCandidate | None = None
     witnesses: list[Witness] = Field(default_factory=list, max_length=32)
-    max_variants: int = Field(default=64, ge=1, le=512)
+    max_variants: int = Field(default=512, ge=1, le=512)
     check_distractors: bool = True
     timeout_seconds: float = Field(
         default=DEFAULT_VALIDATION_TIMEOUT_SECONDS, gt=0, le=60

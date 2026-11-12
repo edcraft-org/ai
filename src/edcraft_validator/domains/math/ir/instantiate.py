@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from fractions import Fraction
+from itertools import product
 
 import sympy
 from sympy.matrices.matrixbase import MatrixBase
@@ -24,6 +25,7 @@ from edcraft_validator.domains.math.ir.schema import (
     Distractor,
     Expr,
     MathItemSpec,
+    MathTemplateSpec,
     Relation,
 )
 from edcraft_validator.text_templates import render_text_template, template_fields
@@ -213,6 +215,37 @@ def substitute_item(item: MathItemSpec, params: Mapping[str, Fraction]) -> MathI
     )
 
 
+def parameter_combinations(
+    template: MathTemplateSpec,
+) -> list[dict[str, Fraction]]:
+    """Enumerate the finite parameter grid, skipping invalid literals."""
+    names = [parameter.name for parameter in template.parameters]
+    combinations: list[dict[str, Fraction]] = []
+    for values in product(*(parameter.values for parameter in template.parameters)):
+        try:
+            combinations.append(
+                dict(zip(names, (Fraction(value) for value in values), strict=True))
+            )
+        except (ValueError, ZeroDivisionError):
+            continue
+    return combinations
+
+
+def representative_item(template: MathTemplateSpec) -> MathItemSpec:
+    """Instantiate the first renderable combination for a concrete check.
+
+    Prose fidelity and blind parse-back operate on a concrete item, not on
+    unbound parameter nodes. Symbolic templates use the same projection for
+    consistency; their parse-back is skipped.
+    """
+    for params in parameter_combinations(template):
+        try:
+            return substitute_item(template.body, params)
+        except (MathCompileError, ValueError, ZeroDivisionError):
+            continue
+    raise ValueError("template has no renderable parameter combination")
+
+
 def display_sympy_value(value: object) -> str:
     """Render a solved value using the same notation as the question text."""
     if isinstance(value, MatrixBase):
@@ -265,27 +298,20 @@ def display_distractor(
     return display_sympy_value(compile_distractor_value(item, distractor, params))
 
 
-def is_equivalent(left: object, right: object) -> bool:
-    """A tiny local comparison used only to skip colliding generated choices."""
-    try:
-        return bool(left == right or sympy.simplify(left - right) == 0)  # type: ignore[operator]
-    except (TypeError, ValueError, sympy.SympifyError):
-        return False
-
-
 __all__ = [
     "MathCompileError",
     "compile_distractor_value",
     "display_distractor",
     "display_sympy_value",
     "fraction_text",
-    "is_equivalent",
+    "parameter_combinations",
     "render_expr",
     "render_goal_display",
     "render_item_text",
     "render_matrix",
     "render_relation",
     "render_relations",
+    "representative_item",
     "substitute_expr",
     "substitute_item",
 ]

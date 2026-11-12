@@ -15,6 +15,7 @@ from edcraft_validator.domains.math.candidate_builder import (
     build_math_candidate,
     template_sha256,
 )
+from edcraft_validator.domains.math.ir.instantiate import representative_item
 from edcraft_validator.domains.math.linear_ir import (
     MAX_IR_VARIANTS,
     linear_template_ir,
@@ -31,11 +32,13 @@ from edcraft_validator.domains.math.math_schemas import (
 from edcraft_validator.domains.math.math_types import (
     MATH_ADVISORY_CHECK_NAMES,
     MATH_ANSWERS_TOOL,
+    MATH_CHECKING_MODE,
     MATH_DIFFICULTY_TOOL,
     MATH_FIDELITY_TOOL,
     MATH_ITEM_SPEC_TOOL,
     MATH_OPTIONS_TOOL,
     MATH_STRUCTURE_TOOL,
+    MAX_DISTRACTORS,
     MIN_DISTRACTORS,
 )
 from edcraft_validator.domains.math.prompt_builder import (
@@ -137,7 +140,9 @@ class MathDomain:
         if tool_name == MATH_OPTIONS_TOOL:
             return {"template": template.model_dump(mode="json")}
         if tool_name == MATH_FIDELITY_TOOL:
-            return {"item": template.body.model_dump(mode="json")}
+            # Prose parse-back needs a concrete item: parameter nodes are not
+            # expressions the blind reconstruction can compare.
+            return {"item": representative_item(template).model_dump(mode="json")}
         if tool_name == MATH_DIFFICULTY_TOOL:
             return {"candidate": candidate.model_dump(mode="json")}
         if tool_name in {MATH_STRUCTURE_TOOL, MATH_ANSWERS_TOOL}:
@@ -248,8 +253,13 @@ class MathDomain:
         template_spec = template.item
         if template_spec is None:
             raise ValueError("Generic finalization requires an item template")
-        if len(template_spec.body.distractors) < MIN_DISTRACTORS:
-            raise ValueError("Generic templates require at least two distractors")
+        distractor_count = len(template_spec.body.distractors)
+        if distractor_count < MIN_DISTRACTORS:
+            raise ValueError("Generic templates require at least one distractor")
+        if distractor_count > MAX_DISTRACTORS:
+            raise ValueError(
+                f"Generic templates allow at most {MAX_DISTRACTORS} distractors"
+            )
         if template_spec.body.text.mode == "prose":
             fidelity = next(
                 (item for item in evidence if item.tool == MATH_FIDELITY_TOOL),
@@ -271,7 +281,7 @@ class MathDomain:
             for item in evidence
         ]
         summary = MathValidationSummary(
-            checking_mode="exhaustive_domain",
+            checking_mode=MATH_CHECKING_MODE,
             combinations_checked=report.variants_checked,
             max_combinations=report.variants_total,
             seed=0,

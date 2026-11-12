@@ -13,6 +13,7 @@ from fractions import Fraction
 from typing import Any
 
 import sympy
+from sympy.matrices.matrixbase import MatrixBase
 
 from edcraft_validator.domains.math.ir.schema import Interval, PrimitiveSpec
 from edcraft_validator.domains.math.validation.results import (
@@ -90,7 +91,9 @@ def numeric_equal(
         left = _as_fraction(expected)
         right = _as_fraction(actual)
     except (TypeError, ValueError, ZeroDivisionError):
-        return _result("numeric", "failed", "values are not finite numbers")
+        # A type mismatch is not a counterexample: this primitive cannot say
+        # the values differ, only that it cannot compare them.
+        return _result("numeric", "inconclusive", "values are not finite numbers")
     if left == right:
         return _result("numeric", "passed", "exact values are equal")
     if rel_tol == 0.0 and abs_tol == 0.0:
@@ -210,6 +213,67 @@ def solution_set_equal(
         expected=sympy.sstr(expected),
         actual=sympy.sstr(actual),
     )
+
+
+def _matrix_rows(value: Any) -> list[list[Any]] | None:
+    if isinstance(value, MatrixBase):
+        return value.tolist()
+    if isinstance(value, list) and all(isinstance(row, list) for row in value):
+        return value
+    return None
+
+
+def option_equivalent(expected: Any, actual: Any) -> PrimitiveResult:
+    """Compare a key with one option independently of the declared primitives.
+
+    The item's primitives decide the learner answer. A distractor must also be
+    shown to differ from that key, so the option check may not rely on a
+    primitive that merely cannot compare the two types.
+    """
+    if isinstance(expected, sympy.Tuple) or isinstance(actual, sympy.Tuple):
+        if not (isinstance(expected, sympy.Tuple) and isinstance(actual, sympy.Tuple)):
+            return _result("option", "failed", "tuple and scalar are different answers")
+        if len(expected) != len(actual):
+            return _result("option", "failed", "tuples have different lengths")
+        results = [
+            option_equivalent(left, right)
+            for left, right in zip(expected, actual, strict=True)
+        ]
+        return _combine_option_results(results, "tuples match componentwise")
+
+    left_rows = _matrix_rows(expected)
+    right_rows = _matrix_rows(actual)
+    if left_rows is not None or right_rows is not None:
+        if left_rows is None or right_rows is None:
+            return _result("option", "failed", "matrix and non-matrix differ")
+        return matrix_equal(left_rows, right_rows)
+
+    if isinstance(expected, sympy.Set) or isinstance(actual, sympy.Set):
+        return solution_set_equal(expected, actual)
+
+    try:
+        if expected == actual:
+            return _result("option", "passed", "values are identical")
+    except (TypeError, ValueError):
+        pass
+
+    if isinstance(expected, str) and isinstance(actual, str):
+        return _result("option", "failed", "strings differ")
+
+    if isinstance(expected, sympy.Expr) and isinstance(actual, sympy.Expr):
+        return expression_equiv(expected, actual)
+
+    return numeric_equal(expected, actual)
+
+
+def _combine_option_results(
+    results: list[PrimitiveResult], reason: str
+) -> PrimitiveResult:
+    if any(result.status == "failed" for result in results):
+        return _result("option", "failed", "one element differs")
+    if any(result.status == "inconclusive" for result in results):
+        return _result("option", "inconclusive", "one element could not be compared")
+    return _result("option", "passed", reason)
 
 
 def collection_equal(

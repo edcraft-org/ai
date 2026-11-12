@@ -17,7 +17,9 @@ from pydantic import ValidationError
 from test_code_relevance import Decisions
 
 from edcraft_validator.application.template_workflow import TemplateApplication
+from edcraft_validator.domains.math.ir.instantiate import representative_item
 from edcraft_validator.domains.math.ir.schema import (
+    Distractor,
     Expr,
     MathTemplateSpec,
     ParameterSpec,
@@ -30,6 +32,12 @@ from edcraft_validator.domains.math.math_schemas import (
     MathValidationSummary,
     ValidatedMathTemplate,
 )
+from edcraft_validator.domains.math.math_types import (
+    MATH_ITEM_SPEC_TOOL,
+    MATH_OPTIONS_TOOL,
+    MATH_TOOL_VERSION,
+    MAX_DISTRACTORS,
+)
 from edcraft_validator.domains.math.question_generator import generate_math_question
 from edcraft_validator.domains.math.validation.harness import validate_template
 from edcraft_validator.mcp.client import FastMcpToolClient
@@ -41,6 +49,7 @@ from edcraft_validator.mcp.math_tools import (
     verify_item_spec,
 )
 from edcraft_validator.mcp.server import create_validation_server
+from edcraft_validator.validation.check_contracts import ToolEvidence
 from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
 TEMPLATES = (
@@ -177,6 +186,48 @@ def test_ir_template_rejects_unknown_text_placeholders() -> None:
             topic=template.topic,
             parameters=template.parameters,
             body=body,
+        )
+
+
+def test_representative_item_substitutes_parameters_and_text() -> None:
+    template = quadratic_ir_template()
+
+    item = representative_item(template)
+
+    assert "{p}" not in item.text.template
+    assert "{q}" not in item.text.template
+    assert "x^2" in item.text.template
+
+
+def _passing_evidence(tool: str) -> ToolEvidence:
+    return ToolEvidence(
+        tool=tool,
+        version=MATH_TOOL_VERSION,
+        status="passed",
+        details={},
+    )
+
+
+def test_ir_finalization_rejects_too_many_distractors() -> None:
+    template = quadratic_ir_template()
+    body = template.body.model_copy(deep=True)
+    body.distractors = [
+        Distractor(value=Expr(num=str(index + 2)), misconception="EXTRA")
+        for index in range(MAX_DISTRACTORS + 1)
+    ]
+    bloated = MathTemplateSpec(
+        topic=template.topic,
+        parameters=template.parameters,
+        body=body,
+    )
+
+    with pytest.raises(ValueError, match="at most"):
+        MathDomain().finalize_checked_template(
+            ir_candidate(bloated),
+            [
+                _passing_evidence(MATH_ITEM_SPEC_TOOL),
+                _passing_evidence(MATH_OPTIONS_TOOL),
+            ],
         )
 
 

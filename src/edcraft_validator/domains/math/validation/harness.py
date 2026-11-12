@@ -9,7 +9,6 @@ is reported as ``inconclusive`` and routes to review.
 from __future__ import annotations
 
 from fractions import Fraction
-from itertools import product
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,6 +20,7 @@ from edcraft_validator.domains.math.ir.compile import (
 from edcraft_validator.domains.math.ir.instantiate import (
     compile_distractor_value,
     display_distractor,
+    parameter_combinations,
 )
 from edcraft_validator.domains.math.ir.schema import (
     Answer,
@@ -34,8 +34,7 @@ from edcraft_validator.domains.math.ir.solve import (
 )
 from edcraft_validator.domains.math.validation.answers import compile_answer
 from edcraft_validator.domains.math.validation.primitives import (
-    expression_equiv,
-    solution_set_equal,
+    option_equivalent,
 )
 from edcraft_validator.domains.math.validation.results import (
     OptionCheck,
@@ -357,8 +356,13 @@ def _check_distractors(
             continue
         compiled.append((distractor, value))
         primitive_results = _check_all(spec, expected, value)
+        collision = option_equivalent(expected, value)
         rejected = any(result.status == "failed" for result in primitive_results)
-        if all(result.status == "passed" for result in primitive_results):
+        if collision.status == "passed" or all(
+            result.status == "passed" for result in primitive_results
+        ):
+            # The declared primitives may be unable to compare this option's
+            # type, so a direct value comparison also guards the key.
             status: PrimitiveStatus = "failed"
             reason = "distractor is equivalent to the key"
         elif rejected:
@@ -419,15 +423,7 @@ def _distractor_display(distractor: Distractor) -> str:
 
 
 def _equivalent(left: object, right: object) -> bool:
-    try:
-        if expression_equiv(left, right).status == "passed":  # type: ignore[arg-type]
-            return True
-    except (TypeError, ValueError):
-        pass
-    try:
-        return solution_set_equal(left, right).status == "passed"  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return False
+    return option_equivalent(left, right).status == "passed"
 
 
 def _aggregate(statuses: list[PrimitiveStatus]) -> PrimitiveStatus:
@@ -441,20 +437,4 @@ def _aggregate(statuses: list[PrimitiveStatus]) -> PrimitiveStatus:
 def _parameter_combinations(
     template: MathTemplateSpec,
 ) -> list[dict[str, Fraction]]:
-    names = [parameter.name for parameter in template.parameters]
-    values = [parameter.values for parameter in template.parameters]
-    combinations: list[dict[str, Fraction]] = []
-    for combination in product(*values):
-        try:
-            combinations.append(
-                dict(
-                    zip(
-                        names,
-                        (Fraction(value) for value in combination),
-                        strict=True,
-                    )
-                )
-            )
-        except (ValueError, ZeroDivisionError):
-            continue
-    return combinations
+    return parameter_combinations(template)

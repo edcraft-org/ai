@@ -315,7 +315,7 @@ def _compare_goals(
 
     try:
         expression_status, expression_reason = _compare_optional_expressions(
-            left_goal.expr, right_goal.expr, symbols
+            left_goal.expr, right_goal.expr, symbols, label="expression"
         )
         if expression_status == "failed":
             reasons.append("goal expressions differ")
@@ -323,7 +323,7 @@ def _compare_goals(
             return "inconclusive", [expression_reason]
 
         point_status, point_reason = _compare_optional_expressions(
-            left_goal.point, right_goal.point, symbols
+            left_goal.point, right_goal.point, symbols, label="evaluation point"
         )
         if point_status == "failed":
             reasons.append("goal evaluation points differ")
@@ -349,19 +349,21 @@ def _compare_optional_expressions(
     expected: Expr | None,
     reconstructed: Expr | None,
     symbols: Mapping[str, sympy.Symbol],
+    *,
+    label: str,
 ) -> tuple[FidelityStatus, str]:
     if expected is None and reconstructed is None:
         return "passed", ""
     if expected is None or reconstructed is None:
-        return "failed", "goal expression or point is missing on one side"
+        return "failed", f"goal {label} is missing on one side"
     equivalence = _expressions_equivalent(
         compile_expr(expected, symbols), compile_expr(reconstructed, symbols)
     )
     if equivalence is None:
-        return "inconclusive", "goal expression could not be compared"
+        return "inconclusive", f"goal {label} could not be compared"
     if equivalence:
         return "passed", ""
-    return "failed", "goal expression differs"
+    return "failed", f"goal {label} differs"
 
 
 def _compare_optional_matrices(
@@ -567,7 +569,8 @@ _MIRRORED_RELATIONS = frozenset(
 
 def _givens_equivalent(left: _ComparableGiven, right: _ComparableGiven) -> bool:
     if left.kind == right.kind:
-        if left.kind == "relation_eq":
+        if left.kind in {"relation_eq", "relation_ne"}:
+            # Equalities and inequalities are symmetric under operand swap.
             return _residual_zero(left.residual, right.residual, flipped=False) or (
                 _residual_zero(left.residual, right.residual, flipped=True)
             )

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import hashlib
 from fractions import Fraction
-from itertools import product
 
 from edcraft_validator.domains.math.ir.compile import MathCompileError
 from edcraft_validator.domains.math.ir.instantiate import (
     compile_distractor_value,
     display_sympy_value,
     fraction_text,
+    parameter_combinations,
     render_goal_display,
     render_item_text,
 )
@@ -19,18 +19,21 @@ from edcraft_validator.domains.math.ir.solve import SolveUnavailable, solve_item
 from edcraft_validator.domains.math.math_schemas import (
     MathQuestionInstance,
     ValidatedMathTemplate,
-    parameter_combinations,
     render_linear_equation,
     render_math_text,
+)
+from edcraft_validator.domains.math.math_schemas import (
+    parameter_combinations as legacy_parameter_combinations,
 )
 from edcraft_validator.domains.math.safe_linear import (
     evaluate_expression,
     format_fraction,
 )
-from edcraft_validator.domains.math.validation.primitives import (
-    expression_equiv,
-    solution_set_equal,
-)
+from edcraft_validator.domains.math.validation.primitives import option_equivalent
+
+
+class UnusableVariant(ValueError):
+    """One parameter combination cannot yield a sound question."""
 
 
 def generate_math_question(
@@ -40,7 +43,7 @@ def generate_math_question(
     template = validated.template
     if template.item is not None:
         return _generate_ir_question(validated, template.item, seed)
-    combinations = parameter_combinations(template.parameters or [])
+    combinations = legacy_parameter_combinations(template.parameters or [])
     if not combinations:
         raise ValueError("validated template has an empty parameter domain")
     start = _seeded_index(
@@ -106,7 +109,7 @@ def _generate_ir_question(
     template: MathTemplateSpec,
     seed: int,
 ) -> MathQuestionInstance:
-    combinations = _ir_combinations(template)
+    combinations = parameter_combinations(template)
     if not combinations:
         raise ValueError("validated template has an empty parameter domain")
     start = _seeded_index(
@@ -116,7 +119,7 @@ def _generate_ir_question(
         values = combinations[(start + offset) % len(combinations)]
         try:
             return _build_ir_instance(validated, template, seed, values)
-        except (MathCompileError, SolveUnavailable, ValueError):
+        except (MathCompileError, SolveUnavailable, UnusableVariant):
             continue
     raise ValueError("Could not produce a usable question from this template")
 
@@ -131,18 +134,18 @@ def _build_ir_instance(
     solved = solve_item(body, values)
     answer = solved.answer.display.replace("**", "^").strip()
     if not answer:
-        raise ValueError("the solver returned an empty display answer")
+        raise UnusableVariant("the solver returned an empty display answer")
     distractor_choices: list[str] = []
     for distractor in body.distractors:
         value = compile_distractor_value(body, distractor, values)
-        if _matches_key(value, solved.value):
-            raise ValueError("a distractor is equivalent to the derived answer")
+        if _matches_key(value, solved.value) is not False:
+            raise UnusableVariant("a distractor is not demonstrably different")
         display = display_sympy_value(value).strip()
         if not display or display == answer or display in distractor_choices:
-            raise ValueError("distractor choices are not distinct")
+            raise UnusableVariant("distractor choices are not distinct")
         distractor_choices.append(display)
     if not distractor_choices:
-        raise ValueError("the template declares no distractors")
+        raise UnusableVariant("the template declares no distractors")
     choices = list(distractor_choices)
     correct_index = _seeded_index(
         validated.template.template_id, seed, "correct-index", len(choices) + 1
@@ -162,33 +165,14 @@ def _build_ir_instance(
     )
 
 
-def _ir_combinations(
-    template: MathTemplateSpec,
-) -> list[dict[str, Fraction]]:
-    names = [parameter.name for parameter in template.parameters]
-    combinations: list[dict[str, Fraction]] = []
-    for values in product(*(parameter.values for parameter in template.parameters)):
-        try:
-            combinations.append(
-                dict(zip(names, (Fraction(value) for value in values), strict=True))
-            )
-        except (ValueError, ZeroDivisionError):
-            continue
-    return combinations
-
-
-def _matches_key(value: object, key: object) -> bool:
-    try:
-        if expression_equiv(value, key).status == "passed":  # type: ignore[arg-type]
-            return True
-    except (TypeError, ValueError):
-        pass
-    try:
-        if solution_set_equal(value, key).status == "passed":  # type: ignore[arg-type]
-            return True
-    except (TypeError, ValueError):
+def _matches_key(value: object, key: object) -> bool | None:
+    """Return True/False when decided, or None when no proof is available."""
+    status = option_equivalent(value, key).status
+    if status == "passed":
+        return True
+    if status == "failed":
         return False
-    return False
+    return None
 
 
 def _seeded_index(template_id: str, seed: int, name: str, size: int) -> int:

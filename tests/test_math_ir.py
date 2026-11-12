@@ -38,6 +38,7 @@ from edcraft_validator.domains.math.validation.primitives import (
     interval_equal,
     matrix_equal,
     numeric_equal,
+    option_equivalent,
     solution_set_equal,
 )
 from edcraft_validator.domains.math.validation.results import PrimitiveResult
@@ -210,6 +211,27 @@ def test_primitives_are_tri_state() -> None:
         == "passed"
     )
     assert matrix_equal([[1, 2]], [[1, 2]]).status == "passed"
+
+
+def test_numeric_mismatch_is_inconclusive_not_a_counterexample() -> None:
+    assert numeric_equal("x", 2).status == "inconclusive"
+    assert numeric_equal(sympy.oo, 2).status == "inconclusive"
+
+
+def test_option_equivalence_compares_values_without_declared_primitives() -> None:
+    assert option_equivalent(sympy.Tuple(1, 2), sympy.Tuple(1, 2)).status == "passed"
+    assert option_equivalent(sympy.Tuple(1, 2), sympy.Integer(1)).status == "failed"
+    assert option_equivalent([[1, 2]], [[1, 2]]).status == "passed"
+    assert option_equivalent([[1, 2]], [[1, 3]]).status == "failed"
+    assert (
+        option_equivalent(sympy.FiniteSet(1, 2), sympy.FiniteSet(2, 1)).status
+        == "passed"
+    )
+    assert (
+        option_equivalent(sympy.FiniteSet(1, 2), sympy.FiniteSet(1, 3)).status
+        == "failed"
+    )
+    assert option_equivalent("north", "south").status == "failed"
 
 
 def test_harness_blocks_wrong_key_and_bad_distractors() -> None:

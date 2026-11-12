@@ -307,6 +307,24 @@ def test_anchor_name_must_appear_in_the_template() -> None:
     assert any("does not appear" in reason for reason in verdict.reasons)
 
 
+def test_symmetric_inequality_reconstruction_passes() -> None:
+    expected = _item(relation=Relation(kind="ne", lhs=_two_x(), rhs=_six()))
+    swapped = MathReconstruction(
+        topic="linear equations",
+        symbols=[SymbolSpec(name="x", domain="real")],
+        givens=[
+            Given(
+                id="g1",
+                kind="relation",
+                relation=Relation(kind="ne", lhs=_six(), rhs=_two_x()),
+            )
+        ],
+        goal=Goal(kind="solve", symbol="x"),
+    )
+
+    assert PLUGIN.equivalent(expected, swapped).status == "passed"
+
+
 def test_symbolic_placeholders_may_skip_anchors() -> None:
     item = _item(mode="symbolic", template="{a}x + {b} = {c}", anchors={})
     verdict = PLUGIN.check_anchors(item, item.text.template)
