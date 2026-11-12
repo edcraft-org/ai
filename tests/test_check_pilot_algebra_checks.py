@@ -4,6 +4,7 @@ from copy import deepcopy
 
 import pytest
 from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from edcraft_validator.application.check_pilot import algebra_checks as checks
 
@@ -149,4 +150,19 @@ def test_exact_system_oracle_agrees_with_checker(problem):
     contract = "linear-system.unique/1"
     assert checks.check_answer(
         contract, problem, checks.expected_answer(contract, problem)
+    )
+
+
+@pytest.mark.parametrize(
+    "contract", ["polynomial.expand/1", "polynomial.complete-square/1"]
+)
+@settings(max_examples=35, deadline=None)
+@given(data=st.data())
+def test_other_algebra_oracles_and_mutations(contract, data):
+    problem = data.draw(checks.problem_strategy(contract))
+    answer = checks.expected_answer(contract, problem)
+    assert checks.check_answer(contract, problem, answer)
+    assert all(
+        not checks.check_answer(contract, problem, wrong)
+        for wrong in checks.wrong_answers(contract, problem, answer)
     )
