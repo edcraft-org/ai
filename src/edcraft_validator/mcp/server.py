@@ -18,6 +18,7 @@ from edcraft_validator.llm.judging import (
     DEFAULT_JUDGE_TIMEOUT_SECONDS,
     JudgeProviderFactory,
 )
+from edcraft_validator.mcp.check_pilot_tools import register_check_pilot_tools
 from edcraft_validator.mcp.code_checks.property_checks import PropertyCheckSettings
 from edcraft_validator.mcp.code_question_tools import register_code_question_tools
 from edcraft_validator.mcp.code_tools import register_code_validation_tools
@@ -81,6 +82,7 @@ def create_validation_server(
         fidelity_provider_factory=partial(configured_judge_provider, selected),
         fidelity_timeout_seconds=fidelity_judge_timeout_seconds,
     )
+    register_check_pilot_tools(server)
     register_relevance_tools(
         server,
         decision_provider_factory=decision_provider_factory

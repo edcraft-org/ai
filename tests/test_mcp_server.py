@@ -63,6 +63,7 @@ async def test_catalogue_exposes_authoritative_names_descriptions_and_schemas():
         "math_verify_item_spec",
         "math_validate_options",
         "math_verify_text_fidelity",
+        "check_pilot_execute_recipe",
         "assess_relevance",
         "assess_template_relevance",
         "code_assess_template_relevance",
@@ -97,6 +98,80 @@ async def test_catalogue_exposes_authoritative_names_descriptions_and_schemas():
     assert "supported Python subset" in executable.description
     assert "sampling-budget limits" in executable.description
     assert "explicit error evidence" in (executable.description)
+
+
+def derivative_recipe() -> dict:
+    return {
+        "steps": [
+            {
+                "id": "d1",
+                "operation": "poly.differentiate",
+                "version": "1",
+                "arguments": {"polynomial": {"source": "input", "name": "problem"}},
+            },
+            {
+                "id": "out",
+                "operation": "poly.equivalent",
+                "version": "1",
+                "arguments": {
+                    "expected": {"source": "step", "name": "d1"},
+                    "actual": {"source": "input", "name": "candidate"},
+                },
+            },
+        ],
+        "output": "out",
+    }
+
+
+async def test_check_pilot_recipe_adapter_uses_isolated_executor():
+    server = create_validation_server()
+    accepted = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": derivative_recipe(),
+            "problem": "3*x^2 - 2*x + 1",
+            "candidate": "6*x - 2",
+        },
+    )
+    assert accepted["status"] == "passed"
+    assert accepted["details"]["verdict"] is True
+
+    rejected = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": derivative_recipe(),
+            "problem": "3*x^2 - 2*x + 1",
+            "candidate": "6*x",
+        },
+    )
+    assert rejected["status"] == "failed"
+    assert rejected["findings"][0]["code"] == "RECIPE_REJECTED_CANDIDATE"
+
+    invalid = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": {
+                "steps": [
+                    {
+                        "id": "d1",
+                        "operation": "poly.unknown",
+                        "version": "1",
+                        "arguments": {
+                            "polynomial": {"source": "input", "name": "problem"}
+                        },
+                    }
+                ],
+                "output": "d1",
+            },
+            "problem": "x",
+            "candidate": "1",
+        },
+    )
+    assert invalid["status"] == "error"
+    assert invalid["findings"][0]["code"] == "RECIPE_INVALID"
 
 
 async def test_structure_and_feature_tools_are_independently_callable():
