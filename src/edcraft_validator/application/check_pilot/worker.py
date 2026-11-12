@@ -32,6 +32,7 @@ from edcraft_validator.application.check_pilot.kernel_registry import (
 )
 from edcraft_validator.application.check_pilot.models import (
     MAX_RECIPE_CASES,
+    RECIPE_OPERATION_SET,
     STRUCTURED_RECIPE_OPERATION_SET,
     SUPPORTED_SCOPE,
     CheckRecipeDefinition,
@@ -194,17 +195,24 @@ def _compile_failure(
     return None
 
 
-def _polynomial_strategy() -> st.SearchStrategy[Polynomial]:
-    return st.integers(min_value=0, max_value=5).flatmap(
+def _polynomial_strategy(
+    scope: PolynomialScope | ContractScope = SUPPORTED_SCOPE,
+) -> st.SearchStrategy[Polynomial]:
+    return st.integers(min_value=0, max_value=scope.max_degree).flatmap(
         lambda degree: st.lists(
-            st.integers(min_value=-20, max_value=20),
+            st.integers(
+                min_value=-scope.max_abs_coefficient,
+                max_value=scope.max_abs_coefficient,
+            ),
             min_size=degree + 1,
             max_size=degree + 1,
         ).map(Polynomial.from_coefficients)
     )
 
 
-def _boundary_polynomials() -> list[Polynomial]:
+def _boundary_polynomials(
+    scope: PolynomialScope | ContractScope = SUPPORTED_SCOPE,
+) -> list[Polynomial]:
     values = [
         [0],
         [1],
@@ -218,7 +226,12 @@ def _boundary_polynomials() -> list[Polynomial]:
         [1, 1, 1, 1, 1, 1],
         [-1, -1, -1, -1, -1, -1],
     ]
-    return [Polynomial.from_coefficients(value) for value in values]
+    return [
+        Polynomial.from_coefficients(value)
+        for value in values
+        if len(value) - 1 <= scope.max_degree
+        and all(abs(coefficient) <= scope.max_abs_coefficient for coefficient in value)
+    ]
 
 
 def _run_property[Case](
@@ -281,6 +294,7 @@ def _run_property[Case](
 def _run_recipe_property(
     *,
     compiled: CompiledRecipe,
+    scope: PolynomialScope | ContractScope,
     state: _RunState,
     seed_value: int,
     max_examples: int,
@@ -359,9 +373,26 @@ def _run_recipe_property(
         max_examples=max_examples,
         expose_counterexample=expose_counterexample,
         include_boundaries=include_boundaries,
-        strategy=_polynomial_strategy(),
-        boundary_cases=_boundary_polynomials,
+        strategy=_polynomial_strategy(scope),
+        boundary_cases=lambda: _boundary_polynomials(scope),
         check_case=check_case,
+    )
+
+
+def _trusted_polynomial_scope(
+    definition: CheckRecipeDefinition,
+) -> PolynomialScope:
+    """Registry-derived bound for a payload-supplied legacy polynomial scope."""
+    if definition.operation_set != RECIPE_OPERATION_SET:
+        raise ValueError(
+            "polynomial scope only applies to differentiation recipe operation sets"
+        )
+    trusted = scope_from_recipe_operation_set(definition.operation_set)
+    if not isinstance(trusted, ContractScope):
+        return SUPPORTED_SCOPE
+    return PolynomialScope(
+        max_degree=trusted.max_degree,
+        max_abs_coefficient=trusted.max_abs_coefficient,
     )
 
 
@@ -373,9 +404,29 @@ def _scope_from_payload(
         parsed = parse_scope(raw)
         if isinstance(parsed, (ContractScope, KernelContractScope)):
             return trusted_contract_scope(parsed)
+        trusted = _trusted_polynomial_scope(definition)
+        if (
+            parsed.max_degree > trusted.max_degree
+            or parsed.max_abs_coefficient > trusted.max_abs_coefficient
+        ):
+            raise ValueError(
+                "recipe polynomial scope exceeds the trusted scope "
+                f"(max_degree <= {trusted.max_degree}, "
+                "max_abs_coefficient <= "
+                f"{trusted.max_abs_coefficient})"
+            )
         return parsed
-    if definition.operation_set == STRUCTURED_RECIPE_OPERATION_SET:
+    contract_id = payload.get("contract_id")
+    if definition.operation_set == STRUCTURED_RECIPE_OPERATION_SET and (
+        contract_id is None
+    ):
         raise ValueError("structured recipes must provide their trusted kernel scope")
+    if contract_id is not None:
+        if not isinstance(contract_id, str):
+            raise ValueError("recipe contract id must be text")
+        return scope_from_recipe_operation_set(
+            definition.operation_set, contract_id=contract_id
+        )
     return scope_from_recipe_operation_set(definition.operation_set)
 
 
@@ -670,8 +721,10 @@ def qualify_recipe_payload(payload: dict[str, Any]) -> Qualification:
             include_boundaries=True,
         )
     else:
+        assert isinstance(scope, (PolynomialScope, ContractScope))
         _, outcome = _run_recipe_property(
             compiled=compiled,
+            scope=scope,
             state=state,
             seed_value=seed_value,
             max_examples=config.max_examples,
@@ -706,8 +759,10 @@ def qualify_recipe_payload(payload: dict[str, Any]) -> Qualification:
             include_boundaries=False,
         )
     else:
+        assert isinstance(scope, (PolynomialScope, ContractScope))
         _, held_out = _run_recipe_property(
             compiled=compiled,
+            scope=scope,
             state=state,
             seed_value=seed_value + 7919,
             max_examples=max(4, config.max_examples // 2),
@@ -1281,6 +1336,12 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
     raise ValueError(f"unknown pilot operation {operation!r}")
 
 
+def _error_code(exc: Exception) -> str:
+    if isinstance(exc, (RecipeCompileError, ValueError, TypeError, KeyError)):
+        return "RECIPE_INVALID"
+    return "RECIPE_WORKER_ERROR"
+
+
 def main() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -1291,6 +1352,7 @@ def main() -> int:
                 "error": {
                     "type": type(exc).__name__,
                     "message": str(exc)[:1000],
+                    "code": _error_code(exc),
                 }
             },
             sys.stdout,

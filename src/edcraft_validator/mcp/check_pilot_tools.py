@@ -9,27 +9,13 @@ from typing import Annotated, Any, Literal
 from fastmcp import FastMCP
 from pydantic import Field
 
-from edcraft_validator.application.check_pilot.contracts import (
-    scope_from_recipe_operation_set,
-)
 from edcraft_validator.application.check_pilot.isolation import (
     PilotWorkerError,
     PilotWorkerTimeout,
 )
 from edcraft_validator.application.check_pilot.models import (
     CheckRecipeDefinition,
-    PolynomialRelation,
-    RealSolutionSet,
     RecipeExecutionResult,
-)
-from edcraft_validator.application.check_pilot.operations import (
-    RecipeCompileError,
-    compile_recipe,
-    validate_execution_inputs,
-)
-from edcraft_validator.application.check_pilot.polynomial import (
-    Polynomial,
-    parse_polynomial,
 )
 from edcraft_validator.application.check_pilot.qualification import (
     execute_recipe_isolated,
@@ -40,71 +26,8 @@ CHECK_PILOT_RECIPE_TOOL = "check_pilot_execute_recipe"
 CHECK_PILOT_TOOL_VERSION = "1"
 DEFAULT_RECIPE_TIMEOUT_SECONDS = 10.0
 MAX_RECIPE_TIMEOUT_SECONDS = 30.0
-MAX_POLYNOMIAL_LENGTH = 2000
+MAX_POLYNOMIAL_LENGTH = 200
 MAX_STRUCTURED_PAYLOAD_LENGTH = 8000
-
-
-def _polynomial(value: str | dict[str, Any]) -> Polynomial:
-    text: object
-    if isinstance(value, str):
-        text = value
-    elif isinstance(value, dict) and value.get("kind") == "polynomial":
-        text = value.get("text")
-    else:
-        raise ValueError("differentiation problems require polynomial text")
-    if not isinstance(text, str) or not 1 <= len(text) <= MAX_POLYNOMIAL_LENGTH:
-        raise ValueError(
-            f"polynomial text must be 1 to {MAX_POLYNOMIAL_LENGTH} characters"
-        )
-    return parse_polynomial(text)
-
-
-def _relation(value: str | dict[str, Any]) -> PolynomialRelation:
-    if not isinstance(value, dict):
-        raise ValueError("solve problems require structured relation data")
-    payload: Any = value
-    if value.get("kind") == "relation":
-        payload = value.get("relation")
-    try:
-        return PolynomialRelation.model_validate(payload)
-    except ValueError as exc:
-        raise ValueError(f"invalid structured relation: {exc}") from exc
-
-
-def _solution_set(value: str | dict[str, Any]) -> RealSolutionSet:
-    if not isinstance(value, dict):
-        raise ValueError("solve candidates require structured solution-set data")
-    payload: Any = value
-    if value.get("kind") == "solution_set":
-        payload = value.get("solution_set")
-    try:
-        return RealSolutionSet.model_validate(payload)
-    except ValueError as exc:
-        raise ValueError(f"invalid structured solution set: {exc}") from exc
-
-
-def _problem_value(
-    definition: CheckRecipeDefinition, value: str | dict[str, Any]
-) -> Polynomial | PolynomialRelation | dict[str, Any]:
-    if definition.operation_set == "structured-check/1":
-        if not isinstance(value, dict):
-            raise ValueError("structured kernel problems require an object")
-        return value
-    if definition.operation_set == "polynomial-solve-real/1":
-        return _relation(value)
-    return _polynomial(value)
-
-
-def _candidate_value(
-    definition: CheckRecipeDefinition, value: str | dict[str, Any]
-) -> Polynomial | RealSolutionSet | dict[str, Any]:
-    if definition.operation_set == "structured-check/1":
-        if not isinstance(value, dict):
-            raise ValueError("structured kernel candidates require an object")
-        return value
-    if definition.operation_set == "polynomial-solve-real/1":
-        return _solution_set(value)
-    return _polynomial(value)
 
 
 def _bounded(value: str | dict[str, Any]) -> None:
@@ -189,25 +112,15 @@ def register_check_pilot_tools(server: FastMCP) -> None:
     ) -> ToolEvidence:
         started = time.perf_counter()
         try:
-            scope = scope_from_recipe_operation_set(
-                definition.operation_set,
-                contract_id=contract_id,
-            )
-            compiled = compile_recipe(definition, scope=scope)
             _bounded(problem)
             _bounded(candidate)
-            problem_value = _problem_value(definition, problem)
-            candidate_value = _candidate_value(definition, candidate)
-            validate_execution_inputs(compiled, problem_value, candidate_value)
             result = execute_recipe_isolated(
                 definition,
-                problem_value,
-                candidate_value,
-                scope=scope,
+                problem,
+                candidate,
+                contract_id=contract_id,
                 timeout_seconds=timeout_seconds,
             )
-        except RecipeCompileError as exc:
-            return _error(started, "RECIPE_INVALID", str(exc)[:500])
         except PilotWorkerTimeout:
             return _error(
                 started,
@@ -215,7 +128,12 @@ def register_check_pilot_tools(server: FastMCP) -> None:
                 f"recipe execution exceeded {timeout_seconds:g}s",
             )
         except PilotWorkerError as exc:
-            return _error(started, "RECIPE_WORKER_ERROR", str(exc)[:500])
+            code = (
+                "RECIPE_INVALID"
+                if exc.code == "RECIPE_INVALID"
+                else "RECIPE_WORKER_ERROR"
+            )
+            return _error(started, code, str(exc)[:500])
         except ValueError as exc:
             return _error(started, "RECIPE_INVALID", str(exc)[:500])
         return _evidence(started, result)

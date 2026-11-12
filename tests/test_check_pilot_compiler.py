@@ -184,13 +184,18 @@ def test_coefficient_oracle_does_not_use_sympy(monkeypatch):
 
 def test_operation_catalogue_is_typed_and_versioned():
     catalogue = operation_catalogue()
-    assert {entry["id"] for entry in catalogue} >= {
+    advertised = {entry["id"] for entry in catalogue}
+    assert advertised >= {
         "poly.differentiate",
         "poly.equivalent",
-        "poly.evaluate_at",
-        "number.equal",
-        "verdict.constant",
+        "relation.solve_real",
+        "set.equal",
+        "structured.expected",
+        "structured.accepts",
     }
+    assert advertised.isdisjoint(
+        {"poly.identity", "poly.evaluate_at", "number.equal", "verdict.constant"}
+    )
     for entry in catalogue:
         assert entry["version"] == "1"
         assert entry["inputs"]

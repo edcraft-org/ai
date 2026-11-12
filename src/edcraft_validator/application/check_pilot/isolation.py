@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from edcraft_validator.tools.isolated_process import run_json_worker
+from edcraft_validator.tools.isolated_process import CodedWorkerError, run_json_worker
 
 PILOT_WORKER_MODULE = "edcraft_validator.application.check_pilot.worker"
 
@@ -14,8 +14,14 @@ class PilotWorkerTimeout(TimeoutError):
     """The isolated pilot worker exceeded its hard wall-clock deadline."""
 
 
-class PilotWorkerError(RuntimeError):
-    """The isolated pilot worker failed before returning a report."""
+class PilotWorkerError(CodedWorkerError):
+    """The isolated pilot worker failed before returning a report.
+
+    ``code`` carries an explicit boundary error code from the worker envelope,
+    such as ``RECIPE_INVALID``; transport failures leave it unset.
+    """
+
+    code: str | None = None
 
 
 def run_pilot_isolated(
