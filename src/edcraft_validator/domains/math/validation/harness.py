@@ -10,14 +10,17 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import product
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from edcraft_validator.domains.math.ir.compile import (
     MathCompileError,
     build_symbols,
-    compile_expr,
+)
+from edcraft_validator.domains.math.ir.instantiate import (
+    compile_distractor_value,
+    display_distractor,
 )
 from edcraft_validator.domains.math.ir.schema import (
     Answer,
@@ -72,6 +75,7 @@ class HarnessReport(BaseModel):
     report: ValidationReport
     witnesses: list[WitnessOutcome] = Field(default_factory=list)
     variants_checked: int = 0
+    variants_total: int = 0
 
     @property
     def passed(self) -> bool:
@@ -149,8 +153,7 @@ def validate_item(
             *[check.status for check in primitives],
             *[option.result.status for option in options],
             *["passed" if item.passed else "failed" for item in witness_outcomes],
-        ],
-        findings,
+        ]
     )
     return HarnessReport(
         report=ValidationReport(
@@ -172,6 +175,7 @@ def validate_template(
 ) -> HarnessReport:
     """Sweep a finite parameter grid; any failed variant blocks the template."""
     combinations = list(_parameter_combinations(template))
+    total_variants = len(combinations)
     if not combinations:
         return HarnessReport(
             report=ValidationReport(
@@ -179,7 +183,8 @@ def validate_template(
                 findings=["template has no parameter combinations"],
             )
         )
-    if len(combinations) > max_variants:
+    truncated = total_variants > max_variants
+    if truncated:
         combinations = combinations[:max_variants]
     reports: list[HarnessReport] = []
     for combination in combinations:
@@ -202,10 +207,15 @@ def validate_template(
             )
     if failed:
         status: PrimitiveStatus = "failed"
-    elif inconclusive:
+    elif inconclusive or truncated:
         status = "inconclusive"
     else:
         status = "passed"
+    if truncated:
+        merged_findings.append(
+            f"variant sweep truncated to {len(combinations)} of "
+            f"{total_variants} combinations"
+        )
     return HarnessReport(
         report=ValidationReport(
             status=status,
@@ -218,6 +228,7 @@ def validate_template(
         ),
         witnesses=[item for report in reports for item in report.witnesses],
         variants_checked=len(reports),
+        variants_total=total_variants,
     )
 
 
@@ -269,7 +280,7 @@ def _run_witness(
         reason = str(exc)
     else:
         checks = _check_all(spec, expected, compiled)
-        observed = _aggregate([check.status for check in checks], [])
+        observed = _aggregate([check.status for check in checks])
         reason = "; ".join(check.reason for check in checks if check.reason)
     matched = (witness.expected == "accepted" and observed == "passed") or (
         witness.expected == "rejected" and observed == "failed"
@@ -325,11 +336,16 @@ def _check_distractors(
     compiled: list[tuple[Distractor, object]] = []
     for index, distractor in enumerate(spec.distractors):
         value = _compile_distractor(spec, distractor, params)
+        display = (
+            display_distractor(spec, distractor, params)
+            if value is not None
+            else _distractor_display(distractor)
+        )
         if value is None:
             checks.append(
                 OptionCheck(
                     index=index,
-                    value=_distractor_display(distractor),
+                    value=display,
                     misconception=distractor.misconception,
                     result=PrimitiveResult(
                         primitive="distractor",
@@ -354,7 +370,7 @@ def _check_distractors(
         checks.append(
             OptionCheck(
                 index=index,
-                value=_distractor_display(distractor),
+                value=display,
                 misconception=distractor.misconception,
                 result=PrimitiveResult(
                     primitive="distractor",
@@ -392,20 +408,14 @@ def _compile_distractor(
     distractor: Distractor,
     params: dict[str, Fraction] | None = None,
 ) -> object | None:
-    symbols = build_symbols(spec.symbols)
-    values = params or {}
     try:
-        if distractor.value is not None:
-            return compile_expr(distractor.value, symbols, values)
-        return [compile_expr(item, symbols, values) for item in distractor.items]
+        return compile_distractor_value(spec, distractor, params)
     except MathCompileError:
         return None
 
 
 def _distractor_display(distractor: Distractor) -> str:
-    if distractor.value is not None:
-        return distractor.value.model_dump_json()
-    return ",".join(item.model_dump_json() for item in distractor.items)
+    return distractor.model_dump_json()
 
 
 def _equivalent(left: object, right: object) -> bool:
@@ -420,18 +430,10 @@ def _equivalent(left: object, right: object) -> bool:
         return False
 
 
-def _aggregate(
-    statuses: list[PrimitiveStatus],
-    findings: list[str],
-) -> PrimitiveStatus:
-    if "failed" in statuses or any(
-        finding.startswith(("options ", "the declared answer contradicts"))
-        for finding in findings
-    ):
+def _aggregate(statuses: list[PrimitiveStatus]) -> PrimitiveStatus:
+    if "failed" in statuses:
         return "failed"
-    if "inconclusive" in statuses:
-        return "inconclusive"
-    if not statuses:
+    if "inconclusive" in statuses or not statuses:
         return "inconclusive"
     return "passed"
 
@@ -456,8 +458,3 @@ def _parameter_combinations(
         except (ValueError, ZeroDivisionError):
             continue
     return combinations
-
-
-def report_payload(report: HarnessReport) -> dict[str, Any]:
-    """Stable JSON payload for wire/tool responses."""
-    return report.model_dump(mode="json")

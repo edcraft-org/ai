@@ -8,8 +8,10 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
+from edcraft_validator.domains.math.ir.schema import MathTemplateSpec
 from edcraft_validator.domains.math.math_types import (
     DEFAULT_DISTRACTORS,
+    LEGACY_MATH_RELEVANCE_TOOL,
     MATH_ADVISORY_CHECK_NAMES,
     MATH_CHECKING_MODE,
     MATH_FORMAT_VERSION,
@@ -34,9 +36,6 @@ from edcraft_validator.validation.check_names import TEMPLATE_RELEVANCE_CHECK
 from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
 _QUESTION_FIELDS = frozenset({*MATH_PARAMETER_NAMES, "equation"})
-# Read compatibility only: artifacts written before relevance became a shared
-# capability still carry this name. New evidence never uses it.
-_LEGACY_MATH_RELEVANCE_CHECK = "math_assess_template_relevance"
 
 
 class MathTemplateRequest(BaseModel):
@@ -115,42 +114,90 @@ class MathDistractorRecipe(BaseModel):
 
 
 class MathTemplateContent(BaseModel):
-    """Model-authored fields that require generative judgment."""
+    """Model-authored template: either a typed IR family or the legacy linear form.
+
+    The generic ``item`` path authors any closed-vocabulary goal (solve,
+    derivative, determinant, and so on). The legacy fields remain for the
+    original linear-equation contract and its stored artifacts. Exactly one mode
+    is present on every proposal.
+    """
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    equation_template: str = Field(
-        min_length=1, max_length=MAX_EQUATION_TEMPLATE_LENGTH
+    item: MathTemplateSpec | None = None
+    equation_template: str | None = Field(
+        default=None, min_length=1, max_length=MAX_EQUATION_TEMPLATE_LENGTH
     )
-    question_template: str = Field(
-        min_length=1, max_length=MAX_QUESTION_TEMPLATE_LENGTH
+    question_template: str | None = Field(
+        default=None, min_length=1, max_length=MAX_QUESTION_TEMPLATE_LENGTH
     )
-    parameters: list[MathParameter] = Field(min_length=3, max_length=3)
-    answer_expression: str = Field(min_length=1, max_length=MAX_EXPRESSION_LENGTH)
-    distractors: list[MathDistractorRecipe] = Field(
-        min_length=MIN_DISTRACTORS, max_length=MAX_DISTRACTOR_CANDIDATES
+    parameters: list[MathParameter] | None = Field(default=None)
+    answer_expression: str | None = Field(
+        default=None, min_length=1, max_length=MAX_EXPRESSION_LENGTH
     )
+    distractors: list[MathDistractorRecipe] | None = Field(default=None)
 
     @field_validator("equation_template", "question_template", "answer_expression")
     @classmethod
-    def reject_blank_text(cls, value: str) -> str:
+    def reject_blank_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         if not value.strip():
             raise ValueError("must not be blank")
         return value
 
     @model_validator(mode="after")
-    def validate_parameter_and_template_domain(self) -> MathTemplateContent:
-        names = [parameter.name for parameter in self.parameters]
+    def validate_authoring_mode(self) -> MathTemplateContent:
+        legacy = [
+            self.equation_template,
+            self.question_template,
+            self.parameters,
+            self.answer_expression,
+            self.distractors,
+        ]
+        if self.item is not None:
+            if any(value is not None for value in legacy):
+                raise ValueError(
+                    "return either a generic item or the legacy linear fields, not both"
+                )
+            return self
+        if any(value is None for value in legacy):
+            raise ValueError(
+                "the legacy authoring mode requires equation_template, "
+                "question_template, parameters, answer_expression, and distractors; "
+                "otherwise return a generic item"
+            )
+        equation_template = self.equation_template
+        question_template = self.question_template
+        parameters = self.parameters
+        distractors = self.distractors
+        if (
+            equation_template is None
+            or question_template is None
+            or parameters is None
+            or distractors is None
+        ):
+            raise ValueError("legacy authoring fields are required")
+        if not MIN_DISTRACTORS <= len(distractors) <= MAX_DISTRACTOR_CANDIDATES:
+            raise ValueError(
+                f"distractors must contain {MIN_DISTRACTORS} to "
+                f"{MAX_DISTRACTOR_CANDIDATES} recipes"
+            )
+        names = [parameter.name for parameter in parameters]
         if len(names) != len(set(names)) or set(names) != set(MATH_PARAMETER_NAMES):
             raise ValueError("parameters must be exactly a, b, and c")
         coefficient_a = next(
-            parameter for parameter in self.parameters if parameter.name == "a"
+            parameter for parameter in parameters if parameter.name == "a"
         )
         if 0 in coefficient_a.values:
             raise ValueError("parameter a must never be zero")
-        validate_equation_template(self.equation_template)
-        validate_question_template(self.question_template)
+        validate_equation_template(equation_template)
+        validate_question_template(question_template)
         return self
+
+    @property
+    def uses_ir(self) -> bool:
+        return self.item is not None
 
 
 class MathTemplateCandidate(MathTemplateContent):
@@ -189,7 +236,7 @@ class MathValidationSummary(BaseModel):
             else:
                 migrated.append(item)
                 continue
-            legacy = data.get("check") == _LEGACY_MATH_RELEVANCE_CHECK
+            legacy = data.get("check") == LEGACY_MATH_RELEVANCE_TOOL
             if legacy:
                 data["check"] = TEMPLATE_RELEVANCE_CHECK
             check = data.get("check")
@@ -229,19 +276,25 @@ class ValidatedMathTemplate(ValidatedTemplateArtifact):
 
 
 class MathQuestionInstance(BaseModel):
-    """A reproducible equation question expanded from a validated template."""
+    """A reproducible question expanded from a validated template.
+
+    Legacy linear templates keep integer ``a``/``b``/``c`` parameters. Generic
+    IR templates carry their declared parameter values as exact strings and set
+    ``topic``; ``equation`` is the rendered mathematical object.
+    """
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
     template_id: str
     artifact_id: str | None = None
     seed: int
-    parameters: dict[str, int]
+    parameters: dict[str, int | str]
     equation: str = Field(min_length=1)
     question: str = Field(min_length=1)
     choices: list[str] = Field(min_length=2)
     correct_index: int = Field(ge=0)
     answer: str = Field(min_length=1)
+    topic: str | None = None
     requires_manual_review: Literal[True] = True
 
     @model_validator(mode="after")
@@ -252,7 +305,7 @@ class MathQuestionInstance(BaseModel):
             raise ValueError("choices must be distinct")
         if self.choices[self.correct_index] != self.answer:
             raise ValueError("answer must equal the choice at correct_index")
-        if set(self.parameters) != set(MATH_PARAMETER_NAMES):
+        if self.topic is None and set(self.parameters) != set(MATH_PARAMETER_NAMES):
             raise ValueError("question parameters must be exactly a, b, and c")
         return self
 

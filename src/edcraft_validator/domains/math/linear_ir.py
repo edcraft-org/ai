@@ -33,6 +33,12 @@ MAX_IR_VARIANTS = 512
 
 def linear_template_ir(candidate: MathTemplateCandidate) -> MathTemplateSpec:
     """Convert a checked canonical linear template into a parameterised IR."""
+    if (
+        candidate.parameters is None
+        or candidate.distractors is None
+        or candidate.question_template is None
+    ):
+        raise ValueError("linear templates require the legacy authoring fields")
     parameters = {
         parameter.name: [str(value) for value in parameter.values]
         for parameter in candidate.parameters

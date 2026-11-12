@@ -15,17 +15,20 @@ from typing import Any
 import sympy
 
 from edcraft_validator.domains.math.ir.schema import Interval, PrimitiveSpec
-from edcraft_validator.domains.math.validation.results import PrimitiveResult
+from edcraft_validator.domains.math.validation.results import (
+    PrimitiveResult,
+    PrimitiveStatus,
+)
 
 _NUMERIC_TOLERANCE = 1e-12
 
 
 def _result(
-    primitive: str, status: str, reason: str = "", **evidence: Any
+    primitive: str, status: PrimitiveStatus, reason: str = "", **evidence: Any
 ) -> PrimitiveResult:
     return PrimitiveResult(
         primitive=primitive,
-        status=status,  # type: ignore[arg-type]
+        status=status,
         reason=reason,
         evidence=evidence,
     )
@@ -112,6 +115,22 @@ def numeric_equal(
     )
 
 
+def _expression_element_equal(left: object, right: object) -> bool:
+    """Compare one set element, including ordered tuples component by component."""
+    if isinstance(left, sympy.Tuple) or isinstance(right, sympy.Tuple):
+        if not (isinstance(left, sympy.Tuple) and isinstance(right, sympy.Tuple)):
+            return False
+        if len(left) != len(right):
+            return False
+        return all(
+            _expression_element_equal(a, b) for a, b in zip(left, right, strict=True)
+        )
+    try:
+        return expression_equiv(left, right).status == "passed"  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return False
+
+
 def solution_set_equal(
     expected: sympy.Set,
     actual: sympy.Set,
@@ -149,10 +168,7 @@ def solution_set_equal(
         unmatched = list(right)
         for candidate in left:
             for index, other in enumerate(unmatched):
-                if (
-                    expression_equiv(candidate, other, symbols=symbols).status
-                    == "passed"
-                ):
+                if _expression_element_equal(candidate, other):
                     unmatched.pop(index)
                     break
             else:
@@ -341,7 +357,25 @@ def check_primitive(
     if kind == "expression_equiv":
         return expression_equiv(expected, actual, symbols=symbols)
     if kind == "solution_set":
-        return solution_set_equal(expected, actual, symbols=symbols)
+        result = solution_set_equal(expected, actual, symbols=symbols)
+        if result.status == "passed" and bool(params.get("unique", False)):
+            elements = _set_elements(expected)
+            if elements is None:
+                return _result(
+                    "solution_set",
+                    "inconclusive",
+                    "uniqueness was requested but the solution set is not finite",
+                    expected=sympy.sstr(expected),
+                )
+            if len(elements) != 1:
+                return _result(
+                    "solution_set",
+                    "failed",
+                    "the goal requires a unique solution",
+                    expected=sympy.sstr(expected),
+                    solutions=len(elements),
+                )
+        return result
     if kind == "collection":
         return collection_equal(
             expected,
@@ -422,6 +456,15 @@ def _find_counterexample(
         if abs(value) > 1e-10:
             return point
     return None
+
+
+def _set_elements(value: Any) -> list[Any] | None:
+    """Return finite set elements, or ``None`` when the set is not finite."""
+    if isinstance(value, sympy.FiniteSet):
+        return list(value.args)
+    if isinstance(value, sympy.Set):
+        return None
+    return [value]
 
 
 def _unique(values: list[Any]) -> list[Any]:

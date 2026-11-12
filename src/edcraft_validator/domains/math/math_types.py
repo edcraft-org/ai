@@ -64,8 +64,13 @@ MATH_FIDELITY_TOOL = "math_verify_text_fidelity"
 # than duplicated.
 MATH_ADVISORY_CHECK_NAMES = frozenset({MATH_DIFFICULTY_TOOL, TEMPLATE_RELEVANCE_CHECK})
 
-MATH_CHECKING_MODE = "exhaustive_domain"
-MATH_VALIDATOR_VERSION = "mcp-math-template-v1"
+MATH_CHECKING_MODE: Literal["exhaustive_domain"] = "exhaustive_domain"
+MATH_VALIDATOR_VERSION: Literal["mcp-math-template-v1"] = "mcp-math-template-v1"
 MATH_TOOL_VERSION = "1.0.0"
 MATH_IR_TOOL_VERSION = "1.1.0"
-MATH_FORMAT_VERSION = "1.0.0"
+MATH_FORMAT_VERSION: Literal["1.0.0"] = "1.0.0"
+
+# Retired public identifier, retained as a constant alias so downstream imports
+# keep working. It is read-compatibility only; new evidence uses the shared
+# relevance check name.
+LEGACY_MATH_RELEVANCE_TOOL = "math_assess_template_relevance"

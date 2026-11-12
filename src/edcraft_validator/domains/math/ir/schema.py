@@ -11,7 +11,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from edcraft_validator.text_templates import template_fields
+
 IR_VERSION: Literal["math-ir/0.1"] = "math-ir/0.1"
+
+# Text placeholders the renderer supplies in addition to declared parameters.
+RESERVED_TEXT_FIELDS = frozenset({"expr", "equation", "equations", "matrix"})
 
 Domain = Literal["real", "integer", "rational"]
 RelationKind = Literal["eq", "ne", "lt", "le", "gt", "ge"]
@@ -173,13 +178,23 @@ class Answer(Record):
 class Distractor(Record):
     value: Expr | None = None
     items: list[Expr] = Field(default_factory=list)
+    components: list[Expr] = Field(default_factory=list)
     misconception: str = Field(min_length=1)
     reason: str = ""
 
     @model_validator(mode="after")
     def require_value(self) -> Distractor:
-        if self.value is None and not self.items:
-            raise ValueError("a distractor requires a value or items")
+        supplied = sum(
+            (
+                self.value is not None,
+                bool(self.items),
+                bool(self.components),
+            )
+        )
+        if supplied != 1:
+            raise ValueError(
+                "a distractor requires exactly one of value, items, or components"
+            )
         return self
 
 
@@ -235,6 +250,38 @@ class ParameterSpec(Record):
     values: list[str] = Field(min_length=1, max_length=32)
 
 
+def _expr_parameters(expr: Expr | None) -> set[str]:
+    if expr is None:
+        return set()
+    found = {expr.param} if expr.param is not None else set()
+    for child in expr.args:
+        found.update(_expr_parameters(child))
+    return found
+
+
+def _relation_parameters(relation: Relation | None) -> set[str]:
+    if relation is None:
+        return set()
+    return _expr_parameters(relation.lhs) | _expr_parameters(relation.rhs)
+
+
+def item_parameters(item: MathItemSpec) -> set[str]:
+    """Return every parameter name referenced by an item body."""
+    found: set[str] = set()
+    for given in item.givens:
+        found.update(_relation_parameters(given.relation))
+    found.update(_expr_parameters(item.goal.expr))
+    found.update(_expr_parameters(item.goal.point))
+    for row in item.goal.matrix or []:
+        for cell in row:
+            found.update(_expr_parameters(cell))
+    for distractor in item.distractors:
+        found.update(_expr_parameters(distractor.value))
+        for entry in [*distractor.items, *distractor.components]:
+            found.update(_expr_parameters(entry))
+    return found
+
+
 class MathTemplateSpec(Record):
     """A reusable item family: a body with parameter nodes plus finite values."""
 
@@ -242,6 +289,27 @@ class MathTemplateSpec(Record):
     topic: str = Field(min_length=1)
     parameters: list[ParameterSpec] = Field(min_length=1, max_length=6)
     body: MathItemSpec
+
+    @model_validator(mode="after")
+    def require_declared_parameters(self) -> MathTemplateSpec:
+        names = [parameter.name for parameter in self.parameters]
+        if len(names) != len(set(names)):
+            raise ValueError("template parameter names must be unique")
+        declared = set(names)
+        used = item_parameters(self.body)
+        unknown = sorted(used - declared)
+        if unknown:
+            raise ValueError(
+                "body references undeclared parameters: " + ", ".join(unknown)
+            )
+        fields = template_fields(self.body.text.template)
+        unknown_fields = sorted(fields - declared - RESERVED_TEXT_FIELDS)
+        if unknown_fields:
+            raise ValueError(
+                "text template uses unsupported placeholders: "
+                + ", ".join(unknown_fields)
+            )
+        return self
 
 
 class MathReconstruction(Record):

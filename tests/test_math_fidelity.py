@@ -404,3 +404,77 @@ def test_incomparable_parse_is_inconclusive() -> None:
     verdict = PLUGIN.equivalent(item, parse)
     assert verdict.status == "inconclusive"
     assert verdict.status != "passed"
+
+
+def test_goal_expression_mismatch_is_failed() -> None:
+    item = _item().model_copy(update={"goal": Goal(kind="simplify", expr=_two_x())})
+    parse = _reconstruction().model_copy(
+        update={
+            "goal": Goal(
+                kind="simplify",
+                expr=Expr(op="mul", args=[Expr(num="3"), Expr(sym="x")]),
+            )
+        }
+    )
+
+    verdict = PLUGIN.equivalent(item, parse)
+
+    assert verdict.status == "failed"
+    assert any("goal expressions differ" in reason for reason in verdict.reasons)
+
+
+def test_goal_matrix_mismatch_is_failed() -> None:
+    matrix = [[Expr(num="1"), Expr(num="2")], [Expr(num="3"), Expr(num="4")]]
+    other = [[Expr(num="1"), Expr(num="2")], [Expr(num="3"), Expr(num="5")]]
+    item = _item().model_copy(update={"goal": Goal(kind="determinant", matrix=matrix)})
+    parse = _reconstruction().model_copy(
+        update={"goal": Goal(kind="determinant", matrix=other)}
+    )
+
+    verdict = PLUGIN.equivalent(item, parse)
+
+    assert verdict.status == "failed"
+    assert any("goal matrix entry 1,1" in reason for reason in verdict.reasons)
+
+
+def test_mirrored_inequality_is_equivalent() -> None:
+    item = _item(
+        relation=Relation(kind="lt", lhs=_two_x(), rhs=_six()),
+    )
+    parse = _reconstruction().model_copy(
+        update={
+            "givens": [
+                Given(
+                    id="g1",
+                    kind="relation",
+                    relation=Relation(kind="gt", lhs=_six(), rhs=_two_x()),
+                )
+            ]
+        }
+    )
+
+    verdict = PLUGIN.equivalent(item, parse)
+
+    assert verdict.status == "passed"
+
+
+def test_same_residual_with_opposite_inequality_direction_is_failed() -> None:
+    item = _item(
+        relation=Relation(kind="lt", lhs=_two_x(), rhs=_six()),
+    )
+    parse = _reconstruction().model_copy(
+        update={
+            "givens": [
+                Given(
+                    id="g1",
+                    kind="relation",
+                    relation=Relation(kind="gt", lhs=_two_x(), rhs=_six()),
+                )
+            ]
+        }
+    )
+
+    verdict = PLUGIN.equivalent(item, parse)
+
+    assert verdict.status == "failed"
+    assert any("missing givens" in reason for reason in verdict.reasons)

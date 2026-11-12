@@ -130,7 +130,8 @@ def _matrix(
     symbols: Mapping[str, sympy.Symbol],
     params: Mapping[str, Fraction],
 ) -> list[list[sympy.Expr]]:
-    assert goal.matrix is not None
+    if goal.matrix is None:
+        raise SolveUnavailable(f"{goal.kind} goals require a matrix")
     return [
         [compile_expr(cell, symbols, params) for cell in row] for row in goal.matrix
     ]

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from fractions import Fraction
 from functools import partial
-from typing import Annotated, Any
+from itertools import product
+from typing import Annotated, Any, Literal
 
 from fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -37,6 +39,7 @@ from edcraft_validator.domains.math.math_types import (
     MATH_TOOL_VERSION,
     MAX_DISTRACTORS,
     MIN_DISTRACTORS,
+    Difficulty,
 )
 from edcraft_validator.domains.math.safe_linear import (
     evaluate_expression,
@@ -110,20 +113,24 @@ class MathFidelityRequest(BaseModel):
 
 
 class MathOptionsRequest(BaseModel):
-    """MCQ option checks for one concrete item or a legacy linear candidate."""
+    """MCQ option checks for one concrete item, a finite template, or a candidate."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
     item: MathItemSpec | None = None
+    template: MathTemplateSpec | None = None
     candidate: MathTemplateCandidate | None = None
     timeout_seconds: float = Field(
         default=DEFAULT_VALIDATION_TIMEOUT_SECONDS, gt=0, le=60
     )
 
     @model_validator(mode="after")
-    def require_one_spec(self) -> MathOptionsRequest:
-        if (self.item is None) == (self.candidate is None):
-            raise ValueError("supply exactly one of item or candidate")
+    def require_one_subject(self) -> MathOptionsRequest:
+        supplied = sum(
+            value is not None for value in (self.item, self.template, self.candidate)
+        )
+        if supplied != 1:
+            raise ValueError("supply exactly one of item, template, or candidate")
         return self
 
 
@@ -310,6 +317,7 @@ def register_math_tools(
     )
     async def math_validate_options(
         item: MathItemSpec | None = None,
+        template: MathTemplateSpec | None = None,
         candidate: MathTemplateCandidate | None = None,
         timeout_seconds: Annotated[float, Field(gt=0, le=60)] = (
             DEFAULT_VALIDATION_TIMEOUT_SECONDS
@@ -318,6 +326,7 @@ def register_math_tools(
         return validate_options(
             MathOptionsRequest(
                 item=item,
+                template=template,
                 candidate=candidate,
                 timeout_seconds=timeout_seconds,
             )
@@ -387,7 +396,7 @@ async def verify_text_fidelity_tool(
             duration_ms=_elapsed_ms(started),
         )
     if report.status == "passed":
-        status = "passed"
+        status: Literal["passed", "failed"] = "passed"
         findings = []
     else:
         status = "failed"
@@ -417,7 +426,10 @@ def verify_item_spec(request: MathSpecRequest) -> ToolEvidence:
     operation = "validate_item"
     template = request.template
     if request.candidate is not None:
-        template = linear_template_ir(request.candidate)
+        if request.candidate.item is not None:
+            template = request.candidate.item
+        else:
+            template = linear_template_ir(request.candidate)
     if template is not None:
         operation = "validate_template"
     payload: dict[str, Any] = {
@@ -429,15 +441,23 @@ def verify_item_spec(request: MathSpecRequest) -> ToolEvidence:
     if template is not None:
         payload["template"] = template.model_dump(mode="json")
     else:
-        payload["spec"] = request.item.model_dump(mode="json")  # type: ignore[union-attr]
+        item = request.item
+        if item is None:
+            return _missing_subject(MATH_ITEM_SPEC_TOOL, "item or template")
+        payload["spec"] = item.model_dump(mode="json")
     return _run_isolated(MATH_ITEM_SPEC_TOOL, payload, request.timeout_seconds)
 
 
 def validate_options(request: MathOptionsRequest) -> ToolEvidence:
+    template = request.template
     if request.candidate is not None:
-        template = linear_template_ir(request.candidate)
+        if request.candidate.item is not None:
+            template = request.candidate.item
+        else:
+            template = linear_template_ir(request.candidate)
+    if template is not None:
         if not template.body.distractors:
-            return _no_options(MATH_OPTIONS_TOOL, "candidate.distractors")
+            return _no_options(MATH_OPTIONS_TOOL, "template.body.distractors")
         payload = {
             "operation": "validate_template",
             "template": template.model_dump(mode="json"),
@@ -445,15 +465,31 @@ def validate_options(request: MathOptionsRequest) -> ToolEvidence:
             "check_distractors": True,
         }
     else:
-        assert request.item is not None
-        if not request.item.distractors:
+        item = request.item
+        if item is None:
+            return _missing_subject(MATH_OPTIONS_TOOL, "item, template, or candidate")
+        if not item.distractors:
             return _no_options(MATH_OPTIONS_TOOL, "item.distractors")
         payload = {
             "operation": "validate_item",
-            "spec": request.item.model_dump(mode="json"),
+            "spec": item.model_dump(mode="json"),
             "check_distractors": True,
         }
     return _run_isolated(MATH_OPTIONS_TOOL, payload, request.timeout_seconds)
+
+
+def _missing_subject(name: str, expected: str) -> ToolEvidence:
+    return ToolEvidence(
+        tool=name,
+        version=MATH_IR_TOOL_VERSION,
+        status="error",
+        findings=[
+            ToolFinding(
+                code="NO_SUBJECT",
+                message=f"validation requires {expected}",
+            )
+        ],
+    )
 
 
 def _no_options(name: str, field: str) -> ToolEvidence:
@@ -541,8 +577,16 @@ def _harness_evidence(
             ],
             duration_ms=_elapsed_ms(started),
         )
-    ir_status = str(report.get("status", "inconclusive"))
+    raw_status = report.get("status")
     findings = [str(item) for item in report.get("findings", []) if item]
+    if raw_status not in {"passed", "failed", "inconclusive"}:
+        ir_status = "inconclusive"
+        findings = [
+            f"validation worker returned unknown status {raw_status!r}",
+            *findings,
+        ]
+    else:
+        ir_status = str(raw_status)
     options = report.get("options", [])
     if name == MATH_OPTIONS_TOOL:
         failed_options = [
@@ -565,7 +609,7 @@ def _harness_evidence(
                 for option in failed_options
             ]
     if ir_status == "passed":
-        status = "passed"
+        status: Literal["passed", "failed"] = "passed"
     else:
         status = "failed"
         if not findings:
@@ -595,6 +639,7 @@ def _harness_evidence(
             "findings": findings,
             "witnesses": harness.get("witnesses", []),
             "variants_checked": harness.get("variants_checked", 0),
+            "variants_total": harness.get("variants_total", 0),
             "primitives": report.get("primitives", []),
             "options": options,
         },
@@ -602,7 +647,7 @@ def _harness_evidence(
     )
 
 
-def _run_tool(name: str, operation) -> ToolEvidence:
+def _run_tool(name: str, operation: Callable[[], Any]) -> ToolEvidence:
     started = time.perf_counter()
     try:
         details = operation()
@@ -655,6 +700,22 @@ def verify_template_structure(
 ) -> dict[str, Any]:
     """Check placeholders, bounds, and the allowlisted expression subset."""
     candidate = _revalidate(candidate)
+    if candidate.item is not None:
+        raise MathToolFailure(
+            "Legacy structure checking does not apply to a generic item; use "
+            "math_verify_item_spec instead.",
+            code="LEGACY_TOOL_UNAVAILABLE",
+            field="item",
+        )
+    if (
+        candidate.answer_expression is None
+        or candidate.parameters is None
+        or candidate.distractors is None
+    ):
+        raise MathToolFailure(
+            "Legacy template fields are missing",
+            code="TEMPLATE_INVALID",
+        )
     try:
         validate_expression(candidate.answer_expression)
     except ValueError as exc:
@@ -703,6 +764,22 @@ def validate_answers_and_distractors(
 ) -> dict[str, Any]:
     """Check exact answers and distractors over the complete bounded domain."""
     candidate = _revalidate(candidate)
+    if candidate.item is not None:
+        raise MathToolFailure(
+            "Legacy answer checking does not apply to a generic item; use "
+            "math_verify_item_spec instead.",
+            code="LEGACY_TOOL_UNAVAILABLE",
+            field="item",
+        )
+    if (
+        candidate.answer_expression is None
+        or candidate.parameters is None
+        or candidate.distractors is None
+    ):
+        raise MathToolFailure(
+            "Legacy template fields are missing",
+            code="TEMPLATE_INVALID",
+        )
     if not MIN_DISTRACTORS <= required_distractors <= MAX_DISTRACTORS:
         raise MathToolFailure(
             "Required distractor count is outside the supported range",
@@ -864,13 +941,49 @@ def _revalidate(candidate: MathTemplateCandidate) -> MathTemplateCandidate:
 
 def _parameter_combinations(
     candidate: MathTemplateCandidate,
-) -> list[dict[str, int]]:
-    return parameter_combinations(candidate.parameters)
+) -> list[dict[str, Any]]:
+    if candidate.item is not None:
+        names = [parameter.name for parameter in candidate.item.parameters]
+        return [
+            dict(zip(names, values, strict=True))
+            for values in product(
+                *(parameter.values for parameter in candidate.item.parameters)
+            )
+        ]
+    return parameter_combinations(candidate.parameters or [])
 
 
-def _estimate_difficulty(candidate: MathTemplateCandidate) -> str:
+def _estimate_difficulty(candidate: MathTemplateCandidate) -> Difficulty:
+    if candidate.item is not None:
+        values = [
+            abs(Fraction(value))
+            for parameter in candidate.item.parameters
+            for value in parameter.values
+        ]
+        score = 0
+        if len(candidate.item.parameters) >= 2:
+            score += 1
+        if any(value > 1 for value in values):
+            score += 1
+        if any(
+            Fraction(value) < 0
+            for parameter in candidate.item.parameters
+            for value in parameter.values
+        ):
+            score += 1
+        if len(_parameter_combinations(candidate)) >= 60:
+            score += 1
+        if len(candidate.item.body.distractors) >= 4:
+            score += 1
+        if candidate.item.topic.startswith("university."):
+            score += 1
+        if score <= 1:
+            return "easy"
+        if score <= 3:
+            return "medium"
+        return "hard"
     parameters = {
-        parameter.name: parameter.values for parameter in candidate.parameters
+        parameter.name: parameter.values for parameter in candidate.parameters or []
     }
     score = 0
     if max(abs(value) for value in parameters["a"]) > 1:
@@ -882,7 +995,7 @@ def _estimate_difficulty(candidate: MathTemplateCandidate) -> str:
     combination_count = len(_parameter_combinations(candidate))
     if combination_count >= 60:
         score += 1
-    if len(candidate.distractors) >= 4:
+    if len(candidate.distractors or []) >= 4:
         score += 1
     if score <= 1:
         return "easy"

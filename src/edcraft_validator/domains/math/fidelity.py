@@ -20,19 +20,23 @@ from pydantic import BaseModel
 from edcraft_validator.application.fidelity.contracts import (
     CanonicalArtifact,
     EvidenceStrength,
+    FidelityStatus,
     FidelityVerdict,
 )
 from edcraft_validator.domains.math.ir.compile import (
+    MathCompileError,
     build_symbols,
+    compile_expr,
     compile_relation,
 )
 from edcraft_validator.domains.math.ir.schema import (
     Expr,
     Given,
-    Goal,
     MathItemSpec,
     MathReconstruction,
 )
+from edcraft_validator.domains.math.ir.solve import goal_symbols
+from edcraft_validator.domains.math.validation.primitives import expression_equiv
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
 
 PROMPT_VERSION = "math-fidelity/1"
@@ -165,8 +169,8 @@ class MathFidelityPlugin:
 
         expected_symbols = {symbol.name: symbol.domain for symbol in item.symbols}
         reconstructed_symbols = {symbol.name: symbol.domain for symbol in parse.symbols}
-        expected_goal_symbols = _goal_symbols(item.goal)
-        reconstructed_goal_symbols = _goal_symbols(parse.goal)
+        expected_goal_symbols = tuple(sorted(goal_symbols(item.goal)))
+        reconstructed_goal_symbols = tuple(sorted(goal_symbols(parse.goal)))
         evidence: dict[str, Any] = {
             "expected_symbols": sorted(expected_symbols),
             "reconstructed_symbols": sorted(reconstructed_symbols),
@@ -219,6 +223,17 @@ class MathFidelityPlugin:
                 evidence=evidence,
             )
 
+        goal_status, goal_reasons = _compare_goals(item, parse)
+        evidence["goal_comparison"] = {
+            "status": goal_status,
+            "reasons": goal_reasons,
+        }
+        if goal_status != "passed":
+            return FidelityVerdict(
+                status=goal_status,
+                reasons=goal_reasons,
+                evidence=evidence,
+            )
         try:
             comparison, leftover_expected, leftover_reconstructed = _compare_givens(
                 item, parse
@@ -279,11 +294,120 @@ def _reconstruction(artifact: BaseModel) -> MathReconstruction:
     return artifact
 
 
-def _goal_symbols(goal: Goal) -> tuple[str, ...]:
-    names = set(goal.symbols)
-    if goal.symbol is not None:
-        names.add(goal.symbol)
-    return tuple(sorted(names))
+def _compare_goals(
+    expected: MathItemSpec, reconstructed: MathReconstruction
+) -> tuple[FidelityStatus, list[str]]:
+    """Compare the whole goal payload, not just its kind and symbols.
+
+    Two questions can share a goal kind while asking for different expressions,
+    points or matrices. Those differences are mismatches, not a pass.
+    """
+    symbols = build_symbols(expected.symbols)
+    left_goal = expected.goal
+    right_goal = reconstructed.goal
+    reasons: list[str] = []
+    if left_goal.order != right_goal.order:
+        reasons.append(f"goal order is {right_goal.order}, not {left_goal.order}")
+    if left_goal.domain != right_goal.domain:
+        reasons.append(
+            f"goal domain is {right_goal.domain!r}, not {left_goal.domain!r}"
+        )
+
+    try:
+        expression_status, expression_reason = _compare_optional_expressions(
+            left_goal.expr, right_goal.expr, symbols
+        )
+        if expression_status == "failed":
+            reasons.append("goal expressions differ")
+        elif expression_status == "inconclusive":
+            return "inconclusive", [expression_reason]
+
+        point_status, point_reason = _compare_optional_expressions(
+            left_goal.point, right_goal.point, symbols
+        )
+        if point_status == "failed":
+            reasons.append("goal evaluation points differ")
+        elif point_status == "inconclusive":
+            return "inconclusive", [point_reason]
+
+        matrix_status, matrix_reason = _compare_optional_matrices(
+            left_goal.matrix, right_goal.matrix, symbols
+        )
+        if matrix_status == "failed":
+            reasons.extend(matrix_reason)
+        elif matrix_status == "inconclusive":
+            return "inconclusive", matrix_reason
+    except MathCompileError as exc:
+        return "inconclusive", [f"goal payload could not be compiled: {exc}"]
+
+    if reasons:
+        return "failed", reasons
+    return "passed", []
+
+
+def _compare_optional_expressions(
+    expected: Expr | None,
+    reconstructed: Expr | None,
+    symbols: Mapping[str, sympy.Symbol],
+) -> tuple[FidelityStatus, str]:
+    if expected is None and reconstructed is None:
+        return "passed", ""
+    if expected is None or reconstructed is None:
+        return "failed", "goal expression or point is missing on one side"
+    equivalence = _expressions_equivalent(
+        compile_expr(expected, symbols), compile_expr(reconstructed, symbols)
+    )
+    if equivalence is None:
+        return "inconclusive", "goal expression could not be compared"
+    if equivalence:
+        return "passed", ""
+    return "failed", "goal expression differs"
+
+
+def _compare_optional_matrices(
+    expected: list[list[Expr]] | None,
+    reconstructed: list[list[Expr]] | None,
+    symbols: Mapping[str, sympy.Symbol],
+) -> tuple[FidelityStatus, list[str]]:
+    if expected is None and reconstructed is None:
+        return "passed", []
+    if expected is None or reconstructed is None:
+        return "failed", ["goal matrix is missing on one side"]
+    if len(expected) != len(reconstructed) or any(
+        len(row) != len(other)
+        for row, other in zip(expected, reconstructed, strict=False)
+    ):
+        return "failed", ["goal matrix shapes differ"]
+    reasons: list[str] = []
+    for row_index, (row, other_row) in enumerate(
+        zip(expected, reconstructed, strict=True)
+    ):
+        for column_index, (cell, other_cell) in enumerate(
+            zip(row, other_row, strict=True)
+        ):
+            equivalence = _expressions_equivalent(
+                compile_expr(cell, symbols), compile_expr(other_cell, symbols)
+            )
+            if equivalence is None:
+                return "inconclusive", [
+                    f"goal matrix entry {row_index},{column_index} "
+                    "could not be compared"
+                ]
+            if not equivalence:
+                reasons.append(f"goal matrix entry {row_index},{column_index} differs")
+    if reasons:
+        return "failed", reasons
+    return "passed", []
+
+
+def _expressions_equivalent(left: sympy.Expr, right: sympy.Expr) -> bool | None:
+    """Decide semantic equality; ``None`` means the comparison could not decide."""
+    result = expression_equiv(left, right)
+    if result.status == "passed":
+        return True
+    if result.status == "failed":
+        return False
+    return None
 
 
 def _canonical_payload(item: MathItemSpec) -> dict[str, Any]:
@@ -296,7 +420,7 @@ def _canonical_payload(item: MathItemSpec) -> dict[str, Any]:
         key=_json_key,
     )
     goal = item.goal.model_dump(mode="json")
-    goal["symbols"] = list(_goal_symbols(item.goal))
+    goal["symbols"] = list(sorted(goal_symbols(item.goal)))
     goal.pop("symbol", None)
     text = {
         "mode": item.text.mode,
@@ -405,19 +529,14 @@ def _comparable_givens(
         if given.kind == "relation" and given.relation is not None:
             relation = compile_relation(given.relation, symbols)
             label = _relation_label(given.relation)
-            if given.relation.kind == "eq":
-                residual = sympy.simplify(relation.lhs - relation.rhs)
-                comparable.append(
-                    _ComparableGiven(kind="relation_eq", label=label, residual=residual)
+            residual = sympy.simplify(relation.lhs - relation.rhs)
+            comparable.append(
+                _ComparableGiven(
+                    kind=f"relation_{given.relation.kind}",
+                    label=label,
+                    residual=residual,
                 )
-            else:
-                comparable.append(
-                    _ComparableGiven(
-                        kind=f"relation_{given.relation.kind}",
-                        label=label,
-                        text=sympy.sstr(relation),
-                    )
-                )
+            )
         elif given.kind == "domain":
             comparable.append(
                 _ComparableGiven(
@@ -438,16 +557,38 @@ def _comparable_givens(
     return comparable
 
 
+_MIRRORED_RELATIONS = frozenset(
+    {
+        ("relation_lt", "relation_gt"),
+        ("relation_le", "relation_ge"),
+    }
+)
+
+
 def _givens_equivalent(left: _ComparableGiven, right: _ComparableGiven) -> bool:
-    if left.kind != right.kind:
+    if left.kind == right.kind:
+        if left.kind == "relation_eq":
+            return _residual_zero(left.residual, right.residual, flipped=False) or (
+                _residual_zero(left.residual, right.residual, flipped=True)
+            )
+        if left.kind.startswith("relation_"):
+            # Two same-direction inequalities are equivalent only when their
+            # residuals agree; multiplying by -1 reverses the direction.
+            return _residual_zero(left.residual, right.residual, flipped=False)
+        return left.text == right.text
+    if (left.kind, right.kind) in _MIRRORED_RELATIONS:
+        # ``x < 5`` and ``5 > x`` describe the same half-line.
+        return _residual_zero(left.residual, right.residual, flipped=True)
+    return False
+
+
+def _residual_zero(left: Any, right: Any, *, flipped: bool) -> bool:
+    if left is None or right is None:
         return False
-    if left.kind == "relation_eq":
-        difference = sympy.simplify(left.residual - right.residual)
-        if difference == 0:
-            return True
-        total = sympy.simplify(left.residual + right.residual)
-        return bool(total == 0)
-    return left.text == right.text
+    difference = (
+        sympy.simplify(left + right) if flipped else sympy.simplify(left - right)
+    )
+    return bool(difference == 0)
 
 
 def _relation_label(relation: Any) -> str:
@@ -472,5 +613,6 @@ def _expr_label(expr: Expr) -> str:
         return expr.sym
     if expr.param is not None:
         return expr.param
-    assert expr.op is not None
-    return f"{expr.op}({', '.join(_expr_label(arg) for arg in expr.args)})"
+    if expr.op is not None:
+        return f"{expr.op}({', '.join(_expr_label(arg) for arg in expr.args)})"
+    raise ValueError("expression node has no payload")

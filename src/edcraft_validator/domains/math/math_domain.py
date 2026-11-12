@@ -1,5 +1,7 @@
 """Math-domain implementation of the generic domain contract."""
 
+from typing import Any
+
 from pydantic import BaseModel, ValidationError
 
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
@@ -29,7 +31,10 @@ from edcraft_validator.domains.math.math_schemas import (
 from edcraft_validator.domains.math.math_types import (
     MATH_ADVISORY_CHECK_NAMES,
     MATH_ANSWERS_TOOL,
+    MATH_DIFFICULTY_TOOL,
     MATH_FIDELITY_TOOL,
+    MATH_ITEM_SPEC_TOOL,
+    MATH_OPTIONS_TOOL,
     MATH_STRUCTURE_TOOL,
     MIN_DISTRACTORS,
 )
@@ -80,9 +85,17 @@ class MathDomain:
             require_type(proposal, MathTemplateContent),
         )
 
-    def tool_bindings(self, request, candidate, tool_name):
+    def tool_bindings(
+        self, request: BaseModel, candidate: BaseModel, tool_name: str
+    ) -> dict[str, Any]:
         """Application-owned values never come from model tool arguments."""
         typed_candidate = require_type(candidate, MathTemplateCandidate)
+        if typed_candidate.item is not None:
+            return self._ir_tool_bindings(
+                typed_candidate,
+                tool_name,
+                author_request=require_type(request, MathTemplateRequest).prompt,
+            )
         if tool_name == TEMPLATE_RELEVANCE_CHECK:
             return {
                 "author_request": require_type(request, MathTemplateRequest).prompt,
@@ -94,12 +107,45 @@ class MathDomain:
             # inspects the projected IR and skips the blind parse-back.
             projected = linear_template_ir(typed_candidate).body
             return {"item": projected.model_dump(mode="json")}
-        bindings = {"candidate": typed_candidate.model_dump(mode="json")}
+        bindings: dict[str, Any] = {
+            "candidate": typed_candidate.model_dump(mode="json")
+        }
         if tool_name == MATH_ANSWERS_TOOL:
             bindings["required_distractors"] = require_type(
                 request, MathTemplateRequest
             ).num_distractors
         return bindings
+
+    @staticmethod
+    def _ir_tool_bindings(
+        candidate: MathTemplateCandidate,
+        tool_name: str,
+        *,
+        author_request: str,
+    ) -> dict[str, Any]:
+        template = candidate.item
+        if template is None:
+            raise ValueError("generic bindings require an item template")
+        if tool_name == TEMPLATE_RELEVANCE_CHECK:
+            return {
+                "author_request": author_request,
+                "question_text": template_relevance_text(candidate),
+                "subject_sha256": template_sha256(candidate),
+            }
+        if tool_name == MATH_ITEM_SPEC_TOOL:
+            return {"template": template.model_dump(mode="json")}
+        if tool_name == MATH_OPTIONS_TOOL:
+            return {"template": template.model_dump(mode="json")}
+        if tool_name == MATH_FIDELITY_TOOL:
+            return {"item": template.body.model_dump(mode="json")}
+        if tool_name == MATH_DIFFICULTY_TOOL:
+            return {"candidate": candidate.model_dump(mode="json")}
+        if tool_name in {MATH_STRUCTURE_TOOL, MATH_ANSWERS_TOOL}:
+            raise ValueError(
+                f"{tool_name} only applies to legacy linear templates; use "
+                "math_verify_item_spec and math_validate_options for a generic item"
+            )
+        return {"candidate": candidate.model_dump(mode="json")}
 
     def finalize_checked_template(
         self, candidate: BaseModel, evidence: list[ToolEvidence]
@@ -111,6 +157,8 @@ class MathDomain:
             for item in evidence
         ):
             raise ValueError("All selected checks must pass")
+        if template.item is not None:
+            return self._finalize_ir_template(template, evidence)
         structure = next(
             (item for item in evidence if item.tool == MATH_STRUCTURE_TOOL),
             None,
@@ -134,6 +182,8 @@ class MathDomain:
             raise ValueError("Checked distractor selection is malformed") from exc
         if len(selected) < MIN_DISTRACTORS:
             raise ValueError("No checked distractor recipes were selected")
+        if template.distractors is None:
+            raise ValueError("Legacy template has no distractor recipes")
         if any(recipe not in template.distractors for recipe in selected):
             raise ValueError("Selected distractors are not checked proposal recipes")
         # The legacy evidence above keeps the 1.0 wire contract readable. The
@@ -178,13 +228,75 @@ class MathDomain:
             validation=summary,
         )
 
-    def checked_tool_bindings(self, request, candidate, tool_name, evidence):
+    def _finalize_ir_template(
+        self,
+        template: MathTemplateCandidate,
+        evidence: list[ToolEvidence],
+    ) -> ValidatedMathTemplate:
+        item_spec = next(
+            (item for item in evidence if item.tool == MATH_ITEM_SPEC_TOOL),
+            None,
+        )
+        if item_spec is None or item_spec.status != "passed":
+            raise ValueError("Missing passing generic item-spec evidence")
+        options = next(
+            (item for item in evidence if item.tool == MATH_OPTIONS_TOOL),
+            None,
+        )
+        if options is None or options.status != "passed":
+            raise ValueError("Missing passing option-check evidence")
+        template_spec = template.item
+        if template_spec is None:
+            raise ValueError("Generic finalization requires an item template")
+        if len(template_spec.body.distractors) < MIN_DISTRACTORS:
+            raise ValueError("Generic templates require at least two distractors")
+        if template_spec.body.text.mode == "prose":
+            fidelity = next(
+                (item for item in evidence if item.tool == MATH_FIDELITY_TOOL),
+                None,
+            )
+            if fidelity is None or fidelity.status != "passed":
+                raise ValueError("Prose items require passing text-fidelity evidence")
+        report = validate_template(template_spec, max_variants=MAX_IR_VARIANTS)
+        if not report.passed:
+            detail = "; ".join(report.report.findings) or report.report.status
+            raise ValueError(f"IR validation did not pass: {detail}")
+        if report.variants_checked < 1:
+            raise ValueError("IR validation checked no parameter combinations")
+        expected_sha256 = template_sha256(template)
+        saved_evidence = [
+            save_checked_evidence(
+                item, expected_sha256, advisory_names=MATH_ADVISORY_CHECK_NAMES
+            )
+            for item in evidence
+        ]
+        summary = MathValidationSummary(
+            checking_mode="exhaustive_domain",
+            combinations_checked=report.variants_checked,
+            max_combinations=report.variants_total,
+            seed=0,
+            evidence=saved_evidence,
+        )
+        return ValidatedMathTemplate(template=template, validation=summary)
+
+    def checked_tool_bindings(
+        self,
+        request: BaseModel,
+        candidate: BaseModel,
+        tool_name: str,
+        evidence: list[ToolEvidence],
+    ) -> dict[str, Any]:
         """Assess exactly the reusable template produced by correctness checks."""
+        typed = require_type(candidate, MathTemplateCandidate)
+        technical = (
+            {MATH_ITEM_SPEC_TOOL, MATH_OPTIONS_TOOL, MATH_FIDELITY_TOOL}
+            if typed.item is not None
+            else {MATH_ANSWERS_TOOL, MATH_STRUCTURE_TOOL}
+        )
         checked_evidence = [
             item
             for item in evidence
-            if item.status == "passed"
-            and item.tool in {MATH_ANSWERS_TOOL, MATH_STRUCTURE_TOOL}
+            if item.status == "passed" and item.tool in technical
         ]
         checked = self.finalize_checked_template(candidate, checked_evidence)
         return self.tool_bindings(request, checked.template, tool_name)

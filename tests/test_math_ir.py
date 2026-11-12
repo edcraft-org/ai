@@ -311,3 +311,30 @@ def test_linear_candidate_with_key_distractor_fails_ir_gate() -> None:
 
 def _unused(_: PrimitiveResult) -> None:
     """Keep the helper import meaningful for type checkers."""
+
+
+def test_truncated_variant_sweep_is_inconclusive() -> None:
+    template = linear_template_ir(math_candidate())
+
+    report = validate_template(template, max_variants=1)
+
+    assert report.report.status == "inconclusive"
+    assert report.variants_checked == 1
+    assert report.variants_total == 8
+    assert any("truncated" in finding for finding in report.report.findings)
+
+
+def test_solution_set_unique_parameter_rejects_multiple_roots() -> None:
+    from edcraft_validator.domains.math.validation.primitives import check_primitive
+
+    primitive = PrimitiveSpec(type="solution_set", params={"unique": True})
+    two_roots = sympy.FiniteSet(-1, 1)
+
+    passed = check_primitive(
+        primitive, expected=sympy.FiniteSet(2), actual=sympy.FiniteSet(2)
+    )
+    failed = check_primitive(primitive, expected=two_roots, actual=two_roots)
+
+    assert passed.status == "passed"
+    assert failed.status == "failed"
+    assert "unique" in failed.reason
