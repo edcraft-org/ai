@@ -170,6 +170,75 @@ def test_runtime_goal_guard_rejects_an_out_of_goal_concrete_problem():
     assert problem_goal_findings(contract.contract_id, goal, factor_problem("1")) == []
 
 
+def antiderivative_problem(*, general: bool) -> dict:
+    return {
+        "kind": "polynomial_antiderivative",
+        "coefficients": ["2"],
+        "general": general,
+    }
+
+
+def antiderivative_goal(*, general: bool) -> KernelGoal:
+    contract = kernel_contract("polynomial.antiderivative/1")
+    assert contract is not None
+    return KernelGoal(
+        operation=contract.operation,
+        answer_type=contract.answer_type,
+        min_degree=contract.min_degree,
+        max_degree=contract.max_degree,
+        max_abs_coefficient=contract.max_abs_coefficient,
+        max_dimension=contract.max_dimension,
+        requires_general_antiderivative=general,
+    )
+
+
+def test_runtime_goal_guard_requires_the_requested_general_antiderivative():
+    contract_id = "polynomial.antiderivative/1"
+
+    assert problem_goal_findings(
+        contract_id,
+        antiderivative_goal(general=True),
+        antiderivative_problem(general=False),
+    )
+    assert (
+        problem_goal_findings(
+            contract_id,
+            antiderivative_goal(general=True),
+            antiderivative_problem(general=True),
+        )
+        == []
+    )
+
+
+def test_runtime_goal_guard_does_not_upgrade_a_one_primitive_request():
+    contract_id = "polynomial.antiderivative/1"
+
+    assert problem_goal_findings(
+        contract_id,
+        antiderivative_goal(general=False),
+        antiderivative_problem(general=True),
+    )
+    assert (
+        problem_goal_findings(
+            contract_id,
+            antiderivative_goal(general=False),
+            antiderivative_problem(general=False),
+        )
+        == []
+    )
+
+
+def test_runtime_goal_guard_keeps_numeric_bound_findings():
+    contract_id = "polynomial.antiderivative/1"
+    goal = antiderivative_goal(general=True).model_copy(
+        update={"max_abs_coefficient": 1}
+    )
+
+    assert problem_goal_findings(
+        contract_id, goal, antiderivative_problem(general=True)
+    )
+
+
 def test_version_three_template_keeps_the_validated_plan_goal():
     contract = kernel_contract("polynomial.factor/1")
     assert contract is not None

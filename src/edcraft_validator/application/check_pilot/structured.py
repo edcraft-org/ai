@@ -272,7 +272,7 @@ def problem_goal_findings(
         extent = problem_extent(spec, problem)
     except ValueError as exc:
         return [f"problem is outside the trusted kernel contract: {str(exc)[:300]}"]
-    return extent_scope_findings(
+    findings = extent_scope_findings(
         extent,
         min_degree=goal.min_degree,
         max_degree=goal.max_degree,
@@ -280,6 +280,9 @@ def problem_goal_findings(
         min_dimension=0,
         max_dimension=goal.max_dimension,
     )
+    if extent.requires_general != goal.requires_general_antiderivative:
+        findings.append("problem antiderivative form does not match the requested goal")
+    return findings
 
 
 def boundary_assignments(
