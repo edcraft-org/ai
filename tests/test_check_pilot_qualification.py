@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sympy
+
 from edcraft_validator.application.check_pilot.models import (
     CheckRecipeDefinition,
     PilotQualificationSettings,
@@ -83,6 +85,8 @@ def test_correct_recipe_passes_property_based_qualification():
     assert result.counterexample is None
     assert "No counterexample found in sampled cases" in result.findings
     assert result.versions["polynomial_oracle"] == "coefficient-arithmetic/1"
+    assert result.versions["differentiation"] == "sympy"
+    assert result.versions["sympy"] == sympy.__version__
     assert result.versions["hypothesis"]
 
 

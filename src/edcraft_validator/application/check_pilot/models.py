@@ -17,6 +17,7 @@ FAMILY_SCHEMA_VERSION: Literal["polynomial-family/1"] = "polynomial-family/1"
 TEMPLATE_SCHEMA_VERSION: Literal["pilot-template/1"] = "pilot-template/1"
 RECIPE_OPERATION_SET: Literal["polynomial-derivative/1"] = "polynomial-derivative/1"
 RENDERER_VERSION: Literal["polynomial-mcq/1"] = "polynomial-mcq/1"
+MAX_RECIPE_CASES = 600
 
 QualificationStatus = Literal["passed", "failed", "inconclusive", "error"]
 TemplateStatus = Literal["ready", "needs_review", "error"]
@@ -334,6 +335,7 @@ __all__ = [
     "CheckRef",
     "CoefficientDomain",
     "FAMILY_SCHEMA_VERSION",
+    "MAX_RECIPE_CASES",
     "PilotBatch",
     "PilotModel",
     "PilotQualificationSettings",

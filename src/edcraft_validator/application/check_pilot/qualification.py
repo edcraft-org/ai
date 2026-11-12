@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+from importlib.metadata import version as package_version
 from typing import Any
 
 from edcraft_validator.application.check_pilot.isolation import (
@@ -12,6 +13,8 @@ from edcraft_validator.application.check_pilot.isolation import (
     run_pilot_isolated,
 )
 from edcraft_validator.application.check_pilot.models import (
+    MAX_RECIPE_CASES,
+    RENDERER_VERSION,
     CheckRecipeDefinition,
     PilotQualificationSettings,
     Qualification,
@@ -26,9 +29,13 @@ from edcraft_validator.application.check_pilot.polynomial import (
 def _static_versions() -> dict[str, str]:
     return {
         "check_pilot": "1",
+        "differentiation": "sympy",
+        "sympy": package_version("sympy"),
+        "oracle": "coefficient-arithmetic/1",
         "polynomial_oracle": "coefficient-arithmetic/1",
         "recipe_compiler": "1",
-        "question_builder": "polynomial-mcq/1",
+        "renderer": RENDERER_VERSION,
+        "question_builder": RENDERER_VERSION,
     }
 
 
@@ -159,8 +166,8 @@ def execute_recipe_cases_isolated(
     """Validate one generated batch in a single disposable interpreter."""
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError("recipe timeout must be finite and positive")
-    if len(cases) > 200:
-        raise ValueError("a batch may contain at most 200 recipe cases")
+    if len(cases) > MAX_RECIPE_CASES:
+        raise ValueError(f"a batch may contain at most {MAX_RECIPE_CASES} recipe cases")
     response = run_pilot_isolated(
         {
             "operation": "execute_recipe_cases",

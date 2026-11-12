@@ -13,6 +13,7 @@ from edcraft_validator.application.check_pilot.isolation import (
     PilotWorkerTimeout,
 )
 from edcraft_validator.application.check_pilot.models import (
+    MAX_RECIPE_CASES,
     CheckRecipeDefinition,
     PilotBatch,
     PilotQuestion,
@@ -102,8 +103,14 @@ def generate_batch(
     cases = []
     for instance in instances:
         cases.append((instance.problem, instance.expected))
-        for choice in instance.choices:
+        for index, choice in enumerate(instance.choices):
+            if index == instance.correct_index:
+                continue
             cases.append((instance.problem, parse_polynomial(choice)))
+    if len(cases) > MAX_RECIPE_CASES:
+        raise PilotConflict(
+            "the generated batch exceeds the bounded recipe-execution limit"
+        )
     try:
         results = execute_recipe_cases_isolated(
             recipe, cases, timeout_seconds=timeout_seconds
@@ -122,12 +129,13 @@ def generate_batch(
         if not correct.verdict:
             raise PilotConflict("the pinned check rejected a generated correct answer")
         for index in range(len(instance.choices)):
+            if index == instance.correct_index:
+                continue
             result = results[cursor]
             cursor += 1
-            expected_verdict = index == instance.correct_index
-            if result.verdict != expected_verdict:
+            if result.verdict:
                 raise PilotConflict(
-                    "the pinned check disagreed with a generated option; no "
+                    "the pinned check accepted a generated distractor; no "
                     "questions were returned"
                 )
 

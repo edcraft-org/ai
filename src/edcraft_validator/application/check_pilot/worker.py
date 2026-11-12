@@ -8,6 +8,7 @@ import random
 import sys
 import time
 from dataclasses import dataclass, field
+from importlib.metadata import version as package_version
 from typing import Any
 
 import hypothesis
@@ -15,6 +16,8 @@ from hypothesis import HealthCheck, Phase, example, given, seed, settings
 from hypothesis import strategies as st
 
 from edcraft_validator.application.check_pilot.models import (
+    MAX_RECIPE_CASES,
+    RENDERER_VERSION,
     CheckRecipeDefinition,
     PilotQualificationSettings,
     PolynomialFamily,
@@ -75,9 +78,13 @@ class _RunState:
 def _versions() -> dict[str, str]:
     return {
         "check_pilot": "1",
+        "differentiation": "sympy",
+        "sympy": package_version("sympy"),
+        "oracle": "coefficient-arithmetic/1",
         "polynomial_oracle": "coefficient-arithmetic/1",
         "recipe_compiler": "1",
-        "question_builder": "polynomial-mcq/1",
+        "renderer": RENDERER_VERSION,
+        "question_builder": RENDERER_VERSION,
         "hypothesis": hypothesis.__version__,
         "python": platform.python_version(),
     }
@@ -488,8 +495,8 @@ def execute_recipe_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 def execute_recipe_cases_payload(payload: dict[str, Any]) -> dict[str, Any]:
     cases = payload.get("cases", [])
-    if not isinstance(cases, list) or len(cases) > 200:
-        raise ValueError("recipe cases must be a list of at most 200")
+    if not isinstance(cases, list) or len(cases) > MAX_RECIPE_CASES:
+        raise ValueError(f"recipe cases must be a list of at most {MAX_RECIPE_CASES}")
     definition = CheckRecipeDefinition.model_validate(payload["definition"])
     compiled = compile_recipe(definition)
     results = []

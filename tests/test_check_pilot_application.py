@@ -188,10 +188,15 @@ def app(tmp_path: Path, *, max_examples: int = 8) -> CheckPilotApplication:
 
 
 def author(
-    application, provider, owner="owner", prompt="Author a polynomial derivative check"
+    application,
+    provider,
+    owner="owner",
+    prompt="Author a polynomial derivative check",
+    *,
+    num_distractors=3,
 ):
     return application.author_template(
-        owner, prompt=prompt, provider=provider, num_distractors=3
+        owner, prompt=prompt, provider=provider, num_distractors=num_distractors
     )
 
 
@@ -498,6 +503,29 @@ def test_generation_shortfall_does_not_claim_domain_exhaustion(tmp_path: Path):
     assert "bounded sampling" in joined
     assert "No claim" in joined
     assert "exhausted" not in joined.lower()
+
+
+def test_max_supported_generation_batch_completes(tmp_path: Path):
+    application = app(tmp_path)
+    provider = ScriptedProvider(
+        template=valid_template_proposal(
+            degree=2, constants=list(range(-4, 4)), leading=[1, 2, 3]
+        )
+    )
+    record = author(application, provider, num_distractors=5)
+    assert record.status == "ready"
+    application.decide(
+        "owner",
+        record.template_id,
+        template_sha256=record.template_sha256,
+        check_sha256=record.check.check_ref.sha256,
+        decision="approved",
+    )
+    batch = application.generate("owner", record.template_id, seed=42, quantity=50)
+    assert len(batch.questions) == 50
+    assert batch.shortfall == 0
+    assert all(len(question.choices) == 6 for question in batch.questions)
+    assert len(provider.calls) == 2
 
 
 def test_input_validation_and_unapproved_owner_operations(tmp_path: Path):
