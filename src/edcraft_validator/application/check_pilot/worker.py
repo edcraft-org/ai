@@ -7,6 +7,7 @@ import platform
 import random
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -195,6 +196,63 @@ def _boundary_polynomials() -> list[Polynomial]:
     return [Polynomial.from_coefficients(value) for value in values]
 
 
+def _run_property[Case](
+    *,
+    state: _RunState,
+    seed_value: int,
+    max_examples: int,
+    expose_counterexample: bool,
+    include_boundaries: bool,
+    strategy: st.SearchStrategy[Case],
+    boundary_cases: Callable[[], list[Case]],
+    check_case: Callable[[Case], None],
+) -> tuple[dict[str, Any] | None, Qualification | None]:
+    """Run one seeded property phase and map its outcome to qualification."""
+
+    @seed(seed_value)
+    @settings(
+        max_examples=max_examples,
+        deadline=None,
+        database=None,
+        report_multiple_bugs=False,
+        phases=(Phase.explicit, Phase.generate, Phase.shrink),
+        suppress_health_check=[HealthCheck.too_slow],
+    )
+    @given(strategy)
+    def wrapped(case: Case) -> None:
+        check_case(case)
+
+    if include_boundaries:
+        for case in reversed(boundary_cases()):
+            wrapped = example(case)(wrapped)
+    try:
+        wrapped()
+    except _BudgetExceeded:
+        return None, _qualification(
+            status="inconclusive",
+            config=state.config,
+            seed_value=seed_value,
+            state=state,
+            findings=["qualification budget was exhausted before a verdict"],
+        )
+    except _CaseFailure as exc:
+        counterexample = exc.counterexample if expose_counterexample else None
+        finding = (
+            "held-out evaluation did not confirm the recipe"
+            if not expose_counterexample
+            else f"counterexample: {exc.counterexample.get('reason', 'case failed')}"
+        )
+        return counterexample or {"withheld": True}, _qualification(
+            status="failed",
+            config=state.config,
+            seed_value=seed_value,
+            state=state,
+            findings=[finding],
+            counterexample=counterexample,
+        )
+    return None, None
+
+
 def _run_recipe_property(
     *,
     compiled: CompiledRecipe,
@@ -270,48 +328,16 @@ def _run_recipe_property(
                 )
         state.accepted.add(coefficients)
 
-    @seed(seed_value)
-    @settings(
+    return _run_property(
+        state=state,
+        seed_value=seed_value,
         max_examples=max_examples,
-        deadline=None,
-        database=None,
-        report_multiple_bugs=False,
-        phases=(Phase.explicit, Phase.generate, Phase.shrink),
-        suppress_health_check=[HealthCheck.too_slow],
+        expose_counterexample=expose_counterexample,
+        include_boundaries=include_boundaries,
+        strategy=_polynomial_strategy(),
+        boundary_cases=_boundary_polynomials,
+        check_case=check_case,
     )
-    @given(polynomial=_polynomial_strategy())
-    def wrapped(polynomial: Polynomial) -> None:
-        check_case(polynomial)
-
-    if include_boundaries:
-        for polynomial in reversed(_boundary_polynomials()):
-            wrapped = example(polynomial=polynomial)(wrapped)
-    try:
-        wrapped()
-    except _BudgetExceeded:
-        return None, _qualification(
-            status="inconclusive",
-            config=state.config,
-            seed_value=seed_value,
-            state=state,
-            findings=["qualification budget was exhausted before a verdict"],
-        )
-    except _CaseFailure as exc:
-        counterexample = exc.counterexample if expose_counterexample else None
-        finding = (
-            "held-out evaluation did not confirm the recipe"
-            if not expose_counterexample
-            else f"counterexample: {exc.counterexample.get('reason', 'case failed')}"
-        )
-        return counterexample or {"withheld": True}, _qualification(
-            status="failed",
-            config=state.config,
-            seed_value=seed_value,
-            state=state,
-            findings=[finding],
-            counterexample=counterexample,
-        )
-    return None, None
 
 
 def _scope_from_payload(
@@ -465,48 +491,16 @@ def _run_solve_recipe_property(
                 )
         state.accepted.add(key)
 
-    @seed(seed_value)
-    @settings(
+    return _run_property(
+        state=state,
+        seed_value=seed_value,
         max_examples=max_examples,
-        deadline=None,
-        database=None,
-        report_multiple_bugs=False,
-        phases=(Phase.explicit, Phase.generate, Phase.shrink),
-        suppress_health_check=[HealthCheck.too_slow],
+        expose_counterexample=expose_counterexample,
+        include_boundaries=include_boundaries,
+        strategy=_solve_relation_strategy(scope),
+        boundary_cases=lambda: _solve_boundary_relations(scope),
+        check_case=check_case,
     )
-    @given(relation=_solve_relation_strategy(scope))
-    def wrapped(relation: PolynomialRelation) -> None:
-        check_case(relation)
-
-    if include_boundaries:
-        for relation in reversed(_solve_boundary_relations(scope)):
-            wrapped = example(relation=relation)(wrapped)
-    try:
-        wrapped()
-    except _BudgetExceeded:
-        return None, _qualification(
-            status="inconclusive",
-            config=state.config,
-            seed_value=seed_value,
-            state=state,
-            findings=["qualification budget was exhausted before a verdict"],
-        )
-    except _CaseFailure as exc:
-        counterexample = exc.counterexample if expose_counterexample else None
-        finding = (
-            "held-out evaluation did not confirm the recipe"
-            if not expose_counterexample
-            else f"counterexample: {exc.counterexample.get('reason', 'case failed')}"
-        )
-        return counterexample or {"withheld": True}, _qualification(
-            status="failed",
-            config=state.config,
-            seed_value=seed_value,
-            state=state,
-            findings=[finding],
-            counterexample=counterexample,
-        )
-    return None, None
 
 
 def qualify_recipe_payload(payload: dict[str, Any]) -> Qualification:
