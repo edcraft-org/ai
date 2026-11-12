@@ -88,6 +88,34 @@ def derivative_via_coefficients(problem: Polynomial) -> Polynomial:
     return Polynomial.from_coefficients(result)
 
 
+def derivative_via_sympy(problem: Polynomial) -> Polynomial:
+    """Trusted differentiate adapter: real SymPy over closed coefficient data.
+
+    Only already-bounded ``Polynomial`` data crosses the boundary. The adapter
+    builds a SymPy ``Poly`` from the coefficient map directly and never parses,
+    evaluates, or formats a symbolic string.
+    """
+    if not isinstance(problem, Polynomial):
+        raise PolynomialError("differentiation requires bounded polynomial data")
+    import sympy
+
+    variable = sympy.Symbol(VARIABLE)
+    if problem.is_zero:
+        source = sympy.Poly(0, variable)
+    else:
+        source = sympy.Poly.from_dict(
+            {
+                exponent: coefficient
+                for exponent, coefficient in enumerate(problem.coefficients)
+            },
+            gens=variable,
+        )
+    differentiated = source.diff(variable)
+    return Polynomial.from_coefficients(
+        [int(coefficient) for coefficient in reversed(differentiated.all_coeffs())]
+    )
+
+
 def _term_text(coefficient: int, exponent: int, *, explicit: bool) -> str:
     magnitude = abs(coefficient)
     if exponent == 0:
@@ -227,21 +255,31 @@ class _Parser:
         return value
 
     def _term(self) -> Polynomial:
-        value = self._power()
+        value = self._unary()
         while True:
             token = self._peek()
             if token == "*":
                 self._take()
-                value = self._multiply(value, self._power())
+                value = self._multiply(value, self._unary())
             elif token is not None and (
                 token == "(" or token == VARIABLE or token.isdigit()
             ):
-                value = self._multiply(value, self._power())
+                value = self._multiply(value, self._unary())
             else:
                 return value
 
+    def _unary(self) -> Polynomial:
+        token = self._peek()
+        if token == "-":
+            self._take()
+            return self._scale(self._unary(), -1)
+        if token == "+":
+            self._take()
+            return self._unary()
+        return self._power()
+
     def _power(self) -> Polynomial:
-        value = self._unary()
+        value = self._primary()
         if self._peek() == "^":
             self._take()
             exponent_token = self._take()
@@ -252,16 +290,6 @@ class _Parser:
                 raise PolynomialError("exponents are bounded")
             value = self._pow(value, exponent)
         return value
-
-    def _unary(self) -> Polynomial:
-        token = self._peek()
-        if token == "-":
-            self._take()
-            return self._scale(self._unary(), -1)
-        if token == "+":
-            self._take()
-            return self._unary()
-        return self._primary()
 
     def _primary(self) -> Polynomial:
         token = self._take()
@@ -359,6 +387,7 @@ __all__ = [
     "VARIABLE",
     "alternate_polynomial_forms",
     "derivative_via_coefficients",
+    "derivative_via_sympy",
     "parse_polynomial",
     "render_polynomial",
     "semantic_mutations",

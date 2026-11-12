@@ -21,6 +21,7 @@ from edcraft_validator.application.check_pilot.models import (
 )
 from edcraft_validator.application.check_pilot.polynomial import (
     Polynomial,
+    derivative_via_sympy,
     render_polynomial,
 )
 
@@ -317,7 +318,7 @@ def _execute_step(
     resolved: dict[str, object],
 ) -> object:
     if operation == "poly.differentiate":
-        return _require_polynomial(resolved["polynomial"]).derivative()
+        return derivative_via_sympy(_require_polynomial(resolved["polynomial"]))
     if operation == "poly.identity":
         return _require_polynomial(resolved["polynomial"])
     if operation == "poly.evaluate_at":
