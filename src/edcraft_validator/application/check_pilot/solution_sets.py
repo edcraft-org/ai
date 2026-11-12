@@ -735,6 +735,13 @@ def solution_set_mutations(
             )
     if relation != "eq":
         add(solve_relation_independently(_INVERSE_RELATION[relation], coefficients))
+    # Empty/all-real answers have no finite endpoints to mutate. Supply enough
+    # distinct point sets for the supported option count without changing the
+    # existing pool when it already suffices.
+    for value in range(2, 2 + MAX_SET_COMPONENTS):
+        if len(candidates) >= count:
+            break
+        add(_point(sympy.Integer(value)))
     ordered = list(candidates)
     (rng or random.Random(0)).shuffle(ordered)
     return ordered[:count]
