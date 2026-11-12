@@ -267,6 +267,17 @@ def test_template_digest_and_record_hash_are_validated_on_read(tmp_path: Path):
         store.get_template("owner", record.template_id)
 
 
+def test_malformed_template_is_rejected_at_the_storage_boundary(tmp_path: Path):
+    store = PilotStore(tmp_path)
+    check = store.save_check("owner", check_record())
+    malformed = template_record(check).model_copy(
+        update={"template": {"schema_version": "pilot-template/1"}}
+    )
+
+    with pytest.raises(PilotConflict, match="outside the pilot scope"):
+        store.save_template("owner", malformed)
+
+
 def test_empty_template_digest_is_stable_for_error_records(tmp_path: Path):
     store = PilotStore(tmp_path)
     record = PilotTemplateRecord(

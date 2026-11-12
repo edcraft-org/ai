@@ -767,8 +767,7 @@ def author_template_flow(
         return store.save_template(owner_id, record)
 
     actual = template_goal(definition)
-    findings = plan_covers_template_findings(goal, actual)
-    findings.extend(scope_applicability_findings(check.scope, actual))
+    findings = scope_applicability_findings(check.scope, actual)
     if findings:
         record = _record_failure(
             prompt=prompt,
