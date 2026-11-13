@@ -5,10 +5,11 @@ engine reject a correct answer, or can a meaning-changing edit make it accept a
 wrong one?  ``check_in_process`` is used for breadth; one preserving and one
 breaking case per operation also go through the public isolated facade.
 
-Soundness failures are hard failures: a meaning-changing edit accepted as
-``correct``, or a meaning-preserving edit rejected as ``incorrect``, fails the
-suite. ``docs/math-correctness-adversarial-findings.md`` records the history of
-the defects that were found and fixed.
+Soundness failures are hard failures: a meaning-changing edit that is not
+``incorrect``, or a meaning-preserving edit that is not ``correct``, fails the
+suite. ``unknown`` is treated as a coverage gap, never as a pass.
+``docs/math-correctness-adversarial-findings.md`` records the history of the
+defects that were found and fixed.
 """
 
 from __future__ import annotations
@@ -253,9 +254,6 @@ def _cases(mutations: tuple[tuple[str, Any], ...]) -> list[tuple[str, str, Wire]
 PRESERVING_CASES = _cases(PRESERVING)
 BREAKING_CASES = _cases(BREAKING)
 
-_PRESERVING_UNKNOWN: dict[str, str] = {}
-_BREAKING_UNKNOWN: dict[str, str] = {}
-
 
 def _run(request: Wire) -> CorrectnessResult:
     return check_in_process(CorrectnessRequest.model_validate(request))
@@ -280,19 +278,21 @@ def test_base_requests_are_accepted() -> None:
     PRESERVING_CASES,
     ids=[_case_id(base, mutation) for base, mutation, _ in PRESERVING_CASES],
 )
-def test_preserving_mutations_are_not_rejected(
+def test_preserving_mutations_are_accepted(
     base_id: str, mutation_name: str, mutated: Wire
 ) -> None:
+    """A meaning-preserving edit must stay ``correct``, not merely non-incorrect.
+
+    Accepting ``unknown`` here would hide an over-refusal regression, so the
+    outcome is asserted exactly. A genuinely undecidable case would have to be
+    marked ``xfail`` individually with its reason.
+    """
     result = _run(mutated)
     case = _case_id(base_id, mutation_name)
-    if result.outcome == "incorrect":
-        pytest.fail(
-            f"D-preserve.{case}: meaning-preserving edit rejected as incorrect "
-            f"({result.reason})"
-        )
-    if result.outcome == "unknown":
-        _PRESERVING_UNKNOWN[case] = result.reason
-    assert result.outcome != "incorrect", result.reason
+    assert result.outcome == "correct", (
+        f"D-preserve.{case}: meaning-preserving edit is {result.outcome}, not "
+        f"correct ({result.reason})"
+    )
 
 
 @pytest.mark.parametrize(
@@ -300,34 +300,40 @@ def test_preserving_mutations_are_not_rejected(
     BREAKING_CASES,
     ids=[_case_id(base, mutation) for base, mutation, _ in BREAKING_CASES],
 )
-def test_breaking_mutations_are_not_accepted(
+def test_breaking_mutations_are_rejected(
     base_id: str, mutation_name: str, mutated: Wire
 ) -> None:
+    """A meaning-changing edit must be ``incorrect``, not merely non-correct.
+
+    Accepting ``unknown`` here would hide an under-decision regression, so the
+    outcome is asserted exactly. A genuinely undecidable case would have to be
+    marked ``xfail`` individually with its reason.
+    """
     result = _run(mutated)
     case = _case_id(base_id, mutation_name)
-    if result.outcome == "correct":
-        pytest.fail(
-            f"D-break.{case}: meaning-changing edit accepted as correct "
-            f"({result.reason})"
-        )
-    if result.outcome == "unknown":
-        _BREAKING_UNKNOWN[case] = result.reason
-    assert result.outcome != "correct", result.reason
+    assert result.outcome == "incorrect", (
+        f"D-break.{case}: meaning-changing edit is {result.outcome}, not "
+        f"incorrect ({result.reason})"
+    )
 
 
 def test_preserving_unknown_rate_stays_below_half() -> None:
-    """Unknowns are a coverage gap, not a defect, but they must stay bounded."""
-    total = len(PRESERVING_CASES)
-    unknown = sorted(
-        set(_PRESERVING_UNKNOWN) & {_case_id(*c[:2]) for c in PRESERVING_CASES}
-    )
+    """Unknowns are a coverage gap, not a defect, but they must stay bounded.
+
+    The outcomes are recomputed here rather than read from module globals so
+    that ``pytest -k unknown_rate`` is meaningful on its own.
+    """
+    outcomes = [(case, _run(mutated)) for *case, mutated in PRESERVING_CASES]
+    unknown = [
+        f"{_case_id(base, mutation)}: {result.reason}"
+        for (base, mutation), result in outcomes
+        if result.outcome == "unknown"
+    ]
+    total = len(outcomes)
     rate = len(unknown) / total if total else 0.0
-    print(
-        f"\npreserving unknown: {len(unknown)}/{total} ({rate:.1%})"
-        f" | breaking unknown: {len(_BREAKING_UNKNOWN)}/{len(BREAKING_CASES)}"
-    )
+    print(f"\npreserving unknown: {len(unknown)}/{total} ({rate:.1%})")
     for case in unknown:
-        print(f"  unknown {case}: {_PRESERVING_UNKNOWN[case]}")
+        print(f"  unknown {case}")
     assert rate < 0.5
 
 
@@ -386,19 +392,18 @@ UNDEFINED_CANDIDATE_CASES: dict[str, Wire] = {
 @pytest.mark.parametrize(
     "case", UNDEFINED_CANDIDATE_CASES, ids=list(UNDEFINED_CANDIDATE_CASES)
 )
-def test_undefined_complex_candidate_is_not_correct(case: str) -> None:
-    """A finite non-real intermediate must not be erased before the verdict.
+def test_undefined_complex_candidate_is_unsupported(case: str) -> None:
+    """A finite non-real intermediate must be erased nowhere and refused.
 
     ``sqrt(-1)**2`` is ``-1`` only under complex arithmetic; no real value is
-    assigned to ``sqrt(-1)``, so a real answer must not be accepted.
+    assigned to ``sqrt(-1)``. The documented contract is an exact
+    ``unsupported`` verdict before any cancellation can accept the answer.
     """
     result = _run(UNDEFINED_CANDIDATE_CASES[case])
-    if result.outcome == "correct":
-        pytest.fail(
-            "D-complex-undefined: candidate cancels an undefined non-real "
-            f"subexpression and is accepted in {case}"
-        )
-    assert result.outcome != "correct", result.reason
+    assert result.outcome == "unsupported", (
+        "D-complex-undefined: candidate cancels an undefined non-real "
+        f"subexpression and is {result.outcome} in {case} ({result.reason})"
+    )
 
 
 def _facade_cases() -> list[tuple[str, str, str, Wire]]:
@@ -425,14 +430,14 @@ def test_isolated_facade_preserves_the_in_process_verdict(
 ) -> None:
     in_process = _run(mutated)
     facade = check_math_correctness(CorrectnessRequest.model_validate(mutated))
+    expected = "correct" if kind == "preserving" else "incorrect"
     assert facade.outcome == in_process.outcome, (
         f"{base_id}.{kind}.{mutation_name}: in-process={in_process.outcome} "
         f"facade={facade.outcome}"
     )
-    if kind == "preserving" and in_process.outcome == "incorrect":
-        pytest.fail(f"D-facade.{base_id}: preserving case rejected across the boundary")
-    if kind == "breaking" and in_process.outcome == "correct":
-        pytest.fail(f"D-facade.{base_id}: breaking case accepted across the boundary")
+    assert in_process.outcome == expected, (
+        f"D-facade.{base_id}: {kind} case is {in_process.outcome}, not {expected}"
+    )
 
 
 # ---------------------------------------------------------------------------
