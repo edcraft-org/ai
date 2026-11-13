@@ -178,7 +178,38 @@ def _solve_relation(
     if _is_false(relation):
         return sympy.EmptySet
     try:
-        if kind in {"eq", "ne"}:
+        if kind == "ne":
+            # Complement the equality solutions inside the requested domain.
+            # Solving ``Ne`` directly can leave unresolved intersections with
+            # an irrational boundary (for example on the rationals, where
+            # ``x**2 != 2`` is simply every rational), so an empty excluded set
+            # short-circuits to the whole domain. Otherwise prefer SymPy's own
+            # ``Ne`` set, which yields comparable Range/Union shapes.
+            excluded = _solve_relation("eq", lhs, rhs, variable, domain)
+            if excluded is sympy.EmptySet:
+                return _DOMAINS[domain]
+            if excluded == _DOMAINS[domain]:
+                return sympy.EmptySet
+            try:
+                solution = sympy.solveset(relation, variable, domain=_DOMAINS[domain])
+            except (EngineUnknown, EngineUnsupported):
+                raise
+            except Exception:
+                solution = None
+            if (
+                solution is None
+                or isinstance(solution, sympy.ConditionSet)
+                or solution.has(sympy.ConditionSet)
+            ):
+                try:
+                    solution = _DOMAINS[domain] - excluded
+                except (EngineUnknown, EngineUnsupported):
+                    raise
+                except Exception as exc:
+                    raise EngineUnknown(
+                        "an inequality exclusion could not be evaluated"
+                    ) from exc
+        elif kind == "eq":
             solution = sympy.solveset(relation, variable, domain=_DOMAINS[domain])
         else:
             solution = solve_univariate_inequality(
@@ -224,6 +255,14 @@ def _condition_set(
     condition: _Condition, variable: sympy.Symbol, domain: str
 ) -> sympy.Set:
     expression = condition.expr
+    # SymPy's inequality helper evaluates a periodic condition over only one
+    # period (``sin(x) > 0`` becomes ``(0, pi)``), which would silently shrink
+    # the complete source domain. Periodic ``ne`` guards remain safe because
+    # their zero set is represented as an ImageSet and rejected downstream.
+    if condition.kind != "ne" and any(
+        atom.has(variable) for atom in expression.atoms(sympy.sin, sympy.cos, sympy.tan)
+    ):
+        raise EngineUnknown("the complete periodic source domain cannot be represented")
     if condition.kind == "ne":
         if expression.is_zero is True:
             return sympy.EmptySet
@@ -430,6 +469,11 @@ def _candidate_set(
             None if bounds.upper is None else ctx.compile(bounds.upper)
         )
         _validate_interval_order(lower, upper)
+        if lower is None and upper is None:
+            # ``Interval(-oo, oo)`` is not structurally equal to ``Reals`` and
+            # does not intersect cleanly with ``Rationals``/``Integers``.
+            intervals.append(sympy.S.Reals)
+            continue
         intervals.append(
             sympy.Interval(
                 sympy.S.NegativeInfinity if lower is None else lower,
