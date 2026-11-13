@@ -4,6 +4,11 @@ The math validation and check-pilot workers own their operations and public
 exception types. This module owns only the transport they share: a sanitized
 environment, bounded JSON framing, a hard parent wall-clock timeout, resource
 limits applied by a tiny trusted bootstrap, and safe failure mapping.
+
+Memory enforcement is layered. The bootstrap reports the child's peak resident
+set size in its response envelope, so an intentionally or accidentally oversized
+worker is rejected even when it finishes quickly and exits zero. A parent-side
+RSS watchdog remains a secondary guard for long-running workers.
 """
 
 from __future__ import annotations
@@ -17,8 +22,8 @@ import subprocess
 import sys
 import tempfile
 import threading
-import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 try:  # pragma: no cover - the resource module is unavailable on Windows
@@ -33,6 +38,7 @@ MAX_STDERR_CHARS = 500
 MAX_ERROR_MESSAGE_CHARS = 1000
 DEFAULT_RSS_POLL_INTERVAL_SECONDS = 0.1
 PID_FILE_WAIT_SECONDS = 5.0
+WORKER_ENVELOPE = "edcraft-worker-envelope/1"
 _RSS_AVAILABLE = os.name == "posix"
 
 
@@ -44,6 +50,31 @@ class CodedWorkerError(RuntimeError):
     """
 
     code: str | None = None
+
+
+class MemoryLimitUnavailable(RuntimeError):
+    """The parent could not establish any memory ceiling for the child.
+
+    Raised instead of running a worker whose peak memory can be neither watched
+    nor limited by the kernel. It is deliberately distinct from the ordinary
+    "limit exceeded" error so callers can tell a policy gap from a violation.
+    """
+
+    code = "memory_limit_unavailable"
+
+
+def normalise_maxrss(value: int, platform: str | None = None) -> int:
+    """Convert ``getrusage``'s ``ru_maxrss`` to bytes.
+
+    Darwin reports bytes; Linux (and most other POSIX systems) report
+    kibibytes.
+    """
+    if type(value) is not int or value < 0:
+        raise ValueError("ru_maxrss must be a non-negative integer")
+    selected = sys.platform if platform is None else platform
+    if selected.startswith("darwin"):
+        return value
+    return value * 1024
 
 
 _MODULE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$")
@@ -130,10 +161,14 @@ def apply_resource_limits(
 def apply_best_effort_data_limit(memory_bytes: int) -> int | None:
     """Best-effort ``RLIMIT_DATA`` on macOS.
 
-    ``RLIMIT_AS`` is not enforced on darwin, so the parent-side RSS watchdog is
-    the primary memory ceiling.  ``RLIMIT_DATA`` is a cheap secondary guard
-    where the platform honours it; it is never allowed to raise a tighter
-    inherited cap, and failures are ignored so startup cannot break.
+    ``RLIMIT_AS`` is not enforced on darwin, so the self-reported peak RSS and
+    the parent-side RSS watchdog are the primary memory ceiling.
+    ``RLIMIT_DATA`` is a cheap secondary guard where the platform honours it.
+
+    The hard limit is read first: the soft limit is lowered to the desired cap
+    but never below an inherited tighter soft limit, and the hard limit is
+    preserved exactly. Raising the hard limit is never attempted; it would both
+    be a privilege violation and weaken the inherited sandbox.
     """
     if type(memory_bytes) is not int or memory_bytes <= 0:
         raise ValueError("worker memory limit must be a positive integer")
@@ -142,11 +177,20 @@ def apply_best_effort_data_limit(memory_bytes: int) -> int | None:
     if not hasattr(resource, "RLIMIT_DATA"):
         return None
     try:
-        data = _inherited_limit(resource.RLIMIT_DATA, memory_bytes)
-        resource.setrlimit(resource.RLIMIT_DATA, (data, data))
+        soft, hard = resource.getrlimit(resource.RLIMIT_DATA)
+        infinity = getattr(resource, "RLIM_INFINITY", -1)
+        if hard == infinity:
+            current = memory_bytes
+        else:
+            current = min(memory_bytes, int(hard))
+        if soft != infinity:
+            current = min(current, int(soft))
+        if current <= 0:
+            return None
+        resource.setrlimit(resource.RLIMIT_DATA, (current, hard))
     except (OSError, ValueError):  # pragma: no cover - platform dependent
         return None
-    return data
+    return current
 
 
 def rss_bytes_for_pid(pid: int) -> int | None:
@@ -185,6 +229,30 @@ def rss_bytes_from_ps(output: str) -> int | None:
     return kibibytes * 1024
 
 
+def pid_start_time(pid: int) -> str | None:
+    """Return a process start timestamp, used to detect pid reuse.
+
+    ``ps -o lstart=`` is available on both macOS and Linux. ``None`` means the
+    process is gone or cannot be inspected; callers must not treat it as an
+    identity match on its own.
+    """
+    if not _RSS_AVAILABLE or type(pid) is not int or pid <= 0:
+        return None
+    try:
+        completed = subprocess.run(
+            ["ps", "-o", "lstart=", "-p", str(pid)],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+            env=worker_environment(),
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    started = completed.stdout.strip()
+    return started or None
+
+
 class RssWatchdog:
     """Parent-side resident-memory watchdog for one child process."""
 
@@ -197,6 +265,7 @@ class RssWatchdog:
         on_exceeded: Callable[[], None] | None = None,
         interval: float = DEFAULT_RSS_POLL_INTERVAL_SECONDS,
         read_rss: Callable[[int], int | None] = rss_bytes_for_pid,
+        verify: Callable[[], bool] | None = None,
     ) -> None:
         if type(memory_bytes) is not int or memory_bytes <= 0:
             raise ValueError("watchdog memory limit must be a positive integer")
@@ -209,13 +278,39 @@ class RssWatchdog:
         self._on_exceeded = on_exceeded
         self._interval = interval
         self._read_rss = read_rss
+        self._verify = verify
 
-    def poll_once(self) -> bool:
+    def _same_process(self) -> bool:
+        """Reject a recycled pid before sending any signal.
+
+        A verifier that cannot prove identity (for example ``ps`` is missing)
+        returns ``False``: leaving a process alive until the child self-reports
+        its peak RSS is safer than killing an unrelated process.
+        """
+        if self._verify is None:
+            return True
+        try:
+            return bool(self._verify())
+        except Exception:  # pragma: no cover - defensive around external probes
+            return False
+
+    def poll_once(self, stop: threading.Event | None = None) -> bool:
         """Check one reading; kill the child once the cap is exceeded."""
         if self.exceeded:
             return True
+        if stop is not None and stop.is_set():
+            return False
         rss = self._read_rss(self.pid)
         if rss is None or rss <= self.memory_bytes:
+            return False
+        # Recheck the stop flag and the pid's identity immediately before the
+        # kill: the child may have exited (and its pid been reused) while the
+        # RSS probe ran.
+        if stop is not None and stop.is_set():
+            return False
+        if not self._same_process():
+            return False
+        if stop is not None and stop.is_set():
             return False
         self.exceeded = True
         if self._on_exceeded is not None:
@@ -226,7 +321,7 @@ class RssWatchdog:
     def watch(self, stop: threading.Event) -> None:
         """Poll until the child exceeds the cap or ``stop`` is set."""
         while not stop.wait(self._interval):
-            if self.poll_once():
+            if self.poll_once(stop):
                 return
 
 
@@ -243,22 +338,29 @@ def _read_pid_file(path: str) -> int | None:
 
 
 def _wait_for_pid(path: str, stop: threading.Event) -> int | None:
-    deadline = time.monotonic() + PID_FILE_WAIT_SECONDS
+    """Wait for the child's pid handshake until the watchdog is stopped.
+
+    There is deliberately no deadline: giving up early would silently disable
+    the watchdog for a slow-starting worker. The caller stops the watchdog once
+    the child exits or the wall-clock timeout fires.
+    """
     while not stop.is_set():
         pid = _read_pid_file(path)
         if pid is not None:
             return pid
-        if time.monotonic() >= deadline:
-            return None
         stop.wait(0.01)
     return None
 
 
-def _kill_pid(pid: int) -> None:
+def _kill_pid(pid: int, *, verify: Callable[[], bool] | None = None) -> bool:
+    """Kill ``pid`` only when ``verify`` still identifies it as our child."""
+    if verify is not None and not verify():
+        return False
     try:
         os.kill(pid, signal.SIGKILL)
     except OSError:  # pragma: no cover - process race
-        return
+        return False
+    return True
 
 
 def _watch_worker_memory(
@@ -271,39 +373,91 @@ def _watch_worker_memory(
     pid = _wait_for_pid(pid_path, stop)
     if pid is None or stop.is_set():
         return
+    started = pid_start_time(pid)
+
+    def verify() -> bool:
+        # The pid file is removed only after the stop flag is set, so a file
+        # that no longer names this pid means the handshake was torn down.
+        if _read_pid_file(pid_path) != pid:
+            return False
+        if started is None:
+            # ``ps`` is unavailable; the pid-file content is the remaining
+            # identity evidence.
+            return True
+        current = pid_start_time(pid)
+        return current is not None and current == started
+
+    def kill() -> None:
+        _kill_pid(pid, verify=verify)
+
     RssWatchdog(
         pid,
         memory_bytes,
-        kill=lambda: _kill_pid(pid),
+        kill=kill,
         on_exceeded=exceeded.set,
+        verify=verify,
     ).watch(stop)
 
 
-def _start_memory_watchdog(
-    memory_bytes: int,
-) -> tuple[str, threading.Event, threading.Event]:
+@dataclass
+class _MemoryWatchdog:
+    """Handle for one watchdog thread and its handshake state."""
+
+    pid_path: str
+    stop: threading.Event
+    exceeded: threading.Event
+    thread: threading.Thread | None = None
+
+    def __iter__(self) -> Iterator[str | threading.Event]:
+        # Backwards-compatible three-value unpacking.
+        yield self.pid_path
+        yield self.stop
+        yield self.exceeded
+
+
+def _start_memory_watchdog(memory_bytes: int) -> _MemoryWatchdog:
     """Create the pid handshake file and start the RSS watchdog thread."""
     stop = threading.Event()
     exceeded = threading.Event()
     handle, pid_path = tempfile.mkstemp(prefix="edcraft-worker-", suffix=".pid")
     os.close(handle)
     os.unlink(pid_path)
+    watch = _MemoryWatchdog(pid_path, stop, exceeded)
     if _RSS_AVAILABLE:
-        threading.Thread(
+        thread = threading.Thread(
             target=_watch_worker_memory,
             args=(pid_path, memory_bytes, stop, exceeded),
             name="worker-rss-watchdog",
             daemon=True,
-        ).start()
-    return pid_path, stop, exceeded
+        )
+        thread.start()
+        watch.thread = thread
+    return watch
 
 
-def _stop_memory_watchdog(pid_path: str, stop: threading.Event) -> None:
+def _stop_memory_watchdog(
+    pid_path: str,
+    stop: threading.Event,
+    thread: threading.Thread | None = None,
+) -> None:
+    """Stop and join the watchdog before removing its handshake file."""
     stop.set()
+    if thread is not None:
+        thread.join(timeout=PID_FILE_WAIT_SECONDS)
     try:
         os.unlink(pid_path)
     except OSError:
         pass
+
+
+def _watchdog_parts(
+    watch: Any,
+) -> tuple[str, threading.Event, threading.Event, threading.Thread | None]:
+    """Normalise a watchdog handle, tolerating test doubles."""
+    if isinstance(watch, _MemoryWatchdog):
+        return watch.pid_path, watch.stop, watch.exceeded, watch.thread
+    pid_path, stop, exceeded = watch
+    return pid_path, stop, exceeded, None
 
 
 def run_json_worker(
@@ -338,7 +492,8 @@ def run_json_worker(
         )
 
     worker_label = worker_description or description
-    pid_path, watch_stop, exceeded = _start_memory_watchdog(memory_bytes)
+    watch = _start_memory_watchdog(memory_bytes)
+    pid_path, watch_stop, exceeded, watch_thread = _watchdog_parts(watch)
     try:
         completed = subprocess.run(
             [
@@ -363,21 +518,39 @@ def run_json_worker(
     except subprocess.TimeoutExpired as exc:
         raise timeout_error(f"{description} exceeded {timeout_seconds:g}s") from exc
     finally:
-        _stop_memory_watchdog(pid_path, watch_stop)
-    if exceeded.is_set() and completed.returncode != 0:
-        failure = (memory_error or worker_error)(
+        _stop_memory_watchdog(pid_path, watch_stop, watch_thread)
+
+    def memory_failure() -> RuntimeError:
+        return (memory_error or worker_error)(
             f"{worker_label} exceeded the {memory_bytes}-byte memory limit"
         )
-        raise failure
+
+    # A watchdog kill is authoritative even if the return code is ambiguous.
+    if exceeded.is_set():
+        raise memory_failure()
+    envelope = _worker_envelope(completed.stdout)
+    if envelope is not None:
+        peak_rss = envelope.get("peak_rss_bytes")
+        if type(peak_rss) is int and peak_rss > memory_bytes:
+            raise memory_failure()
+        if envelope.get("pid_published") is not True and not envelope.get(
+            "kernel_memory_bytes"
+        ):
+            raise _memory_limit_unavailable(worker_error)
     if completed.returncode != 0:
         raise worker_error(
             f"{worker_label} exited with {completed.returncode}: "
             f"{completed.stderr.strip()[:MAX_STDERR_CHARS]}"
         )
-    try:
-        response = json.loads(completed.stdout)
-    except json.JSONDecodeError as exc:
-        raise worker_error(f"{worker_label} returned invalid JSON") from exc
+    if envelope is not None:
+        if envelope.get("payload_valid") is not True:
+            raise worker_error(f"{worker_label} returned invalid JSON")
+        response = envelope.get("payload")
+    else:
+        try:
+            response = json.loads(completed.stdout)
+        except json.JSONDecodeError as exc:
+            raise worker_error(f"{worker_label} returned invalid JSON") from exc
     if not isinstance(response, dict):
         raise worker_error(f"{worker_label} returned a non-object")
     if "error" in response:
@@ -397,16 +570,50 @@ def run_json_worker(
     return response
 
 
+def _worker_envelope(stdout: str) -> dict[str, Any] | None:
+    """Return the bootstrap envelope, or ``None`` for a legacy raw response."""
+    try:
+        response = json.loads(stdout)
+    except json.JSONDecodeError:
+        return None
+    if (
+        not isinstance(response, dict)
+        or response.get("worker_envelope") != WORKER_ENVELOPE
+    ):
+        return None
+    return response
+
+
+def _memory_limit_unavailable(worker_error: type[RuntimeError]) -> RuntimeError:
+    """Build an error that is both distinct and catchable by the caller.
+
+    Callers catch their own worker-error type; subclassing it dynamically keeps
+    the fail-closed outcome on the existing error transport while letting
+    callers and tests identify ``MemoryLimitUnavailable`` specifically.
+    """
+    failure_type = type(
+        "MemoryLimitUnavailable", (MemoryLimitUnavailable, worker_error), {}
+    )
+    return failure_type(
+        "worker memory limit could not be enforced: no pid handshake and no "
+        "kernel limit were available"
+    )
+
+
 __all__ = [
     "BOOTSTRAP_MODULE",
     "CodedWorkerError",
     "DEFAULT_MEMORY_LIMIT_BYTES",
     "DEFAULT_RSS_POLL_INTERVAL_SECONDS",
     "MAX_PAYLOAD_BYTES",
+    "MemoryLimitUnavailable",
     "RssWatchdog",
+    "WORKER_ENVELOPE",
     "apply_best_effort_data_limit",
     "apply_resource_limits",
     "cpu_limit_for_timeout",
+    "normalise_maxrss",
+    "pid_start_time",
     "rss_bytes_for_pid",
     "rss_bytes_from_ps",
     "run_json_worker",
