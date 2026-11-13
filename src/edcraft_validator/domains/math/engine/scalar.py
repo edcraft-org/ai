@@ -250,6 +250,22 @@ def _check_differentiate(ctx: EngineContext, branch: _Branch) -> _Verdict | None
         raise EngineUnsupported("the derivative is not an explicit expression")
     if expected.has(sympy.nan, sympy.zoo, sympy.oo, -sympy.oo):
         raise EngineUnsupported("the derivative is not finite on its domain")
+    if expected.has(sympy.sign):
+        # A symbolic derivative such as sign(x) assigns a value at a cusp even
+        # though abs(x) is not differentiable there. Do not infer the original
+        # function's differentiability solely from the output's definedness.
+        for sign_term in expected.atoms(sympy.sign):
+            zeros = sympy.solveset(sign_term.args[0], variable, domain=sympy.S.Reals)
+            if (
+                source_domain.point_set is None
+                or zeros.has(sympy.ConditionSet)
+                or source_domain.point_set.is_subset(sympy.S.Reals - zeros) is not True
+            ):
+                return _Verdict(
+                    "unknown",
+                    "nonsmooth differentiability requires additional case analysis",
+                    "scalar.differentiate.domain",
+                )
     expected_domain = sympy_domain(ctx, expected, variable)
     required_domain = intersect_domains(source_domain, expected_domain)
     required_empty = domain_is_empty(required_domain)

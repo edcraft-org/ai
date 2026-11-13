@@ -71,3 +71,19 @@ def test_scalar_periodic_domain_is_not_truncated_to_one_period():
         }
     )
     assert result.outcome != "correct"
+
+
+def test_valid_cusp_derivative_is_not_labelled_incorrect():
+    # abs(x) has derivative x/abs(x) wherever the derivative exists (x != 0).
+    result = check_math_correctness(
+        {
+            "problem": {
+                "operation": "differentiate",
+                "symbols": [{"name": "x"}],
+                "variable": "x",
+                "expression": op("abs", X),
+            },
+            "answer": {"expression": op("div", X, op("abs", X))},
+        }
+    )
+    assert result.outcome in {"correct", "unknown", "unsupported"}
