@@ -3,14 +3,12 @@
 import json
 
 import pytest
-from math_helpers import math_candidate, math_payload
+from math_helpers import ir_candidate, quadratic_ir_template
 from pydantic import ValidationError
 
 from edcraft_validator.domains.domain_registry import available_domains, create_domain
 from edcraft_validator.domains.math.math_domain import MathDomain
 from edcraft_validator.domains.math.math_schemas import (
-    MathDistractorRecipe,
-    MathParameter,
     MathQuestionInstance,
     MathTemplateCandidate,
     MathTemplateContent,
@@ -27,7 +25,7 @@ from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
 def test_request_round_trips_and_rejects_extra_fields() -> None:
     request = MathTemplateRequest(
-        prompt="Make an easy linear equation question",
+        prompt="Make an easy quadratic equation question",
         difficulty="easy",
         num_distractors=3,
     )
@@ -66,103 +64,67 @@ def test_request_rejects_invalid_values(overrides) -> None:
         MathTemplateRequest.model_validate(payload)
 
 
-@pytest.mark.parametrize(
-    "values",
-    [
-        [1, 1],
-        [0, 101],
-        list(range(7)),
-        [],
-    ],
-)
-def test_parameter_values_are_bounded_and_unique(values) -> None:
-    with pytest.raises(ValidationError):
-        MathParameter(name="a", values=values)
-
-
 def test_candidate_round_trips() -> None:
-    candidate = math_candidate()
+    candidate = ir_candidate(quadratic_ir_template())
 
     loaded = MathTemplateCandidate.model_validate_json(candidate.model_dump_json())
 
     assert loaded == candidate
     assert loaded.template_id.startswith("math.easy.")
-    assert [parameter.name for parameter in loaded.parameters] == ["a", "b", "c"]
+    assert loaded.item is not None
+    assert loaded.item.topic == "school.quadratic"
+
+
+def test_content_requires_a_generic_item() -> None:
+    with pytest.raises(ValidationError, match="item is required"):
+        MathTemplateContent.model_validate({})
 
 
 @pytest.mark.parametrize(
-    "overrides",
+    "legacy_field",
     [
-        {"equation_template": "2x + 3 = 7"},
-        {"equation_template": "{a}x + {b} = {d}"},
-        {"equation_template": "{a}x^2 + {b} = {c}"},
-        {"equation_template": "{a}x - {b} = {c}"},
-        {"equation_template": "{b} + {a}x = {c}"},
-        {"equation_template": "{a}*x + {b} = {c}"},
-        {"question_template": "Solve {unknown}: {equation}"},
-        {
-            "parameters": [
-                {"name": "a", "values": [2]},
-                {"name": "b", "values": [3]},
-            ]
-        },
-        {
-            "parameters": [
-                {"name": "a", "values": [2]},
-                {"name": "b", "values": [3]},
-                {"name": "d", "values": [4]},
-            ]
-        },
-        {
-            "parameters": [
-                {"name": "a", "values": [0, 2]},
-                {"name": "b", "values": [3]},
-                {"name": "c", "values": [4]},
-            ]
-        },
-        {"distractors": []},
+        "equation_template",
+        "question_template",
+        "parameters",
+        "answer_expression",
+        "distractors",
     ],
 )
-def test_candidate_rejects_malformed_or_unsupported_content(overrides) -> None:
-    with pytest.raises(ValidationError):
-        MathTemplateContent.model_validate(math_payload(**overrides))
+def test_content_rejects_retired_linear_fields(legacy_field) -> None:
+    payload = quadratic_ir_template().model_dump(mode="json")
+    payload = {"item": payload}
+    payload[legacy_field] = None
+
+    with pytest.raises(ValidationError, match="legacy linear authoring fields"):
+        MathTemplateContent.model_validate(payload)
 
 
-def test_candidate_rejects_extra_fields() -> None:
-    payload = math_payload()
+def test_content_rejects_extra_fields() -> None:
+    payload = {"item": quadratic_ir_template().model_dump(mode="json")}
     payload["unexpected"] = "value"
 
     with pytest.raises(ValidationError, match="Extra inputs"):
         MathTemplateContent.model_validate(payload)
 
 
-def test_distractor_recipe_rejects_blank_text() -> None:
-    with pytest.raises(ValidationError):
-        MathDistractorRecipe(expression=" ", reason_template="Reason")
-
-
 def test_validation_summary_rejects_failed_technical_evidence() -> None:
     with pytest.raises(ValidationError, match="passing validation evidence"):
         MathValidationSummary(
-            combinations_checked=8,
-            max_combinations=8,
+            combinations_checked=4,
+            max_combinations=4,
             evidence=[
-                ValidationEvidence(
-                    check="math_verify_template_structure", status="failed"
-                )
+                ValidationEvidence(check="math_verify_item_spec", status="failed")
             ],
         )
 
 
 def test_validation_summary_migrates_legacy_relevance_on_read() -> None:
     summary = MathValidationSummary(
-        combinations_checked=8,
-        max_combinations=8,
+        combinations_checked=4,
+        max_combinations=4,
         evidence=[
-            ValidationEvidence(check="math_verify_template_structure", status="passed"),
-            ValidationEvidence(
-                check="math_validate_answers_and_distractors", status="passed"
-            ),
+            ValidationEvidence(check="math_verify_item_spec", status="passed"),
+            ValidationEvidence(check="math_validate_options", status="passed"),
             ValidationEvidence(check="math_assess_template_relevance", status="failed"),
         ],
     )
@@ -173,36 +135,32 @@ def test_validation_summary_migrates_legacy_relevance_on_read() -> None:
 
 def test_validation_summary_drops_stale_legacy_relevance_duplicate() -> None:
     summary = MathValidationSummary(
-        combinations_checked=8,
-        max_combinations=8,
+        combinations_checked=4,
+        max_combinations=4,
         evidence=[
-            ValidationEvidence(check="math_verify_template_structure", status="passed"),
+            ValidationEvidence(check="math_verify_item_spec", status="passed"),
             ValidationEvidence(check="math_assess_template_relevance", status="failed"),
             ValidationEvidence(check="assess_template_relevance", status="failed"),
         ],
     )
 
     assert [item.check for item in summary.evidence] == [
-        "math_verify_template_structure",
+        "math_verify_item_spec",
         "assess_template_relevance",
     ]
 
 
 def test_validated_artifact_round_trips() -> None:
-    candidate = math_candidate()
+    candidate = ir_candidate(quadratic_ir_template())
     artifact = ValidatedMathTemplate(
         artifact_id="abc123",
         template=candidate,
         validation=MathValidationSummary(
-            combinations_checked=8,
-            max_combinations=8,
+            combinations_checked=4,
+            max_combinations=4,
             evidence=[
-                ValidationEvidence(
-                    check="math_verify_template_structure", status="passed"
-                ),
-                ValidationEvidence(
-                    check="math_validate_answers_and_distractors", status="passed"
-                ),
+                ValidationEvidence(check="math_verify_item_spec", status="passed"),
+                ValidationEvidence(check="math_validate_options", status="passed"),
             ],
         ),
     )
@@ -217,38 +175,53 @@ def test_question_instance_requires_answer_at_correct_index() -> None:
     base = {
         "template_id": "math.easy.abc",
         "seed": 1,
-        "parameters": {"a": 2, "b": 2, "c": 5},
-        "equation": "2x + 2 = 5",
-        "question": "Solve for x: 2x + 2 = 5",
-        "choices": ["3/2", "7/2"],
+        "parameters": {"p": "2", "q": "-7"},
+        "equation": "x^2 + 5*x - 14 = 0",
+        "question": "Solve x^2 + 5*x - 14 = 0.",
+        "choices": ["{-7, 2}", "{0}"],
         "correct_index": 0,
-        "answer": "3/2",
+        "answer": "{-7, 2}",
+        "topic": "school.quadratic",
     }
 
-    assert MathQuestionInstance.model_validate(base).answer == "3/2"
+    assert MathQuestionInstance.model_validate(base).answer == "{-7, 2}"
     with pytest.raises(ValidationError, match="answer must equal"):
-        MathQuestionInstance.model_validate({**base, "answer": "7/2"})
+        MathQuestionInstance.model_validate({**base, "answer": "{0}"})
     with pytest.raises(ValidationError, match="correct_index"):
         MathQuestionInstance.model_validate({**base, "correct_index": 2})
     with pytest.raises(ValidationError, match="choices must be distinct"):
-        MathQuestionInstance.model_validate({**base, "choices": ["3/2", "3/2"]})
+        MathQuestionInstance.model_validate({**base, "choices": ["{0}", "{0}"]})
 
 
 def test_generation_request_uses_math_response_contract() -> None:
     request = build_math_generation_request(
         MathTemplateRequest(
-            prompt="Create an easy linear equation question",
+            prompt="Create an easy quadratic equation question",
             difficulty="easy",
             num_distractors=2,
         )
     )
 
+    system_prompt = request.messages[0]["content"]
     assert request.response_model == PlannedGenerationResponse[MathTemplateContent]
     assert request.check_argument_models == ()
-    assert "Create an easy linear equation question" in request.messages[1]["content"]
-    assert "a*x + b = c" in request.messages[0]["content"]
-    assert "exact rational arithmetic" in request.messages[0]["content"]
+    assert (
+        "Create an easy quadratic equation question" in (request.messages[1]["content"])
+    )
+    assert "`item.topic`" in system_prompt
+    assert "answer_recipe" in system_prompt
     assert "Required usable distractors: 2" in request.messages[1]["content"]
+
+
+def test_generation_request_prompt_is_ir_only() -> None:
+    request = build_math_generation_request(
+        MathTemplateRequest(prompt="quadratic equations", difficulty="medium")
+    )
+    system_prompt = request.messages[0]["content"]
+
+    assert "equation_template" not in system_prompt
+    assert "answer_expression" not in system_prompt
+    assert "linear" not in system_prompt.lower()
 
 
 def test_math_domain_is_registered() -> None:
@@ -263,13 +236,13 @@ def test_math_domain_is_registered() -> None:
 
 def test_generation_request_schema_is_json_serializable() -> None:
     request = build_math_generation_request(
-        MathTemplateRequest(prompt="linear equations", difficulty="medium")
+        MathTemplateRequest(prompt="quadratic equations", difficulty="medium")
     )
 
     encoded = json.dumps(request.response_model.model_json_schema())
 
     assert "MathTemplateContent" in encoded
-    assert "distractors" in encoded
+    assert "item" in encoded
     assert "parameters" in encoded
 
 

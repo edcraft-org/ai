@@ -203,11 +203,44 @@ def substitute_item(item: MathItemSpec, params: Mapping[str, Fraction]) -> MathI
         )
         for distractor in item.distractors
     ]
+    recipe = item.answer_recipe
+    if recipe is not None:
+        interval = recipe.interval
+        if interval is not None:
+            interval = interval.model_copy(
+                update={
+                    "lower": (
+                        substitute_expr(interval.lower, params)
+                        if interval.lower is not None
+                        else None
+                    ),
+                    "upper": (
+                        substitute_expr(interval.upper, params)
+                        if interval.upper is not None
+                        else None
+                    ),
+                }
+            )
+        recipe = recipe.model_copy(
+            update={
+                "items": [substitute_expr(entry, params) for entry in recipe.items],
+                "interval": interval,
+                "matrix": (
+                    [
+                        [substitute_expr(cell, params) for cell in row]
+                        for row in recipe.matrix
+                    ]
+                    if recipe.matrix is not None
+                    else None
+                ),
+            }
+        )
     return item.model_copy(
         update={
             "givens": givens,
             "goal": goal,
             "distractors": distractors,
+            "answer_recipe": recipe,
             "text": item.text.model_copy(
                 update={"template": render_item_text(item, params)}
             ),

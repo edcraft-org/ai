@@ -16,7 +16,7 @@ from edcraft_validator.domains.math.math_schemas import (
 def build_math_candidate(
     request: MathTemplateRequest, proposal: MathTemplateContent
 ) -> MathTemplateCandidate:
-    """Build the canonical math template from either authoring mode."""
+    """Build the canonical math template from the generic IR proposal."""
     identity_payload = json.dumps(
         {
             "request": request.model_dump(mode="json"),
@@ -27,21 +27,10 @@ def build_math_candidate(
     ).encode()
     digest = hashlib.sha256(identity_payload).hexdigest()[:12]
     template_id = f"math.{request.difficulty}.{digest}"
-    if proposal.item is not None:
-        return MathTemplateCandidate(
-            template_id=template_id,
-            difficulty=request.difficulty,
-            item=proposal.item,
-            question_type="mcq",
-        )
     return MathTemplateCandidate(
         template_id=template_id,
         difficulty=request.difficulty,
-        equation_template=proposal.equation_template,
-        question_template=proposal.question_template,
-        parameters=proposal.parameters,
-        answer_expression=proposal.answer_expression,
-        distractors=proposal.distractors,
+        item=proposal.item,
         question_type="mcq",
     )
 

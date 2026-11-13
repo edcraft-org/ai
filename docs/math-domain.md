@@ -1,102 +1,175 @@
-# Mathematics domain: bounded linear equations
+# Mathematics domain: authored recipes, engine correctness, separate form
 
-The `math` domain authors and expands one-step and two-step linear equations of
-the form `ax + b = c`. It is deliberately narrow: every supported template has a
-finite parameter domain that can be checked exhaustively before a human approves
-it.
+The `math` domain authors reusable item families as a closed, typed IR. The
+model authors the problem, the answer recipe and the distractor recipes; a
+deterministic engine adjudicates correctness and a separate form registry
+adjudicates shape. Nothing is solved by the model at expansion time, and nothing
+is derived by the solver at approval time.
 
-## Scope
+Every template has a finite parameter domain that is swept exhaustively before a
+human approves it.
 
-- One unknown, `x`.
-- Integer coefficients `a`, `b`, and `c` from a declared finite set.
-- `a` is never zero, so every combination has exactly one rational solution.
-- Answers and distractors are evaluated as exact `fractions.Fraction` values; no
-  floating-point approximation is used.
-- Templates and seeds are reusable: the same validated artifact and seed always
-  produce the same equation, choices, and correct index without a model, MCP, or
-  external I/O call.
+## Trust model
 
-## Template contract
+```text
+model ──► problem IR + answer recipe + distractor recipes
+                            │
+                            ├──► deterministic engine ──► correct?
+                            └──► form registry        ──► pass?
+```
 
-A math template declares:
+Approval requires **both** verdicts for **every** parameter combination. The two
+verdicts are recorded as separate evidence (`engine_correctness` and `form`) and
+are never collapsed into one boolean.
 
-- `equation_template`: exactly the canonical `{a}x + {b} = {c}` form
-  (whitespace is ignored). Other layouts, including `x^2`, unknowns on both
-  sides, or reordered terms, are rejected.
-- `question_template`: text that may use `{a}`, `{b}`, `{c}`, and `{equation}`.
-- `parameters`: exactly three named parameters `a`, `b`, and `c`, each with
-  1–6 unique integer values in `[-100, 100]`. `a` must not include zero.
-- `answer_expression`: an arithmetic expression in `a`, `b`, and `c` whose exact
-  value equals `(c - b) / a` for every parameter combination.
-- `distractors`: 1–12 recipes, each an arithmetic expression and a misconception
-  reason. The saved artifact keeps only the recipes that passed checking.
-- `difficulty`: `easy`, `medium`, or `hard` (advisory, see below).
+Refusals fail closed:
 
-Text placeholders accept bare names only; format specifications and attribute or
-index access are rejected.
+| Oracle | Passing value | Anything else |
+| --- | --- | --- |
+| engine `CorrectnessResult.outcome` | `correct` | `incorrect`, `unknown`, `unsupported`, `timeout`, `error` all reject |
+| form `FormResult.status` | `pass` | `fail` and `unsupported` both reject |
 
-## Supported expressions
+So a construct the engine cannot represent (`AdapterGap`) rejects the template
+instead of being skipped.
 
-Expressions may contain:
+## Template contract (`math-ir/0.1`)
 
-- parameter names `a`, `b`, `c` (and `x` where the expression is evaluated with a
-  value for it),
-- integer and finite float literals,
-- `+`, `-`, `*`, `/`, unary minus, and parentheses.
+A template declares `topic`, one to six `parameters`, and one `body`.
 
-Examples that are supported: `(c - b) / a`, `c / a - b`, `-(b + c) / a`.
+- `parameters`: named values as exact decimal or rational strings, at most 32
+  values each. Keep the product at or below 512; a larger grid cannot be swept
+  and is reported as inconclusive.
+- `body.symbols`: every variable, with domain facts (`real`/`integer`/`rational`,
+  `positive`, `nonzero`).
+- `body.givens`: relations, domain facts, or finite data sets.
+- `body.goal`: `kind` plus the expression, symbol(s), point, or matrix it needs.
+- `body.answer_recipe`: the answer, as typed expression trees (see below).
+- `body.distractors`: one to twelve recipes, each `value` (scalar), `items`
+  (finite set) or `components` (ordered tuple), plus a `misconception` tag.
+- `body.text.template`: learner-facing text using declared parameter placeholders
+  and the reserved `{expr}`, `{equation}`, `{equations}` and `{matrix}`.
+- `body.validation.primitives`: the comparison primitives used for witnesses.
 
-Unsupported syntax is rejected rather than interpreted: function calls,
-comparisons, boolean operators, exponentiation, comprehensions, attribute access,
-subscripts, strings, and any other name. Constants are bounded, expressions are
-limited to 100 syntax nodes and 500 characters, and nesting is bounded.
+Expressions are closed data trees, never code. A node sets exactly one of
+`num` (exact literal), `sym` (variable), `param` (template parameter) or `op`
+with `args`. Supported operators: `add`, `sub`, `mul`, `div`, `pow`, `sqrt`,
+`abs`, `exp`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `log`. Trees are
+bounded in nodes, depth and exponent.
+
+## Answer recipes
+
+`AnswerRecipe` mirrors `Distractor`: it is data, and it may reference declared
+parameters, so one recipe is correct for every combination.
+
+| `kind` | Payload |
+| --- | --- |
+| `numeric`, `expression` | exactly one `items` entry |
+| `set`, `tuple` | one or more `items` |
+| `matrix` | `matrix` |
+| `interval` | `interval` (not graded yet; rejects) |
+| `boolean` | `boolean` (not graded yet; rejects) |
+
+`display` is never compared. The engine compiles the recipe and decides. A
+template body must declare an `answer_recipe`; a concrete item produced by a
+topic generator may instead carry a derived `Answer`, and the two are mutually
+exclusive.
+
+## Correctness
+
+The adapter maps the IR onto the deterministic engine's closed operations:
+
+| IR goal | Engine operation |
+| --- | --- |
+| `evaluate`, `simplify`, `expand`, `factor` | same name |
+| `derivative` | `differentiate` |
+| `integral` | `antiderivative` |
+| `solve` | `solve` (relation givens, `solve_for`, declared domain) |
+| `determinant` | `determinant` |
+
+The engine returns one of `correct`, `incorrect`, `unknown`, `unsupported`,
+`timeout`, `error`. Only `correct` passes, for answers and for every variant.
+
+Distractors are graded the same way, but the required verdict is inverted: a
+distractor must be `incorrect`. An `unknown` or `unsupported` distractor cannot
+be proven wrong, so it rejects the template.
+
+There is no second derivation. The solver is not consulted for template answers,
+so a model that authors a wrong recipe is rejected rather than corrected.
+
+## Form
+
+The engine grades mathematical equivalence, so `expand`, `factor` and `simplify`
+accept the same answer set. The form registry is what distinguishes them.
+
+| Goal | Required shape |
+| --- | --- |
+| `expand` | a polynomial in the declared symbols, fully expanded, with no unexpanded power of a sum |
+| `factor` | a product of irreducible polynomial factors of degree at least two, already factored |
+| `derivative` | a plain expression with no unevaluated `Derivative` |
+| `integral` | a plain expression with no unevaluated `Integral` |
+| `solve` | a `set` or an ordered `tuple` |
+| `determinant` | a finite numeric scalar |
+| `evaluate`, `simplify` | a compilable expression answer |
+
+For `expand` and `factor` the rule applies to distractors as well: a factored
+answer next to expanded options gives the answer away, so an option with the
+wrong shape is rejected even when it is numerically wrong.
+
+The form rule is not advisory and a model cannot repair it: a recipe with the
+wrong shape rejects the template.
 
 ## Check plan
 
-Two technical checks gate approval:
+Technical checks gate approval:
 
-1. `math_verify_template_structure` — placeholders, parameter domain, expression
-   allowlist, and bounds.
-2. `math_validate_answers_and_distractors` — enumerates every parameter
-   combination, computes the exact answer, and requires every answer to be
-   well-defined, every distractor to differ from the answer, and all choices to
-   be pairwise distinct.
+1. `math_verify_item_spec` — schema, bounded trees, goal/answer agreement, and
+   the per-variant engine and form sweep.
+2. `math_validate_options` — every distractor is demonstrably wrong, distinct
+   from the key, and pairwise distinct.
+3. `math_verify_text_fidelity` — prose text only; unknown placeholders, missing
+   anchors and paraphrase drift.
 
-Two advisory checks never gate approval:
+Advisory checks never gate approval:
 
-3. `math_assess_template_difficulty` — a deterministic, provisional heuristic.
-4. `assess_template_relevance` — the shared semantic relevance classifier, offered
-   to the math domain through the `template-relevance` capability. Math supplies
-   only the learner-facing text projection; the measurement, threshold and verdict
-   are shared with every other domain.
+4. `math_assess_template_difficulty` — deterministic provisional heuristic.
+5. `assess_template_relevance` — the shared semantic relevance classifier.
 
-Advisory `failed` or `unavailable` outcomes stay visible in the review evidence
-and warnings, but only technical failures, missing evidence, unsupported cases,
-or human rejection prevent a reusable artifact.
+Advisory `failed` or `unavailable` outcomes stay visible in review evidence and
+warnings; only technical failures, missing evidence, unsupported cases, or human
+rejection prevent a reusable artifact.
 
-## Difficulty rubric
+## Generation
 
-The heuristic scores five signals, one point each:
+`generate_math_question(validated, seed)` is deterministic and performs no model,
+MCP, or network call. For the selected parameter combination it compiles the
+answer recipe, renders it, and then **re-grades** it: the engine must still say
+`correct` and the form registry must still say `pass`. Every distractor is
+re-graded as `incorrect`, and duplicate or display-identical options are refused.
 
-- coefficient `a` has magnitude greater than 1;
-- any parameter value is negative;
-- any parameter magnitude is at least 10;
-- the parameter domain has at least 60 combinations;
-- the template declares at least 4 distractors.
-
-Score 0–1 is `easy`, 2–3 is `medium`, and 4–5 is `hard`. This mapping is a
-provisional scaffold for the pilot, not a calibrated difficulty model. A mismatch
-is advisory and is recorded separately from technical correctness.
+A variant that fails any gate is skipped, and a template with no usable variant
+produces no question. Approval is not assumed to hold at expansion time.
 
 ## Unsupported cases
 
-- Equations with the unknown on both sides, powers of `x`, fractions with `x` in
-  a denominator, systems of equations, and word problems requiring an external
-  diagram.
-- Non-integer parameter values and unbounded parameter ranges.
-- Templates whose distractor coincides with the answer for any combination in the
-  declared domain.
+These reject rather than approximate:
+
+- `limit` and `eigenvalues` goals — no engine operation.
+- `interval` and `boolean` answers — no engine answer kind.
+- Power operations whose exponent is not a literal node, including exponents that
+  only become literal after parameter binding.
+- Determinant matrices whose entries are not exact numbers after binding.
+- Authoring parameters as `sym` nodes instead of `param` nodes.
+- Templates whose distractor coincides with the key, or repeats another option,
+  for any combination in the declared domain.
 - Templates that need a model, tool, or Python execution at expansion time.
 
-These cases must be rejected by the technical checks rather than silently
-approximated.
+## Retired: the bounded linear-equation authoring mode
+
+The `equation_template` / `question_template` / `answer_expression` /
+`distractors` authoring fields, the linear IR module, and the safe arithmetic
+evaluator are removed. Proposals carrying those fields are rejected. Legacy
+linear artifacts cannot be re-validated, because the evaluator that produced
+their keys no longer exists; they must be re-authored as IR templates.
+
+The only retained read-time migration is the advisory evidence name
+`math_assess_template_relevance` → `assess_template_relevance`.

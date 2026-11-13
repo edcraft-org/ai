@@ -1,12 +1,10 @@
-"""Exact structure and answer checks plus advisory math assessments."""
+"""Exact item and option checks plus advisory math assessments."""
 
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
 from fractions import Fraction
 from functools import partial
-from itertools import product
 from typing import Annotated, Any, Literal
 
 from fastmcp import FastMCP
@@ -16,35 +14,18 @@ from edcraft_validator.application.authoring_contracts import DifficultyOutcome
 from edcraft_validator.application.fidelity.engine import verify_text_fidelity
 from edcraft_validator.domains.math.candidate_builder import template_sha256
 from edcraft_validator.domains.math.fidelity import math_fidelity_plugin
+from edcraft_validator.domains.math.ir.instantiate import parameter_combinations
 from edcraft_validator.domains.math.ir.schema import MathItemSpec, MathTemplateSpec
-from edcraft_validator.domains.math.linear_ir import (
-    MAX_IR_VARIANTS,
-    linear_template_ir,
-)
-from edcraft_validator.domains.math.math_schemas import (
-    MathTemplateCandidate,
-    parameter_combinations,
-    template_fields,
-)
+from edcraft_validator.domains.math.math_schemas import MathTemplateCandidate
 from edcraft_validator.domains.math.math_types import (
-    MATH_ANSWERS_TOOL,
-    MATH_CHECKING_MODE,
     MATH_DIFFICULTY_TOOL,
     MATH_FIDELITY_TOOL,
     MATH_IR_TOOL_VERSION,
     MATH_ITEM_SPEC_TOOL,
     MATH_OPTIONS_TOOL,
-    MATH_PARAMETER_NAMES,
-    MATH_STRUCTURE_TOOL,
     MATH_TOOL_VERSION,
-    MAX_DISTRACTORS,
-    MIN_DISTRACTORS,
+    MAX_IR_VARIANTS,
     Difficulty,
-)
-from edcraft_validator.domains.math.safe_linear import (
-    evaluate_expression,
-    format_fraction,
-    validate_expression,
 )
 from edcraft_validator.domains.math.validation.harness import Witness
 from edcraft_validator.domains.math.validation.isolation import (
@@ -64,15 +45,15 @@ CandidateArgument = Annotated[
     MathTemplateCandidate,
     Field(
         description=(
-            "Complete linear-equation template candidate to check. The tool treats "
-            "it as untrusted input and does not modify the supplied object."
+            "Complete math template candidate to check. The tool treats it as "
+            "untrusted input and does not modify the supplied object."
         )
     ),
 ]
 
 
 class MathSpecRequest(BaseModel):
-    """One IR item, a finite template sweep, or a legacy linear candidate."""
+    """One IR item, a finite template sweep, or a math template candidate."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -166,69 +147,6 @@ def register_math_tools(
         selected_provider = partial(configured_judge_provider, settings)
 
     @server.tool(
-        name=MATH_STRUCTURE_TOOL,
-        version=MATH_TOOL_VERSION,
-        tags={"domain:math"},
-        annotations={
-            "readOnlyHint": True,
-            "destructiveHint": False,
-            "idempotentHint": True,
-            "openWorldHint": False,
-        },
-        description=(
-            "Establish that a linear-equation template uses the supported "
-            "a, b, c parameters, well-formed equation and question placeholders, "
-            "bounded integer values, at least one distractor, and only the allowed "
-            "arithmetic expression subset. The check is static and does not "
-            "compute answers or establish that distractors are wrong."
-        ),
-    )
-    async def math_verify_template_structure(
-        candidate: CandidateArgument,
-    ) -> ToolEvidence:
-        return _run_tool(
-            MATH_STRUCTURE_TOOL,
-            lambda: verify_template_structure(candidate),
-        )
-
-    @server.tool(
-        name=MATH_ANSWERS_TOOL,
-        version=MATH_TOOL_VERSION,
-        tags={"domain:math"},
-        annotations={
-            "readOnlyHint": True,
-            "destructiveHint": False,
-            "idempotentHint": True,
-            "openWorldHint": False,
-        },
-        description=(
-            "Exhaustively enumerate the bounded a, b, c parameter domain and "
-            "compute exact rational answers for the answer recipe. Require every "
-            "answer to be well-defined, every selected distractor to differ from "
-            "the answer, and all selected distractors to be pairwise distinct for "
-            "every declared combination. Returns the checked distractor recipes "
-            "in details.selected_distractors. This is bounded-domain evidence, not "
-            "proof for undeclared coefficient values; generated drafts still "
-            "require manual review."
-        ),
-    )
-    async def math_validate_answers_and_distractors(
-        candidate: CandidateArgument,
-        required_distractors: Annotated[
-            int,
-            Field(
-                ge=MIN_DISTRACTORS,
-                le=MAX_DISTRACTORS,
-                description="Number of checked learner-facing distractors required.",
-            ),
-        ],
-    ) -> ToolEvidence:
-        return _run_tool(
-            MATH_ANSWERS_TOOL,
-            lambda: validate_answers_and_distractors(candidate, required_distractors),
-        )
-
-    @server.tool(
         name=MATH_DIFFICULTY_TOOL,
         version=MATH_TOOL_VERSION,
         tags={
@@ -245,7 +163,7 @@ def register_math_tools(
         },
         description=(
             "Provide a provisional heuristic difficulty assessment for a checked "
-            "linear-equation template. Uses coefficient magnitude, sign variety, "
+            "math template. Uses parameter-count, magnitude, sign variety, "
             "parameter-domain size, and distractor count. The estimate is advisory "
             "and uncalibrated; a mismatch never blocks a technically checked "
             "template or requests author revision. No model call is made."
@@ -426,10 +344,7 @@ def verify_item_spec(request: MathSpecRequest) -> ToolEvidence:
     operation = "validate_item"
     template = request.template
     if request.candidate is not None:
-        if request.candidate.item is not None:
-            template = request.candidate.item
-        else:
-            template = linear_template_ir(request.candidate)
+        template = request.candidate.item
     if template is not None:
         operation = "validate_template"
     payload: dict[str, Any] = {
@@ -451,10 +366,7 @@ def verify_item_spec(request: MathSpecRequest) -> ToolEvidence:
 def validate_options(request: MathOptionsRequest) -> ToolEvidence:
     template = request.template
     if request.candidate is not None:
-        if request.candidate.item is not None:
-            template = request.candidate.item
-        else:
-            template = linear_template_ir(request.candidate)
+        template = request.candidate.item
     if template is not None:
         if not template.body.distractors:
             return _no_options(MATH_OPTIONS_TOOL, "template.body.distractors")
@@ -647,224 +559,6 @@ def _harness_evidence(
     )
 
 
-def _run_tool(name: str, operation: Callable[[], Any]) -> ToolEvidence:
-    started = time.perf_counter()
-    try:
-        details = operation()
-    except MathToolFailure as exc:
-        return ToolEvidence(
-            tool=name,
-            version=MATH_TOOL_VERSION,
-            status="failed",
-            findings=[ToolFinding(code=exc.code, message=str(exc), field=exc.field)],
-            details=exc.context,
-            duration_ms=_elapsed_ms(started),
-        )
-    except ValidationError as exc:
-        return ToolEvidence(
-            tool=name,
-            version=MATH_TOOL_VERSION,
-            status="failed",
-            findings=[
-                ToolFinding(
-                    code="TEMPLATE_INVALID",
-                    message=f"Candidate does not match the math template schema: {exc}",
-                )
-            ],
-            duration_ms=_elapsed_ms(started),
-        )
-    except Exception as exc:
-        return ToolEvidence(
-            tool=name,
-            version=MATH_TOOL_VERSION,
-            status="error",
-            findings=[
-                ToolFinding(
-                    code="TOOL_EXECUTION_ERROR",
-                    message=f"Validation tool failed with {type(exc).__name__}",
-                )
-            ],
-            duration_ms=_elapsed_ms(started),
-        )
-    return ToolEvidence(
-        tool=name,
-        version=MATH_TOOL_VERSION,
-        status="passed",
-        details=details,
-        duration_ms=_elapsed_ms(started),
-    )
-
-
-def verify_template_structure(
-    candidate: MathTemplateCandidate,
-) -> dict[str, Any]:
-    """Check placeholders, bounds, and the allowlisted expression subset."""
-    candidate = _revalidate(candidate)
-    if candidate.item is not None:
-        raise MathToolFailure(
-            "Legacy structure checking does not apply to a generic item; use "
-            "math_verify_item_spec instead.",
-            code="LEGACY_TOOL_UNAVAILABLE",
-            field="item",
-        )
-    if (
-        candidate.answer_expression is None
-        or candidate.parameters is None
-        or candidate.distractors is None
-    ):
-        raise MathToolFailure(
-            "Legacy template fields are missing",
-            code="TEMPLATE_INVALID",
-        )
-    try:
-        validate_expression(candidate.answer_expression)
-    except ValueError as exc:
-        raise MathToolFailure(
-            f"Answer expression is unsupported: {exc}",
-            code="EXPRESSION_UNSUPPORTED",
-            field="answer_expression",
-        ) from exc
-    for index, recipe in enumerate(candidate.distractors):
-        try:
-            validate_expression(recipe.expression)
-        except ValueError as exc:
-            raise MathToolFailure(
-                f"Distractor expression is unsupported: {exc}",
-                code="EXPRESSION_UNSUPPORTED",
-                field=f"distractors.{index}.expression",
-            ) from exc
-        try:
-            unknown = template_fields(recipe.reason_template) - set(
-                MATH_PARAMETER_NAMES
-            )
-        except ValueError as exc:
-            raise MathToolFailure(
-                f"Distractor reason template is invalid: {exc}",
-                code="REASON_TEMPLATE_INVALID",
-                field=f"distractors.{index}.reason_template",
-            ) from exc
-        if unknown:
-            raise MathToolFailure(
-                "Distractor reason uses unsupported placeholders: "
-                + ", ".join(sorted(unknown)),
-                code="REASON_PLACEHOLDER_UNSUPPORTED",
-                field=f"distractors.{index}.reason_template",
-            )
-    combinations = _parameter_combinations(candidate)
-    return {
-        "parameters": len(candidate.parameters),
-        "combinations": len(combinations),
-        "distractors": len(candidate.distractors),
-        "expressions_checked": 1 + len(candidate.distractors),
-    }
-
-
-def validate_answers_and_distractors(
-    candidate: MathTemplateCandidate, required_distractors: int
-) -> dict[str, Any]:
-    """Check exact answers and distractors over the complete bounded domain."""
-    candidate = _revalidate(candidate)
-    if candidate.item is not None:
-        raise MathToolFailure(
-            "Legacy answer checking does not apply to a generic item; use "
-            "math_verify_item_spec instead.",
-            code="LEGACY_TOOL_UNAVAILABLE",
-            field="item",
-        )
-    if (
-        candidate.answer_expression is None
-        or candidate.parameters is None
-        or candidate.distractors is None
-    ):
-        raise MathToolFailure(
-            "Legacy template fields are missing",
-            code="TEMPLATE_INVALID",
-        )
-    if not MIN_DISTRACTORS <= required_distractors <= MAX_DISTRACTORS:
-        raise MathToolFailure(
-            "Required distractor count is outside the supported range",
-            code="DISTRACTOR_COUNT_INVALID",
-            field="required_distractors",
-        )
-    if len(candidate.distractors) < required_distractors:
-        raise MathToolFailure(
-            "The template supplies fewer distractor recipes than required",
-            code="INSUFFICIENT_DISTRACTORS",
-            field="distractors",
-            context={
-                "available": len(candidate.distractors),
-                "required": required_distractors,
-            },
-        )
-    combinations = _parameter_combinations(candidate)
-    selected = candidate.distractors[:required_distractors]
-    for values in combinations:
-        # The candidate schema fixes the equation shape to a*x + b = c and
-        # rejects a == 0, so solve it exactly instead of trusting the recipe.
-        canonical_answer = Fraction(values["c"] - values["b"], values["a"])
-        try:
-            answer = evaluate_expression(candidate.answer_expression, values)
-        except ValueError as exc:
-            raise MathToolFailure(
-                f"Answer recipe is not well-defined: {exc}",
-                code="ANSWER_UNDEFINED",
-                field="answer_expression",
-                context={"failing_parameters": values},
-            ) from exc
-        if answer != canonical_answer:
-            raise MathToolFailure(
-                "Answer recipe does not solve the equation for this combination",
-                code="ANSWER_INCORRECT",
-                field="answer_expression",
-                context={
-                    "failing_parameters": values,
-                    "expected": format_fraction(canonical_answer),
-                    "actual": format_fraction(answer),
-                },
-            )
-        seen: set[Any] = {canonical_answer}
-        for index, recipe in enumerate(selected):
-            try:
-                distractor = evaluate_expression(recipe.expression, values)
-            except ValueError as exc:
-                raise MathToolFailure(
-                    f"Distractor recipe is not well-defined: {exc}",
-                    code="DISTRACTOR_UNDEFINED",
-                    field=f"distractors.{index}.expression",
-                    context={"failing_parameters": values},
-                ) from exc
-            if distractor == canonical_answer:
-                raise MathToolFailure(
-                    "A distractor coincides with the answer for a declared "
-                    "parameter combination",
-                    code="DISTRACTOR_MATCHES_ANSWER",
-                    field=f"distractors.{index}.expression",
-                    context={
-                        "failing_parameters": values,
-                        "distractor_index": index,
-                    },
-                )
-            if distractor in seen:
-                raise MathToolFailure(
-                    "Two selected distractors coincide for a declared parameter "
-                    "combination",
-                    code="DISTRACTOR_COLLISION",
-                    field=f"distractors.{index}.expression",
-                    context={
-                        "failing_parameters": values,
-                        "distractor_index": index,
-                    },
-                )
-            seen.add(distractor)
-    return {
-        "checking_mode": MATH_CHECKING_MODE,
-        "combinations_checked": len(combinations),
-        "max_combinations": len(combinations),
-        "seed": 0,
-        "selected_distractors": [recipe.model_dump(mode="json") for recipe in selected],
-    }
-
-
 def assess_template_difficulty(
     candidate: MathTemplateCandidate,
 ) -> ToolEvidence:
@@ -882,7 +576,7 @@ def assess_template_difficulty(
         decision="matches" if matches else "advisory_mismatch",
         status="passed" if matches else "failed",
         reason=(
-            "Provisional deterministic heuristic from coefficient magnitude, sign "
+            "Provisional deterministic heuristic from parameter magnitude, sign "
             "variety, parameter-domain size, and distractor count; not calibrated."
         ),
     )
@@ -939,63 +633,31 @@ def _revalidate(candidate: MathTemplateCandidate) -> MathTemplateCandidate:
         ) from exc
 
 
-def _parameter_combinations(
-    candidate: MathTemplateCandidate,
-) -> list[dict[str, Any]]:
-    if candidate.item is not None:
-        names = [parameter.name for parameter in candidate.item.parameters]
-        return [
-            dict(zip(names, values, strict=True))
-            for values in product(
-                *(parameter.values for parameter in candidate.item.parameters)
-            )
-        ]
-    return parameter_combinations(candidate.parameters or [])
-
-
 def _estimate_difficulty(candidate: MathTemplateCandidate) -> Difficulty:
-    if candidate.item is not None:
-        values = [
-            abs(Fraction(value))
-            for parameter in candidate.item.parameters
-            for value in parameter.values
-        ]
-        score = 0
-        if len(candidate.item.parameters) >= 2:
-            score += 1
-        if any(value > 1 for value in values):
-            score += 1
-        if any(
-            Fraction(value) < 0
-            for parameter in candidate.item.parameters
-            for value in parameter.values
-        ):
-            score += 1
-        if len(_parameter_combinations(candidate)) >= 60:
-            score += 1
-        if len(candidate.item.body.distractors) >= 4:
-            score += 1
-        if candidate.item.topic.startswith("university."):
-            score += 1
-        if score <= 1:
-            return "easy"
-        if score <= 3:
-            return "medium"
-        return "hard"
-    parameters = {
-        parameter.name: parameter.values for parameter in candidate.parameters or []
-    }
+    template = candidate.item
+    if template is None:
+        raise ValueError("difficulty estimation requires a generic item template")
+    values = [
+        abs(Fraction(value))
+        for parameter in template.parameters
+        for value in parameter.values
+    ]
     score = 0
-    if max(abs(value) for value in parameters["a"]) > 1:
+    if len(template.parameters) >= 2:
         score += 1
-    if any(value < 0 for values in parameters.values() for value in values):
+    if any(value > 1 for value in values):
         score += 1
-    if max(abs(value) for values in parameters.values() for value in values) >= 10:
+    if any(
+        Fraction(value) < 0
+        for parameter in template.parameters
+        for value in parameter.values
+    ):
         score += 1
-    combination_count = len(_parameter_combinations(candidate))
-    if combination_count >= 60:
+    if len(parameter_combinations(template)) >= 60:
         score += 1
-    if len(candidate.distractors or []) >= 4:
+    if len(template.body.distractors) >= 4:
+        score += 1
+    if template.topic.startswith("university."):
         score += 1
     if score <= 1:
         return "easy"

@@ -1,8 +1,8 @@
-"""Small constants and type aliases for the linear-equation math domain."""
+"""Small constants and type aliases for the math domain."""
 
 from __future__ import annotations
 
-from typing import Literal, get_args
+from typing import Literal
 
 # Explicit re-exports: these names remain importable from this module even
 # though the single definition now lives in the shared vocabulary module.
@@ -34,25 +34,11 @@ from edcraft_validator.validation.check_names import TEMPLATE_RELEVANCE_CHECK
 
 MATH_DIFFICULTIES: tuple[Difficulty, ...] = DIFFICULTIES
 
-MathParameterName = Literal["a", "b", "c"]
-
-MATH_PARAMETER_NAMES: tuple[str, ...] = get_args(MathParameterName)
-
-MATH_VARIABLE_NAME = "x"
-
-MIN_PARAMETER_VALUES = 1
-MAX_PARAMETER_VALUES = 6
-MIN_PARAMETER_VALUE = -100
-MAX_PARAMETER_VALUE = 100
-
 MAX_PROMPT_LENGTH = 4000
-MAX_EQUATION_TEMPLATE_LENGTH = 500
-MAX_QUESTION_TEMPLATE_LENGTH = 2000
-MAX_EXPRESSION_LENGTH = 500
-MAX_REASON_TEMPLATE_LENGTH = 1000
 
-MATH_STRUCTURE_TOOL = "math_verify_template_structure"
-MATH_ANSWERS_TOOL = "math_validate_answers_and_distractors"
+# Upper bound for the finite parameter grid a single template may declare.
+MAX_IR_VARIANTS = 512
+
 MATH_DIFFICULTY_TOOL = "math_assess_template_difficulty"
 MATH_ITEM_SPEC_TOOL = "math_verify_item_spec"
 MATH_OPTIONS_TOOL = "math_validate_options"

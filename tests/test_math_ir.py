@@ -1,4 +1,4 @@
-"""Typed IR, solver, primitives, harness, and linear migration tests."""
+"""Typed IR, solver, primitives, and harness tests."""
 
 from __future__ import annotations
 
@@ -6,11 +6,11 @@ from fractions import Fraction
 
 import pytest
 import sympy
-from math_helpers import math_candidate
 
 from edcraft_validator.domains.math.ir.compile import MathCompileError, compile_expr
 from edcraft_validator.domains.math.ir.schema import (
     Answer,
+    AnswerRecipe,
     Distractor,
     Expr,
     Given,
@@ -26,7 +26,6 @@ from edcraft_validator.domains.math.ir.schema import (
     ValidationSpec,
 )
 from edcraft_validator.domains.math.ir.solve import solve_item
-from edcraft_validator.domains.math.linear_ir import linear_template_ir
 from edcraft_validator.domains.math.validation.harness import (
     Witness,
     validate_item,
@@ -41,7 +40,6 @@ from edcraft_validator.domains.math.validation.primitives import (
     option_equivalent,
     solution_set_equal,
 )
-from edcraft_validator.domains.math.validation.results import PrimitiveResult
 
 
 def num(value: int | str) -> Expr:
@@ -292,6 +290,7 @@ def test_template_sweep_blocks_a_failing_variant() -> None:
             )
         ],
         goal=Goal(kind="solve", symbol="x"),
+        answer_recipe=AnswerRecipe(kind="set", items=[num(4)]),
         distractors=[Distractor(value=Expr(param="d"), misconception="WRONG_CONSTANT")],
         text=TextSpec(mode="symbolic", template="Solve for x."),
         validation=ValidationSpec(primitives=[PrimitiveSpec(type="solution_set")]),
@@ -311,38 +310,45 @@ def test_template_sweep_blocks_a_failing_variant() -> None:
     assert report.variants_checked == 2
 
 
-def test_linear_candidate_migrates_to_ir_and_passes() -> None:
-    template = linear_template_ir(math_candidate())
-    report = validate_template(template, max_variants=512)
-    assert report.report.status == "passed"
-    assert report.variants_checked == 8
-
-
-def test_linear_candidate_with_key_distractor_fails_ir_gate() -> None:
-    candidate = math_candidate(
-        distractors=[
-            {
-                "expression": "(c - b) / a",
-                "reason_template": "Copies the correct answer.",
-            }
-        ]
-    )
-    report = validate_template(linear_template_ir(candidate), max_variants=512)
-    assert report.report.status == "failed"
-
-
-def _unused(_: PrimitiveResult) -> None:
-    """Keep the helper import meaningful for type checkers."""
-
-
 def test_truncated_variant_sweep_is_inconclusive() -> None:
-    template = linear_template_ir(math_candidate())
+    body = MathItemSpec(
+        topic="school.quadratic",
+        symbols=[SymbolSpec(name="x")],
+        givens=[
+            Given(
+                id="g1",
+                relation=Relation(
+                    kind="eq",
+                    lhs=add(
+                        sub(
+                            power(sym("x"), num(2)),
+                            mul(add(num(2), num(3)), sym("x")),
+                        ),
+                        mul(num(2), num(3)),
+                    ),
+                    rhs=num(0),
+                ),
+            )
+        ],
+        goal=Goal(kind="solve", symbol="x"),
+        answer_recipe=AnswerRecipe(kind="set", items=[num(2), num(3)]),
+        text=TextSpec(mode="symbolic", template="Solve for x."),
+        validation=ValidationSpec(primitives=[PrimitiveSpec(type="solution_set")]),
+    )
+    template = MathTemplateSpec(
+        topic="school.quadratic",
+        parameters=[
+            ParameterSpec(name="p", values=["2", "3"]),
+            ParameterSpec(name="q", values=["5", "7"]),
+        ],
+        body=body,
+    )
 
     report = validate_template(template, max_variants=1)
 
     assert report.report.status == "inconclusive"
     assert report.variants_checked == 1
-    assert report.variants_total == 8
+    assert report.variants_total == 4
     assert any("truncated" in finding for finding in report.report.findings)
 
 

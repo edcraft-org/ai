@@ -2,6 +2,7 @@
 
 from edcraft_validator.domains.math.validation.answers import (
     compile_answer,
+    compile_answer_recipe,
     parse_answer_expr,
 )
 from edcraft_validator.domains.math.validation.harness import (
@@ -52,6 +53,7 @@ __all__ = [
     "check_primitive",
     "collection_equal",
     "compile_answer",
+    "compile_answer_recipe",
     "expression_equiv",
     "interval_equal",
     "matrix_equal",

@@ -10,6 +10,7 @@ from edcraft_validator.domains.math.ir.compile import (
 )
 from edcraft_validator.domains.math.ir.schema import (
     Answer,
+    AnswerRecipe,
     Distractor,
     Expr,
     Given,
@@ -20,6 +21,7 @@ from edcraft_validator.domains.math.ir.schema import (
     MathTemplateSpec,
     ParameterSpec,
     PrimitiveSpec,
+    RecipeInterval,
     Relation,
     SymbolSpec,
     TextSpec,
@@ -35,6 +37,7 @@ from edcraft_validator.domains.math.ir.solve import (
 
 __all__ = [
     "Answer",
+    "AnswerRecipe",
     "Distractor",
     "Expr",
     "Given",
@@ -46,6 +49,7 @@ __all__ = [
     "MathTemplateSpec",
     "ParameterSpec",
     "PrimitiveSpec",
+    "RecipeInterval",
     "Relation",
     "SolveResult",
     "SolveUnavailable",

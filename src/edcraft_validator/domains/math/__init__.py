@@ -1,1 +1,1 @@
-"""Linear-equation math schemas, validation checks, and question expansion."""
+"""Math schemas, validation checks, and question expansion."""

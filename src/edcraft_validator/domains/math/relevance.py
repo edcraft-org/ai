@@ -12,30 +12,19 @@ from edcraft_validator.domains.math.math_schemas import MathTemplateCandidate
 
 def template_relevance_text(candidate: MathTemplateCandidate) -> str:
     """Render the reusable task without answers, hints or distractor recipes."""
-    if candidate.item is not None:
-        template = candidate.item
-        parameters = "; ".join(
-            f"{parameter.name} in [{', '.join(parameter.values)}]"
-            for parameter in template.parameters
-        )
-        return (
-            "Mathematics multiple-choice question template\n\n"
-            f"Topic: {template.topic}\n"
-            f"Task: {template.body.text.template}\n"
-            f"Goal: {template.body.goal.kind}\n"
-            f"Parameter values: {parameters}\n"
-            "Each generated question substitutes one allowed value for every "
-            "parameter.\n"
-        )
-    parameters = ", ".join(
-        f"{parameter.name} in {parameter.values}"
-        for parameter in candidate.parameters or []
+    template = candidate.item
+    if template is None:
+        raise ValueError("relevance text requires a generic item template")
+    parameters = "; ".join(
+        f"{parameter.name} in [{', '.join(parameter.values)}]"
+        for parameter in template.parameters
     )
     return (
         "Mathematics multiple-choice question template\n\n"
-        f"Equation: {candidate.equation_template}\n"
-        f"Question: {candidate.question_template}\n"
+        f"Topic: {template.topic}\n"
+        f"Task: {template.body.text.template}\n"
+        f"Goal: {template.body.goal.kind}\n"
         f"Parameter values: {parameters}\n"
         "Each generated question substitutes one allowed value for every "
-        "placeholder.\n"
+        "parameter.\n"
     )

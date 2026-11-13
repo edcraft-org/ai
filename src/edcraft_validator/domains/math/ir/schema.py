@@ -175,6 +175,72 @@ class Answer(Record):
     display: str = ""
 
 
+class RecipeInterval(Record):
+    lower: Expr | None = None
+    upper: Expr | None = None
+    lower_open: bool = True
+    upper_open: bool = True
+
+
+class AnswerRecipe(Record):
+    """A structured answer authored as typed expression trees.
+
+    The model authors recipes the same way it authors distractors: closed
+    ``Expr`` nodes, optionally with parameter references. The deterministic
+    engine compiles them later; ``display`` is never compared.
+    """
+
+    kind: AnswerKind
+    items: list[Expr] = Field(default_factory=list)
+    interval: RecipeInterval | None = None
+    matrix: list[list[Expr]] | None = None
+    boolean: bool | None = None
+    display: str = ""
+
+    @model_validator(mode="after")
+    def require_payload(self) -> AnswerRecipe:
+        if self.kind in {"numeric", "expression"}:
+            if len(self.items) != 1:
+                raise ValueError(f"{self.kind} answer recipes require exactly one item")
+        elif self.kind in {"set", "tuple"}:
+            if not self.items:
+                raise ValueError(
+                    f"{self.kind} answer recipes require at least one item"
+                )
+        elif self.kind == "interval":
+            if self.interval is None:
+                raise ValueError("interval answer recipes require an interval value")
+        elif self.kind == "matrix":
+            if self.matrix is None:
+                raise ValueError("matrix answer recipes require a matrix value")
+        elif self.kind == "boolean":
+            if self.boolean is None:
+                raise ValueError("boolean answer recipes require a boolean value")
+        primary = {
+            "numeric": "items",
+            "expression": "items",
+            "set": "items",
+            "tuple": "items",
+            "interval": "interval",
+            "matrix": "matrix",
+            "boolean": "boolean",
+        }[self.kind]
+        payload = {
+            "items": bool(self.items),
+            "interval": self.interval is not None,
+            "matrix": self.matrix is not None,
+            "boolean": self.boolean is not None,
+        }
+        extra = sorted(
+            name for name, present in payload.items() if name != primary and present
+        )
+        if extra:
+            raise ValueError(
+                f"{self.kind} answer recipes must not set: " + ", ".join(extra)
+            )
+        return self
+
+
 class Distractor(Record):
     value: Expr | None = None
     items: list[Expr] = Field(default_factory=list)
@@ -214,7 +280,11 @@ class ValidationSpec(Record):
 
 
 class MathItemSpec(Record):
-    """One concrete item, optionally with a derived answer attached."""
+    """One concrete item, optionally with a derived answer attached.
+
+    A template body must declare an ``answer_recipe``; a concrete item may use
+    either ``answer`` or ``answer_recipe``.
+    """
 
     schema_version: Literal["math-ir/0.1"] = IR_VERSION
     topic: str = Field(min_length=1)
@@ -222,6 +292,7 @@ class MathItemSpec(Record):
     givens: list[Given] = Field(min_length=1)
     goal: Goal
     answer: Answer | None = None
+    answer_recipe: AnswerRecipe | None = None
     distractors: list[Distractor] = Field(default_factory=list)
     text: TextSpec
     validation: ValidationSpec
@@ -265,6 +336,21 @@ def _relation_parameters(relation: Relation | None) -> set[str]:
     return _expr_parameters(relation.lhs) | _expr_parameters(relation.rhs)
 
 
+def _recipe_parameters(recipe: AnswerRecipe | None) -> set[str]:
+    if recipe is None:
+        return set()
+    found: set[str] = set()
+    for entry in recipe.items:
+        found.update(_expr_parameters(entry))
+    for row in recipe.matrix or []:
+        for cell in row:
+            found.update(_expr_parameters(cell))
+    if recipe.interval is not None:
+        found.update(_expr_parameters(recipe.interval.lower))
+        found.update(_expr_parameters(recipe.interval.upper))
+    return found
+
+
 def item_parameters(item: MathItemSpec) -> set[str]:
     """Return every parameter name referenced by an item body."""
     found: set[str] = set()
@@ -275,6 +361,7 @@ def item_parameters(item: MathItemSpec) -> set[str]:
     for row in item.goal.matrix or []:
         for cell in row:
             found.update(_expr_parameters(cell))
+    found.update(_recipe_parameters(item.answer_recipe))
     for distractor in item.distractors:
         found.update(_expr_parameters(distractor.value))
         for entry in [*distractor.items, *distractor.components]:

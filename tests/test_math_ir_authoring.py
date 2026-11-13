@@ -44,7 +44,6 @@ from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.math_tools import (
     MathOptionsRequest,
     MathSpecRequest,
-    validate_answers_and_distractors,
     validate_options,
     verify_item_spec,
 )
@@ -146,11 +145,11 @@ def test_percentage_generation_keeps_the_authored_problem_text() -> None:
     assert "%" in instance.question
 
 
-def test_ir_proposal_rejects_mixed_authoring_modes() -> None:
+def test_ir_proposal_rejects_retired_linear_fields() -> None:
     payload = ir_proposal(quadratic_ir_template()).model_dump(mode="json")
     payload["equation_template"] = "{a}x + {b} = {c}"
 
-    with pytest.raises(ValidationError, match="not both"):
+    with pytest.raises(ValidationError, match="legacy linear authoring fields"):
         MathTemplateContent.model_validate(payload)
 
 
@@ -242,15 +241,6 @@ def test_ir_tools_accept_the_finite_template() -> None:
     assert options.status == "passed"
 
 
-def test_legacy_answer_tool_rejects_a_generic_candidate() -> None:
-    candidate = ir_candidate(quadratic_ir_template())
-
-    with pytest.raises(Exception) as raised:
-        validate_answers_and_distractors(candidate, 3)
-
-    assert getattr(raised.value, "code", None) == "LEGACY_TOOL_UNAVAILABLE"
-
-
 def test_math_domain_binds_ir_tools_without_model_arguments() -> None:
     domain = MathDomain()
     candidate = ir_candidate(quadratic_ir_template())
@@ -269,8 +259,6 @@ def test_math_domain_binds_ir_tools_without_model_arguments() -> None:
     assert "template" in spec_bindings
     assert "template" in options_bindings
     assert "item" in fidelity_bindings
-    with pytest.raises(ValueError, match="legacy linear templates"):
-        domain.tool_bindings(request, candidate, "math_verify_template_structure")
 
 
 def test_ir_authoring_round_trip_through_the_application() -> None:

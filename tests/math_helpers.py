@@ -1,59 +1,7 @@
 """Shared valid math-domain fixtures for unit and workflow tests."""
 
 from edcraft_validator.domains.math.candidate_builder import build_math_candidate
-from edcraft_validator.domains.math.math_schemas import (
-    MathTemplateCandidate,
-    MathTemplateContent,
-    MathTemplateRequest,
-)
-
-
-def math_payload(**overrides):
-    payload = {
-        "equation_template": "{a}x + {b} = {c}",
-        "question_template": "Solve for x: {equation}",
-        "parameters": [
-            {"name": "a", "values": [2, 3]},
-            {"name": "b", "values": [2, 4]},
-            {"name": "c", "values": [5, 7]},
-        ],
-        "answer_expression": "(c - b) / a",
-        "distractors": [
-            {
-                "expression": "(c + b) / a",
-                "reason_template": "Adds b instead of subtracting it.",
-            },
-            {
-                "expression": "(c - b) * 2",
-                "reason_template": "Multiplies by 2 instead of dividing by a.",
-            },
-            {
-                "expression": "(c - b + 1) / a",
-                "reason_template": "Off by one in the numerator.",
-            },
-        ],
-    }
-    payload.update(overrides)
-    return payload
-
-
-def math_proposal(**overrides) -> MathTemplateContent:
-    return MathTemplateContent.model_validate(math_payload(**overrides))
-
-
-def math_candidate(
-    *,
-    difficulty: str = "easy",
-    num_distractors: int = 3,
-    **overrides,
-) -> MathTemplateCandidate:
-    request = MathTemplateRequest(
-        prompt="Solve a linear equation for x with small integer coefficients.",
-        difficulty=difficulty,
-        num_distractors=num_distractors,
-    )
-    return build_math_candidate(request, math_proposal(**overrides))
-
+from edcraft_validator.domains.math.math_schemas import MathTemplateRequest
 
 # --- Generic IR template fixtures -------------------------------------------
 #
@@ -117,6 +65,7 @@ def ir_template(topic, parameters, body):
 
 def quadratic_ir_template():
     from edcraft_validator.domains.math.ir.schema import (
+        AnswerRecipe,
         Distractor,
         Given,
         Goal,
@@ -150,6 +99,7 @@ def quadratic_ir_template():
             )
         ],
         goal=Goal(kind="solve", symbol="x", domain="real"),
+        answer_recipe=AnswerRecipe(kind="set", items=[ir_param("p"), ir_param("q")]),
         distractors=[
             Distractor(
                 value=ir_sub(ir_num(0), ir_param("p")),
@@ -182,6 +132,7 @@ def quadratic_ir_template():
 
 def linear_system_ir_template():
     from edcraft_validator.domains.math.ir.schema import (
+        AnswerRecipe,
         Distractor,
         Given,
         Goal,
@@ -219,6 +170,7 @@ def linear_system_ir_template():
             ),
         ],
         goal=Goal(kind="solve", symbols=["x", "y"], domain="real"),
+        answer_recipe=AnswerRecipe(kind="tuple", items=[ir_param("p"), ir_param("q")]),
         distractors=[
             Distractor(
                 components=[ir_param("p"), ir_sub(ir_num(0), ir_param("q"))],
@@ -251,6 +203,7 @@ def linear_system_ir_template():
 
 def derivative_ir_template():
     from edcraft_validator.domains.math.ir.schema import (
+        AnswerRecipe,
         Distractor,
         Given,
         Goal,
@@ -262,45 +215,47 @@ def derivative_ir_template():
         ValidationSpec,
     )
 
+    # The engine refuses power nodes whose exponent is not a bounded literal,
+    # so the fixture fixes the exponents and varies only the coefficients.
     expression = ir_add(
-        ir_mul(ir_param("a"), ir_pow(ir_sym("x"), ir_param("n"))),
-        ir_mul(ir_param("b"), ir_sym("x")),
+        ir_mul(ir_param("a"), ir_pow(ir_sym("x"), ir_num(3))),
+        ir_mul(ir_param("b"), ir_pow(ir_sym("x"), ir_num(2))),
         ir_num(1),
+    )
+    derivative_expr = ir_add(
+        ir_mul(ir_num(3), ir_param("a"), ir_pow(ir_sym("x"), ir_num(2))),
+        ir_mul(ir_num(2), ir_param("b"), ir_sym("x")),
     )
     body = MathItemSpec(
         topic="university.derivative",
         symbols=[SymbolSpec(name="x", domain="real")],
         givens=[Given(id="domain_x", kind="domain", symbol="x", domain="real")],
         goal=Goal(kind="derivative", symbol="x", expr=expression, order=1),
+        answer_recipe=AnswerRecipe(kind="expression", items=[derivative_expr]),
         distractors=[
             Distractor(
                 value=ir_add(
-                    ir_mul(ir_param("a"), ir_pow(ir_sym("x"), ir_param("n"))),
-                    ir_param("b"),
+                    ir_mul(ir_num(3), ir_param("a"), ir_pow(ir_sym("x"), ir_num(3))),
+                    ir_mul(ir_num(2), ir_param("b"), ir_pow(ir_sym("x"), ir_num(2))),
                 ),
-                misconception="POWER_MISSING_COEFFICIENT",
-                reason="Forgets to multiply by the original exponent",
+                misconception="POWER_NOT_DECREMENTED",
+                reason="Keeps the original exponents",
             ),
             Distractor(
                 value=ir_add(
-                    ir_mul(
-                        ir_param("a"),
-                        ir_pow(ir_sym("x"), ir_param("n")),
-                        ir_param("n"),
-                    ),
-                    ir_param("b"),
+                    ir_mul(ir_param("a"), ir_pow(ir_sym("x"), ir_num(2))),
+                    ir_mul(ir_param("b"), ir_sym("x")),
                 ),
-                misconception="POWER_NOT_DECREMENTED",
-                reason="Keeps the original exponent",
+                misconception="DROPPED_COEFFICIENTS",
+                reason="Drops the power-rule coefficients",
             ),
             Distractor(
-                value=ir_mul(
-                    ir_param("a"),
-                    ir_param("n"),
-                    ir_pow(ir_sym("x"), ir_param("n")),
+                value=ir_sub(
+                    ir_mul(ir_num(3), ir_param("a"), ir_pow(ir_sym("x"), ir_num(2))),
+                    ir_mul(ir_num(2), ir_param("b"), ir_sym("x")),
                 ),
-                misconception="MISSING_TERM",
-                reason="Drops the linear term",
+                misconception="SIGN_ERROR",
+                reason="Flips the sign of the linear term",
             ),
         ],
         text=TextSpec(
@@ -312,7 +267,6 @@ def derivative_ir_template():
         "university.derivative",
         [
             ParameterSpec(name="a", values=["2", "3"]),
-            ParameterSpec(name="n", values=["2", "3"]),
             ParameterSpec(name="b", values=["-2", "1"]),
         ],
         body,
@@ -321,6 +275,7 @@ def derivative_ir_template():
 
 def determinant_ir_template():
     from edcraft_validator.domains.math.ir.schema import (
+        AnswerRecipe,
         Distractor,
         Given,
         Goal,
@@ -341,6 +296,15 @@ def determinant_ir_template():
             matrix=[
                 [ir_param("a"), ir_param("b")],
                 [ir_param("c"), ir_param("d")],
+            ],
+        ),
+        answer_recipe=AnswerRecipe(
+            kind="numeric",
+            items=[
+                ir_sub(
+                    ir_mul(ir_param("a"), ir_param("d")),
+                    ir_mul(ir_param("b"), ir_param("c")),
+                )
             ],
         ),
         distractors=[
@@ -383,6 +347,7 @@ def determinant_ir_template():
 
 def percentage_ir_template():
     from edcraft_validator.domains.math.ir.schema import (
+        AnswerRecipe,
         Distractor,
         Given,
         Goal,
@@ -403,6 +368,10 @@ def percentage_ir_template():
         goal=Goal(
             kind="evaluate",
             expr=ir_div(ir_mul(ir_param("percent"), ir_param("whole")), ir_num(100)),
+        ),
+        answer_recipe=AnswerRecipe(
+            kind="numeric",
+            items=[ir_div(ir_mul(ir_param("percent"), ir_param("whole")), ir_num(100))],
         ),
         distractors=[
             Distractor(
