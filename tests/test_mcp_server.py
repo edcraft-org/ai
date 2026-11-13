@@ -63,6 +63,8 @@ async def test_catalogue_exposes_authoritative_names_descriptions_and_schemas():
         "math_verify_item_spec",
         "math_validate_options",
         "math_verify_text_fidelity",
+        "math_check_correctness",
+        "math_qualify_correctness_template",
         "check_pilot_execute_recipe",
         "assess_relevance",
         "assess_template_relevance",

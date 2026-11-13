@@ -23,6 +23,7 @@ from edcraft_validator.mcp.code_checks.property_checks import PropertyCheckSetti
 from edcraft_validator.mcp.code_question_tools import register_code_question_tools
 from edcraft_validator.mcp.code_tools import register_code_validation_tools
 from edcraft_validator.mcp.difficulty_tools import register_difficulty_tools
+from edcraft_validator.mcp.math_correctness_tools import register_math_correctness_tools
 from edcraft_validator.mcp.math_tools import register_math_tools
 from edcraft_validator.mcp.relevance_tools import register_relevance_tools
 from edcraft_validator.tools.python_execution import (
@@ -82,6 +83,7 @@ def create_validation_server(
         fidelity_provider_factory=partial(configured_judge_provider, selected),
         fidelity_timeout_seconds=fidelity_judge_timeout_seconds,
     )
+    register_math_correctness_tools(server)
     register_check_pilot_tools(server)
     register_relevance_tools(
         server,
