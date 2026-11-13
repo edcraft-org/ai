@@ -163,6 +163,46 @@ def qualify_structured_template(
     )
 
 
+def qualify_engine(
+    contract_id: str,
+    *,
+    seed: int,
+    settings: PilotQualificationSettings | None = None,
+) -> Qualification:
+    """Qualify one authoritative engine check against kernel-derived answers."""
+    selected = settings or PilotQualificationSettings()
+    seed_value = _seed(seed)
+    if not isinstance(contract_id, str) or not contract_id:
+        raise ValueError("engine qualification requires a contract id")
+    payload = {
+        "operation": "qualify_engine",
+        "contract_id": contract_id,
+        "seed": seed_value,
+        "settings": selected.model_dump(mode="json"),
+    }
+    return _run_qualification(payload, seed=seed_value, settings=selected)
+
+
+def qualify_engine_template(
+    definition: Any,
+    template: PilotTemplateDefinition,
+    *,
+    seed: int,
+    settings: PilotQualificationSettings | None = None,
+) -> Qualification:
+    """Qualify an engine-graded template with its generator family."""
+    selected = settings or PilotQualificationSettings()
+    seed_value = _seed(seed)
+    payload = {
+        "operation": "qualify_template",
+        "definition": definition.model_dump(mode="json"),
+        "template": template.model_dump(mode="json", exclude_none=True),
+        "seed": seed_value,
+        "settings": selected.model_dump(mode="json"),
+    }
+    return _run_qualification(payload, seed=seed_value, settings=selected)
+
+
 def _serialize_problem(problem: RecipeProblem) -> str | dict[str, Any]:
     if isinstance(problem, (str, dict)):
         return problem
@@ -273,6 +313,8 @@ __all__ = [
     "execute_recipe_cases_isolated",
     "execute_recipe_isolated",
     "qualification_seed",
+    "qualify_engine",
+    "qualify_engine_template",
     "qualify_recipe",
     "qualify_structured_template",
     "qualify_template",

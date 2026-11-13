@@ -23,6 +23,10 @@ from edcraft_validator.application.check_pilot.contracts import (
     scope_from_recipe_operation_set,
     trusted_contract_scope,
 )
+from edcraft_validator.application.check_pilot.engine_checks import (
+    grade_answer,
+)
+from edcraft_validator.application.check_pilot.engine_registry import engine_contract
 from edcraft_validator.application.check_pilot.kernel_registry import (
     kernel_boundary_problems,
     kernel_contract,
@@ -38,6 +42,8 @@ from edcraft_validator.application.check_pilot.models import (
     CheckRecipeDefinition,
     CheckRef,
     ContractScope,
+    EngineCheckDefinition,
+    EngineContractScope,
     KernelContractScope,
     KernelGoal,
     PilotQualificationSettings,
@@ -107,6 +113,15 @@ class _CaseFailure(Exception):
     def __init__(self, counterexample: dict[str, Any]) -> None:
         super().__init__(counterexample.get("reason", "case failed"))
         self.counterexample = counterexample
+
+
+class _EngineRefusal(Exception):
+    """An honest engine refusal, which is inconclusive rather than a failure."""
+
+    def __init__(self, outcome: str, reason: str) -> None:
+        super().__init__(reason)
+        self.outcome = outcome
+        self.reason = reason
 
 
 @dataclass
@@ -789,6 +804,174 @@ def qualify_recipe_payload(payload: dict[str, Any]) -> Qualification:
     )
 
 
+def _run_engine_property(
+    *,
+    contract_id: str,
+    state: _RunState,
+    seed_value: int,
+    max_examples: int,
+    expose_counterexample: bool,
+    include_boundaries: bool,
+) -> tuple[dict[str, Any] | None, Qualification | None]:
+    """Qualify one engine contract on sampled kernel problems."""
+
+    spec = engine_contract(contract_id)
+    if spec is None:
+        return None, _qualification(
+            status="error",
+            config=state.config,
+            seed_value=seed_value,
+            findings=["the engine contract is not trusted"],
+        )
+    generator_id = spec.generator_contract_id
+
+    def check_case(problem: dict[str, Any]) -> None:
+        state.reserve()
+        key = json.dumps(problem, sort_keys=True)
+        if key in state.accepted:
+            return
+        try:
+            expected = kernel_expected_answer(generator_id, problem)
+        except (ValueError, TypeError) as exc:
+            raise _CaseFailure(
+                {
+                    "reason": f"kernel rejected the sampled problem: {str(exc)[:200]}",
+                    "problem": problem,
+                }
+            ) from None
+        state.reserve()
+        grading = grade_answer(contract_id, problem, expected, compare_kernel=False)
+        if grading.passed:
+            state.accepted.add(key)
+            return
+        if grading.failed:
+            raise _CaseFailure(
+                {
+                    "reason": (
+                        "engine rejected the kernel expected answer: "
+                        f"{grading.reason[:300]}"
+                    ),
+                    "problem": problem,
+                    "expected": expected,
+                }
+            )
+        raise _EngineRefusal(grading.outcome, grading.reason)
+
+    @seed(seed_value)
+    @settings(
+        max_examples=max_examples,
+        deadline=None,
+        database=None,
+        report_multiple_bugs=False,
+        phases=(Phase.explicit, Phase.generate, Phase.shrink),
+        suppress_health_check=[HealthCheck.too_slow],
+    )
+    @given(kernel_problem_strategy(generator_id))
+    def wrapped(problem: dict[str, Any]) -> None:
+        check_case(problem)
+
+    if include_boundaries:
+        for problem in reversed(kernel_boundary_problems(generator_id)):
+            wrapped = example(problem)(wrapped)
+    try:
+        wrapped()
+    except _BudgetExceeded:
+        return None, _qualification(
+            status="inconclusive",
+            config=state.config,
+            seed_value=seed_value,
+            state=state,
+            findings=["engine qualification budget was exhausted before a verdict"],
+        )
+    except _EngineRefusal as exc:
+        return None, _qualification(
+            status="inconclusive",
+            config=state.config,
+            seed_value=seed_value,
+            state=state,
+            findings=[
+                f"engine refused to decide a sampled case ({exc.outcome}): "
+                f"{exc.reason[:300]}"
+            ],
+        )
+    except _CaseFailure as exc:
+        counterexample = exc.counterexample if expose_counterexample else None
+        finding = (
+            "held-out evaluation did not confirm the engine check"
+            if not expose_counterexample
+            else f"counterexample: {exc.counterexample.get('reason', 'case failed')}"
+        )
+        return counterexample or {"withheld": True}, _qualification(
+            status="failed",
+            config=state.config,
+            seed_value=seed_value,
+            state=state,
+            findings=[finding],
+            counterexample=counterexample,
+        )
+    return None, None
+
+
+def qualify_engine_payload(payload: dict[str, Any]) -> Qualification:
+    """Qualify an engine check against the kernel's independently derived answers."""
+    config = PilotQualificationSettings.model_validate(payload.get("settings", {}))
+    seed_value = int(payload.get("seed", 0))
+    if seed_value < 0:
+        seed_value = 0
+    contract_id = payload.get("contract_id")
+    if not isinstance(contract_id, str):
+        return _qualification(
+            status="error",
+            config=config,
+            seed_value=seed_value,
+            findings=["engine qualification requires a contract id"],
+        )
+    spec = engine_contract(contract_id)
+    if spec is None:
+        return _qualification(
+            status="error",
+            config=config,
+            seed_value=seed_value,
+            findings=["the engine contract is not trusted"],
+        )
+    state = _RunState(config)
+    _, outcome = _run_engine_property(
+        contract_id=contract_id,
+        state=state,
+        seed_value=seed_value,
+        max_examples=config.max_examples,
+        expose_counterexample=True,
+        include_boundaries=True,
+    )
+    if outcome is not None:
+        return outcome
+    _, held_out = _run_engine_property(
+        contract_id=contract_id,
+        state=state,
+        seed_value=seed_value + 7919,
+        max_examples=max(4, config.max_examples // 2),
+        expose_counterexample=False,
+        include_boundaries=False,
+    )
+    if held_out is not None:
+        return held_out
+    if len(state.accepted) < 2:
+        return _qualification(
+            status="inconclusive",
+            config=config,
+            seed_value=seed_value,
+            state=state,
+            findings=["not enough sampled cases were accepted for qualification"],
+        )
+    return _qualification(
+        status="passed",
+        config=config,
+        seed_value=seed_value,
+        state=state,
+        findings=["Every sampled kernel answer was engine-correct"],
+    )
+
+
 def _family_strategy(
     family: PolynomialFamily | SolveFamily,
 ) -> st.SearchStrategy[dict[str, int]]:
@@ -1073,15 +1256,217 @@ def _structured_template_qualification(
     )
 
 
+def _engine_template_qualification(
+    *,
+    definition: EngineCheckDefinition,
+    family: StructuredProblemFamily,
+    scope: EngineContractScope,
+    goal: KernelGoal,
+    config: PilotQualificationSettings,
+    seed_value: int,
+) -> Qualification:
+    state = _RunState(config)
+    spec = engine_contract(scope.contract_id)
+    if spec is None:
+        return _qualification(
+            status="error",
+            config=config,
+            seed_value=seed_value,
+            findings=["the engine contract is not trusted"],
+        )
+    if (
+        definition.contract_id != scope.contract_id
+        or definition.operation != spec.operation
+        or definition.generator_contract_id != scope.generator_contract_id
+    ):
+        return _qualification(
+            status="error",
+            config=config,
+            seed_value=seed_value,
+            findings=["the engine check definition does not match its scope"],
+        )
+    if family.contract_id != scope.generator_contract_id:
+        return _qualification(
+            status="error",
+            config=config,
+            seed_value=seed_value,
+            findings=["the structured family does not name the generator contract"],
+        )
+    generator_scope = spec.generator.scope()
+
+    def check_case(assignment: dict[str, int]) -> None:
+        state.reserve()
+        key = json.dumps(assignment, sort_keys=True)
+        if key in state.accepted:
+            return
+        try:
+            instance = build_structured_instance(
+                family, assignment, seed=seed_value, scope=generator_scope
+            )
+        except (StructuredFamilyError, ValueError) as exc:
+            raise _CaseFailure(
+                {
+                    "reason": f"structured renderer rejected the assignment: {exc}",
+                    "assignment": assignment,
+                }
+            ) from None
+        guard_findings = guard_structured_instance(
+            instance,
+            contract_id=family.contract_id,
+            num_distractors=family.num_distractors,
+            scope=generator_scope,
+        )
+        if guard_findings:
+            raise _CaseFailure(
+                {
+                    "reason": guard_findings[0],
+                    "assignment": assignment,
+                    "expected": instance.answer,
+                    "choices": list(instance.choices),
+                }
+            )
+        goal_findings = problem_goal_findings(
+            family.contract_id, goal, instance.problem
+        )
+        if goal_findings:
+            raise _CaseFailure(
+                {
+                    "reason": goal_findings[0],
+                    "assignment": assignment,
+                    "expected": instance.answer,
+                    "choices": list(instance.choices),
+                }
+            )
+        state.reserve()
+        correct = grade_answer(
+            scope.contract_id, instance.problem, instance.expected, compare_kernel=False
+        )
+        if correct.failed:
+            raise _CaseFailure(
+                {
+                    "reason": "engine rejected the correct answer",
+                    "assignment": assignment,
+                    "expected": instance.answer,
+                }
+            )
+        if correct.refused:
+            raise _EngineRefusal(correct.outcome, correct.reason)
+        for distractor in instance.distractors:
+            state.reserve()
+            wrong = grade_answer(
+                scope.contract_id,
+                instance.problem,
+                distractor,
+                compare_kernel=False,
+            )
+            if wrong.passed:
+                raise _CaseFailure(
+                    {
+                        "reason": "engine accepted a distractor",
+                        "assignment": assignment,
+                        "expected": instance.answer,
+                    }
+                )
+            if wrong.refused:
+                raise _EngineRefusal(wrong.outcome, wrong.reason)
+        state.accepted.add(key)
+
+    @seed(seed_value)
+    @settings(
+        max_examples=config.max_examples,
+        deadline=None,
+        database=None,
+        report_multiple_bugs=False,
+        phases=(Phase.explicit, Phase.generate, Phase.shrink),
+        suppress_health_check=[HealthCheck.too_slow],
+    )
+    @given(assignment=_structured_family_strategy(family))
+    def wrapped(assignment: dict[str, int]) -> None:
+        check_case(assignment)
+
+    for assignment in reversed(boundary_assignments(family)):
+        wrapped = example(assignment=assignment)(wrapped)
+    try:
+        wrapped()
+    except _BudgetExceeded:
+        return _qualification(
+            status="inconclusive",
+            config=config,
+            seed_value=seed_value,
+            state=state,
+            findings=["template qualification budget was exhausted before a verdict"],
+        )
+    except _EngineRefusal as exc:
+        return _qualification(
+            status="inconclusive",
+            config=config,
+            seed_value=seed_value,
+            state=state,
+            findings=[
+                f"engine refused to decide a template case ({exc.outcome}): "
+                f"{exc.reason[:300]}"
+            ],
+        )
+    except _CaseFailure as exc:
+        return _qualification(
+            status="failed",
+            config=config,
+            seed_value=seed_value,
+            state=state,
+            findings=[f"counterexample: {exc.counterexample.get('reason', 'failed')}"],
+            counterexample=exc.counterexample,
+        )
+    minimum = min(2, max(1, family_assignment_count(family)))
+    if len(state.accepted) < minimum:
+        return _qualification(
+            status="inconclusive",
+            config=config,
+            seed_value=seed_value,
+            state=state,
+            findings=["not enough sampled family assignments were accepted"],
+        )
+    return _qualification(
+        status="passed",
+        config=config,
+        seed_value=seed_value,
+        state=state,
+        findings=["No counterexample found in sampled cases"],
+    )
+
+
 def qualify_template_payload(payload: dict[str, Any]) -> Qualification:
     config = PilotQualificationSettings.model_validate(payload.get("settings", {}))
     seed_value = int(payload.get("seed", 0))
     if seed_value < 0:
         seed_value = 0
-    definition = CheckRecipeDefinition.model_validate(payload.get("definition"))
     template_data = payload.get("template")
     if isinstance(template_data, dict):
         template = PilotTemplateDefinition.model_validate(template_data)
+        if isinstance(template.scope, EngineContractScope):
+            if (
+                template.structured_family is None
+                or template.goal is None
+                or not isinstance(template.goal, KernelGoal)
+            ):
+                return _qualification(
+                    status="error",
+                    config=config,
+                    seed_value=seed_value,
+                    findings=[
+                        "engine templates require a structured family and "
+                        "validated goal"
+                    ],
+                )
+            definition = EngineCheckDefinition.model_validate(payload.get("definition"))
+            return _engine_template_qualification(
+                definition=definition,
+                family=template.structured_family,
+                scope=template.scope,
+                goal=template.goal,
+                config=config,
+                seed_value=seed_value,
+            )
+        definition = CheckRecipeDefinition.model_validate(payload.get("definition"))
         scope: PolynomialScope | ContractScope | KernelContractScope = template.scope
         failure = _compile_failure(definition, config, seed_value, scope)
         if failure is not None:
@@ -1115,6 +1500,7 @@ def qualify_template_payload(payload: dict[str, Any]) -> Qualification:
         family = template.family
         assert family is not None
     else:
+        definition = CheckRecipeDefinition.model_validate(payload.get("definition"))
         scope = _scope_from_payload(payload, definition)
         failure = _compile_failure(definition, config, seed_value, scope)
         if failure is not None:
@@ -1307,12 +1693,19 @@ def generate_batch_payload(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("generation requires a template id")
     if type(seed) is not int or type(quantity) is not int:
         raise ValueError("generation seed and quantity must be integers")
+    template = PilotTemplateDefinition.model_validate(payload.get("template"))
+    if isinstance(template.scope, EngineContractScope):
+        definition: CheckRecipeDefinition | EngineCheckDefinition = (
+            EngineCheckDefinition.model_validate(payload.get("definition"))
+        )
+    else:
+        definition = CheckRecipeDefinition.model_validate(payload.get("definition"))
     batch = build_generation_batch(
         template_id=template_id,
         seed=seed,
         quantity=quantity,
-        definition=CheckRecipeDefinition.model_validate(payload.get("definition")),
-        template=PilotTemplateDefinition.model_validate(payload.get("template")),
+        definition=definition,
+        template=template,
         check_ref=CheckRef.model_validate(payload.get("check_ref")),
     )
     return {"batch": batch.model_dump(mode="json")}
@@ -1322,6 +1715,9 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
     operation = payload.get("operation")
     if operation == "qualify_recipe":
         qualification = qualify_recipe_payload(payload)
+        return {"qualification": qualification.model_dump(mode="json")}
+    if operation == "qualify_engine":
+        qualification = qualify_engine_payload(payload)
         return {"qualification": qualification.model_dump(mode="json")}
     if operation == "qualify_template":
         return {
