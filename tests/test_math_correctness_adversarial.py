@@ -5,9 +5,10 @@ engine reject a correct answer, or can a meaning-changing edit make it accept a
 wrong one?  ``check_in_process`` is used for breadth; one preserving and one
 breaking case per operation also go through the public isolated facade.
 
-Known defects are recorded with a non-strict runtime ``pytest.xfail`` so the
-branch stays green while ``docs/math-correctness-adversarial-findings.md``
-holds the reproducer and severity.
+Soundness failures are hard failures: a meaning-changing edit accepted as
+``correct``, or a meaning-preserving edit rejected as ``incorrect``, fails the
+suite. ``docs/math-correctness-adversarial-findings.md`` records the history of
+the defects that were found and fixed.
 """
 
 from __future__ import annotations
@@ -285,7 +286,7 @@ def test_preserving_mutations_are_not_rejected(
     result = _run(mutated)
     case = _case_id(base_id, mutation_name)
     if result.outcome == "incorrect":
-        pytest.xfail(
+        pytest.fail(
             f"D-preserve.{case}: meaning-preserving edit rejected as incorrect "
             f"({result.reason})"
         )
@@ -305,7 +306,7 @@ def test_breaking_mutations_are_not_accepted(
     result = _run(mutated)
     case = _case_id(base_id, mutation_name)
     if result.outcome == "correct":
-        pytest.xfail(
+        pytest.fail(
             f"D-break.{case}: meaning-changing edit accepted as correct "
             f"({result.reason})"
         )
@@ -393,7 +394,7 @@ def test_undefined_complex_candidate_is_not_correct(case: str) -> None:
     """
     result = _run(UNDEFINED_CANDIDATE_CASES[case])
     if result.outcome == "correct":
-        pytest.xfail(
+        pytest.fail(
             "D-complex-undefined: candidate cancels an undefined non-real "
             f"subexpression and is accepted in {case}"
         )
@@ -429,11 +430,11 @@ def test_isolated_facade_preserves_the_in_process_verdict(
         f"facade={facade.outcome}"
     )
     if kind == "preserving" and in_process.outcome == "incorrect":
-        pytest.xfail(
+        pytest.fail(
             f"D-facade.{base_id}: preserving case rejected across the boundary"
         )
     if kind == "breaking" and in_process.outcome == "correct":
-        pytest.xfail(f"D-facade.{base_id}: breaking case accepted across the boundary")
+        pytest.fail(f"D-facade.{base_id}: breaking case accepted across the boundary")
 
 
 # ---------------------------------------------------------------------------

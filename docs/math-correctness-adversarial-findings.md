@@ -28,7 +28,16 @@ matrix and solution handlers inspect only the final compiled value, so
 `sqrt(-1)**2` is erased to `-1` and accepted even though no real value is
 assigned to `sqrt(-1)`.
 
-Affected code:
+**Status: fixed.** `EngineContext.compile` now refuses any node whose value
+SymPy proves non-real (`is_real is False`), before a parent constructor can
+erase it. This covers expression, matrix, LU and solution answer paths, since
+all of them compile through the same context. A definite `False` is required:
+symbolic realness that SymPy cannot decide stays with the domain handlers, so
+`sqrt(x)` for an unconstrained real `x` is unaffected. The reproducers below now
+return `unsupported` and are hard assertions in
+`tests/test_math_correctness_adversarial.py`.
+
+Affected code at the time of the report:
 
 - `src/edcraft_validator/domains/math/engine/context.py:34` rejects only
   `is_finite is False` or `nan`, never `is_real is False`.
