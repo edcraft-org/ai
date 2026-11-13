@@ -169,8 +169,9 @@ literal length/bit limits, per-expression/global node limits, depth limits and
 conservative intermediate-growth budgets. Expansion output is additionally
 capped at 20,000 terms: the request validator estimates the expanded term count
 before the worker starts, and equivalence operations re-count the actual expanded
-candidate before any equivalence or counterexample work. Default concrete timeout is ten
-seconds; Python callers can choose a finite positive budget up to sixty seconds.
+candidate before any equivalence or counterexample work. Default concrete
+timeout is ten seconds; Python callers can choose a finite positive budget up to
+sixty seconds.
 Qualification has a separate worker deadline and a bounded shrinking budget.
 Workers run in a fresh interpreter with a CPU limit and a parent-side resident
 memory watchdog (default 1 GiB); Linux also applies an address-space limit, and

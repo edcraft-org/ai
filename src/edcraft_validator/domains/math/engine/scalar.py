@@ -423,7 +423,12 @@ def _compare_expressions(
             "incorrect",
             incorrect_reason,
             method,
-            {"witness": {name: sympy.sstr(value) for name, value in witness.items()}},
+            {
+                "witness": {
+                    name: sympy.sstr(value)
+                    for name, value in sorted(witness.items(), key=lambda item: item[0])
+                }
+            },
         )
     return _Verdict(
         "unknown",

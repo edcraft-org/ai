@@ -75,6 +75,8 @@ def test_scalar_periodic_domain_is_not_truncated_to_one_period():
 
 def test_valid_cusp_derivative_is_not_labelled_incorrect():
     # abs(x) has derivative x/abs(x) wherever the derivative exists (x != 0).
+    # The engine cannot certify differentiability at the cusp, so the honest
+    # outcome is `unknown`: refusing every derivative as `unsupported` fails.
     result = check_math_correctness(
         {
             "problem": {
@@ -86,7 +88,8 @@ def test_valid_cusp_derivative_is_not_labelled_incorrect():
             "answer": {"expression": op("div", X, op("abs", X))},
         }
     )
-    assert result.outcome in {"correct", "unknown", "unsupported"}
+    assert result.outcome == "unknown"
+    assert result.method == "scalar.differentiate.domain"
 
 
 def test_symbolic_solution_candidate_cannot_hide_an_unresolved_domain():
