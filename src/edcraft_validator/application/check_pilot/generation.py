@@ -26,6 +26,8 @@ from edcraft_validator.application.check_pilot.isolation import (
 from edcraft_validator.application.check_pilot.models import (
     MAX_GENERATION_QUANTITY,
     CheckRecipeDefinition,
+    EngineCheckDefinition,
+    EngineContractScope,
     PilotBatch,
     PilotTemplateDefinition,
 )
@@ -72,9 +74,15 @@ def generate_batch(
     check = store.get_check(owner_id, record_check.check_ref.check_id)
     if check.check_ref != record_check.check_ref:
         raise PilotConflict("the pinned check no longer matches this template")
-    recipe = CheckRecipeDefinition.model_validate(check.definition)
     if scope_applicability_findings(check.scope, template_goal(definition)):
         raise PilotConflict("the pinned check does not cover this template")
+
+    if isinstance(definition.scope, EngineContractScope):
+        engine_definition: CheckRecipeDefinition | EngineCheckDefinition = (
+            EngineCheckDefinition.model_validate(check.definition)
+        )
+    else:
+        engine_definition = CheckRecipeDefinition.model_validate(check.definition)
 
     try:
         response = run_pilot_isolated(
@@ -83,7 +91,7 @@ def generate_batch(
                 "template_id": record.template_id,
                 "seed": seed,
                 "quantity": quantity,
-                "definition": recipe.model_dump(mode="json"),
+                "definition": engine_definition.model_dump(mode="json"),
                 "template": definition.model_dump(mode="json", exclude_none=True),
                 "check_ref": check.check_ref.model_dump(mode="json"),
             },

@@ -27,6 +27,7 @@ from edcraft_validator.application.check_pilot.contracts import (
     template_goal,
     trusted_contract_scope,
 )
+from edcraft_validator.application.check_pilot.engine_registry import engine_contract
 from edcraft_validator.application.check_pilot.errors import (
     PilotConflict,
     PilotInputError,
@@ -36,6 +37,8 @@ from edcraft_validator.application.check_pilot.models import (
     CHECK_SCHEMA_VERSION,
     CheckRecipeDefinition,
     CheckRecord,
+    EngineCheckDefinition,
+    EngineContractScope,
     PilotTemplateDefinition,
     PilotTemplateRecord,
     PolynomialScope,
@@ -188,8 +191,22 @@ def _validate_check_record(record: CheckRecord) -> None:
     try:
         scope = parse_scope(record.scope)
         _validate_trusted_scope(scope)
-        definition = CheckRecipeDefinition.model_validate(record.definition)
-        compile_recipe(definition, scope=scope)
+        if isinstance(scope, EngineContractScope):
+            definition = EngineCheckDefinition.model_validate(record.definition)
+            spec = engine_contract(scope.contract_id)
+            if (
+                spec is None
+                or definition.contract_id != scope.contract_id
+                or definition.operation != spec.operation
+                or definition.generator_contract_id != scope.generator_contract_id
+                or definition.grader != "engine"
+            ):
+                raise ValueError(
+                    "engine check definition does not match its trusted scope"
+                )
+        else:
+            definition = CheckRecipeDefinition.model_validate(record.definition)
+            compile_recipe(definition, scope=scope)
     except (ValueError, RecipeCompileError) as exc:
         raise PilotConflict("stored check is outside the pilot scope") from exc
     digest = check_content_sha256(

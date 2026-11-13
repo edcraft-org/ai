@@ -11,12 +11,16 @@ from __future__ import annotations
 import json
 import random
 
+from edcraft_validator.application.check_pilot.engine_checks import grade_answer
+from edcraft_validator.application.check_pilot.engine_registry import engine_contract
 from edcraft_validator.application.check_pilot.models import (
     MAX_GENERATION_QUANTITY,
     MAX_RECIPE_CASES,
     CheckRecipeDefinition,
     CheckRef,
     ContractScope,
+    EngineCheckDefinition,
+    EngineContractScope,
     KernelContractScope,
     KernelGoal,
     PilotBatch,
@@ -223,12 +227,152 @@ def _check_verdicts(
                 )
 
 
+def _engine_definition_for(
+    definition: CheckRecipeDefinition | EngineCheckDefinition,
+    scope: EngineContractScope,
+) -> EngineCheckDefinition:
+    engine_definition = EngineCheckDefinition.model_validate(
+        definition.model_dump(mode="json")
+    )
+    spec = engine_contract(scope.contract_id)
+    if spec is None:
+        raise BatchGenerationError("the engine contract is not trusted")
+    if (
+        engine_definition.contract_id != scope.contract_id
+        or engine_definition.operation != spec.operation
+        or engine_definition.generator_contract_id != scope.generator_contract_id
+    ):
+        raise BatchGenerationError(
+            "the engine check definition does not match its scope"
+        )
+    return engine_definition
+
+
+def _generate_engine_batch(
+    *,
+    template_id: str,
+    seed: int,
+    quantity: int,
+    definition: CheckRecipeDefinition | EngineCheckDefinition,
+    template: PilotTemplateDefinition,
+    check_ref: CheckRef,
+) -> PilotBatch:
+    """Generate with the kernel family and grade every option with the engine."""
+    scope = template.scope
+    assert isinstance(scope, EngineContractScope)
+    _engine_definition_for(definition, scope)
+    family = template.structured_family
+    if family is None or family.contract_id != scope.generator_contract_id:
+        raise BatchGenerationError(
+            "the engine template does not declare its generator family"
+        )
+    spec = engine_contract(scope.contract_id)
+    assert spec is not None
+    generator_scope = spec.generator.scope()
+
+    instances, skipped = _sample_instances(family, seed=seed, quantity=quantity)
+    for instance in instances:
+        findings = _guard(
+            instance,
+            family=family,
+            scope=generator_scope,
+            goal=template.goal,
+        )
+        if findings:
+            raise BatchGenerationError(
+                "a generated instance failed the independent correctness guard; "
+                "no questions were returned"
+            )
+
+    questions: list[PilotQuestion] = []
+    dropped = 0
+    drop_reasons: list[str] = []
+    evidence_findings: list[str] = []
+    for instance in instances:
+        correct = grade_answer(scope.contract_id, instance.problem, instance.expected)
+        if not correct.passed:
+            dropped += 1
+            if len(drop_reasons) < 3:
+                drop_reasons.append(
+                    f"engine {correct.outcome} on a correct answer: "
+                    f"{correct.reason[:200]}"
+                )
+            continue
+        if correct.kernel_verdict is None and len(evidence_findings) < 3:
+            evidence_findings.extend(correct.findings[:1])
+        elif correct.kernel_verdict == "rejected" and len(evidence_findings) < 3:
+            evidence_findings.append(
+                "the kernel comparison rejected an engine-correct answer"
+            )
+        accepted = True
+        for distractor in instance.distractors:
+            wrong = grade_answer(
+                scope.contract_id,
+                instance.problem,
+                distractor,
+                compare_kernel=False,
+            )
+            if not wrong.failed:
+                accepted = False
+                if len(drop_reasons) < 3:
+                    drop_reasons.append(
+                        f"engine {wrong.outcome} on a distractor: {wrong.reason[:200]}"
+                    )
+                break
+        if not accepted:
+            dropped += 1
+            continue
+        questions.append(
+            PilotQuestion(
+                question=instance.question,
+                expression=instance.expression,
+                choices=list(instance.choices),
+                correct_index=instance.correct_index,
+                answer=instance.answer,
+                parameters=instance.parameters,
+                check_ref=check_ref,
+                engine_outcome=correct.outcome,
+                kernel_verdict=correct.kernel_verdict,
+                grader="engine",
+            )
+        )
+
+    shortfall = quantity - len(questions)
+    findings: list[str] = []
+    if skipped:
+        findings.append(
+            f"Skipped {skipped} sampled assignment(s) that could not be rendered "
+            "safely."
+        )
+    findings.extend(evidence_findings)
+    if dropped:
+        findings.append(
+            f"Dropped {dropped} generated item(s) whose engine verdict did not "
+            "confirm every option."
+        )
+        findings.extend(drop_reasons)
+    if shortfall:
+        findings.append(
+            f"Generated {len(questions)} unique instance(s) for requested "
+            f"{quantity} after bounded sampling. No claim is made about "
+            "untested parts of the declared parameter domains."
+        )
+    return PilotBatch(
+        template_id=template_id,
+        seed=seed,
+        questions=questions,
+        requested_quantity=quantity,
+        shortfall=shortfall,
+        findings=findings,
+    )
+
+
 def generate_batch(
     *,
     template_id: str,
     seed: int,
     quantity: int,
-    definition: CheckRecipeDefinition,
+    definition: CheckRecipeDefinition | EngineCheckDefinition,
     template: PilotTemplateDefinition,
     check_ref: CheckRef,
 ) -> PilotBatch:
@@ -242,9 +386,20 @@ def generate_batch(
     if not isinstance(template_id, str) or not template_id:
         raise BatchGenerationError("template id is required")
 
+    if isinstance(template.scope, EngineContractScope):
+        return _generate_engine_batch(
+            template_id=template_id,
+            seed=seed,
+            quantity=quantity,
+            definition=definition,
+            template=template,
+            check_ref=check_ref,
+        )
+
+    recipe = CheckRecipeDefinition.model_validate(definition.model_dump(mode="json"))
     family = _family(template)
     try:
-        compiled = compile_recipe(definition, scope=template.scope)
+        compiled = compile_recipe(recipe, scope=template.scope)
     except RecipeCompileError as exc:
         raise BatchGenerationError(
             f"the pinned check did not compile: {'; '.join(exc.findings)[:500]}"
@@ -284,6 +439,7 @@ def generate_batch(
             answer=instance.answer,
             parameters=instance.parameters,
             check_ref=check_ref,
+            grader="kernel",
         )
         for instance in instances
     ]
