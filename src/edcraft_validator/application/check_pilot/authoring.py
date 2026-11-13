@@ -133,20 +133,67 @@ def _request_sha256(prompt: str) -> str:
     return hashlib.sha256(prompt.encode()).hexdigest()
 
 
-def _schema_error_feedback(stage: str) -> dict[str, Any]:
+_STAGE_SCHEMA_GUIDANCE = {
+    "plan": (
+        "Return only advertised plan fields: supported, contract_id, goal, "
+        "reason and saved_check_ref. The goal must use the exact kernel goal "
+        "fields advertised for the selected contract."
+    ),
+    "check": (
+        "Declare each recipe step with one registered operation and exactly "
+        "that operation's argument names. Input and step arguments use a name "
+        "and a null value; literal arguments use a null name and a non-null "
+        "value."
+    ),
+    "template": (
+        "Return exactly one family. Kernel and engine contracts require "
+        "structured_family, whose problem must be one advertised closed "
+        "variant. Each binding path must address a numeric leaf in that "
+        "problem; numeric literals must be exact rational strings such as "
+        '"-3/2" or "4", never placeholders; binding values must be unique; and '
+        "every bound instance must stay inside the contract bounds."
+    ),
+}
+
+
+def _schema_error_details(error: BaseException | None) -> list[str]:
+    """Field paths and validator messages from a local schema rejection.
+
+    Only Pydantic's ``loc`` and ``msg`` are copied. Raw model output, input
+    values and provider error text stay out of the next prompt so a failed
+    response cannot leak untrusted data or held-out cases.
+    """
+    cause = error.__cause__ if error is not None else None
+    if not isinstance(cause, ValidationError):
+        return []
+    details: list[str] = []
+    for item in cause.errors()[:4]:
+        location = ".".join(str(part) for part in item.get("loc", ()))
+        message = str(item.get("msg", "")).strip()
+        detail = f"{location}: {message}" if location else message
+        if detail:
+            details.append(detail[:300])
+    return details
+
+
+def _schema_error_feedback(
+    stage: str, error: BaseException | None = None
+) -> dict[str, Any]:
     """Bounded, application-authored repair hint for one schema rejection.
 
     Provider error text and raw model output stay out of the next prompt so a
     failed structured response cannot leak untrusted data or held-out cases.
+    The local validator's field path and message are safe to repeat because
+    both are authored by this application.
     """
     return {
         "stage": stage,
-        "findings": ["the previous response did not match the closed schema"],
-        "guidance": (
-            "Return only advertised fields. Declare each recipe step with one "
-            "registered operation and exactly that operation's argument names. "
-            "Input and step arguments use a name and a null value; literal "
-            "arguments use a null name and a non-null value."
+        "findings": [
+            "the previous response did not match the closed schema",
+            *_schema_error_details(error),
+        ],
+        "guidance": _STAGE_SCHEMA_GUIDANCE.get(
+            stage, _STAGE_SCHEMA_GUIDANCE["template"]
         ),
     }
 
@@ -315,7 +362,7 @@ def _plan_with_repairs(
                     feedback=feedback,
                 )
             )
-        except GenerationSchemaError:
+        except GenerationSchemaError as exc:
             if attempt >= MAX_PLAN_REPAIRS:
                 return PlanOutcome(
                     proposal=None,
@@ -325,7 +372,7 @@ def _plan_with_repairs(
                     status="error",
                     findings=[_SAFE_SCHEMA_ERROR],
                 )
-            feedback = _schema_error_feedback("plan")
+            feedback = _schema_error_feedback("plan", exc)
             continue
         except Exception:
             return PlanOutcome(
@@ -497,7 +544,7 @@ def author_check(
                     feedback=feedback,
                 )
             )
-        except GenerationSchemaError:
+        except GenerationSchemaError as exc:
             if attempt >= MAX_CHECK_REPAIRS:
                 return CheckAuthoringOutcome(
                     check=None,
@@ -505,7 +552,7 @@ def author_check(
                     status="error",
                     findings=[_SAFE_SCHEMA_ERROR],
                 )
-            feedback = _schema_error_feedback("check")
+            feedback = _schema_error_feedback("check", exc)
             continue
         except Exception:
             return CheckAuthoringOutcome(
@@ -857,10 +904,10 @@ def _author_template_proposal(
                     feedback=feedback,
                 )
             )
-        except GenerationSchemaError:
+        except GenerationSchemaError as exc:
             if attempt >= MAX_TEMPLATE_REPAIRS:
                 return None, last_proposal, "error", [_SAFE_SCHEMA_ERROR]
-            feedback = _schema_error_feedback("template")
+            feedback = _schema_error_feedback("template", exc)
             continue
         except Exception:
             return None, last_proposal, "error", [_SAFE_PROVIDER_ERROR]
