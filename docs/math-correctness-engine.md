@@ -58,7 +58,11 @@ result reports the convention in `CorrectnessResult.details["lu_convention"]`.
 Results distinguish `correct`, `incorrect`, `unknown`, `unsupported`, `timeout`,
 and `error`. A well-formed answer with the wrong kind for the operation is
 `unsupported`; an answer of the right kind whose mathematical values are wrong is
-`incorrect`. `unknown` does not mean incorrect. A timeout is a bounded execution
+`incorrect`. One exception is deliberate: a candidate containing a provably
+non-real subexpression on the declared domain, such as `sqrt(-1)**2`, is
+`unsupported`, not `incorrect`. There is no real value to compare, so the checker
+declines to make a correctness claim rather than calling the candidate wrong.
+`unknown` does not mean incorrect. A timeout is a bounded execution
 outcome, not a mathematical conclusion. Only `correct` maps to passing shared
 `ToolEvidence`; `incorrect` maps to failed, while unresolved outcomes map to
 error with their precise outcome retained in `details`.
@@ -169,14 +173,41 @@ literal length/bit limits, per-expression/global node limits, depth limits and
 conservative intermediate-growth budgets. Expansion output is additionally
 capped at 20,000 terms: the request validator estimates the expanded term count
 before the worker starts, and equivalence operations re-count the actual expanded
-candidate before any equivalence or counterexample work. Default concrete
-timeout is ten seconds; Python callers can choose a finite positive budget up to
-sixty seconds.
-Qualification has a separate worker deadline and a bounded shrinking budget.
-Workers run in a fresh interpreter with a CPU limit and a parent-side resident
-memory watchdog (default 1 GiB); Linux also applies an address-space limit, and
-macOS attempts a best-effort data-segment limit. Exceeding the memory ceiling is
-reported as a worker error, never as a passing check.
+candidate before any equivalence or counterexample work.
+
+Estimation first applies a cheap structural normalisation: addition and
+subtraction are flattened, structurally identical opposite terms are cancelled,
+literal zero terms are dropped, multiplication is flattened and its literal ones
+and zeros are removed, powers of zero and one are unwrapped, and `div(a, a)`
+collapses to one. Division is then estimated multiplicatively (numerator terms
+times denominator terms), while a power is bounded by the magnitude of its
+integer exponent. Expressions that still contain a division or a
+negative-integer power must also satisfy
+
+```text
+estimated_terms * (total_degree + 1) <= 20,000
+```
+
+where `total_degree` counts numerator plus denominator degree. Cancelling
+structures that normalise to a small expression therefore pass, while nested
+rational expansions with large numerators and denominators are rejected before
+the worker starts. The normalisation is iterative, memoised and free of SymPy, so
+adversarial trees stay bounded.
+
+Default concrete timeout is ten seconds; Python callers can choose a finite
+positive budget up to sixty seconds. Qualification has a separate worker deadline
+and a bounded shrinking budget. Workers run in a fresh interpreter with a CPU
+limit and a parent-side resident memory watchdog (default 1 GiB). The bootstrap
+also reports the child's peak RSS (`ru_maxrss`) in its response envelope; a peak
+above the cap is a memory error regardless of exit code, which covers workers
+that allocate quickly and exit zero. The parent poll is a secondary guard for
+long-running workers: on trigger it kills the child after rechecking the stop
+flag and the child's pid identity, then raises. Linux also applies an
+address-space limit, and macOS applies a best-effort data-segment limit while
+preserving the inherited hard limit. If neither a pid handshake nor a kernel
+limit is available, the parent fails closed with a distinct error instead of
+running the worker unwatched. Exceeding the memory ceiling is never reported as
+a passing check.
 
 The operation enum is not a promise to decide every expression. Unsupported
 structure, unsettled assumptions or symbolic sets, and exhausted budgets remain
