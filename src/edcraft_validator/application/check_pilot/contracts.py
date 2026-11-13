@@ -265,15 +265,11 @@ def _kernel_scope_findings(
         findings.append("requested maximum degree is outside the stored check scope")
     if goal.max_abs_coefficient > scope.max_abs_coefficient:
         findings.append("requested coefficient bound is outside the stored check scope")
-    if goal.min_dimension < scope.min_dimension:
-        findings.append("requested minimum dimension is outside the stored check scope")
     if goal.max_dimension > scope.max_dimension:
         findings.append("requested dimension is outside the stored check scope")
-    if (
-        scope.requires_general_antiderivative
-        and not goal.requires_general_antiderivative
-    ):
-        findings.append("stored check scope requires a general antiderivative")
+    # A general-capable contract still accepts one-primitive requests: the
+    # problem payload carries the requested form, so scope coverage is one-way.
+    # Only a general request that the scope cannot cover is a finding.
     if (
         goal.requires_general_antiderivative
         and not scope.requires_general_antiderivative
@@ -358,8 +354,8 @@ def _kernel_goal_findings(contract: KernelContractSpec, goal: KernelGoal) -> lis
         findings.append("requested maximum degree is outside the contract")
     if not 1 <= goal.max_abs_coefficient <= contract.max_abs_coefficient:
         findings.append("requested coefficient bound is outside the contract")
-    if goal.min_dimension < contract.min_dimension:
-        findings.append("requested minimum dimension is below the contract")
+    # A minimum below the contract floor is not a finding: the contract cannot
+    # generate below its own minimum, so the floor narrows the request instead.
     if goal.min_dimension > goal.max_dimension:
         findings.append("requested minimum dimension exceeds its maximum")
     if goal.max_dimension > contract.max_dimension:

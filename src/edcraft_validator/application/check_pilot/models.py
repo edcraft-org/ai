@@ -569,12 +569,11 @@ class PilotTemplateDefinition(PilotModel):
             raise ValueError("template goal degree is outside its contract scope")
         if self.goal.max_abs_coefficient > self.scope.max_abs_coefficient:
             raise ValueError("template goal coefficient is outside its contract scope")
-        if self.goal.min_dimension < self.scope.min_dimension:
-            raise ValueError(
-                "template goal minimum dimension is outside its contract scope"
-            )
         if self.goal.max_dimension > self.scope.max_dimension:
             raise ValueError("template goal dimension is outside its contract scope")
+        # A goal minimum below the contract floor is not an error: the contract
+        # cannot generate below its own minimum. This keeps stored plans that
+        # omitted ``min_dimension`` readable, with the floor narrowing them.
         if self.structured_family.contract_id != self.contract_id:
             raise ValueError("structured family contract id must match the template")
         return self

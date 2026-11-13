@@ -105,16 +105,16 @@ def test_range_plan_still_accepts_a_2x2_family():
     assert plan_covers_template_findings(plan, actual) == []
 
 
-def test_kernel_goal_rejects_a_minimum_dimension_below_the_contract():
+def test_kernel_goal_accepts_a_minimum_dimension_below_the_contract_floor():
     contract = kernel_contract(DETERMINANT)
     assert contract is not None
     goal = structured_family_goal(determinant_family()).model_copy(
         update={"min_dimension": 0}
     )
 
-    assert "requested minimum dimension is below the contract" in (
-        applicability_findings(contract, goal)
-    )
+    # The contract cannot generate below its own minimum, so an unspecified or
+    # lower request is narrowed by the floor rather than rejected.
+    assert applicability_findings(contract, goal) == []
 
 
 def test_kernel_goal_rejects_inverted_dimension_bounds():
@@ -152,15 +152,15 @@ def test_general_answer_goal_is_not_covered_by_a_primitive_scope():
     )
 
 
-def test_primitive_goal_is_not_covered_by_a_general_scope():
+def test_primitive_goal_is_covered_by_a_general_capable_scope():
     contract = kernel_contract(ANTIDERIVATIVE)
     assert contract is not None
     scope = contract.scope()
     goal = antiderivative_goal(general=False)
 
-    assert "stored check scope requires a general antiderivative" in (
-        _kernel_scope_findings(contract, scope, goal)
-    )
+    # The problem payload carries the requested form, so a general-capable
+    # contract also covers one-primitive requests.
+    assert _kernel_scope_findings(contract, scope, goal) == []
 
 
 def test_distractor_builder_does_not_consult_the_checker(
