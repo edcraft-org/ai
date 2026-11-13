@@ -748,7 +748,12 @@ def _expr_sign(conditions: tuple[Condition, ...], expr: sympy.Expr) -> int | Non
                     return 1
                 return None
             if exponent.is_Rational and exponent.q % 2 == 0:
-                if base_sign in {-1, 1} or _nonzero_implied(conditions, base):
+                # An even denominator is a principal square (or higher even)
+                # root: it is real and positive only on a strictly positive
+                # base. Nonzero is not enough (sqrt(-2) is imaginary), and a
+                # proven-negative base is not enough either, so only a strict
+                # positive proof may commit to +1.
+                if base_sign == 1:
                     return 1
                 return None
             if base_sign is None:
@@ -984,13 +989,19 @@ def _condition_truth_at(
         return None
     if substituted.has(sympy.nan, sympy.zoo, sympy.oo, -sympy.oo):
         return None
-    relation = {
-        "ne": lambda: sympy.Ne(substituted, 0),
-        "gt": lambda: sympy.Gt(substituted, 0),
-        "ge": lambda: sympy.Ge(substituted, 0),
-        "lt": lambda: sympy.Lt(substituted, 0),
-        "le": lambda: sympy.Le(substituted, 0),
-    }[condition.kind]()
+    try:
+        relation = {
+            "ne": lambda: sympy.Ne(substituted, 0),
+            "gt": lambda: sympy.Gt(substituted, 0),
+            "ge": lambda: sympy.Ge(substituted, 0),
+            "lt": lambda: sympy.Lt(substituted, 0),
+            "le": lambda: sympy.Le(substituted, 0),
+        }[condition.kind]()
+    except TypeError:
+        # The condition is not real at this exact point (e.g. ``gt sqrt(a)`` at
+        # ``a = -1``). That is not a violation of the condition; the point is
+        # simply outside its real domain, so its truth stays unknown.
+        return None
     return _relational_truth(relation)
 
 
