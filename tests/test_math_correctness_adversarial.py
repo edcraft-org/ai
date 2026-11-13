@@ -430,9 +430,7 @@ def test_isolated_facade_preserves_the_in_process_verdict(
         f"facade={facade.outcome}"
     )
     if kind == "preserving" and in_process.outcome == "incorrect":
-        pytest.fail(
-            f"D-facade.{base_id}: preserving case rejected across the boundary"
-        )
+        pytest.fail(f"D-facade.{base_id}: preserving case rejected across the boundary")
     if kind == "breaking" and in_process.outcome == "correct":
         pytest.fail(f"D-facade.{base_id}: breaking case accepted across the boundary")
 

@@ -106,10 +106,13 @@ def _node_terms(expr: Expr, child_terms: list[int]) -> int:
     if operation == "pow":
         base = child_terms[0] if child_terms else 1
         exponent = _literal_integer(expr.args[1]) if len(expr.args) == 2 else None
-        if exponent is None or exponent < 0:
+        if exponent is None:
             # Rational and symbolic exponents do not expand into a polynomial.
             return base
-        return _multinomial_terms(exponent, base)
+        # A negative integer exponent expands to a rational function whose
+        # numerator and denominator carry the same multinomial growth as the
+        # positive power, so bound it by the magnitude of the exponent.
+        return _multinomial_terms(abs(exponent), base)
     # add, sub, div and unary functions all add their children's term counts.
     total = 0
     for child in child_terms:

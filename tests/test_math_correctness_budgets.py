@@ -122,3 +122,19 @@ def test_scalar_defence_refuses_oversized_expanded_candidate():
     with pytest.raises(EngineUnsupported):
         _require_bounded_expansion(widened, "answer expression")
     _require_bounded_expansion(sympy.expand((sympy.Symbol("x") + 1) ** 2), "ok")
+
+
+def test_negative_integer_power_is_bounded_by_its_magnitude():
+    # (a+...+h)^-12 grows like the positive power in numerator and denominator;
+    # it must be refused at validation instead of reaching the worker.
+    request = {
+        "problem": {
+            "operation": "simplify",
+            "symbols": [{"name": name} for name in "abcdefgh"],
+            "expression": _op("pow", _sum(), _num(-12)),
+        },
+        "answer": {"expression": _num(1)},
+    }
+    with pytest.raises(EngineUnsupported):
+        validate_request(CorrectnessRequest.model_validate(request))
+    assert estimated_terms(_op("pow", _sum(), _num(-2))) < MAX_OUTPUT_TERMS
