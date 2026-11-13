@@ -113,6 +113,7 @@ Default tests use scripted providers. Live tests are opt-in; run the OpenAI
 workflow smoke before a PR. See [evaluation](docs/evaluation.md) for commands.
 
 - [Mathematics domain](docs/math-domain.md): supported linear-equation templates, exact checks and unsupported cases.
+- [Mathematics correctness engine](docs/math-correctness-engine.md): additive deterministic checking for concrete answers, sampled template qualification and scope limits.
 - [Reusable check-authoring pilot](docs/reusable-check-authoring-pilot.md): private algebra, calculus, systems and matrix flow, evidence, limits and test commands.
 - [Development](docs/development.md): responsibilities, contracts and extension points.
 - [Evaluation](docs/evaluation.md): reproducible runs and interpretation limits.
