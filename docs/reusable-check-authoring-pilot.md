@@ -38,9 +38,14 @@ this facade. The AI-side flow is:
 4. **Reuse.** A suitable saved check is reused (`reused_check=true`) and no
    check-author call is made. A new template remains unreviewed even when its
    check was reused.
-5. **Approval.** An educator explicitly approves a `ready` template using the
-   current template and check digests. Rejection is separate from check
-   qualification.
+5. **Approval.** An educator approves a `ready` template using the current
+   template and check digests; approval stays unavailable until a check exists
+   and passed. Rejection needs only the current template digest, so a draft whose
+   check failed or was never produced can still be dismissed. A deterministic
+   `failed` or `inconclusive` qualification stores the draft as `rejected` with
+   its findings intact; provider, schema, compile and worker `error` outcomes
+   stay `unreviewed` so they remain retryable. Rejection never publishes or
+   deletes evidence.
 6. **Generation.** Seeded generation requires the matching approval and pinned
    digests. It makes no provider/model calls. The whole batch — bounded sampling,
    key and distractor arithmetic, rendering, independent correctness guards and
@@ -166,6 +171,16 @@ Defaults and bounds:
   enumerating them.
 - Solve family: degree 1 to 2, one coefficient domain per exponent, nonzero
   leading domain, relation fixed by the plan.
+- Dimension goals use an inclusive `min_dimension`/`max_dimension` pair, so an
+  exact size is `min == max` (for example "exactly 3x3"). A contract's own
+  minimum dimension is a floor: a plan that omits the field, or asks for less,
+  is narrowed rather than rejected, and generation still cannot go below it.
+- An antiderivative request marked general needs a general-capable check, but a
+  general-capable check still accepts one-primitive requests; the problem payload
+  carries the requested form.
+- Recipe parsing, scope validation and kernel checks run inside the isolated
+  worker. The host boundary performs only JSON size checks and never parses or
+  evaluates mathematical text.
 - Polynomial text: 200 characters and 120 tokens in the closed parser. Structured
   solve payloads are bounded before parsing.
 
