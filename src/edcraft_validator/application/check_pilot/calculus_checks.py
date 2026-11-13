@@ -1132,6 +1132,23 @@ def _safe_positive_expression() -> st.SearchStrategy[dict[str, Any]]:
     return safe
 
 
+def _mentions_symbol(node: dict[str, Any]) -> bool:
+    """True when an expression tree contains a symbol leaf.
+
+    Constant-only subtrees are kept flat.  A product or power of constants can
+    constant-fold during differentiation into a single rational literal whose
+    numerator or denominator exceeds the validator's bounds, e.g.
+    ``(1/2)**3`` raised to ``4`` becomes ``1/4096``.
+    """
+    pending: list[dict[str, Any]] = [node]
+    while pending:
+        current = pending.pop()
+        if "sym" in current:
+            return True
+        pending.extend(current.get("args", ()))
+    return False
+
+
 def _expression_strategy() -> st.SearchStrategy[dict[str, Any]]:
     x = {"sym": "x"}
     leaves = st.one_of(
@@ -1161,6 +1178,11 @@ def _expression_strategy() -> st.SearchStrategy[dict[str, Any]]:
                 lambda a, b: {"op": "mul", "args": [a, b]},
                 children,
                 children,
+            ).filter(
+                lambda node: (
+                    _mentions_symbol(node["args"][0])
+                    or _mentions_symbol(node["args"][1])
+                )
             ),
             st.builds(
                 lambda a, b: {"op": "div", "args": [a, b]},
@@ -1190,7 +1212,7 @@ def _expression_strategy() -> st.SearchStrategy[dict[str, Any]]:
                 },
                 children,
                 st.integers(min_value=1, max_value=4),
-            ),
+            ).filter(lambda node: _mentions_symbol(node["args"][0])),
         )
 
     return st.recursive(leaves, extend, max_leaves=8)
