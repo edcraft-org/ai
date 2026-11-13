@@ -30,6 +30,8 @@ SOLVE_RENDERER_VERSION: Literal["polynomial-solve-mcq/1"] = "polynomial-solve-mc
 STRUCTURED_RENDERER_VERSION: Literal["structured-mcq/1"] = "structured-mcq/1"
 SCOPE_SCHEMA_VERSION: Literal["check-scope/2"] = "check-scope/2"
 KERNEL_SCOPE_SCHEMA_VERSION: Literal["check-scope/3"] = "check-scope/3"
+ENGINE_SCOPE_SCHEMA_VERSION: Literal["check-scope/4"] = "check-scope/4"
+ENGINE_CHECK_SCHEMA_VERSION: Literal["engine-check/1"] = "engine-check/1"
 STRUCTURED_FAMILY_SCHEMA_VERSION: Literal["structured-family/1"] = "structured-family/1"
 MAX_RECIPE_CASES = 600
 MAX_GENERATION_QUANTITY = 100
@@ -132,6 +134,11 @@ class PilotQuestion(PilotModel):
     answer: str = Field(min_length=1)
     parameters: dict[str, int | str] = Field(default_factory=dict)
     check_ref: CheckRef
+    # Additive agreement evidence for engine-graded batches. Kernel-graded
+    # batches only record which grader decided the item.
+    engine_outcome: str | None = None
+    kernel_verdict: Literal["accepted", "rejected"] | None = None
+    grader: Literal["kernel", "engine"] | None = None
 
     @model_validator(mode="after")
     def require_index_in_choices(self) -> PilotQuestion:
@@ -292,6 +299,70 @@ class KernelContractScope(PilotModel):
         if self.requires_general_antiderivative and self.operation != "antiderivative":
             raise ValueError("only antiderivative scopes can require a general answer")
         return self
+
+
+EngineOperation = Literal[
+    "differentiate",
+    "antiderivative",
+    "definite-integral",
+    "expand",
+    "factor",
+    "complete-square",
+    "solve",
+    "matrix-multiply",
+    "determinant",
+    "inverse",
+    "lu",
+]
+
+
+class EngineContractScope(PilotModel):
+    """Stored check scope for exactly one deterministic-engine contract.
+
+    It carries the same bounds as the corresponding kernel contract so plan and
+    template applicability are unchanged. ``grader`` and
+    ``generator_contract_id`` make the two roles explicit: the engine grades,
+    and the named kernel contract only generates problems.
+    """
+
+    schema_version: Literal["check-scope/4"] = ENGINE_SCOPE_SCHEMA_VERSION
+    contract_id: str = Field(min_length=1, max_length=120)
+    operation: KernelOperation
+    answer_type: KernelAnswerType
+    min_degree: int = Field(ge=0, le=5)
+    max_degree: int = Field(ge=0, le=5)
+    max_abs_coefficient: int = Field(ge=1, le=MAX_BINDING_ABS)
+    min_dimension: int = Field(ge=0, le=MAX_DIMENSION_BOUND)
+    max_dimension: int = Field(ge=0, le=MAX_DIMENSION_BOUND)
+    requires_general_antiderivative: bool = False
+    domain_assumptions: list[str] = Field(default_factory=list, max_length=8)
+    required_policy: list[RequiredPolicy] = Field(min_length=1, max_length=5)
+    grader: Literal["engine"] = "engine"
+    generator_contract_id: str = Field(min_length=1, max_length=120)
+
+    @model_validator(mode="after")
+    def require_ordered_bounds(self) -> EngineContractScope:
+        if self.min_degree > self.max_degree:
+            raise ValueError("min_degree must not exceed max_degree")
+        if self.min_dimension > self.max_dimension:
+            raise ValueError("min_dimension must not exceed max_dimension")
+        if len(set(self.required_policy)) != len(self.required_policy):
+            raise ValueError("scope policies must be unique")
+        if len(set(self.domain_assumptions)) != len(self.domain_assumptions):
+            raise ValueError("domain assumptions must be unique")
+        if self.requires_general_antiderivative and self.operation != "antiderivative":
+            raise ValueError("only antiderivative scopes can require a general answer")
+        return self
+
+
+class EngineCheckDefinition(PilotModel):
+    """Closed, recipe-free definition of one authoritative engine check."""
+
+    schema_version: Literal["engine-check/1"] = ENGINE_CHECK_SCHEMA_VERSION
+    contract_id: str = Field(min_length=1, max_length=120)
+    operation: EngineOperation
+    generator_contract_id: str = Field(min_length=1, max_length=120)
+    grader: Literal["engine"] = "engine"
 
 
 class NumericBinding(PilotModel):
@@ -504,7 +575,9 @@ class PilotTemplateDefinition(PilotModel):
     renderer_version: Literal[
         "polynomial-mcq/1", "polynomial-solve-mcq/1", "structured-mcq/1"
     ] = RENDERER_VERSION
-    scope: PolynomialScope | ContractScope | KernelContractScope = SUPPORTED_SCOPE
+    scope: (
+        PolynomialScope | ContractScope | KernelContractScope | EngineContractScope
+    ) = SUPPORTED_SCOPE
     contract_id: str | None = Field(default=None, max_length=120)
     family: PolynomialFamily | None = None
     solve_family: SolveFamily | None = None
@@ -549,8 +622,8 @@ class PilotTemplateDefinition(PilotModel):
     def _require_structured_payload(self) -> PilotTemplateDefinition:
         if not self.contract_id:
             raise ValueError("version 3 templates require a contract id")
-        if not isinstance(self.scope, KernelContractScope):
-            raise ValueError("version 3 templates require a kernel contract scope")
+        if not isinstance(self.scope, (KernelContractScope, EngineContractScope)):
+            raise ValueError("version 3 templates require a structured contract scope")
         if self.renderer_version != STRUCTURED_RENDERER_VERSION:
             raise ValueError("version 3 templates use the structured renderer")
         if self.scope.contract_id != self.contract_id:
@@ -575,7 +648,16 @@ class PilotTemplateDefinition(PilotModel):
         # cannot generate below its own minimum. This keeps stored plans that
         # omitted ``min_dimension`` readable, with the floor narrowing them.
         if self.structured_family.contract_id != self.contract_id:
-            raise ValueError("structured family contract id must match the template")
+            # Engine checks grade, but the named kernel contract still generates
+            # the problems, so the family names that generator contract.
+            if not (
+                isinstance(self.scope, EngineContractScope)
+                and self.structured_family.contract_id
+                == self.scope.generator_contract_id
+            ):
+                raise ValueError(
+                    "structured family contract id must match the template"
+                )
         return self
 
 
@@ -856,9 +938,19 @@ class TemplateAuthorProposal(_StrictAuthorProposalSchema, PilotModel):
                 if not self.contract_id:
                     raise ValueError("structured templates require a contract id")
                 if self.structured_family.contract_id != self.contract_id:
-                    raise ValueError(
-                        "structured family contract id must match the proposal"
+                    from edcraft_validator.application.check_pilot import (
+                        engine_registry,
                     )
+
+                    engine = engine_registry.engine_contract(self.contract_id)
+                    if (
+                        engine is None
+                        or engine.generator_contract_id
+                        != self.structured_family.contract_id
+                    ):
+                        raise ValueError(
+                            "structured family contract id must match the proposal"
+                        )
         elif not (self.development_needed or "").strip():
             raise ValueError("an unsupported proposal requires development_needed")
         return self
@@ -887,6 +979,8 @@ class RecipeExecutionResult(PilotModel):
 __all__ = [
     "ApprovalStatus",
     "CHECK_SCHEMA_VERSION",
+    "ENGINE_CHECK_SCHEMA_VERSION",
+    "ENGINE_SCOPE_SCHEMA_VERSION",
     "CheckAuthorProposal",
     "CheckPlanProposal",
     "CheckRecipeDefinition",
@@ -895,6 +989,9 @@ __all__ = [
     "CheckSelection",
     "CoefficientDomain",
     "ContractScope",
+    "EngineCheckDefinition",
+    "EngineContractScope",
+    "EngineOperation",
     "FAMILY_SCHEMA_VERSION",
     "GoalRelation",
     "KERNEL_SCOPE_SCHEMA_VERSION",

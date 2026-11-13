@@ -11,17 +11,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, TypeGuard
 
+from edcraft_validator.application.check_pilot.engine_registry import (
+    EngineContractSpec,
+    engine_contract,
+    engine_contract_specs,
+)
 from edcraft_validator.application.check_pilot.kernel_registry import (
     KernelContractSpec,
     kernel_contract,
     kernel_contract_specs,
 )
 from edcraft_validator.application.check_pilot.models import (
+    ENGINE_SCOPE_SCHEMA_VERSION,
     KERNEL_SCOPE_SCHEMA_VERSION,
     RECIPE_OPERATION_SET,
     SOLVE_RECIPE_OPERATION_SET,
     STRUCTURED_RECIPE_OPERATION_SET,
     ContractScope,
+    EngineContractScope,
     GoalRelation,
     KernelContractScope,
     KernelGoal,
@@ -90,8 +97,8 @@ class ContractDescriptor:
         }
 
 
-Contract = ContractDescriptor | KernelContractSpec
-Scope = ContractScope | KernelContractScope | PolynomialScope
+Contract = ContractDescriptor | KernelContractSpec | EngineContractSpec
+Scope = ContractScope | KernelContractScope | EngineContractScope | PolynomialScope
 Goal = StructuredGoal | KernelGoal
 
 
@@ -166,11 +173,16 @@ _CONTRACT_INDEX: dict[str, Contract] = {
     contract.contract_id: contract for contract in _CONTRACTS
 }
 _CONTRACT_INDEX.update({spec.contract_id: spec for spec in kernel_contract_specs()})
+_CONTRACT_INDEX.update({spec.contract_id: spec for spec in engine_contract_specs()})
 
 
 def contract_catalogue() -> list[dict[str, Any]]:
     """Model-facing trusted capability descriptors."""
-    contracts: list[Contract] = [*_CONTRACTS, *kernel_contract_specs()]
+    contracts: list[Contract] = [
+        *_CONTRACTS,
+        *kernel_contract_specs(),
+        *engine_contract_specs(),
+    ]
     return [contract.descriptor() for contract in contracts]
 
 
@@ -186,8 +198,19 @@ def is_kernel_contract(
     return isinstance(contract, KernelContractSpec)
 
 
+def is_engine_contract(
+    contract: Contract | None,
+) -> TypeGuard[EngineContractSpec]:
+    return isinstance(contract, EngineContractSpec)
+
+
 def trusted_contract_scope(scope: Scope) -> Scope:
     """Return the scope only when it is exactly one trusted contract's scope."""
+    if isinstance(scope, EngineContractScope):
+        spec = engine_contract(scope.contract_id)
+        if spec is None or spec.scope() != scope:
+            raise ValueError("recipe scope is not a trusted engine contract scope")
+        return scope
     if isinstance(scope, KernelContractScope):
         spec = kernel_contract(scope.contract_id)
         if spec is None or spec.scope() != scope:
@@ -201,7 +224,7 @@ def trusted_contract_scope(scope: Scope) -> Scope:
         contract = get_contract(scope.contract_id)
     if (
         contract is None
-        or isinstance(contract, KernelContractSpec)
+        or isinstance(contract, (KernelContractSpec, EngineContractSpec))
         or contract.scope() != scope
     ):
         raise ValueError("recipe scope is not a trusted contract scope")
@@ -210,6 +233,15 @@ def trusted_contract_scope(scope: Scope) -> Scope:
 
 def contract_for_scope(scope: dict[str, Any]) -> Contract | None:
     """Resolve a stored scope, including legacy v1 differentiation scopes."""
+    if scope.get("schema_version") == ENGINE_SCOPE_SCHEMA_VERSION:
+        try:
+            engine_scope = EngineContractScope.model_validate(scope)
+        except ValueError:
+            return None
+        spec = engine_contract(engine_scope.contract_id)
+        if spec is None or spec.scope() != engine_scope:
+            return None
+        return spec
     if scope.get("schema_version") == KERNEL_SCOPE_SCHEMA_VERSION:
         try:
             kernel_scope = KernelContractScope.model_validate(scope)
@@ -240,6 +272,8 @@ def parse_scope(scope: dict[str, Any]) -> Scope:
     """Parse one stored or proposed scope into its closed model."""
     if not isinstance(scope, dict):
         raise ValueError("stored check scope must be an object")
+    if scope.get("schema_version") == ENGINE_SCOPE_SCHEMA_VERSION:
+        return EngineContractScope.model_validate(scope)
     if scope.get("schema_version") == KERNEL_SCOPE_SCHEMA_VERSION:
         return KernelContractScope.model_validate(scope)
     if "contract_id" in scope:
@@ -288,19 +322,69 @@ def _kernel_scope_findings(
     return findings
 
 
+def _engine_scope_findings(
+    contract: EngineContractSpec,
+    scope: EngineContractScope,
+    goal: KernelGoal,
+) -> list[str]:
+    findings: list[str] = []
+    if scope.contract_id != contract.contract_id:
+        findings.append("stored check scope names a different contract")
+    if scope.generator_contract_id != contract.generator_contract_id:
+        findings.append("stored check scope names a different generator contract")
+    if scope.grader != "engine":
+        findings.append("stored check scope is not engine-graded")
+    if scope.operation != contract.generator.operation:
+        findings.append("stored check operation does not cover the requested task")
+    if scope.answer_type != contract.generator.answer_type:
+        findings.append("stored check answer type does not cover the request")
+    if goal.min_degree < scope.min_degree:
+        findings.append("requested minimum degree is outside the stored check scope")
+    if goal.max_degree > scope.max_degree:
+        findings.append("requested maximum degree is outside the stored check scope")
+    if goal.max_abs_coefficient > scope.max_abs_coefficient:
+        findings.append("requested coefficient bound is outside the stored check scope")
+    if goal.max_dimension > scope.max_dimension:
+        findings.append("requested dimension is outside the stored check scope")
+    if (
+        goal.requires_general_antiderivative
+        and not scope.requires_general_antiderivative
+    ):
+        findings.append(
+            "requested general antiderivative is outside the stored check scope"
+        )
+    missing = set(contract.required_policy) - set(scope.required_policy)
+    if missing:
+        findings.append("stored check policy omits a mandatory contract policy")
+    extra = set(scope.required_policy) - set(contract.required_policy)
+    if extra:
+        findings.append("stored check policy is outside the trusted contract")
+    if set(goal.domain_assumptions) != set(scope.domain_assumptions):
+        findings.append("requested domain assumptions do not match the stored scope")
+    return findings
+
+
 def _scope_applicability_findings(
     contract: Contract,
     scope: Scope,
     goal: Goal,
 ) -> list[str]:
     findings: list[str] = []
+    if isinstance(contract, EngineContractSpec):
+        if not isinstance(scope, EngineContractScope) or not isinstance(
+            goal, KernelGoal
+        ):
+            return ["engine contracts require an engine scope and kernel goal"]
+        return _engine_scope_findings(contract, scope, goal)
     if isinstance(contract, KernelContractSpec):
         if not isinstance(scope, KernelContractScope) or not isinstance(
             goal, KernelGoal
         ):
             return ["kernel contracts require a kernel scope and kernel goal"]
         return _kernel_scope_findings(contract, scope, goal)
-    if isinstance(goal, KernelGoal) or isinstance(scope, KernelContractScope):
+    if isinstance(goal, KernelGoal) or isinstance(
+        scope, (KernelContractScope, EngineContractScope)
+    ):
         return ["the stored scope does not belong to this kernel contract"]
     if isinstance(scope, ContractScope):
         if scope.contract_id != contract.contract_id:
@@ -367,10 +451,40 @@ def _kernel_goal_findings(contract: KernelContractSpec, goal: KernelGoal) -> lis
     return findings
 
 
+def _engine_goal_findings(contract: EngineContractSpec, goal: KernelGoal) -> list[str]:
+    findings: list[str] = []
+    generator = contract.generator
+    if goal.operation != generator.operation:
+        findings.append(
+            f"contract {contract.contract_id} requires operation {generator.operation}"
+        )
+    if goal.answer_type != generator.answer_type:
+        findings.append("requested answer type is outside the contract")
+    if goal.min_degree < generator.min_degree:
+        findings.append("requested minimum degree is outside the contract")
+    if goal.max_degree > generator.max_degree:
+        findings.append("requested maximum degree is outside the contract")
+    if not 1 <= goal.max_abs_coefficient <= generator.max_abs_coefficient:
+        findings.append("requested coefficient bound is outside the contract")
+    if goal.min_dimension > goal.max_dimension:
+        findings.append("requested minimum dimension exceeds its maximum")
+    if goal.max_dimension > generator.max_dimension:
+        findings.append("requested dimension is outside the contract")
+    if goal.requires_general_antiderivative and generator.operation != "antiderivative":
+        findings.append("only antiderivative plans can require a general answer")
+    if set(goal.domain_assumptions) != set(generator.domain_assumptions):
+        findings.append("requested domain assumptions do not match the contract")
+    return findings
+
+
 def applicability_findings(contract: Contract | None, goal: Goal) -> list[str]:
     """Validate a model-proposed goal against the trusted contract alone."""
     if contract is None:
         return ["the proposed check contract is not trusted"]
+    if isinstance(contract, EngineContractSpec):
+        if not isinstance(goal, KernelGoal):
+            return ["engine contracts require a kernel goal"]
+        return _engine_goal_findings(contract, goal)
     if isinstance(contract, KernelContractSpec):
         if not isinstance(goal, KernelGoal):
             return ["kernel contracts require a kernel goal"]
@@ -416,13 +530,7 @@ def scope_applicability_findings(scope: dict[str, Any], goal: Goal) -> list[str]
     if findings:
         return findings
     try:
-        parsed: Scope
-        if scope.get("schema_version") == KERNEL_SCOPE_SCHEMA_VERSION:
-            parsed = parse_scope(scope)
-        elif "contract_id" in scope:
-            parsed = ContractScope.model_validate(scope)
-        else:
-            parsed = PolynomialScope.model_validate(scope)
+        parsed = parse_scope(scope)
     except ValueError:
         return ["stored check scope is invalid"]
     return _scope_applicability_findings(contract, parsed, goal)
@@ -559,6 +667,7 @@ __all__ = [
     "contract_for_scope",
     "contract_id_for_scope",
     "get_contract",
+    "is_engine_contract",
     "is_kernel_contract",
     "parse_scope",
     "plan_covers_template_findings",
