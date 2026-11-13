@@ -15,6 +15,10 @@ uv run pytest -q tests/test_math_correctness_corpus.py
 
 The companion sweep is `uv run pytest -q tests/test_math_correctness_*.py`.
 
+The same engine is wired into the reusable check authoring pilot as an
+authoritative grader for the eleven bounded kernel-generated families; see
+[`reusable-check-authoring-pilot.md`](reusable-check-authoring-pilot.md#engine-graded-checks).
+
 ## Corpus by contract
 
 | Contract | Cases | Accepted when | Correct-by-design refusals | Known gaps |

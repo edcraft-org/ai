@@ -61,6 +61,36 @@ The HTTP contract is unchanged: `POST /templates`, `GET /templates`,
 `POST /templates/{template_id}/generate`. Provider selection remains a backend
 concern; the AI package accepts a resolved `ModelProvider`.
 
+## Engine-graded checks
+
+The catalogue also advertises eleven `engine.<kernel contract>/1` entries, one
+for each bounded kernel contract above. They are additive: `check-scope/3` and
+every existing kernel wire shape are unchanged, while engine checks use
+`check-scope/4` with `grader: "engine"` and the kernel contract id that still
+generates the problems.
+
+Planning can select an engine contract like any other trusted contract. Because
+the engine check definition is developer-owned, a missing engine check is not
+authored by a model: the application builds the closed `engine-check/1`
+definition and qualifies it in the isolated worker against independently derived
+kernel expected answers. Qualification passes only when every sampled expected
+answer is engine-`correct`; any engine-`incorrect` fails, and any
+`unknown`/`unsupported`/`timeout`/`error` refusal is inconclusive. Failed and
+inconclusive evidence cannot be approved.
+
+The engine verdict is authoritative. `correct` passes, `incorrect` fails, and
+every honest refusal fails closed rather than silently accepting a candidate.
+An adapter converts kernel problem/answer payloads into the engine's closed IR;
+a genuine IR gap is reported as `unsupported` with the contract id and field.
+
+Generation is unchanged: the same bounded kernel family, seed, guards and
+distractors produce the questions. Each generated item is graded by the engine,
+and the corresponding kernel `check_answer` also runs in the same worker purely
+as evidence (`engine_outcome`, `kernel_verdict`, `grader` on `PilotQuestion`).
+Kernel-graded batches keep `grader: "kernel"` and carry no engine evidence. An
+engine refusal on a correct answer or any distractor drops that item and reports
+a shortfall; the batch never claims an unconfirmed option.
+
 ## Trusted contracts
 
 | Contract id | Task | Bounds |
