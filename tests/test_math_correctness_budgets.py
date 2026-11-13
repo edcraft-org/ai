@@ -16,6 +16,7 @@ from edcraft_validator.domains.math.engine.scalar import _require_bounded_expans
 from edcraft_validator.domains.math.engine.validation import (
     MAX_OUTPUT_TERMS,
     estimated_terms,
+    normalise_expression,
     validate_request,
 )
 from edcraft_validator.domains.math.ir.schema import Expr
@@ -84,7 +85,10 @@ def test_estimator_matches_the_documented_rules():
     assert estimated_terms(_op("pow", _sum(), _num(12))) > MAX_OUTPUT_TERMS
     assert estimated_terms(_op("pow", _sym("a"), _num(12))) == 1
     assert estimated_terms(_op("pow", _sym("a"), _num(0))) == 1
-    assert estimated_terms(_op("div", _sum(), _op("add", _sym("a"), _sym("b")))) == 10
+    assert estimated_terms(_op("pow", _sym("a"), _num(1))) == 1
+    # Division is multiplicative: an 8-term numerator over a 2-term denominator
+    # expands to 8 * 2 denominator-aware term products.
+    assert estimated_terms(_op("div", _sum(), _op("add", _sym("a"), _sym("b")))) == 16
     assert estimated_terms(_op("sin", _sum())) == 8
     # C(3 + 4 - 1, 4 - 1) = C(6, 3) = 20
     quartic = _op("pow", _op("add", *[_sym(name) for name in "abcd"]), _num(3))
@@ -138,3 +142,134 @@ def test_negative_integer_power_is_bounded_by_its_magnitude():
     with pytest.raises(EngineUnsupported):
         validate_request(CorrectnessRequest.model_validate(request))
     assert estimated_terms(_op("pow", _sum(), _num(-2))) < MAX_OUTPUT_TERMS
+
+
+def test_nested_division_is_rejected_before_the_worker_starts():
+    one = _num(1)
+    nested = _op(
+        "div",
+        _op(
+            "div",
+            _op("pow", _op("add", _sym("x"), one), _num(12)),
+            _op("pow", _op("add", _sym("y"), one), _num(12)),
+        ),
+        _op("pow", _op("add", _sym("z"), one), _num(12)),
+    )
+    assert estimated_terms(nested) == 2197
+
+    request = CorrectnessRequest.model_validate(
+        {
+            "problem": {
+                "operation": "simplify",
+                "symbols": [{"name": name} for name in "xyz"],
+                "expression": nested,
+            },
+            "answer": {"expression": _num(1)},
+        }
+    )
+    with pytest.raises(EngineUnsupported, match="rational expression work"):
+        validate_request(request)
+
+
+def test_cancelling_rational_expansion_is_accepted():
+    one = _num(1)
+    binomial = _op("add", _sym("x"), one)
+    cancelling = _op(
+        "pow",
+        _op(
+            "div",
+            _op("pow", binomial, _num(12)),
+            _op("pow", _op("add", _sym("x"), one), _num(12)),
+        ),
+        _num(4),
+    )
+    assert estimated_terms(cancelling) == 1
+
+    moderate = _op(
+        "div",
+        _op("pow", _op("add", _sym("x"), one), _num(2)),
+        _op("pow", _op("sub", _sym("x"), one), _num(2)),
+    )
+    assert estimated_terms(moderate) == 9
+
+    request = CorrectnessRequest.model_validate(
+        {
+            "problem": {
+                "operation": "simplify",
+                "symbols": [{"name": name} for name in "xyz"],
+                "expression": cancelling,
+            },
+            "answer": {"expression": _num(1)},
+        }
+    )
+    validate_request(request)
+    validate_request(
+        CorrectnessRequest.model_validate(
+            {
+                "problem": {
+                    "operation": "simplify",
+                    "symbols": [{"name": "x"}, {"name": "y"}],
+                    "expression": moderate,
+                },
+                "answer": {"expression": _num(1)},
+            }
+        )
+    )
+
+
+def test_cancelling_sum_expansion_is_accepted():
+    zero = _num(0)
+    symbols = [_sym(name) for name in "abcdefg"]
+    cancelling = _op(
+        "pow",
+        _op("add", *symbols, _op("mul", _num(-1), _sym("a")), zero),
+        _num(12),
+    )
+    # (a+...+g) - a + 0 collapses to six symbols before multinomial counting:
+    # C(12 + 6 - 1, 6 - 1) = C(17, 5) = 6188.
+    assert estimated_terms(cancelling) == 6188
+
+    request = CorrectnessRequest.model_validate(
+        {
+            "problem": {
+                "operation": "expand",
+                "symbols": [{"name": name} for name in "abcdefg"],
+                "expression": cancelling,
+            },
+            "answer": {"expression": cancelling},
+        }
+    )
+    validate_request(request)
+
+
+def test_estimator_is_idempotent_under_normalisation():
+    one = _num(1)
+    cases = [
+        _op("div", _op("pow", _op("add", _sym("x"), one), _num(2)), _sym("x")),
+        _op(
+            "add",
+            _sym("a"),
+            _op("sub", _sym("b"), _sym("a")),
+            _num(0),
+            _op("mul", _num(1), _sym("c")),
+        ),
+        _op("pow", _op("pow", _op("add", _sym("x"), _sym("y")), _num(1)), _num(0)),
+    ]
+    for case in cases:
+        once = normalise_expression(case)
+        assert normalise_expression(once) == once
+        assert estimated_terms(once) == estimated_terms(case)
+
+
+def test_estimator_stays_fast_on_wide_and_deep_adversarial_trees():
+    wide = _op("add", *[_sym("a") for _ in range(900)])
+    started = time.perf_counter()
+    assert estimated_terms(wide) == 900
+    assert time.perf_counter() - started < 0.25
+
+    nested: Expr = _sym("a")
+    for _ in range(500):
+        nested = _op("sub", nested, _sym("b"))
+    started = time.perf_counter()
+    assert estimated_terms(nested) == 501
+    assert time.perf_counter() - started < 0.25
