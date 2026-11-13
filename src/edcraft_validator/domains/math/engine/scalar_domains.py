@@ -8,6 +8,7 @@ components, and uses only exact rational witnesses to *reject* an answer.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import combinations
 from random import Random
 
 import sympy
@@ -300,6 +301,22 @@ def condition_implied(
     if target.kind in {"lt", "le"} and sign == 1:
         return False
 
+    # ``_expr_sign`` only commits to a single sign. Non-strict guards such as
+    # ``ge``/``le`` describe a *set* of possible signs, and products of such
+    # quantities (``sqrt(x)*sqrt(y)``) are nonnegative without being positive.
+    category = _sign_category(source_conditions, target.expr)
+    if category is not None:
+        if target.kind == "gt" and category == frozenset({1}):
+            return True
+        if target.kind == "ge" and category <= frozenset({0, 1}):
+            return True
+        if target.kind == "lt" and category == frozenset({-1}):
+            return True
+        if target.kind == "le" and category <= frozenset({-1, 0}):
+            return True
+        if target.kind == "ne" and 0 not in category:
+            return True
+
     if target.kind == "ne" and _nonzero_implied(source_conditions, target.expr):
         return True
 
@@ -331,6 +348,20 @@ def provably_zero(expr: sympy.Expr, domain: Domain | None = None) -> bool:
         except (TypeError, ValueError):
             posified = expr
         if _simple_zero(posified):
+            return True
+    if domain is not None and _symbols_provably_nonnegative(
+        expr.free_symbols, domain.conditions
+    ):
+        # ``posify`` proves the identity on the open positive orthant. The
+        # remaining boundary points (where a nonnegative symbol is zero) are
+        # checked exactly, which covers the whole closed domain.
+        try:
+            posified, _ = sympy.posify(expr)
+        except (TypeError, ValueError):
+            posified = expr
+        if _simple_zero(posified) and _zero_on_nonnegative_boundary(
+            expr, domain.conditions
+        ):
             return True
     if domain is not None and _log_arguments_positive(expr, domain.conditions):
         try:
@@ -588,6 +619,99 @@ def _assumption_truth(condition: Condition) -> bool | None:
     return None
 
 
+def _sign_category(
+    conditions: tuple[Condition, ...], expr: sympy.Expr
+) -> frozenset[int] | None:
+    """Return every sign an expression can take on the source domain.
+
+    ``_expr_sign`` commits to one sign; this helper carries non-strict facts
+    such as "nonnegative". Products and powers of guarded quantities can then
+    be classified exactly without sampling.
+    """
+    if expr.is_zero is True:
+        return frozenset({0})
+    if expr.is_positive is True:
+        return frozenset({1})
+    if expr.is_negative is True:
+        return frozenset({-1})
+    if expr.is_nonnegative is True:
+        return frozenset({0, 1})
+    if expr.is_nonpositive is True:
+        return frozenset({-1, 0})
+    if expr.is_nonzero is True:
+        return frozenset({-1, 1})
+    for condition in conditions:
+        if not _same_expr(condition.expr, expr):
+            continue
+        if condition.kind == "gt":
+            return frozenset({1})
+        if condition.kind == "ge":
+            return frozenset({0, 1})
+        if condition.kind == "lt":
+            return frozenset({-1})
+        if condition.kind == "le":
+            return frozenset({-1, 0})
+        if condition.kind == "ne":
+            return frozenset({-1, 1})
+    if isinstance(expr, sympy.Mul):
+        categories = [_sign_category(conditions, argument) for argument in expr.args]
+        if any(category is None for category in categories):
+            return None
+        result = frozenset({1})
+        for category in categories:
+            assert category is not None
+            result = frozenset(left * right for left in result for right in category)
+        return result
+    if isinstance(expr, sympy.Add):
+        categories = [_sign_category(conditions, argument) for argument in expr.args]
+        if any(category is None for category in categories):
+            return None
+        if all(category == frozenset({1}) for category in categories):
+            return frozenset({1})
+        if all(category == frozenset({-1}) for category in categories):
+            return frozenset({-1})
+        if all(category <= frozenset({0, 1}) for category in categories):
+            return frozenset({0, 1})
+        if all(category <= frozenset({-1, 0}) for category in categories):
+            return frozenset({-1, 0})
+        return None
+    if isinstance(expr, sympy.Pow):
+        base, exponent = expr.args
+        base_category = _sign_category(conditions, base)
+        if base_category is None:
+            return None
+        if exponent.is_zero is True:
+            return frozenset({1})
+        if exponent.is_Integer:
+            if exponent % 2 == 0:
+                if base_category == frozenset({0}):
+                    return frozenset({0})
+                if 0 not in base_category:
+                    return frozenset({1})
+                return frozenset({0, 1})
+            return base_category
+        if exponent.is_Rational and exponent.q % 2 != 0 and exponent > 0:
+            if base_category == frozenset({1}):
+                return frozenset({1})
+            if base_category <= frozenset({0, 1}):
+                return frozenset({0, 1})
+        return None
+    if isinstance(expr, sympy.Abs):
+        argument_category = _sign_category(conditions, expr.args[0])
+        if argument_category is None:
+            return None
+        if argument_category == frozenset({0}):
+            return frozenset({0})
+        if 0 not in argument_category:
+            return frozenset({1})
+        return frozenset({0, 1})
+    if isinstance(expr, sympy.exp):
+        return frozenset({1})
+    if isinstance(expr, sympy.sign):
+        return frozenset({-1, 0, 1})
+    return None
+
+
 def _expr_sign(conditions: tuple[Condition, ...], expr: sympy.Expr) -> int | None:
     if expr.is_zero is True:
         return 0
@@ -659,6 +783,44 @@ def _symbols_provably_positive(
     symbols: set[sympy.Symbol], conditions: tuple[Condition, ...]
 ) -> bool:
     return all(_expr_sign(conditions, symbol) == 1 for symbol in symbols)
+
+
+def _symbols_provably_nonnegative(
+    symbols: set[sympy.Symbol], conditions: tuple[Condition, ...]
+) -> bool:
+    for symbol in symbols:
+        category = _sign_category(conditions, symbol)
+        if category is None or not category <= frozenset({0, 1}):
+            return False
+    return True
+
+
+def _zero_on_nonnegative_boundary(
+    expr: sympy.Expr, conditions: tuple[Condition, ...]
+) -> bool:
+    zeroable = sorted(
+        (
+            symbol
+            for symbol in expr.free_symbols
+            if (category := _sign_category(conditions, symbol)) is not None
+            and 0 in category
+        ),
+        key=lambda symbol: symbol.name,
+    )
+    if len(zeroable) > 6:
+        return False
+    for size in range(1, len(zeroable) + 1):
+        for subset in combinations(zeroable, size):
+            point = {symbol: sympy.S.Zero for symbol in subset}
+            try:
+                restricted = sympy.sympify(expr).subs(point)
+            except (TypeError, ValueError):
+                return False
+            if restricted.has(sympy.nan, sympy.zoo, sympy.oo, -sympy.oo):
+                return False
+            if not _simple_zero(restricted):
+                return False
+    return True
 
 
 def _log_arguments_positive(
