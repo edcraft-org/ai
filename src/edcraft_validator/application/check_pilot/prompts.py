@@ -8,10 +8,10 @@ from edcraft_validator.application.check_pilot.contracts import (
     Contract,
     Goal,
     contract_catalogue,
+    is_engine_contract,
     is_kernel_contract,
 )
 from edcraft_validator.application.check_pilot.kernel_registry import (
-    KernelContractSpec,
     kernel_boundary_problems,
 )
 from edcraft_validator.application.check_pilot.models import (
@@ -225,14 +225,14 @@ def _kernel_goal_example() -> str:
     return _json(goal.model_dump(mode="json"))
 
 
-def _kernel_family_example(contract: KernelContractSpec) -> str:
-    for problem in kernel_boundary_problems(contract.contract_id):
+def _kernel_family_example(contract_id: str) -> str:
+    for problem in kernel_boundary_problems(contract_id):
         paths = numeric_leaf_paths(problem)
         for path in paths:
             values = [-2, -1, 1, 2]
             try:
                 family = StructuredProblemFamily(
-                    contract_id=contract.contract_id,
+                    contract_id=contract_id,
                     problem=problem,
                     bindings=[NumericBinding(path=path, values=values)],
                     num_distractors=3,
@@ -245,8 +245,8 @@ def _kernel_family_example(contract: KernelContractSpec) -> str:
                 continue
             return _json(family.model_dump(mode="json"))
     fallback = StructuredProblemFamily(
-        contract_id=contract.contract_id,
-        problem=kernel_boundary_problems(contract.contract_id)[0],
+        contract_id=contract_id,
+        problem=kernel_boundary_problems(contract_id)[0],
         bindings=[],
         num_distractors=3,
     )
@@ -254,22 +254,51 @@ def _kernel_family_example(contract: KernelContractSpec) -> str:
 
 
 def _output_rule(contract: Contract) -> str:
-    if is_kernel_contract(contract):
+    if is_kernel_contract(contract) or is_engine_contract(contract):
         return _KERNEL_OUTPUT_RULE
     return _LEGACY_OUTPUT_RULES.get(contract.operation, _LEGACY_OUTPUT_RULES["solve"])
 
 
+def _structured_family_rule(
+    *,
+    contract_id: str,
+    generator_contract_id: str,
+    engine: bool,
+) -> str:
+    rule = (
+        f"For contract {contract_id}, return `structured_family` and no `family` "
+        "or `solve_family`. Its `contract_id` must be "
+        f"`{generator_contract_id}`. Its `problem` must be exactly one closed "
+        "problem variant advertised in the response schema, and its `bindings` "
+        "name numeric parameter domains in that problem. The concrete problem "
+        "must stay within the goal's inclusive `min_dimension`/`max_dimension` "
+        "bounds; an exact size such as 3x3 means both bounds are 3."
+    )
+    if engine:
+        rule += (
+            " The deterministic engine grades this family authoritatively; the "
+            f"kernel contract `{generator_contract_id}` only generates the "
+            "problems and never decides a candidate."
+        )
+    return (
+        rule
+        + " A valid example for this contract is:\n"
+        + _kernel_family_example(generator_contract_id)
+    )
+
+
 def _family_rule(contract: Contract) -> str:
+    if is_engine_contract(contract):
+        return _structured_family_rule(
+            contract_id=contract.contract_id,
+            generator_contract_id=contract.generator_contract_id,
+            engine=True,
+        )
     if is_kernel_contract(contract):
-        return (
-            "For a kernel contract, return `structured_family` and no `family` "
-            "or `solve_family`. Its `problem` must be exactly one closed problem "
-            "variant advertised in the response schema, and its `bindings` name "
-            "numeric parameter domains in that problem. The concrete problem must "
-            "stay within the goal's inclusive `min_dimension`/`max_dimension` "
-            "bounds; an exact size such as 3x3 means both bounds are 3. A valid "
-            "example for this contract is:\n"
-            f"{_kernel_family_example(contract)}"
+        return _structured_family_rule(
+            contract_id=contract.contract_id,
+            generator_contract_id=contract.contract_id,
+            engine=False,
         )
     if contract.operation == "differentiate":
         return (

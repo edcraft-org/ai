@@ -23,6 +23,9 @@ from edcraft_validator.application.check_pilot.contracts import (
     scope_applicability_findings,
     template_goal,
 )
+from edcraft_validator.application.check_pilot.engine_registry import (
+    EngineContractSpec,
+)
 from edcraft_validator.application.check_pilot.errors import PilotError
 from edcraft_validator.application.check_pilot.kernel_registry import (
     KernelContractSpec,
@@ -41,6 +44,7 @@ from edcraft_validator.application.check_pilot.models import (
     CheckRecord,
     CheckRef,
     CheckSelection,
+    EngineCheckDefinition,
     KernelGoal,
     PilotQualificationSettings,
     PilotTemplateDefinition,
@@ -66,6 +70,8 @@ from edcraft_validator.application.check_pilot.prompts import (
 )
 from edcraft_validator.application.check_pilot.qualification import (
     qualification_seed,
+    qualify_engine,
+    qualify_engine_template,
     qualify_recipe,
     qualify_structured_template,
 )
@@ -365,6 +371,101 @@ def _plan_with_repairs(
     raise AssertionError("bounded plan repair loop must return")
 
 
+def _make_engine_check(
+    contract: EngineContractSpec,
+    *,
+    prompt: str,
+    seed: int,
+    qualification: Qualification,
+) -> CheckRecord:
+    definition = contract.definition()
+    scope = contract.scope().model_dump(mode="json")
+    definition_payload = definition.model_dump(mode="json")
+    digest = check_content_sha256(
+        title=contract.title,
+        description=contract.summary,
+        scope=scope,
+        definition=definition_payload,
+    )
+    return CheckRecord(
+        check_ref=CheckRef(
+            check_id=f"chk_{digest[:24]}",
+            version="1",
+            sha256=digest,
+        ),
+        title=contract.title,
+        description=contract.summary,
+        scope=scope,
+        definition=definition_payload,
+        qualification=qualification,
+        provenance={
+            "role": "engine-grader",
+            "contract_id": contract.contract_id,
+            "generator_contract_id": contract.generator_contract_id,
+            "engine_check": definition.schema_version,
+            "request_sha256": _request_sha256(prompt),
+            "qualification_seed": seed,
+        },
+        created_at=_now(),
+    )
+
+
+def _author_engine_check(
+    store: PilotStore,
+    owner_id: str,
+    *,
+    prompt: str,
+    settings: PilotQualificationSettings,
+    contract: EngineContractSpec,
+) -> CheckAuthoringOutcome:
+    """Build the fixed engine check; no model-authored recipe is involved."""
+    seed = qualification_seed(contract.contract_id, "engine-check/1")
+    qualification = qualify_engine(
+        contract.contract_id,
+        seed=seed,
+        settings=settings,
+    )
+    if qualification.status == "passed":
+        check = _make_engine_check(
+            contract,
+            prompt=prompt,
+            seed=seed,
+            qualification=qualification,
+        )
+        try:
+            store.save_check(owner_id, check)
+        except PilotError:
+            return CheckAuthoringOutcome(
+                check=None,
+                qualification=qualification,
+                status="error",
+                findings=[_SAFE_STORAGE_ERROR],
+            )
+        return CheckAuthoringOutcome(
+            check=check,
+            qualification=qualification,
+            status="ready",
+            findings=[],
+        )
+    findings = [
+        f"check qualification {qualification.status}",
+        *_public_check_findings(qualification),
+    ]
+    if qualification.status == "error":
+        return CheckAuthoringOutcome(
+            check=None,
+            qualification=qualification,
+            status="error",
+            findings=[_SAFE_WORKER_ERROR, *findings],
+        )
+    return CheckAuthoringOutcome(
+        check=None,
+        qualification=qualification,
+        status="needs_review",
+        findings=findings,
+    )
+
+
 def author_check(
     store: PilotStore,
     owner_id: str,
@@ -375,6 +476,14 @@ def author_check(
     contract: Contract,
     goal: Goal,
 ) -> CheckAuthoringOutcome:
+    if isinstance(contract, EngineContractSpec):
+        return _author_engine_check(
+            store,
+            owner_id,
+            prompt=prompt,
+            settings=settings,
+            contract=contract,
+        )
     feedback: dict[str, Any] | None = None
     last_qualification: Qualification | None = None
     scope = contract.scope()
@@ -613,7 +722,40 @@ def _template_definition_from_proposal(
 ) -> tuple[PilotTemplateDefinition | None, list[str]]:
     if proposal.contract_id != contract.contract_id:
         return None, ["the template proposal must preserve the selected contract id"]
-    if isinstance(contract, KernelContractSpec):
+    if isinstance(contract, EngineContractSpec):
+        if not isinstance(goal, KernelGoal):
+            return None, ["an engine contract requires a kernel plan goal"]
+        if (
+            proposal.structured_family is None
+            or proposal.family is not None
+            or proposal.solve_family is not None
+        ):
+            return None, [
+                "an engine contract requires exactly one structured problem family"
+            ]
+        if proposal.structured_family.contract_id != contract.generator_contract_id:
+            return None, [
+                "the engine template family must name the generator contract "
+                f"{contract.generator_contract_id}"
+            ]
+        try:
+            structured_family = StructuredProblemFamily.model_validate(
+                {
+                    **proposal.structured_family.model_dump(mode="json"),
+                    "num_distractors": num_distractors,
+                }
+            )
+        except ValidationError as exc:
+            return None, _validation_findings(exc)
+        definition = PilotTemplateDefinition(
+            schema_version=TEMPLATE_SCHEMA_VERSION_V3,
+            renderer_version=STRUCTURED_RENDERER_VERSION,
+            scope=contract.scope(),
+            contract_id=contract.contract_id,
+            structured_family=structured_family,
+            goal=goal,
+        )
+    elif isinstance(contract, KernelContractSpec):
         if not isinstance(goal, KernelGoal):
             return None, ["a kernel contract requires a kernel plan goal"]
         if (
@@ -898,36 +1040,67 @@ def author_template_flow(
 
     template_digest = template_definition_sha256(definition)
     seed = qualification_seed(template_digest, check.check_ref.sha256)
-    try:
-        recipe = CheckRecipeDefinition.model_validate(check.definition)
-    except ValidationError:
-        record = _record_failure(
-            prompt=prompt,
-            status="error",
-            findings=[_SAFE_STORAGE_ERROR],
-            check=check,
-            check_qualification=check_qualification,
-            provenance=_template_provenance(
-                provider,
+    if isinstance(contract, EngineContractSpec):
+        try:
+            engine_definition = EngineCheckDefinition.model_validate(check.definition)
+        except ValidationError:
+            record = _record_failure(
                 prompt=prompt,
-                template_digest=template_digest,
-                check_sha256=check.check_ref.sha256,
-                seed=seed,
-                contract=contract,
-                source=selection.source,
-            ),
-            reused_check=reused_check,
-            scope=definition.scope.model_dump(mode="json", exclude_none=True),
-            selection=selection,
+                status="error",
+                findings=[_SAFE_STORAGE_ERROR],
+                check=check,
+                check_qualification=check_qualification,
+                provenance=_template_provenance(
+                    provider,
+                    prompt=prompt,
+                    template_digest=template_digest,
+                    check_sha256=check.check_ref.sha256,
+                    seed=seed,
+                    contract=contract,
+                    source=selection.source,
+                ),
+                reused_check=reused_check,
+                scope=definition.scope.model_dump(mode="json", exclude_none=True),
+                selection=selection,
+            )
+            return store.save_template(owner_id, record)
+        qualification = qualify_engine_template(
+            engine_definition,
+            definition,
+            seed=seed,
+            settings=settings,
         )
-        return store.save_template(owner_id, record)
+    else:
+        try:
+            recipe = CheckRecipeDefinition.model_validate(check.definition)
+        except ValidationError:
+            record = _record_failure(
+                prompt=prompt,
+                status="error",
+                findings=[_SAFE_STORAGE_ERROR],
+                check=check,
+                check_qualification=check_qualification,
+                provenance=_template_provenance(
+                    provider,
+                    prompt=prompt,
+                    template_digest=template_digest,
+                    check_sha256=check.check_ref.sha256,
+                    seed=seed,
+                    contract=contract,
+                    source=selection.source,
+                ),
+                reused_check=reused_check,
+                scope=definition.scope.model_dump(mode="json", exclude_none=True),
+                selection=selection,
+            )
+            return store.save_template(owner_id, record)
 
-    qualification = qualify_structured_template(
-        recipe,
-        definition,
-        seed=seed,
-        settings=settings,
-    )
+        qualification = qualify_structured_template(
+            recipe,
+            definition,
+            seed=seed,
+            settings=settings,
+        )
     if qualification.status == "passed":
         status: TemplateStatus = "ready"
         status_findings: list[str] = []
