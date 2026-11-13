@@ -1,6 +1,6 @@
 # Math correctness coverage
 
-`tests/test_math_correctness_corpus.py` is a golden corpus of 178 complete
+`tests/test_math_correctness_corpus.py` is a golden corpus of 179 complete
 requests for the deterministic mathematics engine. Each case names one contract,
 supplies a problem and a candidate answer, and asserts one exact outcome. The
 corpus mixes accepted answers, definite mistakes, and correct-by-design refusals:
@@ -23,7 +23,7 @@ The companion sweep is `uv run pytest -q tests/test_math_correctness_*.py`.
 | `complete-square` | 11 | Algebraically equivalent to the source on its domain; no vertex form is required. | Wrong constants or scales are `incorrect`. | Form, presentation and step validity are not assessed. |
 | `definite-integral` | 13 | The exact value equals the candidate; reversed bounds negate and equal bounds give zero. | Symbolic endpoints are `unsupported`. Interior poles and endpoint singularities (improper integrals) are `unknown`. | Some convergent improper integrals remain outside the qualified scope; piecewise-conditional values are `unknown`. |
 | `differentiate` | 14 | The candidate is exactly the indicated derivative on the differentiability domain, including higher orders. | A candidate that introduces a singularity is `incorrect`. | Nonsmooth points (for example `abs` at a cusp) may return `unknown`. |
-| `expand` | 13 | Algebraically equivalent to the source on its domain. | A missing cross term or constant is `incorrect`. | Answer form is not assessed: a factored answer passes `expand`. |
+| `expand` | 14 | Algebraically equivalent to the source on its domain. | A missing cross term or constant is `incorrect`, as is an identity that needs stronger sign facts than the source domain supplies. | Answer form is not assessed: a factored answer passes `expand`. |
 | `factor` | 12 | Algebraically equivalent to the source on its domain. | A wrong root or multiplicity is `incorrect`. | Answer form is not assessed: an expanded answer passes `factor`, and an irreducible expression may be returned unchanged. |
 | `determinant` | 14 | Exact determinant, including `1x1`, rational, radical, singular and `5x5` matrices. | A non-expression answer or a non-square matrix is `unsupported`. | Symbolic matrix entries are `unsupported` before cancellation. |
 | `inverse` | 14 | Both exact products `A*A^-1` and `A^-1*A` equal the identity. | A singular matrix, a non-matrix answer or a non-square matrix is `unsupported`. | Symbolic entries are outside scope; numerical approximations are not used. |
@@ -68,7 +68,7 @@ mathematical definition of a valid decomposition and are checked exactly.
 
 ## Defects repaired by this corpus
 
-The corpus exposed three false verdicts, now fixed in the owned engine files:
+The corpus exposed four false verdicts, now fixed in the owned engine files:
 
 1. **Periodic source-domain truncation.** `solve` with
    `log(sin(x)) = log(sin(x))` accepted only `(0, pi)` because SymPy's
@@ -86,8 +86,21 @@ The corpus exposed three false verdicts, now fixed in the owned engine files:
    because sign inference knew only strict `gt`/`lt` guards. A sign-category
    helper now classifies products, powers, sums, `abs` and `exp` under `ge`/`le`,
    and the `posify` proof is extended from the positive orthant to the
-   nonnegative boundary by exact zero checks. See
-   `expand/restricted-source-domain` and the equivalent scalar suite.
+   nonnegative boundary by exact zero checks. This path is exercised by
+   `tests/test_math_correctness_scalar_domains.py::test_sqrt_product_identity_on_nonnegative_source_domain`
+   (the two square roots contribute non-strict `ge` guards), not by
+   `expand/restricted-source-domain`, which makes no `_sign_category` calls.
+   The corpus keeps the converse direction honest:
+   `expand/sqrt-product-needs-nonnegative-factors` shows that a signed product
+   (even `x*y > 0`) does not justify the identity when both factors may be
+   negative.
+4. **Even-root sign inference used nonzero instead of positive.** `_expr_sign`
+   returned `+1` for `sqrt(a)` whenever `a*b > 0` proved `a` nonzero, although
+   `sqrt(-2)` is imaginary. Even-denominator rational powers now require a
+   strict positive proof of the base; odd denominators keep the existing strict
+   sign rule. The unit regression is
+   `test_even_root_sign_requires_a_positive_base`, with end-to-end coverage from
+   `test_sqrt_product_identity_needs_individual_signs`.
 
 No corpus case needs `xfail`: every current expectation is either a decided
 verdict or a documented refusal.

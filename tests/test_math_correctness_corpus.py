@@ -296,7 +296,8 @@ CASES.extend(
             scalar_problem("antiderivative", div(num(1), sym("x"))),
             expression_answer(log(sym("x"))),
             "incorrect",
-            "log(x) misses the negative branch of the source domain",
+            "log(x) is undefined on the negative branch where 1/x is defined, "
+            "so it fails the real-domain contract rather than differing in value",
         ),
         case(
             "antiderivative/cosine",
@@ -747,7 +748,8 @@ CASES.extend(
             scalar_problem("differentiate", sym("x")),
             expression_answer(div(sym("x"), sym("x"))),
             "incorrect",
-            "a derivative may not introduce a singularity",
+            "x/x introduces a hole at x = 0 where x is differentiable, so the "
+            "real-domain contract refuses it (not a value difference)",
         ),
         case(
             "differentiate/square-root",
@@ -943,6 +945,17 @@ CASES.extend(
             expression_answer(sym("x")),
             "correct",
             "(sqrt(x))**2 equals x on the source domain x >= 0",
+        ),
+        case(
+            "expand/sqrt-product-needs-nonnegative-factors",
+            "expand",
+            scalar_problem("expand", sqrt(mul(sym("x"), sym("y"))), symbols=XY),
+            expression_answer(mul(sqrt(sym("x")), sqrt(sym("y")))),
+            "incorrect",
+            "sqrt(x)*sqrt(y) = sqrt(x*y) needs nonnegative factors, not just a "
+            "signed product: the source fixes only x*y >= 0, and even the strict "
+            "guard x*y > 0 admits x = y = -2, where the candidate is not real. "
+            "This is a real-domain failure, not a value difference.",
         ),
     ]
 )
@@ -1872,7 +1885,7 @@ CASES.extend(
                 ],
             ),
             "correct",
-            "x**2!=1 removes the two integer points",
+            "x**2!=1 removes the points x = -1 and x = 1",
         ),
         case(
             "solve/half-line",
