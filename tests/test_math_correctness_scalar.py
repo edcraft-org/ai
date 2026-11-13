@@ -12,6 +12,7 @@ import pytest
 from edcraft_validator.domains.math.engine.context import EngineContext
 from edcraft_validator.domains.math.engine.contracts import (
     CorrectnessRequest,
+    EngineUnsupported,
     MathAnswer,
     MathProblem,
 )
@@ -330,37 +331,12 @@ def test_multivariable_cancellation() -> None:
     assert _outcome("simplify", sym("y"), source, symbols=[X, Y]) == "incorrect"
 
 
-def test_given_relation_is_used_not_ignored() -> None:
-    assert _outcome("simplify", sym("x"), num(2), relations=[_eq("x", 2)]) == (
-        "correct"
-    )
-    assert _outcome("simplify", sym("x"), num(3), relations=[_eq("x", 2)]) == (
-        "incorrect"
-    )
-
-
-def test_given_relation_can_exclude_a_candidate_hole() -> None:
-    assert (
-        _outcome(
-            "simplify",
-            num(1),
-            quotient(sym("x"), sym("x")),
-            relations=[_ne("x", 0)],
-        )
-        == "correct"
-    )
-
-
-def test_given_relation_exposing_a_hole_is_not_ignored() -> None:
-    assert (
-        _outcome(
-            "simplify",
-            num(1),
-            quotient(sym("x"), sym("x")),
-            relations=[_eq("x", 0)],
-        )
-        == "incorrect"
-    )
+@pytest.mark.parametrize("relation", [_eq("x", 2), _ne("x", 0), _eq("x", 0)])
+def test_scalar_relational_givens_are_explicitly_unsupported(
+    relation: Relation,
+) -> None:
+    with pytest.raises(EngineUnsupported, match="relational givens"):
+        _outcome("simplify", num(1), quotient(sym("x"), sym("x")), relations=[relation])
 
 
 def test_equation_on_calculus_variable_is_unsupported() -> None:

@@ -9,29 +9,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from random import Random
-from typing import Literal
 
 import sympy
 from sympy.calculus.util import continuous_domain
 from sympy.solvers.inequalities import solve_univariate_inequality
 
+from edcraft_validator.domains.math.engine.conditions import (
+    Condition,
+    ConditionKind,
+    ast_conditions,
+    power_conditions,
+    symbol_domain,
+)
 from edcraft_validator.domains.math.engine.context import EngineContext
 from edcraft_validator.domains.math.engine.contracts import (
     EngineUnsupported,
 )
-from edcraft_validator.domains.math.ir.compile import MathCompileError, parse_exact
 from edcraft_validator.domains.math.ir.schema import Expr
-
-ConditionKind = Literal["ne", "gt", "ge", "lt", "le"]
-
-
-@dataclass(frozen=True)
-class Condition:
-    kind: ConditionKind
-    expr: sympy.Expr
-
-    def substitute(self, values: dict[sympy.Symbol, sympy.Expr]) -> Condition:
-        return Condition(self.kind, sympy.sympify(self.expr).subs(values))
 
 
 @dataclass(frozen=True)
@@ -41,95 +35,8 @@ class Domain:
     point_set: sympy.Set | None = None
 
 
-_KNOWN_AST_OPERATORS = frozenset(
-    {
-        "add",
-        "sub",
-        "mul",
-        "div",
-        "pow",
-        "sqrt",
-        "abs",
-        "exp",
-        "sin",
-        "cos",
-        "tan",
-        "asin",
-        "acos",
-        "atan",
-        "log",
-    }
-)
 _TRANSPARENT_FUNCTIONS = (sympy.exp, sympy.sin, sympy.cos, sympy.atan, sympy.Abs)
 _ALL_REAL_FUNCTIONS = (sympy.sign,)
-
-
-def compile_ast(ctx: EngineContext, expr: Expr | None) -> sympy.Expr:
-    """Compile a validated IR node, translating compiler failures honestly."""
-    if expr is None:
-        raise EngineUnsupported("missing expression")
-    try:
-        return ctx.compile(expr)
-    except (MathCompileError, TypeError, ValueError) as exc:
-        raise EngineUnsupported(f"expression cannot be compiled: {exc}") from exc
-
-
-def ast_conditions(ctx: EngineContext, root: Expr) -> tuple[Condition, ...]:
-    """Collect the real-domain guards present in the original AST.
-
-    Collection deliberately walks every raw denominator, square root, negative
-    power, log, inverse trig and tangent node before SymPy can cancel it.
-    """
-    conditions: list[Condition] = []
-    compiled: dict[int, sympy.Expr] = {}
-
-    def compile_node(node: Expr) -> sympy.Expr:
-        key = id(node)
-        if key not in compiled:
-            compiled[key] = compile_ast(ctx, node)
-        return compiled[key]
-
-    def walk(node: Expr) -> None:
-        op = node.op
-        if op is None:
-            return
-        if op not in _KNOWN_AST_OPERATORS:
-            raise EngineUnsupported(f"unsupported scalar operator {op!r}")
-        args = node.args
-        if op == "div":
-            _require_arity(op, args, 2)
-            conditions.append(Condition("ne", compile_node(args[1])))
-        elif op == "sqrt":
-            _require_arity(op, args, 1)
-            conditions.append(Condition("ge", compile_node(args[0])))
-        elif op == "log":
-            if len(args) == 1:
-                conditions.append(Condition("gt", compile_node(args[0])))
-            elif len(args) == 2:
-                base = compile_node(args[1])
-                conditions.append(Condition("gt", compile_node(args[0])))
-                conditions.append(Condition("gt", base))
-                conditions.append(Condition("ne", base - 1))
-            else:
-                raise EngineUnsupported("log requires one or two arguments")
-        elif op == "pow":
-            _require_arity(op, args, 2)
-            base = compile_node(args[0])
-            exponent = _compile_exponent(ctx, args[1])
-            _power_conditions(base, exponent, conditions)
-        elif op == "tan":
-            _require_arity(op, args, 1)
-            conditions.append(Condition("ne", sympy.cos(compile_node(args[0]))))
-        elif op in {"asin", "acos"}:
-            _require_arity(op, args, 1)
-            argument = compile_node(args[0])
-            conditions.append(Condition("ge", argument + 1))
-            conditions.append(Condition("le", argument - 1))
-        for child in args:
-            walk(child)
-
-    walk(root)
-    return merge_conditions(conditions)
 
 
 def sympy_conditions(root: sympy.Expr) -> tuple[Condition, ...]:
@@ -150,7 +57,7 @@ def sympy_conditions(root: sympy.Expr) -> tuple[Condition, ...]:
             return
         if isinstance(expr, sympy.Pow):
             base, exponent = expr.args
-            _power_conditions(base, exponent, conditions)
+            power_conditions(base, exponent, conditions)
             walk(base)
             walk(exponent)
             return
@@ -230,16 +137,23 @@ def intersect_domains(left: Domain, right: Domain) -> Domain:
     conditions = merge_conditions(left.conditions + right.conditions)
     variable = left.variable if left.variable is not None else right.variable
     point_set: sympy.Set | None
+    missing: tuple[Condition, ...] = ()
     if left.point_set is not None and right.point_set is not None:
-        point_set = left.point_set.intersect(right.point_set)
+        point_set = (
+            left.point_set
+            if left.point_set.dummy_eq(right.point_set)
+            else left.point_set.intersect(right.point_set)
+        )
     elif left.point_set is not None:
-        point_set = left.point_set
+        point_set, missing = left.point_set, right.conditions
     elif right.point_set is not None:
-        point_set = right.point_set
+        point_set, missing = right.point_set, left.conditions
     else:
         point_set = None
+    # A resolved point set already incorporates its own guards. Re-applying
+    # periodic exclusions repeatedly can make equivalent ImageSets explode.
     if point_set is not None and variable is not None:
-        for condition in conditions:
+        for condition in missing:
             condition_set = _condition_set(condition, variable)
             if condition_set is None:
                 point_set = None
@@ -256,6 +170,19 @@ def _as_bool(value: object) -> bool | None:
     return None
 
 
+def _countable_set(points: sympy.Set) -> bool:
+    if isinstance(points, sympy.FiniteSet) or points is sympy.EmptySet:
+        return True
+    if isinstance(points, sympy.Union):
+        return all(_countable_set(part) for part in points.args)
+    if isinstance(points, sympy.ImageSet):
+        return all(
+            base in (sympy.S.Integers, sympy.S.Naturals, sympy.S.Naturals0)
+            for base in points.base_sets
+        )
+    return False
+
+
 def domain_is_empty(domain: Domain) -> bool | None:
     if domain.point_set is not None:
         if domain.point_set is sympy.EmptySet:
@@ -263,6 +190,16 @@ def domain_is_empty(domain: Domain) -> bool | None:
         empty = _as_bool(domain.point_set.is_empty)
         if empty is not None:
             return empty
+        if isinstance(domain.point_set, sympy.Complement):
+            base, excluded = domain.point_set.args
+            # Removing countably many periodic poles/zeros cannot empty a
+            # real interval of positive length. No sample agreement is used.
+            if (
+                base is sympy.S.Reals
+                or isinstance(base, sympy.Interval)
+                and base.measure.is_positive is True
+            ) and _countable_set(excluded):
+                return False
     for condition in domain.conditions:
         truth = _constant_condition_truth(condition)
         if truth is False:
@@ -291,6 +228,8 @@ def domain_covered(
 ) -> bool | None:
     """Return whether the candidate is defined everywhere the source is."""
     if source.point_set is not None and candidate.point_set is not None:
+        if source.point_set.dummy_eq(candidate.point_set):
+            return True
         subset = _as_bool(source.point_set.is_subset(candidate.point_set))
         if subset is True:
             return True
@@ -374,6 +313,16 @@ def provably_zero(expr: sympy.Expr, domain: Domain | None = None) -> bool:
     """Prove an expression is exactly zero on the supplied domain."""
     if _simple_zero(expr):
         return True
+    if domain is not None:
+        # On a domain excluding f=0, sign(f)=f/Abs(f) for real f.
+        substitutions = {
+            term: term.args[0] / sympy.Abs(term.args[0])
+            for term in expr.atoms(sympy.sign)
+            if term.args[0].is_real is True
+            and _nonzero_implied(domain.conditions, term.args[0])
+        }
+        if substitutions and _simple_zero(expr.xreplace(substitutions)):
+            return True
     if domain is not None and _symbols_provably_positive(
         expr.free_symbols, domain.conditions
     ):
@@ -459,49 +408,6 @@ def merge_conditions(
     return tuple(merged)
 
 
-def _require_arity(operator: str, args: list[Expr], arity: int) -> None:
-    if len(args) != arity:
-        raise EngineUnsupported(f"{operator} requires {arity} arguments")
-
-
-def _compile_exponent(ctx: EngineContext, node: Expr) -> sympy.Expr:
-    if node.num is not None:
-        value = parse_exact(node.num)
-        return sympy.Rational(value.numerator, value.denominator)
-    exponent = compile_ast(ctx, node)
-    if not exponent.is_number or exponent.is_real is not True:
-        raise EngineUnsupported("powers require an exact real exponent")
-    return exponent
-
-
-def _power_conditions(
-    base: sympy.Expr,
-    exponent: sympy.Expr,
-    conditions: list[Condition],
-) -> None:
-    if exponent.is_zero is True:
-        return
-    if exponent.is_Integer:
-        if exponent < 0:
-            conditions.append(Condition("ne", base))
-        return
-    if exponent.is_Rational:
-        if exponent.q % 2 == 0:
-            if exponent < 0:
-                conditions.append(Condition("gt", base))
-            else:
-                conditions.append(Condition("ge", base))
-        elif exponent < 0:
-            conditions.append(Condition("ne", base))
-        return
-    if exponent.is_positive is True:
-        conditions.append(Condition("ge", base))
-    elif exponent.is_negative is True:
-        conditions.append(Condition("gt", base))
-    else:
-        raise EngineUnsupported("cannot determine the real domain of a power")
-
-
 def _point_set(
     ctx: EngineContext,
     compiled: sympy.Expr,
@@ -540,7 +446,8 @@ def _point_set(
         condition_set = _condition_set(condition, variable)
         if condition_set is None:
             return None
-        point_set = point_set.intersect(condition_set)
+        if not point_set.dummy_eq(condition_set):
+            point_set = point_set.intersect(condition_set)
     return point_set
 
 
@@ -602,17 +509,7 @@ def _symbol_domain(ctx: EngineContext, symbol: sympy.Symbol) -> sympy.Set:
     )
     if spec is None:
         return sympy.S.Reals
-    if spec.domain == "integer" or spec.integer:
-        domain: sympy.Set = sympy.S.Integers
-    elif spec.domain == "rational":
-        domain = sympy.S.Rationals
-    else:
-        domain = sympy.S.Reals
-    if spec.positive:
-        domain = domain.intersect(sympy.Interval.open(0, sympy.oo))
-    if spec.nonzero:
-        domain = domain - sympy.FiniteSet(0)
-    return domain
+    return symbol_domain(spec)
 
 
 def _constant_condition_truth(condition: Condition) -> bool | None:
@@ -958,7 +855,7 @@ def _value_is_zero(expr: sympy.Expr, point: dict[sympy.Symbol, sympy.Expr]) -> b
 
 def _value_is_nonzero(expr: sympy.Expr, point: dict[sympy.Symbol, sympy.Expr]) -> bool:
     value = _evaluate_exact(expr, point)
-    if value is None or value == 0:
+    if value is None or value == 0 or value.is_real is not True:
         return False
     return value.is_zero is False
 

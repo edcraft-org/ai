@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from edcraft_validator.domains.math.engine.contracts import (
     CorrectnessRequest,
     CorrectnessResult,
+    EngineUnknown,
     EngineUnsupported,
 )
 from edcraft_validator.domains.math.engine.validation import validate_request
@@ -65,6 +66,8 @@ def check_math_correctness(
             description="math correctness",
         )
         result = CorrectnessResult.model_validate(response["result"])
+    except EngineUnknown as exc:
+        result = CorrectnessResult(outcome="unknown", reason=str(exc))
     except EngineUnsupported as exc:
         result = CorrectnessResult(outcome="unsupported", reason=str(exc))
     except CorrectnessTimeout:

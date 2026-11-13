@@ -89,4 +89,5 @@ def register_math_correctness_tools(server: FastMCP) -> None:
                 )
             ],
             details=report,
+            duration_ms=report.get("duration_ms", 0),
         )

@@ -87,3 +87,19 @@ def test_valid_cusp_derivative_is_not_labelled_incorrect():
         }
     )
     assert result.outcome in {"correct", "unknown", "unsupported"}
+
+
+def test_symbolic_solution_candidate_cannot_hide_an_unresolved_domain():
+    y = {"sym": "y"}
+    result = check_math_correctness(
+        {
+            "problem": {
+                "operation": "solve",
+                "symbols": [{"name": "x"}, {"name": "y"}],
+                "solve_for": ["x"],
+                "relations": [{"lhs": X, "rhs": n(1)}],
+            },
+            "answer": {"kind": "set", "items": [op("div", y, y)]},
+        }
+    )
+    assert result.outcome == "unknown"

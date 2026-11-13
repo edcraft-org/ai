@@ -4,9 +4,15 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
-from edcraft_validator.domains.math.ir.schema import Expr, Relation, SymbolSpec
+from edcraft_validator.domains.math.ir.schema import (
+    Domain,
+    Expr,
+    Record,
+    Relation,
+    SymbolSpec,
+)
 
 Operation = Literal[
     "evaluate",
@@ -26,10 +32,6 @@ Operation = Literal[
 Outcome = Literal["correct", "incorrect", "unknown", "unsupported", "timeout", "error"]
 
 
-class Record(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
-
-
 class MathProblem(Record):
     operation: Operation
     symbols: list[SymbolSpec] = Field(default_factory=list, max_length=8)
@@ -38,7 +40,9 @@ class MathProblem(Record):
     order: int = Field(default=1, ge=1, le=8)
     relations: list[Relation] = Field(default_factory=list, max_length=16)
     solve_for: list[str] = Field(default_factory=list, max_length=8)
-    domain: Literal["real", "integer", "rational"] = "real"
+    domain: Domain = Field(
+        default="real", description="Solution domain for solve operations."
+    )
     matrix: list[list[Expr]] | None = None
     right_matrix: list[list[Expr]] | None = None
     lower: Expr | None = None
@@ -46,6 +50,32 @@ class MathProblem(Record):
 
     @model_validator(mode="after")
     def validate_problem(self) -> MathProblem:
+        supplied = {
+            name
+            for name in (
+                "expression",
+                "matrix",
+                "right_matrix",
+                "lower",
+                "upper",
+                "solve_for",
+            )
+            if (value := getattr(self, name)) is not None and value != []
+        }
+        if self.operation == "solve":
+            permitted = {"solve_for"}
+        elif self.operation in {"determinant", "inverse", "lu"}:
+            permitted = {"matrix"}
+        elif self.operation == "matrix-multiply":
+            permitted = {"matrix", "right_matrix"}
+        elif self.operation == "definite-integral":
+            permitted = {"expression", "lower", "upper"}
+        else:
+            permitted = {"expression"}
+        if supplied - permitted:
+            raise ValueError("problem contains fields for another operation")
+        if self.operation != "differentiate" and self.order != 1:
+            raise ValueError("only differentiation supports an order")
         names = [s.name for s in self.symbols]
         if len(names) != len(set(names)):
             raise ValueError("symbol names must be unique")

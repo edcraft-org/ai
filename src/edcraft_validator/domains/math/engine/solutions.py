@@ -9,12 +9,16 @@ membership is reported as unknown rather than being discarded.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
-
 import sympy
 from sympy.solvers.inequalities import solve_univariate_inequality
 
+from edcraft_validator.domains.math.engine.conditions import (
+    Condition as _Condition,
+)
+from edcraft_validator.domains.math.engine.conditions import (
+    ast_conditions,
+    symbol_domain,
+)
 from edcraft_validator.domains.math.engine.context import EngineContext
 from edcraft_validator.domains.math.engine.contracts import (
     CorrectnessResult,
@@ -56,12 +60,6 @@ class _CandidateIncorrect(Exception):
     """The candidate makes a definite mathematical mistake."""
 
 
-@dataclass(frozen=True)
-class _Condition:
-    kind: Literal["ne", "ge", "gt", "le", "lt"]
-    expression: sympy.Expr
-
-
 def check_solutions(ctx: EngineContext) -> CorrectnessResult:
     """Check a ``solve`` answer against the complete solution set."""
     problem = ctx.request.problem
@@ -83,22 +81,6 @@ def _symbol_spec(problem: MathProblem, name: str) -> SymbolSpec:
         if spec.name == name:
             return spec
     raise EngineUnsupported(f"target symbol {name!r} has no declaration")
-
-
-def _base_domain(spec: SymbolSpec, domain: str) -> sympy.Set:
-    """Intersect the requested domain with every declared symbol fact."""
-    base: sympy.Set = _DOMAINS[domain]
-    if spec.domain == "integer":
-        base = base.intersect(sympy.S.Integers)
-    elif spec.domain == "rational":
-        base = base.intersect(sympy.S.Rationals)
-    if spec.integer:
-        base = base.intersect(sympy.S.Integers)
-    if spec.positive:
-        base = base.intersect(sympy.Interval.open(0, sympy.oo))
-    if spec.nonzero:
-        base = base - sympy.FiniteSet(0)
-    return base
 
 
 def _compiled_relations(
@@ -238,61 +220,10 @@ def _intersect(left: sympy.Set, right: sympy.Set) -> sympy.Set:
 # Original-tree domain constraints
 
 
-def _domain_conditions(expr: Expr, ctx: EngineContext) -> list[_Condition]:
-    """Collect every condition needed for the source expression to be real."""
-    if expr.op is None:
-        return []
-    conditions: list[_Condition] = []
-    for argument in expr.args:
-        conditions.extend(_domain_conditions(argument, ctx))
-    if expr.op in {"add", "mul", "sub"}:
-        return conditions
-    if expr.op == "div":
-        denominator = ctx.compile(expr.args[1])
-        conditions.append(_Condition("ne", denominator))
-        return conditions
-    if expr.op == "pow":
-        base = ctx.compile(expr.args[0])
-        exponent = ctx.compile(expr.args[1])
-        if exponent.free_symbols:
-            raise EngineUnsupported("symbolic exponents are unsupported")
-        if not exponent.is_number:
-            raise EngineUnsupported("non-numeric exponents are unsupported")
-        if exponent.is_negative:
-            conditions.append(_Condition("ne", base))
-        if exponent.is_Rational and not exponent.is_integer:
-            if exponent.q % 2 == 0:
-                conditions.append(_Condition("ge", base))
-        elif not exponent.is_integer:
-            conditions.append(_Condition("ge", base))
-        return conditions
-    if expr.op == "sqrt":
-        conditions.append(_Condition("ge", ctx.compile(expr.args[0])))
-        return conditions
-    if expr.op == "log":
-        conditions.append(_Condition("gt", ctx.compile(expr.args[0])))
-        if len(expr.args) == 2:
-            base = ctx.compile(expr.args[1])
-            conditions.append(_Condition("gt", base))
-            conditions.append(_Condition("ne", base - 1))
-        return conditions
-    if expr.op == "tan":
-        conditions.append(_Condition("ne", sympy.cos(ctx.compile(expr.args[0]))))
-        return conditions
-    if expr.op in {"asin", "acos"}:
-        argument = ctx.compile(expr.args[0])
-        conditions.append(_Condition("ge", 1 + argument))
-        conditions.append(_Condition("ge", 1 - argument))
-        return conditions
-    if expr.op in {"abs", "exp", "sin", "cos", "atan"}:
-        return conditions
-    raise EngineUnsupported(f"unsupported operator {expr.op!r}")
-
-
 def _condition_set(
     condition: _Condition, variable: sympy.Symbol, domain: str
 ) -> sympy.Set:
-    expression = condition.expression
+    expression = condition.expr
     if condition.kind == "ne":
         if expression.is_zero is True:
             return sympy.EmptySet
@@ -385,7 +316,7 @@ def _validate_membership(value: sympy.Expr, spec: SymbolSpec, domain: str) -> No
 def _evaluate_condition(
     condition: _Condition, substitutions: dict[sympy.Symbol, sympy.Expr]
 ) -> bool | None:
-    expression = condition.expression.subs(substitutions)
+    expression = condition.expr.subs(substitutions)
     if expression.free_symbols:
         return None
     if condition.kind == "ne":
@@ -560,6 +491,21 @@ def _sets_equal(expected: sympy.Set, candidate: sympy.Set) -> bool:
         return True
     if simplified.is_empty is False:
         return False
+    # Exact witnesses can disprove equality when symbolic set reduction stalls.
+    # Agreement at these points is never sufficient to accept an answer.
+    for point in map(sympy.Rational, (0, 1, -1, "1/2", "-1/2", "1/3", "4/3", 2)):
+        wanted = expected.contains(point)
+        supplied = candidate.contains(point)
+        if (
+            wanted in (sympy.true, sympy.false)
+            and supplied
+            in (
+                sympy.true,
+                sympy.false,
+            )
+            and wanted != supplied
+        ):
+            return False
     raise EngineUnknown("whether the answer set equals the solution set is undecidable")
 
 
@@ -581,7 +527,7 @@ def _check_univariate(ctx: EngineContext) -> CorrectnessResult:
                 "symbolic parameters in a one-variable equation are unsupported"
             )
 
-    base = _base_domain(spec, problem.domain)
+    base = symbol_domain(spec, problem.domain)
     expected = base
     for relation, lhs, rhs in compiled:
         expected = _intersect(
@@ -591,8 +537,8 @@ def _check_univariate(ctx: EngineContext) -> CorrectnessResult:
 
     conditions: list[_Condition] = []
     for relation in problem.relations:
-        conditions.extend(_domain_conditions(relation.lhs, ctx))
-        conditions.extend(_domain_conditions(relation.rhs, ctx))
+        conditions.extend(ast_conditions(ctx, relation.lhs))
+        conditions.extend(ast_conditions(ctx, relation.rhs))
     if expected is not sympy.EmptySet:
         for condition in conditions:
             expected = _intersect(
@@ -678,7 +624,7 @@ def _check_linear_system(ctx: EngineContext) -> CorrectnessResult:
 
     expected_tuple: tuple[sympy.Expr, ...] | None
     if solution is sympy.EmptySet:
-        expected_tuple = None
+        raise EngineUnsupported("the linear system has no unique admissible solution")
     elif isinstance(solution, sympy.ConditionSet):
         raise EngineUnknown("the linear system solver returned a condition set")
     elif isinstance(solution, sympy.FiniteSet):
@@ -697,8 +643,8 @@ def _check_linear_system(ctx: EngineContext) -> CorrectnessResult:
 
     conditions: list[_Condition] = []
     for relation in problem.relations:
-        conditions.extend(_domain_conditions(relation.lhs, ctx))
-        conditions.extend(_domain_conditions(relation.rhs, ctx))
+        conditions.extend(ast_conditions(ctx, relation.lhs))
+        conditions.extend(ast_conditions(ctx, relation.rhs))
 
     if expected_tuple is not None:
         for value, spec in zip(expected_tuple, specs, strict=True):
@@ -721,6 +667,8 @@ def _check_linear_system(ctx: EngineContext) -> CorrectnessResult:
                 "linear system membership in the source domain is undecidable"
             )
 
+    if expected_tuple is None:
+        raise EngineUnsupported("the linear system has no unique admissible solution")
     try:
         matches = _check_system_candidate(
             ctx, variables, specs, conditions, expected_tuple

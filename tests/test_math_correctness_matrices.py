@@ -139,7 +139,7 @@ def test_matrix_multiplication_candidate_shape_is_incorrect() -> None:
         {"kind": "expression", "expression": _num(1)},
         right_matrix=[[0, 1], [1, 0]],
     )
-    assert result.outcome == "incorrect"
+    assert result.outcome == "unsupported"
 
 
 def test_determinant_is_exact_for_4x4_and_5x5() -> None:
@@ -209,7 +209,7 @@ def test_determinant_requires_an_expression_answer() -> None:
         [[1, 2], [3, 4]],
         _matrix_answer([[-2]]),
     )
-    assert result.outcome == "incorrect"
+    assert result.outcome == "unsupported"
     assert "expression" in result.reason
 
 
@@ -283,7 +283,7 @@ def test_inverse_accepts_irrationals_and_rejects_singular_problem() -> None:
         [[1, 2], [3, 4]],
         _expression_answer(_num(1)),
     )
-    assert result.outcome == "incorrect"
+    assert result.outcome == "unsupported"
 
 
 def test_inverse_requires_square_problem_matrix() -> None:

@@ -12,6 +12,11 @@ from dataclasses import dataclass, field
 
 import sympy
 
+from edcraft_validator.domains.math.engine.conditions import (
+    Condition,
+    ast_conditions,
+    compile_ast,
+)
 from edcraft_validator.domains.math.engine.context import EngineContext
 from edcraft_validator.domains.math.engine.contracts import (
     CorrectnessResult,
@@ -20,17 +25,12 @@ from edcraft_validator.domains.math.engine.contracts import (
     Outcome,
 )
 from edcraft_validator.domains.math.engine.scalar_domains import (
-    Condition,
     Domain,
-    ast_conditions,
-    compile_ast,
     counterexample,
     domain_covered,
     domain_from_conditions,
-    domain_is_empty,
     domain_nonempty,
     intersect_domains,
-    merge_conditions,
     provably_zero,
     sympy_domain,
 )
@@ -45,12 +45,11 @@ _SUPPORTED_OPERATIONS = _EQUIVALENCE_OPERATIONS | _CALCULUS_OPERATIONS
 
 
 @dataclass(frozen=True)
-class _Branch:
+class _Expressions:
     source: sympy.Expr
     candidate: sympy.Expr
     source_conditions: tuple[Condition, ...]
     candidate_conditions: tuple[Condition, ...]
-    substitution: dict[sympy.Symbol, sympy.Expr] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -78,101 +77,29 @@ def check_scalar(ctx: EngineContext) -> CorrectnessResult:
 
     source = compile_ast(ctx, problem.expression)
     candidate = compile_ast(ctx, answer.expression)
-    branches = _branches(ctx, source, candidate, operation)
-    verdicts = [_run_branch(ctx, operation, branch) for branch in branches]
-    return _combine(ctx, operation, verdicts)
-
-
-def _branches(
-    ctx: EngineContext,
-    source: sympy.Expr,
-    candidate: sympy.Expr,
-    operation: str,
-) -> list[_Branch]:
-    problem = ctx.request.problem
-    source_ast = problem.expression
-    answer_ast = ctx.request.answer.expression
-    assert source_ast is not None and answer_ast is not None
-    source_guards = ast_conditions(ctx, source_ast)
-    candidate_guards = ast_conditions(ctx, answer_ast)
-
-    equations: list[sympy.Expr] = []
-    inequalities: list[Condition] = []
-    for relation in problem.relations:
-        left = compile_ast(ctx, relation.lhs)
-        right = compile_ast(ctx, relation.rhs)
-        residual = left - right
-        if relation.kind == "eq":
-            if provably_zero(residual):
-                continue
-            equations.append(residual)
-        else:
-            inequalities.append(Condition(relation.kind, residual))
-
-    if not equations:
-        return [
-            _Branch(
-                source,
-                candidate,
-                merge_conditions(source_guards + tuple(inequalities)),
-                candidate_guards,
-            )
-        ]
-
-    variable = _problem_variable(ctx)
-    if operation in _CALCULUS_OPERATIONS and variable is not None:
-        if any(residual.has(variable) for residual in equations):
-            raise EngineUnsupported(
-                "equations that constrain the calculus variable are unsupported"
-            )
-
-    try:
-        solutions = sympy.solve(equations, list(ctx.symbols.values()), dict=True)
-    except (NotImplementedError, TypeError, ValueError) as exc:
-        raise EngineUnknown(f"could not solve the given relations: {exc}") from exc
-    if not solutions:
-        raise EngineUnsupported("the given equations have no real solutions")
-
-    branches: list[_Branch] = []
-    for solution in solutions:
-        if not isinstance(solution, dict):
-            raise EngineUnknown("the given relations did not produce explicit values")
-        substitution = {
-            key: value
-            for key, value in solution.items()
-            if isinstance(key, sympy.Symbol)
-        }
-        if any(value.is_real is False for value in substitution.values()):
-            continue
-        try:
-            branch_source = source.subs(substitution)
-            branch_candidate = candidate.subs(substitution)
-        except (TypeError, ValueError) as exc:
-            raise EngineUnknown(f"could not apply the given relations: {exc}") from exc
-        source_conditions = tuple(
-            guard.substitute(substitution) for guard in source_guards
-        ) + tuple(condition.substitute(substitution) for condition in inequalities)
-        candidate_conditions = tuple(
-            guard.substitute(substitution) for guard in candidate_guards
+    if problem.relations:
+        raise EngineUnsupported("scalar relational givens are unsupported; use solve")
+    assert problem.expression is not None
+    expressions = _Expressions(
+        source,
+        candidate,
+        ast_conditions(ctx, problem.expression),
+        ast_conditions(ctx, answer.expression),
+    )
+    verdict = _check_operation(ctx, operation, expressions)
+    if verdict is None:
+        return ctx.result(
+            "unsupported", "the problem has no real inputs", f"scalar.{operation}"
         )
-        branches.append(
-            _Branch(
-                branch_source,
-                branch_candidate,
-                merge_conditions(source_conditions),
-                merge_conditions(candidate_conditions),
-                substitution,
-            )
-        )
-    if not branches:
-        raise EngineUnsupported("the given equations have no real solutions")
-    return branches
+    return ctx.result(
+        verdict.outcome, verdict.reason, verdict.method, **verdict.details
+    )
 
 
-def _run_branch(
+def _check_operation(
     ctx: EngineContext,
     operation: str,
-    branch: _Branch,
+    branch: _Expressions,
 ) -> _Verdict | None:
     if operation in _EQUIVALENCE_OPERATIONS:
         return _check_equivalence(ctx, branch)
@@ -185,7 +112,7 @@ def _run_branch(
     raise EngineUnsupported(f"{operation!r} is not a scalar expression operation")
 
 
-def _check_equivalence(ctx: EngineContext, branch: _Branch) -> _Verdict | None:
+def _check_equivalence(ctx: EngineContext, branch: _Expressions) -> _Verdict | None:
     variable = _variable_for(ctx, branch)
     source_domain = domain_from_conditions(
         ctx, branch.source, branch.source_conditions, variable
@@ -226,7 +153,7 @@ def _check_equivalence(ctx: EngineContext, branch: _Branch) -> _Verdict | None:
     )
 
 
-def _check_differentiate(ctx: EngineContext, branch: _Branch) -> _Verdict | None:
+def _check_differentiate(ctx: EngineContext, branch: _Expressions) -> _Verdict | None:
     variable = _problem_variable(ctx)
     if variable is None:
         raise EngineUnsupported("differentiation requires a declared variable")
@@ -268,10 +195,10 @@ def _check_differentiate(ctx: EngineContext, branch: _Branch) -> _Verdict | None
                 )
     expected_domain = sympy_domain(ctx, expected, variable)
     required_domain = intersect_domains(source_domain, expected_domain)
-    required_empty = domain_is_empty(required_domain)
-    if required_empty is True:
+    required_nonempty = domain_nonempty(ctx, required_domain)
+    if required_nonempty is False:
         raise EngineUnsupported("the derivative has no real differentiability domain")
-    if required_empty is None:
+    if required_nonempty is None:
         return _Verdict(
             "unknown",
             "could not determine the derivative's real domain",
@@ -304,7 +231,7 @@ def _check_differentiate(ctx: EngineContext, branch: _Branch) -> _Verdict | None
     )
 
 
-def _check_antiderivative(ctx: EngineContext, branch: _Branch) -> _Verdict | None:
+def _check_antiderivative(ctx: EngineContext, branch: _Expressions) -> _Verdict | None:
     variable = _problem_variable(ctx)
     if variable is None:
         raise EngineUnsupported("antidifferentiation requires a declared variable")
@@ -374,13 +301,15 @@ def _check_antiderivative(ctx: EngineContext, branch: _Branch) -> _Verdict | Non
     )
 
 
-def _check_definite_integral(ctx: EngineContext, branch: _Branch) -> _Verdict | None:
+def _check_definite_integral(
+    ctx: EngineContext, branch: _Expressions
+) -> _Verdict | None:
     problem = ctx.request.problem
     variable = _problem_variable(ctx)
     if variable is None:
         raise EngineUnsupported("definite integration requires a declared variable")
-    lower = compile_ast(ctx, problem.lower).subs(branch.substitution)
-    upper = compile_ast(ctx, problem.upper).subs(branch.substitution)
+    lower = compile_ast(ctx, problem.lower)
+    upper = compile_ast(ctx, problem.upper)
     if not _finite_real_constant(lower) or not _finite_real_constant(upper):
         return _Verdict(
             "unsupported",
@@ -496,38 +425,6 @@ def _compare_expressions(
     )
 
 
-def _combine(
-    ctx: EngineContext,
-    operation: str,
-    verdicts: list[_Verdict | None],
-) -> CorrectnessResult:
-    actual = [verdict for verdict in verdicts if verdict is not None]
-    if not actual:
-        return ctx.result(
-            "unsupported",
-            "the given relations leave no real inputs for this problem",
-            f"scalar.{operation}",
-        )
-    for outcome in ("incorrect", "unknown", "unsupported"):
-        for verdict in actual:
-            if verdict.outcome == outcome:
-                return ctx.result(
-                    verdict.outcome,
-                    verdict.reason,
-                    verdict.method,
-                    branch_count=len(actual),
-                    **verdict.details,
-                )
-    first = actual[0]
-    return ctx.result(
-        first.outcome,
-        first.reason,
-        first.method,
-        branch_count=len(actual),
-        **first.details,
-    )
-
-
 def _problem_variable(ctx: EngineContext) -> sympy.Symbol | None:
     name = ctx.request.problem.variable
     if name is None:
@@ -535,7 +432,7 @@ def _problem_variable(ctx: EngineContext) -> sympy.Symbol | None:
     return ctx.symbols.get(name)
 
 
-def _variable_for(ctx: EngineContext, branch: _Branch) -> sympy.Symbol | None:
+def _variable_for(ctx: EngineContext, branch: _Expressions) -> sympy.Symbol | None:
     variable = _problem_variable(ctx)
     if variable is not None:
         return variable

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import time
 from typing import Any
 
 from pydantic import ValidationError
@@ -23,7 +24,7 @@ from edcraft_validator.tools.isolated_process import run_json_worker
 def qualify_math_template(
     template: CorrectnessTemplate | dict[str, Any],
     *,
-    settings: SamplingSettings | None = None,
+    settings: SamplingSettings | dict[str, Any] | None = None,
     timeout_seconds: float = 30.0,
 ) -> dict[str, Any]:
     if (
@@ -34,6 +35,7 @@ def qualify_math_template(
         raise ValueError(
             "qualification timeout must be finite, positive and at most 60 seconds"
         )
+    started = time.perf_counter()
     try:
         raw = (
             template.model_dump(mode="json")
@@ -42,7 +44,11 @@ def qualify_math_template(
         )
         definition = CorrectnessTemplate.model_validate(raw)
         selected = SamplingSettings.model_validate(
-            (settings or SamplingSettings()).model_dump()
+            settings.model_dump()
+            if isinstance(settings, SamplingSettings)
+            else settings
+            if settings is not None
+            else {}
         )
         response = run_json_worker(
             {
@@ -56,12 +62,16 @@ def qualify_math_template(
             worker_error=CorrectnessWorkerError,
             description="math correctness qualification",
         )
-        return response["qualification"]
+        return {
+            **response["qualification"],
+            "duration_ms": (time.perf_counter() - started) * 1000,
+        }
     except CorrectnessTimeout:
         return {
             "status": "timeout",
             "reason": "qualification timed out; partial results unavailable",
             "checking_mode": "property_based",
+            "duration_ms": (time.perf_counter() - started) * 1000,
         }
     except (
         ValidationError,
@@ -76,4 +86,5 @@ def qualify_math_template(
             "status": "error",
             "reason": str(exc)[:500],
             "checking_mode": "property_based",
+            "duration_ms": (time.perf_counter() - started) * 1000,
         }

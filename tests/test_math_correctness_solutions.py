@@ -646,12 +646,10 @@ def test_extra_equations_are_never_ignored() -> None:
         eq(add(sym("x"), sym("y")), num(4)),
     ]
     symbols = [SymbolSpec(name="x"), SymbolSpec(name="y")]
-    assert (
+    with pytest.raises(EngineUnsupported, match="no unique admissible solution"):
         check(
             relations,
             tuple_answer([num(2), num(1)]),
             solve_for=("x", "y"),
             symbols=symbols,
-        ).outcome
-        == "incorrect"
-    )
+        )

@@ -7,6 +7,7 @@ from fractions import Fraction
 
 from edcraft_validator.domains.math.engine.contracts import (
     CorrectnessRequest,
+    EngineUnknown,
     EngineUnsupported,
 )
 from edcraft_validator.domains.math.ir.schema import Expr
@@ -147,6 +148,20 @@ def validate_request(request: CorrectnessRequest) -> None:
     ):
         matrix(value)
     if problem.operation == "solve":
+        candidate_values = list(answer.items)
+        if answer.expression is not None:
+            candidate_values.append(answer.expression)
+        for interval in answer.intervals:
+            candidate_values.extend(
+                endpoint
+                for endpoint in (interval.lower, interval.upper)
+                if endpoint is not None
+            )
+        if any(_has_symbol(expr) for expr in candidate_values):
+            raise EngineUnknown(
+                "solution values require closed expressions; "
+                "symbolic candidate domain is unresolved"
+            )
         targets = set(problem.solve_for)
         for relation in problem.relations:
             if relation.kind in {"lt", "le", "gt", "ge"} and (
@@ -177,3 +192,7 @@ def _has_periodic_variable(expr: Expr, targets: set[str]) -> bool:
     return (expr.op in {"sin", "cos", "tan"} and has_target(expr)) or any(
         _has_periodic_variable(child, targets) for child in expr.args
     )
+
+
+def _has_symbol(expr: Expr) -> bool:
+    return expr.sym is not None or any(_has_symbol(child) for child in expr.args)

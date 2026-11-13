@@ -648,7 +648,7 @@ def _wrong_answer_kind(
     actual: str,
 ) -> CorrectnessResult:
     return ctx.result(
-        "incorrect",
+        "unsupported",
         f"candidate answer kind must be {expected}",
         method,
         operation=operation,
