@@ -40,6 +40,21 @@ even if it is not factorised or expanded. LU triangular and permutation structur
 are part of a valid decomposition's mathematical definition. Worked prose is not
 certified by checking a final mathematical answer.
 
+### LU convention
+
+An `lu` answer is checked against the row-permutation convention
+
+```text
+P * A = L * U
+```
+
+That is, `P` selects rows of the problem matrix `A`, `L` is unit lower
+triangular and `U` is upper triangular. This is *not* scipy's `A = P * L * U`
+convention with the transposed permutation. Because a three-cycle `P` differs
+from its transpose, the two conventions only coincide for self-inverse
+permutations such as a single swap; tests therefore use a three-cycle. Every LU
+result reports the convention in `CorrectnessResult.details["lu_convention"]`.
+
 Results distinguish `correct`, `incorrect`, `unknown`, `unsupported`, `timeout`,
 and `error`. A well-formed answer with the wrong kind for the operation is
 `unsupported`; an answer of the right kind whose mathematical values are wrong is
@@ -94,6 +109,25 @@ operator is supported: `x**(1/3)` is defined only for `x >= 0`, not as a real cu
 root of negative `x`. This interface therefore makes no claim about all real cube
 roots, and problems needing that convention are outside scope.
 
+## Adding an operation
+
+Operation dispatch is a declarative registry in `engine/dispatch.py`:
+`OPERATION_HANDLERS` maps every `Operation` literal to one handler with the
+signature `(EngineContext) -> CorrectnessResult`, and `dispatch_operation` is
+the only dispatcher. To add an operation:
+
+1. Add the name to the `Operation` literal in `engine/contracts.py`.
+2. Add a handler (or reuse `check_scalar`/`check_solutions`/`check_matrices`).
+3. Add one entry to `OPERATION_HANDLERS`; a test asserts the registry covers the
+   literal exactly.
+
+Handlers raise `EngineUnsupported`/`EngineUnknown` for out-of-scope or unsettled
+inputs; the dispatcher maps them to outcomes and stamps versions and duration.
+Optional facts belong in `details` and must be deterministic (no set-order
+leakage). The following `details` keys are reserved for a later answer-form
+layer and are intentionally not implemented: `normalized_answer`,
+`solution_set`, `factors`, `domain_assumptions`, `unknown_reason`.
+
 ## Property-based template qualification
 
 `math_qualify_correctness_template` and Python `qualify_math_template` sample a
@@ -132,9 +166,16 @@ The current scope uses up to eight declared symbols and matrix dimensions up to
 eight. Matrix entries are exact numeric expressions. Powers require bounded
 literal exponents, with magnitude and denominator at most twelve. Inputs have
 literal length/bit limits, per-expression/global node limits, depth limits and
-conservative intermediate-growth budgets. Default concrete timeout is ten
+conservative intermediate-growth budgets. Expansion output is additionally
+capped at 20,000 terms: the request validator estimates the expanded term count
+before the worker starts, and equivalence operations re-count the actual expanded
+candidate before any equivalence or counterexample work. Default concrete timeout is ten
 seconds; Python callers can choose a finite positive budget up to sixty seconds.
 Qualification has a separate worker deadline and a bounded shrinking budget.
+Workers run in a fresh interpreter with a CPU limit and a parent-side resident
+memory watchdog (default 1 GiB); Linux also applies an address-space limit, and
+macOS attempts a best-effort data-segment limit. Exceeding the memory ceiling is
+reported as a worker error, never as a passing check.
 
 The operation enum is not a promise to decide every expression. Unsupported
 structure, unsettled assumptions or symbolic sets, and exhausted budgets remain

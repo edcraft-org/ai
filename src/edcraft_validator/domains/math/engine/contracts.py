@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+import sympy
 from pydantic import Field, model_validator
 
 from edcraft_validator.domains.math.ir.schema import (
@@ -172,6 +173,18 @@ class CorrectnessResult(Record):
     duration_ms: float = Field(default=0, ge=0)
     engine_version: str = "math-correctness/1"
     sympy_version: str = ""
+
+    @model_validator(mode="after")
+    def stamp_sympy_version(self) -> CorrectnessResult:
+        version = sympy.__version__
+        if not self.sympy_version:
+            self.sympy_version = version
+        elif self.sympy_version != version:
+            raise ValueError(
+                f"sympy_version {self.sympy_version!r} does not match the "
+                f"installed SymPy {version!r}"
+            )
+        return self
 
 
 class EngineUnsupported(ValueError):
