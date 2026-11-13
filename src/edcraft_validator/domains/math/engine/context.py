@@ -33,6 +33,13 @@ class EngineContext:
         value = compile_expr(expr, self.symbols)
         if not value.free_symbols and (value.is_finite is False or value is sympy.nan):
             raise EngineUnsupported("expression has a non-finite subexpression")
+        # The request domain is real throughout. Reject any subexpression whose
+        # value SymPy proves non-real (e.g. sqrt(-1)), including one that a later
+        # operation would erase, such as sqrt(-1)**2 -> -1. Only a definite
+        # False is refused; unknown realness (a free symbol of unknown sign)
+        # stays with the domain handlers.
+        if value.is_real is False:
+            raise EngineUnsupported("expression has no real value")
         return value
 
     def result(
