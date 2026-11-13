@@ -10,6 +10,7 @@ from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateContent,
     CodeTemplateRequest,
 )
+from edcraft_validator.domains.domain_support import content_sha256
 
 
 def build_code_candidate(
@@ -41,11 +42,4 @@ def build_code_candidate(
 
 def template_sha256(candidate: CodeTemplateCandidate) -> str:
     """Identify the exact reusable content independently of any assessment."""
-    return hashlib.sha256(
-        json.dumps(
-            candidate.model_dump(mode="json"),
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
-        ).encode()
-    ).hexdigest()
+    return content_sha256(candidate)

@@ -4,6 +4,33 @@ from __future__ import annotations
 
 from typing import Literal, get_args
 
+# Explicit re-exports: these names remain importable from this module even
+# though the single definition now lives in the shared vocabulary module.
+from edcraft_validator.domain_types import (
+    DEFAULT_DISTRACTORS as DEFAULT_DISTRACTORS,
+)
+from edcraft_validator.domain_types import (
+    DIFFICULTIES as DIFFICULTIES,
+)
+from edcraft_validator.domain_types import (
+    MAX_CHOICES as MAX_CHOICES,
+)
+from edcraft_validator.domain_types import (
+    MAX_DISTRACTOR_CANDIDATES as MAX_DISTRACTOR_CANDIDATES,
+)
+from edcraft_validator.domain_types import (
+    MAX_DISTRACTORS as MAX_DISTRACTORS,
+)
+from edcraft_validator.domain_types import (
+    MIN_CHOICES as MIN_CHOICES,
+)
+from edcraft_validator.domain_types import (
+    MIN_DISTRACTORS as MIN_DISTRACTORS,
+)
+from edcraft_validator.domain_types import (
+    Difficulty as Difficulty,
+)
+
 AnswerTarget = Literal[
     "return_value",
     "loop_iterations",
@@ -20,9 +47,6 @@ ProgrammingTopic = Literal[
     "functions",
     "lists",
 ]
-
-
-Difficulty = Literal["easy", "medium", "hard"]
 
 
 ParameterKind = Literal["integer", "boolean", "string", "integer_list"]
@@ -51,25 +75,13 @@ CodeFeature = Literal[
 CODE_TOPICS: tuple[ProgrammingTopic, ...] = get_args(ProgrammingTopic)
 
 
-CODE_DIFFICULTIES: tuple[Difficulty, ...] = get_args(Difficulty)
+CODE_DIFFICULTIES: tuple[Difficulty, ...] = DIFFICULTIES
 
-
-# Learner-facing choice count is distractors + 1. The default keeps the familiar
-# four choices, while authors may request any supported count.
-MIN_DISTRACTORS = 1
-DEFAULT_DISTRACTORS = 3
-MAX_DISTRACTORS = 10
-MIN_CHOICES = MIN_DISTRACTORS + 1
-MAX_CHOICES = MAX_DISTRACTORS + 1
 
 # Concrete MCQs use the fixed A-D option schema, so they support only the
 # three- and four-choice forms. Template authoring has the wider range above.
 MIN_CONCRETE_DISTRACTORS = 2
 MAX_CONCRETE_DISTRACTORS = 3
-
-# Models may propose spare candidates so selection can skip collisions. Keep
-# enough headroom for the largest supported request plus a couple of spares.
-MAX_DISTRACTOR_CANDIDATES = 12
 
 # Domain-owned advisory identities. Application policy never derives this from
 # untrusted tool evidence or model arguments.

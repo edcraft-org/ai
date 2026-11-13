@@ -5,6 +5,7 @@ from typing import Any, Protocol
 from pydantic import BaseModel
 
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
+from edcraft_validator.domains.domain_support import ReviewTemplateView
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
 from edcraft_validator.validation.check_contracts import ToolEvidence
 
@@ -17,6 +18,14 @@ class DomainModule(Protocol):
     candidate_model: type[BaseModel]
     validated_model: type[ValidatedTemplateArtifact]
     question_model: type[BaseModel]
+    # Human-readable review label for a candidate language, when it has one.
+    template_language: str | None
+    # Shared checks this domain opts into, selected by ``capability:<name>``.
+    capabilities: frozenset[str]
+
+    def review_view(
+        self, artifact: ValidatedTemplateArtifact
+    ) -> ReviewTemplateView | None: ...
 
     def generation_request(self, request: BaseModel) -> StructuredGenerationRequest: ...
 

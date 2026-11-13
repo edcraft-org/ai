@@ -148,6 +148,14 @@ async def test_server_freezes_one_model_and_threshold_for_all_assessments(monkey
             "assess_relevance",
             {"request": {"author_request": "objective", "question_text": "question"}},
         )
+        shared_relevance = await client.call_tool(
+            "assess_template_relevance",
+            {
+                "author_request": "objective",
+                "question_text": "question",
+                "subject_sha256": "a" * 64,
+            },
+        )
         template_relevance = await client.call_tool(
             "code_assess_template_relevance",
             {
@@ -157,9 +165,10 @@ async def test_server_freezes_one_model_and_threshold_for_all_assessments(monkey
         )
     assert difficulty.structured_content["status"] == "passed"
     assert relevance.structured_content["decision"]["threshold"] == 0.94
+    assert shared_relevance.structured_content["details"]["threshold"] == 0.94
     assert template_relevance.structured_content["status"] == "passed"
     assert template_relevance.structured_content["details"]["threshold"] == 0.94
-    assert seen == ["original", "original", "original"]
+    assert seen == ["original", "original", "original", "original"]
 
 
 def test_classifier_prompt_is_independent_of_reasoning_wording(monkeypatch):

@@ -57,7 +57,15 @@ async def test_catalogue_exposes_authoritative_names_descriptions_and_schemas():
         "code_assess_template_difficulty",
         "check_code_question_correctness",
         "check_code_question_requirements",
+        "math_verify_template_structure",
+        "math_validate_answers_and_distractors",
+        "math_assess_template_difficulty",
+        "math_verify_item_spec",
+        "math_validate_options",
+        "math_verify_text_fidelity",
+        "check_pilot_execute_recipe",
         "assess_relevance",
+        "assess_template_relevance",
         "code_assess_template_relevance",
     ]
     for tool in tools[:3]:
@@ -90,6 +98,283 @@ async def test_catalogue_exposes_authoritative_names_descriptions_and_schemas():
     assert "supported Python subset" in executable.description
     assert "sampling-budget limits" in executable.description
     assert "explicit error evidence" in (executable.description)
+
+
+def derivative_recipe() -> dict:
+    return {
+        "steps": [
+            {
+                "id": "d1",
+                "operation": "poly.differentiate",
+                "version": "1",
+                "arguments": {"polynomial": {"source": "input", "name": "problem"}},
+            },
+            {
+                "id": "out",
+                "operation": "poly.equivalent",
+                "version": "1",
+                "arguments": {
+                    "expected": {"source": "step", "name": "d1"},
+                    "actual": {"source": "input", "name": "candidate"},
+                },
+            },
+        ],
+        "output": "out",
+    }
+
+
+def solve_recipe() -> dict:
+    return {
+        "operation_set": "polynomial-solve-real/1",
+        "steps": [
+            {
+                "id": "s1",
+                "operation": "relation.solve_real",
+                "version": "1",
+                "arguments": {"problem": {"source": "input", "name": "problem"}},
+            },
+            {
+                "id": "out",
+                "operation": "set.equal",
+                "version": "1",
+                "arguments": {
+                    "expected": {"source": "step", "name": "s1"},
+                    "actual": {"source": "input", "name": "candidate"},
+                },
+            },
+        ],
+        "output": "out",
+    }
+
+
+def solution_set(*values: str) -> dict:
+    return {
+        "kind": "solution_set",
+        "solution_set": {
+            "components": [
+                {
+                    "lower": value,
+                    "upper": value,
+                    "lower_closed": True,
+                    "upper_closed": True,
+                }
+                for value in values
+            ]
+        },
+    }
+
+
+def inequality_solution_set(
+    *,
+    lower: str | None,
+    upper: str | None,
+    lower_closed: bool,
+    upper_closed: bool,
+) -> dict:
+    return {
+        "kind": "solution_set",
+        "solution_set": {
+            "components": [
+                {
+                    "lower": lower,
+                    "upper": upper,
+                    "lower_closed": lower_closed,
+                    "upper_closed": upper_closed,
+                }
+            ]
+        },
+    }
+
+
+def inequality_problem() -> dict:
+    return {
+        "kind": "relation",
+        "relation": {"relation": "gt", "coefficients": [-1, 1]},
+    }
+
+
+async def test_check_pilot_recipe_adapter_uses_isolated_executor():
+    server = create_validation_server()
+    accepted = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": derivative_recipe(),
+            "problem": "3*x^2 - 2*x + 1",
+            "candidate": "6*x - 2",
+        },
+    )
+    assert accepted["status"] == "passed"
+    assert accepted["details"]["verdict"] is True
+
+    rejected = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": derivative_recipe(),
+            "problem": "3*x^2 - 2*x + 1",
+            "candidate": "6*x",
+        },
+    )
+    assert rejected["status"] == "failed"
+    assert rejected["findings"][0]["code"] == "RECIPE_REJECTED_CANDIDATE"
+
+    invalid = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": {
+                "steps": [
+                    {
+                        "id": "d1",
+                        "operation": "poly.unknown",
+                        "version": "1",
+                        "arguments": {
+                            "polynomial": {"source": "input", "name": "problem"}
+                        },
+                    }
+                ],
+                "output": "d1",
+            },
+            "problem": "x",
+            "candidate": "1",
+        },
+    )
+    assert invalid["status"] == "error"
+    assert invalid["findings"][0]["code"] == "RECIPE_INVALID"
+
+
+async def test_check_pilot_recipe_adapter_dispatches_structured_solve_sets():
+    server = create_validation_server()
+    problem = {
+        "kind": "relation",
+        "relation": {"relation": "eq", "coefficients": [-1, 0, 1]},
+    }
+    accepted = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": solve_recipe(),
+            "problem": problem,
+            "candidate": solution_set("-1", "1"),
+        },
+    )
+    assert accepted["status"] == "passed"
+    assert accepted["details"]["verdict"] is True
+    assert accepted["details"]["problem"] == "x^2 - 1 = 0"
+
+    reversed_order = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": solve_recipe(),
+            "problem": problem,
+            "candidate": solution_set("1", "-1"),
+        },
+    )
+    assert reversed_order["status"] == "passed"
+
+    rejected = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": solve_recipe(),
+            "problem": problem,
+            "candidate": solution_set("1"),
+        },
+    )
+    assert rejected["status"] == "failed"
+    assert rejected["findings"][0]["code"] == "RECIPE_REJECTED_CANDIDATE"
+
+    malformed = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": solve_recipe(),
+            "problem": problem,
+            "candidate": {
+                "kind": "solution_set",
+                "solution_set": {
+                    "components": [
+                        {
+                            "lower": None,
+                            "upper": None,
+                            "lower_closed": True,
+                            "upper_closed": True,
+                        }
+                    ]
+                },
+            },
+        },
+    )
+    assert malformed["status"] == "error"
+    assert malformed["findings"][0]["code"] == "RECIPE_INVALID"
+
+
+async def test_check_pilot_recipe_adapter_requires_an_explicit_inequality_contract():
+    server = create_validation_server()
+    problem = inequality_problem()
+    candidate = inequality_solution_set(
+        lower="1",
+        upper=None,
+        lower_closed=False,
+        upper_closed=False,
+    )
+
+    default_scope = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": solve_recipe(),
+            "problem": problem,
+            "candidate": candidate,
+        },
+    )
+    assert default_scope["status"] == "error"
+    assert default_scope["findings"][0]["code"] == "RECIPE_INVALID"
+    assert "verdict" not in default_scope["details"]
+
+    explicit = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": solve_recipe(),
+            "problem": problem,
+            "candidate": candidate,
+            "contract_id": "polynomial.inequality-real/1",
+        },
+    )
+    assert explicit["status"] == "passed"
+    assert explicit["details"]["verdict"] is True
+    assert explicit["details"]["problem"] == "x - 1 > 0"
+
+    wrong_scope = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": solve_recipe(),
+            "problem": problem,
+            "candidate": candidate,
+            "contract_id": "polynomial.equation-real/1",
+        },
+    )
+    assert wrong_scope["status"] == "error"
+    assert wrong_scope["findings"][0]["code"] == "RECIPE_INVALID"
+    assert "verdict" not in wrong_scope["details"]
+
+    unknown = await call_tool(
+        server,
+        "check_pilot_execute_recipe",
+        {
+            "definition": solve_recipe(),
+            "problem": problem,
+            "candidate": candidate,
+            "contract_id": "polynomial.inequality-complex/1",
+        },
+    )
+    assert unknown["status"] == "error"
+    assert unknown["findings"][0]["code"] == "RECIPE_INVALID"
+    assert "verdict" not in unknown["details"]
 
 
 async def test_structure_and_feature_tools_are_independently_callable():

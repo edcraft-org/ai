@@ -5,11 +5,15 @@ from collections.abc import Callable
 
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.domain_contract import DomainModule
+from edcraft_validator.domains.math.math_domain import MathDomain
 
 DomainFactory = Callable[[], DomainModule]
 
 _DOMAIN_NAME = re.compile(r"^[a-z][a-z0-9_-]*$")
-_DOMAIN_FACTORIES: dict[str, DomainFactory] = {"code": CodeDomain}
+_DOMAIN_FACTORIES: dict[str, DomainFactory] = {
+    "code": CodeDomain,
+    "math": MathDomain,
+}
 
 
 def available_domains() -> tuple[str, ...]:

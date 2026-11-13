@@ -44,6 +44,12 @@ def definition(name, domains=("code",)):
     }
 
 
+def capability_definition(name, capability):
+    definition_ = definition(name, domains=())
+    definition_["_meta"]["fastmcp"]["tags"] = [f"capability:{capability}"]
+    return definition_
+
+
 def test_code_domain_resolves_real_tagged_mcp_definitions():
     with FastMcpToolClient() as client:
         tools = resolve_domain_tools("code", client)
@@ -92,6 +98,40 @@ def test_new_tagged_tool_is_discovered_without_a_domain_tool_list():
     ]
 
 
+def test_capability_tags_are_visible_only_when_the_domain_opts_in():
+    catalogue = RecordingCatalogue(
+        [
+            definition("domain_check"),
+            capability_definition("shared_check", "template-relevance"),
+            capability_definition("other_shared", "other-capability"),
+        ]
+    )
+
+    assert [tool["name"] for tool in resolve_domain_tools("code", catalogue)] == [
+        "domain_check"
+    ]
+    assert [
+        tool["name"]
+        for tool in resolve_domain_tools(
+            "code", catalogue, capabilities={"template-relevance"}
+        )
+    ] == ["domain_check", "shared_check"]
+
+
+def test_real_math_capabilities_offer_the_shared_relevance_tool():
+    from edcraft_validator.domains.math.math_domain import MathDomain
+
+    with FastMcpToolClient() as client:
+        tools = resolve_domain_tools(
+            "math", client, capabilities=MathDomain.capabilities
+        )
+
+    names = [tool["name"] for tool in tools]
+    assert "assess_template_relevance" in names
+    assert "math_assess_template_relevance" not in names
+    assert MathDomain.capabilities == frozenset({"template-relevance"})
+
+
 @pytest.mark.parametrize(
     ("listed", "message"),
     [
@@ -106,6 +146,7 @@ def test_bad_catalogue_stops_before_generation(listed, message):
 
     class Domain:
         name = "code"
+        capabilities = frozenset()
 
         def generation_request(self, request):
             pytest.fail("invalid catalogues must stop before prompt construction")

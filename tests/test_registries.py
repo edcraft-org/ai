@@ -1,5 +1,6 @@
 import pytest
 
+from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.domains import domain_registry
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.domain_registry import available_domains, create_domain
@@ -39,6 +40,14 @@ def test_domain_registry_exposes_code_without_changing_the_application() -> None
     assert domain.candidate_model is not None
     assert domain.validated_model is not None
     assert domain.question_model is not None
+    assert domain.template_language == "python"
+
+
+def test_domain_review_view_projects_only_shared_fields() -> None:
+    class EmptyArtifact(ValidatedTemplateArtifact):
+        pass
+
+    assert create_domain("code").review_view(EmptyArtifact()) is None
 
 
 def test_domain_registry_can_register_and_unregister_a_domain() -> None:
