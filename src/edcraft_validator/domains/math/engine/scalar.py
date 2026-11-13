@@ -34,6 +34,7 @@ from edcraft_validator.domains.math.engine.scalar_domains import (
     provably_zero,
     sympy_domain,
 )
+from edcraft_validator.domains.math.engine.validation import MAX_OUTPUT_TERMS
 
 _EQUIVALENCE_OPERATIONS = frozenset(
     {"evaluate", "simplify", "expand", "factor", "complete-square"}
@@ -113,6 +114,12 @@ def _check_operation(
 
 
 def _check_equivalence(ctx: EngineContext, branch: _Expressions) -> _Verdict | None:
+    # Defence in depth: validation bounds the compact input tree, but a
+    # normalising operation (expand/simplify/factor/complete-square) can still
+    # produce a candidate whose expanded form is far larger.  Refuse before any
+    # equivalence or counterexample work touches it.
+    _require_bounded_expansion(branch.source, "problem expression")
+    _require_bounded_expansion(branch.candidate, "answer expression")
     variable = _variable_for(ctx, branch)
     source_domain = domain_from_conditions(
         ctx, branch.source, branch.source_conditions, variable
@@ -423,6 +430,18 @@ def _compare_expressions(
         "could not prove exact equality and found no exact counterexample",
         method,
     )
+
+
+def _expanded_terms(value: sympy.Expr) -> int:
+    """Count actual additive terms after polynomial expansion."""
+    return len(sympy.Add.make_args(sympy.expand(value)))
+
+
+def _require_bounded_expansion(value: sympy.Expr, label: str) -> None:
+    if _expanded_terms(value) > MAX_OUTPUT_TERMS:
+        raise EngineUnsupported(
+            f"{label} expansion exceeds the {MAX_OUTPUT_TERMS}-term output budget"
+        )
 
 
 def _problem_variable(ctx: EngineContext) -> sympy.Symbol | None:

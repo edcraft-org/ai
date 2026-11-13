@@ -16,6 +16,8 @@ MAX_TOTAL_NODES = 1000
 MAX_DEPTH = 24
 MAX_MATRIX_DIMENSION = 8
 MAX_LITERAL_BITS = 512
+MAX_OUTPUT_TERMS = 20_000
+_TERM_OVERFLOW = MAX_OUTPUT_TERMS + 1
 _LITERAL = re.compile(
     r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE]([+-]?\d+))?(?:/[+-]?\d+)?$"
 )
@@ -58,6 +60,97 @@ def bounded_number(text: str) -> Fraction:
     return number
 
 
+def _clamp_terms(value: int) -> int:
+    return _TERM_OVERFLOW if value > MAX_OUTPUT_TERMS else value
+
+
+def _literal_integer(expr: Expr) -> int | None:
+    if expr.num is None:
+        return None
+    try:
+        number = bounded_number(expr.num)
+    except EngineUnsupported:
+        return None
+    if number.denominator != 1:
+        return None
+    return int(number.numerator)
+
+
+def _multinomial_terms(exponent: int, base_terms: int) -> int:
+    """C(exponent + base_terms - 1, base_terms - 1), clamped early."""
+    if exponent <= 0:
+        return 1
+    if base_terms <= 1:
+        return 1
+    if base_terms > MAX_OUTPUT_TERMS:
+        return _TERM_OVERFLOW
+    total = 1
+    for step in range(1, base_terms):
+        total = total * (exponent + step) // step
+        if total > MAX_OUTPUT_TERMS:
+            return _TERM_OVERFLOW
+    return total
+
+
+def _node_terms(expr: Expr, child_terms: list[int]) -> int:
+    operation = expr.op
+    if operation is None:
+        return 1
+    if operation == "mul":
+        total = 1
+        for child in child_terms:
+            if child > 1 and total > MAX_OUTPUT_TERMS // child:
+                return _TERM_OVERFLOW
+            total *= child
+        return _clamp_terms(total)
+    if operation == "pow":
+        base = child_terms[0] if child_terms else 1
+        exponent = _literal_integer(expr.args[1]) if len(expr.args) == 2 else None
+        if exponent is None or exponent < 0:
+            # Rational and symbolic exponents do not expand into a polynomial.
+            return base
+        return _multinomial_terms(exponent, base)
+    # add, sub, div and unary functions all add their children's term counts.
+    total = 0
+    for child in child_terms:
+        total += child
+        if total > MAX_OUTPUT_TERMS:
+            return _TERM_OVERFLOW
+    return total
+
+
+def estimated_terms(expr: Expr) -> int:
+    """Conservative, cheap estimate of the expanded term count, clamped.
+
+    The traversal is iterative and stops accumulating as soon as the estimate
+    exceeds ``MAX_OUTPUT_TERMS``, so adversarial trees cannot build huge
+    integers or exhaust the recursion limit.
+    """
+    resolved: dict[int, int] = {}
+    pending: list[tuple[Expr, bool]] = [(expr, False)]
+    while pending:
+        node, children_done = pending.pop()
+        key = id(node)
+        if key in resolved:
+            continue
+        if not children_done:
+            pending.append((node, True))
+            for child in node.args:
+                if id(child) not in resolved:
+                    pending.append((child, False))
+            continue
+        resolved[key] = _node_terms(node, [resolved[id(child)] for child in node.args])
+    return resolved[id(expr)]
+
+
+def require_bounded_terms(expr: Expr) -> None:
+    """Reject an expression whose expansion would exceed the term budget."""
+    if estimated_terms(expr) > MAX_OUTPUT_TERMS:
+        raise EngineUnsupported(
+            f"expression expansion exceeds the {MAX_OUTPUT_TERMS}-term output budget"
+        )
+
+
 def validate_request(request: CorrectnessRequest) -> None:
     """Reject unsupported trees and malformed references without running SymPy."""
     names = {symbol.name for symbol in request.problem.symbols}
@@ -68,6 +161,7 @@ def validate_request(request: CorrectnessRequest) -> None:
         nonlocal nodes, expression_nodes
         if depth == 0:
             expression_nodes = 0
+            require_bounded_terms(expr)
         nodes += 1
         expression_nodes += 1
         if nodes > MAX_TOTAL_NODES or expression_nodes > 200 or depth > MAX_DEPTH:
