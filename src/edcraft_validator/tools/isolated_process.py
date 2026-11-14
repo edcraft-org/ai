@@ -1,6 +1,6 @@
 """Shared JSON-only process boundary for trusted worker modules.
 
-The math validation and check-pilot workers own their operations and public
+The math validation and correctness workers own their operations and public
 exception types. This module owns only the transport they share: a sanitized
 environment, bounded JSON framing, a hard parent wall-clock timeout, resource
 limits applied by a tiny trusted bootstrap, and safe failure mapping.

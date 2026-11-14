@@ -27,7 +27,7 @@ metadata. CLI/server/worker boundaries construct dependencies and settings.
 The deterministic mathematics tools are additive `quality:math` interfaces, not
 legacy `domain:math` template checks. They do not rewire template authoring,
 authored recipes, relevance or difficulty routing. Historical math validation
-and pilot records keep their existing versions and behaviour.
+records keep their existing versions and behaviour.
 
 Package initializers must not construct servers. Shared evidence can be imported
 without FastMCP or application services. `mcp/evidence.py` retains compatibility

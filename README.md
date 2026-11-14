@@ -93,13 +93,7 @@ checks and may reject a seed if usable options cannot be produced.
 
 ## Integration and development
 
-The backend exposes authenticated `/ai-authoring/check-pilot` routes that call the
-private reusable-check pilot's Python facade for provider-resolved authoring,
-qualification, approval, reuse and seeded generation. This repository owns the
-AI-side service, persistence, MCP adapter and bounded isolated workers; see
-[reusable check-authoring pilot](docs/reusable-check-authoring-pilot.md). Local
-development uses the source via `PYTHONPATH`; final dependency pinning is owned
-by the integration process. The general authoring flow's typed worker boundary
+The general authoring flow's typed worker boundary
 and progress events remain described in [development](docs/development.md).
 
 ```bash
@@ -114,7 +108,6 @@ workflow smoke before a PR. See [evaluation](docs/evaluation.md) for commands.
 
 - [Mathematics domain](docs/math-domain.md): supported linear-equation templates, exact checks and unsupported cases.
 - [Mathematics correctness engine](docs/math-correctness-engine.md): additive deterministic checking for concrete answers, sampled template qualification and scope limits.
-- [Reusable check-authoring pilot](docs/reusable-check-authoring-pilot.md): private algebra, calculus, systems and matrix flow, evidence, limits and test commands.
 - [Development](docs/development.md): responsibilities, contracts and extension points.
 - [Evaluation](docs/evaluation.md): reproducible runs and interpretation limits.
 - [Production rubric](docs/difficulty-rubric.md): runtime v0.2 assessment resource.

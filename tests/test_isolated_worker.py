@@ -6,48 +6,13 @@ import subprocess
 
 import pytest
 
-from edcraft_validator.application.check_pilot.isolation import (
-    PILOT_WORKER_MODULE,
-    PilotWorkerError,
-    PilotWorkerTimeout,
-    run_pilot_isolated,
-)
-from edcraft_validator.application.check_pilot.models import (
-    CheckRecipeDefinition,
-    RecipeArgument,
-    RecipeStep,
-)
 from edcraft_validator.domains.math.validation.isolation import (
+    WORKER_MODULE,
     ValidationTimeout,
     ValidationWorkerError,
     run_isolated,
 )
 from edcraft_validator.tools import isolated_process
-
-
-def recipe() -> CheckRecipeDefinition:
-    return CheckRecipeDefinition(
-        steps=[
-            RecipeStep(
-                id="d1",
-                operation="poly.differentiate",
-                version="1",
-                arguments={
-                    "polynomial": RecipeArgument(source="input", name="problem")
-                },
-            ),
-            RecipeStep(
-                id="out",
-                operation="poly.equivalent",
-                version="1",
-                arguments={
-                    "expected": RecipeArgument(source="step", name="d1"),
-                    "actual": RecipeArgument(source="input", name="candidate"),
-                },
-            ),
-        ],
-        output="out",
-    )
 
 
 def completed(
@@ -56,36 +21,9 @@ def completed(
     return subprocess.CompletedProcess([], returncode, stdout, stderr)
 
 
-def test_pilot_worker_real_json_roundtrip() -> None:
-    response = run_pilot_isolated(
-        {
-            "operation": "execute_recipe",
-            "definition": recipe().model_dump(mode="json"),
-            "problem": "2*x + 3",
-            "candidate": "2",
-        },
-        timeout_seconds=30,
-    )
-
-    assert response["result"]["verdict"] is True
-    assert response["result"]["expected"] == "2"
-
-
-def test_pilot_timeout_terminates_a_real_worker() -> None:
-    with pytest.raises(PilotWorkerTimeout, match=r"exceeded 0\.01s"):
-        run_pilot_isolated({"operation": "noop"}, timeout_seconds=0.01)
-
-
 def test_math_timeout_terminates_a_real_worker() -> None:
     with pytest.raises(ValidationTimeout, match=r"exceeded 0\.01s"):
         run_isolated({"operation": "noop"}, timeout_seconds=0.01)
-
-
-def test_pilot_error_envelope_is_mapped_safely() -> None:
-    with pytest.raises(
-        PilotWorkerError, match="ValueError: unknown pilot operation 'noop'"
-    ):
-        run_pilot_isolated({"operation": "noop"}, timeout_seconds=30)
 
 
 def test_math_error_envelope_is_mapped_safely() -> None:
@@ -104,10 +42,10 @@ def test_nonzero_exit_is_mapped_safely(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     with pytest.raises(
-        PilotWorkerError,
-        match=r"pilot worker exited with 7: worker exploded",
+        ValidationWorkerError,
+        match=r"validation worker exited with 7: worker exploded",
     ):
-        run_pilot_isolated({"operation": "noop"}, timeout_seconds=30)
+        run_isolated({"operation": "noop"}, timeout_seconds=30)
 
 
 def test_invalid_json_is_mapped_safely(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -143,8 +81,8 @@ def test_malformed_error_envelope_is_mapped_safely(
         lambda *args, **kwargs: completed(stdout='{"error": "bad worker"}'),
     )
 
-    with pytest.raises(PilotWorkerError, match="error: bad worker"):
-        run_pilot_isolated({"operation": "noop"}, timeout_seconds=30)
+    with pytest.raises(ValidationWorkerError, match="error: bad worker"):
+        run_isolated({"operation": "noop"}, timeout_seconds=30)
 
 
 def test_worker_environment_keeps_runtime_inputs_only(
@@ -184,7 +122,7 @@ def test_subprocess_receives_the_sanitized_environment(
 
     monkeypatch.setattr(isolated_process.subprocess, "run", fake_run)
 
-    assert run_pilot_isolated({"operation": "noop"}, timeout_seconds=30) == {}
+    assert run_isolated({"operation": "noop"}, timeout_seconds=30) == {}
     environment = observed["env"]
     assert isinstance(environment, dict)
     assert "EDCRAFT_FAKE_API_KEY" not in environment
@@ -204,7 +142,7 @@ def test_oversized_payload_is_rejected_before_spawning(
     monkeypatch.setattr(isolated_process.subprocess, "run", fake_run)
 
     with pytest.raises(ValueError, match="payload exceeds"):
-        run_pilot_isolated(
+        run_isolated(
             {"data": "x" * (isolated_process.MAX_PAYLOAD_BYTES + 1)},
             timeout_seconds=30,
         )
@@ -305,8 +243,8 @@ def test_resource_limits_respect_tighter_inherited_caps(
     ]
 
 
-def test_pilot_module_name_stays_an_application_constant() -> None:
-    assert PILOT_WORKER_MODULE == "edcraft_validator.application.check_pilot.worker"
+def test_worker_module_names_stay_application_constants() -> None:
+    assert WORKER_MODULE == "edcraft_validator.domains.math.validation.worker"
     assert isolated_process.BOOTSTRAP_MODULE == (
         "edcraft_validator.tools.isolated_worker_bootstrap"
     )
