@@ -194,6 +194,22 @@ def test_differentiate_product_and_chain_rules() -> None:
     )
 
 
+def test_wrong_derivative_is_rejected_without_a_symbolic_zero_proof(
+    monkeypatch,
+) -> None:
+    """A sampled counterexample settles a wrong answer before costly proofs."""
+    from edcraft_validator.domains.math.engine import scalar
+
+    def forbid(*args, **kwargs):
+        raise AssertionError("a witnessed mismatch must not need provably_zero")
+
+    monkeypatch.setattr(scalar, "provably_zero", forbid)
+    chain = sin(power(sym("x"), 2))
+    wrong = cos(power(sym("x"), 2))
+
+    assert _outcome("differentiate", chain, wrong, variable="x") == "incorrect"
+
+
 def test_differentiate_higher_order() -> None:
     source = power(sym("x"), 3)
     assert (

@@ -76,8 +76,15 @@ def expression_equivalence(
     """Decide semantic equality; ``None`` means the comparison could not decide."""
     if left == right:
         return True
+    difference = left - right
+    # A sampled nonzero point already disproves equality, so try it before the
+    # expensive symbolic simplification. Wrong choices are the common case and
+    # should be rejected cheaply.
+    names = sorted(difference.free_symbols, key=sympy.default_sort_key)
+    if names and _find_counterexample(difference, names) is not None:
+        return False
     try:
-        difference = sympy.simplify(sympy.together(left - right))
+        difference = sympy.simplify(sympy.together(difference))
     except Exception:  # total: an undecidable difference stays undecided
         return None
     if difference == 0:
@@ -95,9 +102,6 @@ def expression_equivalence(
             decided = None
         if decided is True:
             return True
-    names = sorted(difference.free_symbols, key=sympy.default_sort_key)
-    if _find_counterexample(difference, names) is not None:
-        return False
     return None
 
 

@@ -150,6 +150,25 @@ def test_expression_equivalence_is_tri_state() -> None:
     assert expression_equivalence(x, x + 1) is False
 
 
+def test_expression_equivalence_finds_a_counterexample_before_simplifying(
+    monkeypatch,
+) -> None:
+    """A sampled mismatch settles inequality without a symbolic simplification."""
+    from edcraft_validator.domains.math.validation import distinct
+
+    original = distinct.sympy.simplify
+
+    def guarded(value, **kwargs):
+        if getattr(value, "free_symbols", None):
+            raise TypeError("symbolic simplify disabled for this test")
+        return original(value, **kwargs)
+
+    x = sympy.Symbol("x")
+    monkeypatch.setattr(distinct.sympy, "simplify", guarded)
+
+    assert expression_equivalence(x, x + 1) is False
+
+
 def test_same_value_compares_supported_answer_shapes() -> None:
     assert same_value(sympy.Tuple(1, 2), sympy.Tuple(1, 2))
     assert not same_value(sympy.Tuple(1, 2), sympy.Integer(1))

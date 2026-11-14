@@ -413,8 +413,9 @@ def _compare_expressions(
     incorrect_reason: str,
 ) -> _Verdict:
     difference = expected - candidate
-    if provably_zero(difference, domain):
-        return _Verdict("correct", correct_reason, method)
+    # A witnessed nonzero point already disproves equality, so search for one
+    # before the expensive symbolic zero tests. This keeps a wrong answer
+    # cheap to reject instead of paying for simplify/trigsimp/factor first.
     witness = counterexample(
         difference, domain, ctx, extra_symbols=difference.free_symbols
     )
@@ -430,6 +431,8 @@ def _compare_expressions(
                 }
             },
         )
+    if provably_zero(difference, domain):
+        return _Verdict("correct", correct_reason, method)
     return _Verdict(
         "unknown",
         "could not prove exact equality and found no exact counterexample",
