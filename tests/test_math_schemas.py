@@ -212,6 +212,8 @@ def test_generation_request_uses_math_response_contract() -> None:
     assert "answer_recipe" in system_prompt
     assert "bounded integer literal" in system_prompt
     assert "never both" in system_prompt
+    assert "different names" in system_prompt
+    assert "product of factors" in system_prompt
     assert "Required usable distractors: 2" in request.messages[1]["content"]
 
 

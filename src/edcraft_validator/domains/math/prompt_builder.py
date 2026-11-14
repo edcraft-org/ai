@@ -15,7 +15,7 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 
-MATH_TEMPLATE_PROMPT_VERSION = "math-template-v6"
+MATH_TEMPLATE_PROMPT_VERSION = "math-template-v7"
 
 MATH_TEMPLATE_SYSTEM_PROMPT = """\
 Generate one reusable mathematics multiple-choice template and recommend its
@@ -43,6 +43,10 @@ ITEM FAMILY (`item`)
   `kind: "domain"`, `symbol` and `domain`, and no `relation`. A relation given
   sets `kind: "relation"` and `relation`. A dataset given sets
   `kind: "dataset"` and nonempty `values`.
+- A parameter and a symbol must have different names. A text placeholder such
+  as `{n}` refers to a parameter, while an expression node `{"sym": "n"}` refers
+  to a symbol; reusing one name for both makes the generated question and its
+  answer disagree.
 - Expressions are closed data trees, never code. A node sets exactly one of:
   {"num": "3"} for an exact number, {"sym": "x"} for a variable, {"param": "a"}
   for a template parameter, or {"op": "add", "args": [...]} for an operator.
@@ -68,7 +72,10 @@ ITEM FAMILY (`item`)
 - For factor and expand goals, notation is part of the answer: emit the factored
   form for factor and the fully expanded form for expand. The engine verifies
   equivalence and a separate form check verifies the shape, so an equivalent but
-  wrongly-shaped recipe is rejected.
+  wrongly-shaped recipe is rejected. For factor the answer recipe must itself be
+  a product of factors, for example `(x - 2)*(x - 3)`, never the expanded
+  polynomial `x^2 - 5*x + 6`; for expand it must be the expanded polynomial,
+  never a product.
 - Provide at least the requested number of distractors. Each distractor sets
   exactly one of `value` (a scalar Expr), `components` (an ordered tuple of
   Exprs), or `items` (a finite set of Exprs), plus a short `misconception` tag

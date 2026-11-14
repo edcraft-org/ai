@@ -201,6 +201,30 @@ def test_ir_template_rejects_unknown_text_placeholders() -> None:
         )
 
 
+def test_ir_template_rejects_a_parameter_used_as_a_symbol() -> None:
+    """A name cannot be both a template parameter and an item symbol."""
+    template = arithmetic_ir_template()
+    body = template.body.model_copy(
+        update={
+            "goal": template.body.goal.model_copy(
+                update={
+                    "expr": Expr(
+                        op="add", args=[Expr(sym="a"), Expr(param="b")]
+                    )
+                }
+            )
+        },
+        deep=True,
+    )
+
+    with pytest.raises(ValidationError, match="referenced as symbols"):
+        MathTemplateSpec(
+            topic=template.topic,
+            parameters=template.parameters,
+            body=body,
+        )
+
+
 def test_representative_item_substitutes_parameters_and_text() -> None:
     template = quadratic_ir_template()
 

@@ -7,6 +7,7 @@ model may only emit the fields and operators declared here. The compiler in
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -294,52 +295,50 @@ class ParameterSpec(Record):
     values: list[str] = Field(min_length=1, max_length=32)
 
 
-def _expr_parameters(expr: Expr | None) -> set[str]:
+def _expr_nodes(expr: Expr | None) -> Iterator[Expr]:
     if expr is None:
-        return set()
-    found = {expr.param} if expr.param is not None else set()
+        return
+    yield expr
     for child in expr.args:
-        found.update(_expr_parameters(child))
-    return found
+        yield from _expr_nodes(child)
 
 
-def _relation_parameters(relation: Relation | None) -> set[str]:
-    if relation is None:
-        return set()
-    return _expr_parameters(relation.lhs) | _expr_parameters(relation.rhs)
-
-
-def _recipe_parameters(recipe: AnswerRecipe | None) -> set[str]:
-    if recipe is None:
-        return set()
-    found: set[str] = set()
-    for entry in recipe.items:
-        found.update(_expr_parameters(entry))
-    for row in recipe.matrix or []:
+def _item_expr_nodes(item: MathItemSpec) -> Iterator[Expr]:
+    for given in item.givens:
+        if given.relation is not None:
+            yield from _expr_nodes(given.relation.lhs)
+            yield from _expr_nodes(given.relation.rhs)
+    yield from _expr_nodes(item.goal.expr)
+    yield from _expr_nodes(item.goal.point)
+    for row in item.goal.matrix or []:
         for cell in row:
-            found.update(_expr_parameters(cell))
-    if recipe.interval is not None:
-        found.update(_expr_parameters(recipe.interval.lower))
-        found.update(_expr_parameters(recipe.interval.upper))
-    return found
+            yield from _expr_nodes(cell)
+    recipe = item.answer_recipe
+    if recipe is not None:
+        for entry in recipe.items:
+            yield from _expr_nodes(entry)
+        for row in recipe.matrix or []:
+            for cell in row:
+                yield from _expr_nodes(cell)
+        if recipe.interval is not None:
+            yield from _expr_nodes(recipe.interval.lower)
+            yield from _expr_nodes(recipe.interval.upper)
+    for distractor in item.distractors:
+        yield from _expr_nodes(distractor.value)
+        for entry in [*distractor.items, *distractor.components]:
+            yield from _expr_nodes(entry)
 
 
 def item_parameters(item: MathItemSpec) -> set[str]:
     """Return every parameter name referenced by an item body."""
-    found: set[str] = set()
-    for given in item.givens:
-        found.update(_relation_parameters(given.relation))
-    found.update(_expr_parameters(item.goal.expr))
-    found.update(_expr_parameters(item.goal.point))
-    for row in item.goal.matrix or []:
-        for cell in row:
-            found.update(_expr_parameters(cell))
-    found.update(_recipe_parameters(item.answer_recipe))
-    for distractor in item.distractors:
-        found.update(_expr_parameters(distractor.value))
-        for entry in [*distractor.items, *distractor.components]:
-            found.update(_expr_parameters(entry))
-    return found
+    return {
+        node.param for node in _item_expr_nodes(item) if node.param is not None
+    }
+
+
+def item_symbols(item: MathItemSpec) -> set[str]:
+    """Return every symbol name referenced by an item body."""
+    return {node.sym for node in _item_expr_nodes(item) if node.sym is not None}
 
 
 class MathTemplateSpec(Record):
@@ -356,6 +355,12 @@ class MathTemplateSpec(Record):
         if len(names) != len(set(names)):
             raise ValueError("template parameter names must be unique")
         declared = set(names)
+        ambiguous = sorted(declared & item_symbols(self.body))
+        if ambiguous:
+            raise ValueError(
+                "parameters must not also be referenced as symbols: "
+                + ", ".join(ambiguous)
+            )
         used = item_parameters(self.body)
         unknown = sorted(used - declared)
         if unknown:
