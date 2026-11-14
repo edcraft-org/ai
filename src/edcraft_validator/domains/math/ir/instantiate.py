@@ -21,7 +21,6 @@ from edcraft_validator.domains.math.ir.compile import (
     MathCompileError,
     build_symbols,
     compile_expr,
-    compile_relation,
     parse_exact,
 )
 from edcraft_validator.domains.math.ir.schema import (
@@ -178,7 +177,12 @@ def render_relation(
     symbols: Mapping[str, sympy.Symbol],
     params: Mapping[str, Fraction] | None = None,
 ) -> str:
-    compiled = compile_relation(relation, symbols, params)
+    """Render a relation without evaluating it to a truth value.
+
+    Parameter-only guards such as ``a != 0`` collapse to ``True``/``False``
+    when both sides are substituted. Rendering the operands directly keeps the
+    authored relation visible instead of raising on a missing ``lhs``.
+    """
     operator = {
         "eq": "=",
         "ne": "≠",
@@ -187,7 +191,21 @@ def render_relation(
         "gt": ">",
         "ge": "≥",
     }[relation.kind]
-    return f"{render_expr(compiled.lhs)} {operator} {render_expr(compiled.rhs)}"
+    lhs = render_expr(compile_expr(relation.lhs, symbols, params))
+    rhs = render_expr(compile_expr(relation.rhs, symbols, params))
+    return f"{lhs} {operator} {rhs}"
+
+
+def _expr_has_symbol(expr: Expr | None) -> bool:
+    if expr is None:
+        return False
+    if expr.sym is not None:
+        return True
+    return any(_expr_has_symbol(child) for child in expr.args)
+
+
+def _relation_has_symbol(relation: Relation) -> bool:
+    return _expr_has_symbol(relation.lhs) or _expr_has_symbol(relation.rhs)
 
 
 def render_matrix(
@@ -208,11 +226,18 @@ def render_relations(
     item: MathItemSpec,
     params: Mapping[str, Fraction] | None = None,
 ) -> list[str]:
+    """Render the symbol-bearing relations a learner would see.
+
+    Relations that only mention substituted parameters are authoring guards
+    (for example ``a != 0`` or ``a*d - b*c != 0``), not problem equations.
+    """
     symbols = build_symbols(item.symbols)
     return [
         render_relation(given.relation, symbols, params)
         for given in item.givens
-        if given.kind == "relation" and given.relation is not None
+        if given.kind == "relation"
+        and given.relation is not None
+        and _relation_has_symbol(given.relation)
     ]
 
 

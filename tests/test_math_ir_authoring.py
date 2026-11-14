@@ -9,6 +9,8 @@ from math_helpers import (
     derivative_ir_template,
     determinant_ir_template,
     ir_candidate,
+    ir_num,
+    ir_param,
     ir_proposal,
     linear_ir_template,
     linear_system_ir_template,
@@ -26,8 +28,10 @@ from edcraft_validator.domains.math.ir.instantiate import (
 from edcraft_validator.domains.math.ir.schema import (
     Distractor,
     Expr,
+    Given,
     MathTemplateSpec,
     ParameterSpec,
+    Relation,
 )
 from edcraft_validator.domains.math.math_domain import MathDomain
 from edcraft_validator.domains.math.math_schemas import (
@@ -303,6 +307,28 @@ def test_representative_item_substitutes_parameters_and_text() -> None:
     assert "{p}" not in item.text.template
     assert "{q}" not in item.text.template
     assert "x^2" in item.text.template
+
+
+def test_representative_item_skips_parameter_only_guards() -> None:
+    """A guard such as ``a != 0`` must not be rendered as a problem equation."""
+    template = linear_ir_template()
+    body = template.body.model_copy(deep=True)
+    body.givens.append(
+        Given(
+            id="a_nonzero",
+            relation=Relation(kind="ne", lhs=ir_param("a"), rhs=ir_num(0)),
+        )
+    )
+    guarded = MathTemplateSpec(
+        topic=template.topic,
+        parameters=template.parameters,
+        body=body,
+    )
+
+    item = representative_item(guarded)
+
+    assert "≠" not in item.text.template
+    assert item.text.template.startswith("Solve ")
 
 
 def _passing_evidence(tool: str) -> ToolEvidence:
