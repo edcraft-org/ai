@@ -25,6 +25,10 @@ DEFAULT_OPENAI_MODEL = "gpt-5-mini"
 DEFAULT_SOCLAAS_MODEL = "x-test-1"
 OpenAIGenerationError = GenerationError
 
+#: Providers that validate ``json_schema`` against the strict structured-output
+#: contract before inference, so only strict-compatible schemas may be sent.
+_STRICT_SCHEMA_PROVIDERS = frozenset({"openai"})
+
 
 class OpenAICompatibleProvider:
     """Structured generation through an OpenAI-compatible API."""
@@ -51,7 +55,11 @@ class OpenAICompatibleProvider:
         self.model = model or _model(provider)
         self.last_usage = TokenUsage()
         soclaas = provider == "soclaas"
+        self.enforces_strict_schema = provider in _STRICT_SCHEMA_PROVIDERS
         self._response_format = _response_format(provider)
+        # Set once a request has chosen a legal wire format, so recorded
+        # settings describe the format that was actually sent.
+        self._effective_response_format: str | None = None
         self._generation_max_tokens = _positive_int_setting(
             provider, "GENERATION_MAX_TOKENS", 32768 if soclaas else None
         )
@@ -63,10 +71,11 @@ class OpenAICompatibleProvider:
         timeout = getattr(self.client, "timeout", None)
         if timeout is not None and not isinstance(timeout, int | float):
             timeout = str(timeout)
+        response_format = self._effective_response_format or self._response_format
         settings = {
             "sampling": "provider_defaults",
-            "response_format": self._response_format,
-            "strict": self._response_format == "json_schema",
+            "response_format": response_format,
+            "strict": response_format == "json_schema",
             "timeout_seconds": timeout,
             "max_retries": getattr(self.client, "max_retries", None),
         }
@@ -81,6 +90,27 @@ class OpenAICompatibleProvider:
     def close(self) -> None:
         if self._owns_client:
             self.client.close()
+
+    def _wire_response_format(self, schema: dict[str, Any]) -> str:
+        """Return the response format this request can legally send.
+
+        An endpoint that enforces the strict structured-output contract rejects
+        a ``json_schema`` request whose objects leave properties out of
+        ``required`` or allow additional ones, and it rejects it before
+        inference. Pydantic emits neither for fields that carry a default, so a
+        schema such as the mathematics IR is refused with HTTP 400 while the
+        model is never invoked. Fall back to JSON mode there and let local
+        validation enforce the schema instead.
+        """
+        if (
+            self._response_format == "json_schema"
+            and self.enforces_strict_schema
+            and not strict_schema_compatible(schema)
+        ):
+            self._effective_response_format = "json_object"
+        else:
+            self._effective_response_format = self._response_format
+        return self._effective_response_format
 
     def generate[ProposalT: BaseModel](
         self, request: StructuredGenerationRequest[ProposalT]
@@ -99,8 +129,9 @@ class OpenAICompatibleProvider:
             )
             schema = wire_model.model_json_schema()
             messages = generation_messages(request)
-            response_format = {"type": self._response_format}
-            if self._response_format == "json_schema":
+            wire_format = self._wire_response_format(schema)
+            response_format = {"type": wire_format}
+            if wire_format == "json_schema":
                 response_format["json_schema"] = {
                     "name": request.schema_name,
                     "strict": True,
@@ -204,6 +235,46 @@ class OpenAICompatibleProvider:
 def _variable(provider: str, name: str) -> str:
     """Both providers configure the same options under their own prefix."""
     return f"{provider.upper()}_{name}"
+
+
+def strict_schema_compatible(schema: dict[str, Any]) -> bool:
+    """Return whether a wire schema satisfies strict structured outputs.
+
+    The contract requires every object to set ``additionalProperties: false``
+    and to list every property in ``required``. Free-form mappings cannot be
+    expressed at all, so a ``dict[str, ...]`` field never qualifies.
+    """
+    return not _strict_violations(schema)
+
+
+def _strict_violations(node: Any, path: str = "$") -> list[str]:
+    """Collect strict-contract violations, including inside ``$defs``."""
+    violations: list[str] = []
+    if isinstance(node, dict):
+        if node.get("type") == "object" or "properties" in node:
+            properties = node.get("properties") or {}
+            if node.get("additionalProperties") is not False:
+                violations.append(f"{path}: additionalProperties must be false")
+            if set(node.get("required") or []) != set(properties):
+                violations.append(f"{path}: required must list every property")
+        for key, value in node.items():
+            if key == "properties" and isinstance(value, dict):
+                for name, child in value.items():
+                    violations += _strict_violations(child, f"{path}.{name}")
+            elif key in {"items", "additionalProperties"} and isinstance(
+                value, dict | list
+            ):
+                violations += _strict_violations(value, f"{path}.{key}")
+            elif key in {"$defs", "definitions"} and isinstance(value, dict):
+                for name, child in value.items():
+                    violations += _strict_violations(child, f"{path}.{name}")
+            elif key in {"anyOf", "oneOf", "allOf"} and isinstance(value, list):
+                for index, child in enumerate(value):
+                    violations += _strict_violations(child, f"{path}.{key}[{index}]")
+    elif isinstance(node, list):
+        for index, child in enumerate(node):
+            violations += _strict_violations(child, f"{path}[{index}]")
+    return violations
 
 
 def _api_key(provider: str) -> str | None:

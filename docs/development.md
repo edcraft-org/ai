@@ -157,6 +157,15 @@ and `OPENAI_REASONING_EFFORT` configure existing transport
 options without adding another provider. These settings do not guarantee support
 for decision logprobs or reasoning controls on that endpoint.
 
+OpenAI validates a `json_schema` response format before inference and rejects any
+schema that strict structured outputs cannot express: every object needs
+`additionalProperties: false` and must list every property in `required`, and
+free-form mappings are not expressible at all. Pydantic omits both for fields with
+defaults, which the mathematics IR uses throughout, so the adapter falls back to
+`json_object` for those requests and relies on local validation instead. Code
+proposals keep strict mode because their tool-constrained schema satisfies the
+contract.
+
 SocLaas defaults to a 32,768-token output budget. The shipped configuration also
 sets low generation reasoning; `SOCLAAS_GENERATION_MAX_TOKENS`,
 `SOCLAAS_REASONING_EFFORT` and `SOCLAAS_TIMEOUT_SECONDS` override both settings.

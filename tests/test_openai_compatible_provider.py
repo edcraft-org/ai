@@ -3,7 +3,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
 from edcraft_validator.domains.code.prompt_builder import build_code_generation_request
@@ -18,11 +18,14 @@ from edcraft_validator.llm.llm_errors import (
 from edcraft_validator.llm.openai_compatible_provider import (
     OpenAICompatibleProvider,
     OpenAIGenerationError,
+    OpenAIProvider,
+    SocLaasProvider,
     _api_key,
     _base_url,
     _max_retries,
     _model,
     _timeout_seconds,
+    strict_schema_compatible,
 )
 from edcraft_validator.llm.tool_context import constrained_check_plan
 
@@ -35,6 +38,28 @@ def generation_request(
             CodeTemplateRequest(prompt=prompt, difficulty=difficulty)
         ),
         offered_tool_names=("code_execution", "code_structure"),
+    )
+
+
+class DefaultedProposal(BaseModel):
+    """A schema with a defaulted field, which strict outputs cannot express.
+
+    Pydantic keeps ``note`` out of ``required`` because it has a default, so an
+    endpoint that enforces the strict contract refuses the schema before
+    inference.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    answer: str
+    note: str = ""
+
+
+def defaulted_request() -> StructuredGenerationRequest[DefaultedProposal]:
+    return StructuredGenerationRequest(
+        messages=[{"role": "user", "content": "Give an answer"}],
+        response_model=DefaultedProposal,
+        prompt_version="defaulted-v1",
     )
 
 
@@ -233,8 +258,105 @@ def test_provider_accepts_a_schema_from_another_domain() -> None:
     result = provider.generate(request)
 
     assert result == ExampleProposal(equation="x + 1")
-    schema = client.chat.completions.arguments["response_format"]["json_schema"]
-    assert "equation" in schema["schema"]["properties"]
+    # A bare BaseModel omits additionalProperties, so strict mode cannot express
+    # it and the request travels as JSON mode with the schema in the prompt.
+    arguments = client.chat.completions.arguments
+    assert arguments["response_format"] == {"type": "json_object"}
+    assert '"equation"' in arguments["messages"][-1]["content"]
+
+
+def test_openai_falls_back_to_json_mode_for_a_non_strict_schema(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_RESPONSE_FORMAT", raising=False)
+    client = client_with_content("{}")
+    provider = OpenAIProvider(client=client, model="gpt-5-mini")
+
+    with pytest.raises(GenerationSchemaError):
+        provider.generate(defaulted_request())
+
+    arguments = client.chat.completions.arguments
+    assert arguments["response_format"] == {"type": "json_object"}
+    instruction = arguments["messages"][-1]["content"]
+    assert "line breaks and indentation" in instruction
+    assert '"note"' in instruction
+    settings = provider.generation_settings()
+    assert settings["response_format"] == "json_object"
+    assert settings["strict"] is False
+
+
+def test_soclaas_keeps_strict_json_schema_for_the_same_request(monkeypatch) -> None:
+    monkeypatch.delenv("SOCLAAS_RESPONSE_FORMAT", raising=False)
+    client = client_with_content("{}")
+    provider = SocLaasProvider(client=client, model="x-test-2")
+
+    with pytest.raises(GenerationSchemaError):
+        provider.generate(defaulted_request())
+
+    response_format = client.chat.completions.arguments["response_format"]
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["strict"] is True
+    assert provider.generation_settings()["strict"] is True
+
+
+def test_strict_schema_compatibility_passes_a_fully_required_object() -> None:
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    }
+
+    assert strict_schema_compatible(schema) is True
+
+
+def test_strict_schema_compatibility_rejects_defaulted_properties() -> None:
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "name": {"type": "string"},
+            "kind": {"type": "string", "default": "unknown"},
+        },
+        "required": ["name"],
+    }
+
+    assert strict_schema_compatible(schema) is False
+
+
+def test_strict_schema_compatibility_rejects_free_form_mappings() -> None:
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "anchors": {
+                "type": "object",
+                "additionalProperties": {"type": "string"},
+            }
+        },
+        "required": ["anchors"],
+    }
+
+    assert strict_schema_compatible(schema) is False
+
+
+def test_strict_schema_compatibility_inspects_nested_definitions() -> None:
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {"item": {"$ref": "#/$defs/Item"}},
+        "required": ["item"],
+        "$defs": {
+            "Item": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {"value": {"type": "string"}},
+                "required": [],
+            }
+        },
+    }
+
+    assert strict_schema_compatible(schema) is False
 
 
 def test_reports_empty_template_response() -> None:

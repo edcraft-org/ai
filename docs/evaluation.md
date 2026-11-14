@@ -64,6 +64,10 @@ native-tool/acknowledgement, patch-only or exhaustive-checking experiments descr
 their recorded revisions. Preserve those records rather than pooling them with the
 current workflow. SocLaas structured output defaults to `json_schema`;
 `json_object` is an explicit weaker wire option with local schema validation.
+Endpoints that enforce strict structured outputs, such as OpenAI, reject a
+`json_schema` request whose schema cannot satisfy `additionalProperties: false`
+and a complete `required` list, so the adapter sends those requests as
+`json_object` and validates the response locally.
 
 ## Mathematics correctness
 
