@@ -52,7 +52,8 @@ def item(goal: Goal, *givens: Given, symbols: tuple[str, ...] = ("x",)) -> MathI
     return MathItemSpec(
         topic="test.forms",
         symbols=[SymbolSpec(name=name) for name in symbols],
-        givens=list(givens) or [Given(id="g0", kind="dataset", values=["0"])],
+        givens=list(givens)
+        or [Given(id="g0", kind="domain", symbol=symbols[0], domain="real")],
         goal=goal,
         text=TextSpec(mode="symbolic", template="Test item."),
     )
@@ -166,15 +167,22 @@ def test_solve_accepts_a_set_answer() -> None:
     assert result == FormResult("pass")
 
 
-def test_solve_accepts_a_tuple_answer() -> None:
+def test_solve_rejects_a_tuple_for_one_unknown() -> None:
     result = check_form(linear_item(), AnswerRecipe(kind="tuple", items=[num(4)]))
+    assert result.status == "fail"
+    assert "requires a set" in result.reason
+
+
+def test_solve_accepts_a_tuple_for_a_system() -> None:
+    system = item(Goal(kind="solve", symbols=["x", "y"]), symbols=("x", "y"))
+    result = check_form(system, AnswerRecipe(kind="tuple", items=[num(4), num(5)]))
     assert result == FormResult("pass")
 
 
 def test_solve_rejects_a_single_expression_answer() -> None:
     result = check_form(linear_item(), one(num(4)))
     assert result.status == "fail"
-    assert "set or an ordered tuple" in result.reason
+    assert "requires an answer set" in result.reason
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,14 @@
 # A general validation method for math questions
 
-Status: implemented for V0-V7 (school and university symbolic topics). The Lean
-proof track is deferred. This document supersedes the family-by-family approach
+> **Superseded.** This document records the V0-V7 pilot design (a solver-derived
+> key plus answer-type primitives). The shipped contract is the authored-recipe
+> design in `math-domain.md`: the model authors an `AnswerRecipe`, the
+> deterministic engine grades correctness and the form registry grades shape.
+> The solver, the primitive registry and the derived `answer` field were removed,
+> so sections 4 and 5 below describe history, not the current code.
+
+Status: historical pilot design, superseded by `math-domain.md`. The Lean proof
+track is deferred. This document supersedes the family-by-family approach
 in `math-domain-roadmap.md` Parts C and D.
 
 ## 1. The short answer

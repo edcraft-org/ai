@@ -323,18 +323,9 @@ def compile_distractor_value(
     )
 
 
-def display_distractor(
-    item: MathItemSpec,
-    distractor: Distractor,
-    params: Mapping[str, Fraction] | None = None,
-) -> str:
-    return display_sympy_value(compile_distractor_value(item, distractor, params))
-
-
 __all__ = [
     "MathCompileError",
     "compile_distractor_value",
-    "display_distractor",
     "display_sympy_value",
     "fraction_text",
     "parameter_combinations",

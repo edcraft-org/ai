@@ -283,3 +283,20 @@ def test_recipe_parameters_compile_exactly() -> None:
     assert compile_answer_recipe(
         recipe, [SymbolSpec(name="x")], {"a": Fraction(1, 2)}
     ) == sympy.Rational(1, 8)
+
+
+def test_matrix_shapes_must_be_rectangular() -> None:
+    with pytest.raises(ValidationError, match="rectangular"):
+        AnswerRecipe(kind="matrix", matrix=[[num(1), num(2)], [num(3)]])
+
+    with pytest.raises(ValidationError, match="rectangular"):
+        MathItemSpec(
+            topic="school.matrix",
+            symbols=[SymbolSpec(name="x")],
+            givens=[Given(id="g1", kind="domain", symbol="x", domain="real")],
+            goal=Goal(
+                kind="determinant",
+                matrix=[[num(1), num(2)], [num(3)]],
+            ),
+            text=TextSpec(mode="symbolic", template="Find the determinant."),
+        )

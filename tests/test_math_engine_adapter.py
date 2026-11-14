@@ -57,7 +57,8 @@ def item(
     return MathItemSpec(
         topic="test.adapter",
         symbols=[SymbolSpec(name=name) for name in symbols],
-        givens=list(givens) or [Given(id="g0", kind="dataset", values=["0"])],
+        givens=list(givens)
+        or [Given(id="g0", kind="domain", symbol=symbols[0], domain="real")],
         goal=goal,
         text=TextSpec(mode="symbolic", template="Test item."),
     )
@@ -311,3 +312,29 @@ def test_grade_distractor_kinds() -> None:
         ).outcome
         == "incorrect"
     )
+
+
+def test_domain_givens_reach_the_engine() -> None:
+    spec = item(
+        Goal(kind="solve", symbol="x"),
+        Given(
+            id="g1",
+            relation=Relation(kind="eq", lhs=mul(num(2), sym("x")), rhs=num(1)),
+        ),
+        Given(id="dom", kind="domain", symbol="x", domain="integer"),
+    )
+    request = to_correctness_request(spec, AnswerRecipe(kind="set", items=[num("1/2")]))
+
+    assert request.problem.symbols[0].domain == "integer"
+    assert (
+        grade(spec, AnswerRecipe(kind="set", items=[num("1/2")])).outcome != "correct"
+    )
+
+
+def test_dataset_givens_are_refused() -> None:
+    spec = item(Goal(kind="evaluate", expr=num(1))).model_copy(
+        update={"givens": [Given(id="g0", kind="dataset", values=["1"])]}
+    )
+
+    with pytest.raises(AdapterGap, match="dataset"):
+        to_correctness_request(spec, AnswerRecipe(kind="numeric", items=[num(1)]))

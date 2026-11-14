@@ -7,8 +7,9 @@ product of irreducible factors, a solution set, a finite scalar determinant,
 and so on.
 
 Every check is total: :func:`check_form` returns a :class:`FormResult` and
-never raises. SymPy is used only here; the registry inspects the compiled
-answer, never the goal, so notation and truth stay independent verdicts.
+never raises. SymPy inspection of the compiled answer happens only here; the
+registry selects a rule from the goal kind but never decides truth, so notation
+and correctness stay independent verdicts.
 """
 
 from __future__ import annotations
@@ -21,7 +22,12 @@ from typing import Literal
 import sympy
 
 from edcraft_validator.domains.math.ir.compile import build_symbols
-from edcraft_validator.domains.math.ir.schema import AnswerRecipe, MathItemSpec
+from edcraft_validator.domains.math.ir.schema import (
+    AnswerKind,
+    AnswerRecipe,
+    GoalKind,
+    MathItemSpec,
+)
 from edcraft_validator.domains.math.validation.answers import compile_answer_recipe
 
 FormStatus = Literal["pass", "fail", "unsupported"]
@@ -68,7 +74,9 @@ def _compile_answer(
     """Compile the recipe; any refusal becomes a ``fail`` result, never a raise."""
     try:
         return compile_answer_recipe(answer, item.symbols, params), None
-    except Exception as exc:  # total: an uncompilable answer has the wrong form
+    except (TypeError, ValueError) as exc:
+        # An uncompilable answer has the wrong form; unexpected exceptions are
+        # bugs and must surface in tests instead of becoming a form verdict.
         return None, FormResult("fail", f"answer does not compile: {exc}")
 
 
@@ -106,7 +114,7 @@ def _declared_poly(
         )
     try:
         return sympy.Poly(expr, *declared), None
-    except Exception as exc:  # total: non-polynomial answers fail, never raise
+    except (sympy.PolynomialError, TypeError, ValueError) as exc:
         return None, FormResult(
             "fail", f"answer is not a polynomial in the declared symbols: {exc}"
         )
@@ -174,18 +182,18 @@ def _factored_form(
     for base in _factor_bases(compiled):
         try:
             base_poly = sympy.Poly(base, *poly.gens)
-        except Exception as exc:  # total: a non-polynomial factor fails
+        except (sympy.PolynomialError, TypeError, ValueError) as exc:
             return FormResult("fail", f"factor {base} is not a polynomial: {exc}")
         if base_poly.total_degree() >= 2 and base_poly.is_irreducible is not True:
             return FormResult("fail", f"factor {base} is reducible")
     return FormResult("pass")
 
 
-def _derivative_free_form(
+def _operator_free_form(
     unevaluated: type[sympy.Basic],
     description: str,
 ) -> FormRule:
-    """Build the calculus form rule: a plain expression without the operator."""
+    """Build a calculus form rule: a plain expression without the operator."""
 
     def rule(
         item: MathItemSpec,
@@ -216,8 +224,20 @@ def _solution_set_form(
     _compiled, failure = _compile_answer(item, answer, params)
     if failure is not None:
         return failure
+    targets = item.goal.symbols or (
+        [item.goal.symbol] if item.goal.symbol is not None else []
+    )
+    expected: AnswerKind = "set" if len(targets) == 1 else "tuple"
     if answer.kind not in _SET_TUPLE_ANSWER_KINDS:
-        return FormResult("fail", "solve answers must be a set or an ordered tuple")
+        return FormResult(
+            "fail", f"a {len(targets)}-unknown solve requires an answer {expected}"
+        )
+    if answer.kind != expected:
+        return FormResult(
+            "fail",
+            f"a {len(targets)}-unknown solve requires a {expected} answer, "
+            f"not a {answer.kind}",
+        )
     return FormResult("pass")
 
 
@@ -251,13 +271,13 @@ def _expression_form(
     return FormResult("pass")
 
 
-_FORM_RULES: dict[str, FormRule] = {
+_FORM_RULES: dict[GoalKind, FormRule] = {
     "evaluate": _expression_form,
     "simplify": _expression_form,
     "expand": _expanded_form,
     "factor": _factored_form,
-    "derivative": _derivative_free_form(sympy.Derivative, "derivative"),
-    "integral": _derivative_free_form(sympy.Integral, "integral"),
+    "derivative": _operator_free_form(sympy.Derivative, "derivative"),
+    "integral": _operator_free_form(sympy.Integral, "integral"),
     "solve": _solution_set_form,
     "determinant": _determinant_form,
     # "limit" and "eigenvalues" have no entry: the registry reports them as

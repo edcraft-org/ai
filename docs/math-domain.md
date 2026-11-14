@@ -105,7 +105,7 @@ accept the same answer set. The form registry is what distinguishes them.
 | `factor` | a product of irreducible polynomial factors of degree at least two, already factored |
 | `derivative` | a plain expression with no unevaluated `Derivative` |
 | `integral` | a plain expression with no unevaluated `Integral` |
-| `solve` | a `set` or an ordered `tuple` |
+| `solve` | a `set` for one unknown, an ordered `tuple` for a system |
 | `determinant` | a finite numeric scalar |
 | `evaluate`, `simplify` | a compilable expression answer |
 
@@ -153,8 +153,9 @@ These reject rather than approximate:
 
 - `limit` and `eigenvalues` goals — no engine operation.
 - `interval` and `boolean` answers — no engine answer kind.
-- Power operations whose exponent is not a literal node, including exponents that
-  only become literal after parameter binding.
+- Power operations whose exponent is not an exact real number after parameter
+  binding, such as a symbolic exponent. A parameter exponent is bound to a
+  number first and is supported.
 - Determinant matrices whose entries are not exact numbers after binding.
 - Authoring parameters as `sym` nodes instead of `param` nodes.
 - Templates whose distractor coincides with the key, or repeats another option,

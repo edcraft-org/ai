@@ -8,8 +8,8 @@ two independent oracles that are never collapsed into one field:
 * ``form`` -- the domain form registry says ``pass`` or the item is rejected.
 
 An item passes only when both pass and every distractor is demonstrably wrong.
-A failed check blocks approval; an undecidable check is reported as
-``inconclusive`` and routes to review.
+A failed check blocks approval. Only a truncated parameter sweep is reported as
+``inconclusive``, and it routes to review.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ from edcraft_validator.domains.math.ir.schema import (
     MathItemSpec,
     MathTemplateSpec,
 )
+from edcraft_validator.domains.math.math_types import MAX_IR_VARIANTS
 from edcraft_validator.domains.math.validation.answers import compile_answer_recipe
 from edcraft_validator.domains.math.validation.distinct import same_value
 from edcraft_validator.domains.math.validation.forms import check_form
@@ -41,7 +42,7 @@ from edcraft_validator.domains.math.validation.results import (
     ValidationReport,
 )
 
-MAX_VARIANTS = 64
+MAX_VARIANTS = MAX_IR_VARIANTS
 
 # Only these goals turn notation into mathematics. For every other goal an
 # equivalent distractor is indistinguishable from the key, so applying the form
@@ -134,8 +135,14 @@ def _engine_correctness(
     return CheckResult(
         check="engine_correctness",
         status="passed" if passed else "failed",
-        reason="" if passed else f"the engine returned {outcome!r}",
-        evidence={"outcome": outcome, "expected": "correct"},
+        reason="" if passed else f"the engine returned {outcome!r}: {grading.reason}",
+        evidence={
+            "outcome": outcome,
+            "expected": "correct",
+            "reason": grading.reason,
+            "method": grading.method,
+            "details": grading.details,
+        },
     )
 
 
@@ -223,21 +230,28 @@ def _check_recipe_distractors(
             )
         )
 
+    by_index = {check.index: check for check in checks}
     for left in range(len(compiled)):
         for right in range(left + 1, len(compiled)):
-            if same_value(compiled[left][1], compiled[right][1]):
-                left_check = checks[compiled[left][0]]
-                right_check = checks[compiled[right][0]]
-                findings.append(
-                    f"options {left_check.index} and {right_check.index} are equivalent"
+            left_index, left_value = compiled[left]
+            right_index, right_value = compiled[right]
+            left_check = by_index[left_index]
+            right_check = by_index[right_index]
+            if not (
+                same_value(left_value, right_value)
+                or left_check.value == right_check.value
+            ):
+                continue
+            findings.append(
+                f"options {left_check.index} and {right_check.index} are equivalent"
+            )
+            for check in (left_check, right_check):
+                check.result = check.result.model_copy(
+                    update={
+                        "status": "failed",
+                        "reason": "duplicate distractor option",
+                    }
                 )
-                for check in (left_check, right_check):
-                    check.result = check.result.model_copy(
-                        update={
-                            "status": "failed",
-                            "reason": "duplicate distractor option",
-                        }
-                    )
     return checks, findings
 
 
@@ -261,12 +275,12 @@ def validate_template(
             report=ValidationReport(
                 status="failed",
                 findings=[
-                    "template body must declare an answer_recipe; the solver no "
-                    "longer supplies template answers"
+                    "template body must declare an answer_recipe; an answer "
+                    "cannot be derived for it"
                 ],
             )
         )
-    combinations = list(_parameter_combinations(template))
+    combinations = parameter_combinations(template)
     total_variants = len(combinations)
     if not combinations:
         return HarnessReport(
@@ -325,9 +339,3 @@ def _aggregate(statuses: list[CheckStatus]) -> CheckStatus:
     if "inconclusive" in statuses or not statuses:
         return "inconclusive"
     return "passed"
-
-
-def _parameter_combinations(
-    template: MathTemplateSpec,
-) -> list[dict[str, Fraction]]:
-    return parameter_combinations(template)

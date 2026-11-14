@@ -44,6 +44,7 @@ from edcraft_validator.domains.math.ir.schema import (
     Expr,
     GoalKind,
     MathItemSpec,
+    SymbolSpec,
 )
 
 _SCALAR_GOAL_OPERATIONS: dict[GoalKind, Operation] = {
@@ -78,8 +79,9 @@ def to_correctness_request(
     the declared symbols and parameters.
     """
     symbols = build_symbols(item.symbols)
+    symbol_specs = _reconciled_symbol_specs(item)
     try:
-        problem = _problem(item, symbols, params)
+        problem = _problem(item, symbols, params, symbol_specs)
         engine_answer = _answer(item, answer, symbols, params)
     except ValidationError as exc:
         raise AdapterGap(f"no engine representation for this item: {exc}") from exc
@@ -103,22 +105,51 @@ def grade(
 # Problem side
 
 
+def _reconciled_symbol_specs(item: MathItemSpec) -> list[SymbolSpec]:
+    """Fold domain givens into the symbol specs the engine receives.
+
+    The engine reads a symbol's domain from its :class:`SymbolSpec`, so a
+    ``domain`` given that is not forwarded would be silently ignored. Conflicting
+    facts and finite data sets have no engine representation and fail closed.
+    """
+    specs = {spec.name: spec for spec in item.symbols}
+    for given in item.givens:
+        if given.kind == "dataset":
+            raise AdapterGap("dataset givens have no engine representation")
+        if given.kind != "domain":
+            continue
+        if given.symbol is None or given.domain is None:  # unreachable by schema
+            raise AdapterGap("domain givens require a symbol and domain")
+        spec = specs.get(given.symbol)
+        if spec is None:
+            raise AdapterGap(f"domain given references unknown symbol {given.symbol!r}")
+        if spec.domain == "real":
+            specs[given.symbol] = spec.model_copy(update={"domain": given.domain})
+        elif given.domain != "real" and given.domain != spec.domain:
+            raise AdapterGap(
+                f"domain given for {given.symbol!r} conflicts with its "
+                f"declared {spec.domain} domain"
+            )
+    return list(specs.values())
+
+
 def _problem(
     item: MathItemSpec,
     symbols: Mapping[str, sympy.Symbol],
     params: Mapping[str, Fraction] | None,
+    symbol_specs: list[SymbolSpec],
 ) -> MathProblem:
     kind = item.goal.kind
     if kind in _SCALAR_GOAL_OPERATIONS:
-        return _scalar_problem(item, symbols, params)
+        return _scalar_problem(item, symbols, params, symbol_specs)
     if kind == "derivative":
-        return _calculus_problem(item, symbols, params, "differentiate")
+        return _calculus_problem(item, symbols, params, symbol_specs, "differentiate")
     if kind == "integral":
-        return _calculus_problem(item, symbols, params, "antiderivative")
+        return _calculus_problem(item, symbols, params, symbol_specs, "antiderivative")
     if kind == "solve":
-        return _solve_problem(item, symbols, params)
+        return _solve_problem(item, symbols, params, symbol_specs)
     if kind in _MATRIX_GOAL_OPERATIONS:
-        return _determinant_problem(item, symbols, params)
+        return _determinant_problem(item, symbols, params, symbol_specs)
     raise AdapterGap(f"goal kind {kind!r} has no engine operation")
 
 
@@ -126,6 +157,7 @@ def _scalar_problem(
     item: MathItemSpec,
     symbols: Mapping[str, sympy.Symbol],
     params: Mapping[str, Fraction] | None,
+    symbol_specs: list[SymbolSpec],
 ) -> MathProblem:
     kind = item.goal.kind
     operation = _SCALAR_GOAL_OPERATIONS[kind]
@@ -134,7 +166,7 @@ def _scalar_problem(
     _checked(item.goal.expr, symbols, params, f"{kind} goal expression")
     return MathProblem(
         operation=operation,
-        symbols=item.symbols,
+        symbols=symbol_specs,
         expression=_bound(item.goal.expr, params),
     )
 
@@ -143,6 +175,7 @@ def _calculus_problem(
     item: MathItemSpec,
     symbols: Mapping[str, sympy.Symbol],
     params: Mapping[str, Fraction] | None,
+    symbol_specs: list[SymbolSpec],
     operation: Operation,
 ) -> MathProblem:
     kind = item.goal.kind
@@ -153,7 +186,7 @@ def _calculus_problem(
     _checked(item.goal.expr, symbols, params, f"{kind} goal expression")
     return MathProblem(
         operation=operation,
-        symbols=item.symbols,
+        symbols=symbol_specs,
         expression=_bound(item.goal.expr, params),
         variable=item.goal.symbol,
         order=item.goal.order,
@@ -164,6 +197,7 @@ def _solve_problem(
     item: MathItemSpec,
     symbols: Mapping[str, sympy.Symbol],
     params: Mapping[str, Fraction] | None,
+    symbol_specs: list[SymbolSpec],
 ) -> MathProblem:
     relations = [
         given.relation
@@ -182,7 +216,7 @@ def _solve_problem(
         _checked(relation.rhs, symbols, params, f"solve relation {index} right side")
     return MathProblem(
         operation="solve",
-        symbols=item.symbols,
+        symbols=symbol_specs,
         relations=[
             relation.model_copy(
                 update={
@@ -201,6 +235,7 @@ def _determinant_problem(
     item: MathItemSpec,
     symbols: Mapping[str, sympy.Symbol],
     params: Mapping[str, Fraction] | None,
+    _symbol_specs: list[SymbolSpec],
 ) -> MathProblem:
     matrix = item.goal.matrix
     if not matrix:  # unreachable: the IR validator requires a matrix

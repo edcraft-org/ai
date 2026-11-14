@@ -36,6 +36,10 @@ def compile_answer_recipe(
         return _compile_recipe(recipe, symbols, params or {})
     except MathCompileError as exc:
         raise MathCompileError(f"invalid {recipe.kind} answer recipe: {exc}") from exc
+    except (TypeError, ValueError, ZeroDivisionError) as exc:
+        # SymPy's constructors refuse malformed values; report that as an
+        # uncompilable recipe rather than letting it escape the harness.
+        raise MathCompileError(f"invalid {recipe.kind} answer recipe: {exc}") from exc
 
 
 def _compile_recipe(

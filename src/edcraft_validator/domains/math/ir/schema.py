@@ -18,6 +18,15 @@ IR_VERSION: Literal["math-ir/0.1"] = "math-ir/0.1"
 # Text placeholders the renderer supplies in addition to declared parameters.
 RESERVED_TEXT_FIELDS = frozenset({"expr", "equation", "equations", "matrix"})
 
+
+def _is_rectangular(matrix: list[list[Expr]]) -> bool:
+    """Whether ``matrix`` has at least one row/column and every row matches."""
+    if not matrix:
+        return False
+    width = len(matrix[0])
+    return width > 0 and all(len(row) == width for row in matrix)
+
+
 Domain = Literal["real", "integer", "rational"]
 RelationKind = Literal["eq", "ne", "lt", "le", "gt", "ge"]
 GoalKind = Literal[
@@ -141,6 +150,8 @@ class Goal(Record):
             raise ValueError("limit goals require a point")
         if self.kind in {"determinant", "eigenvalues"} and not self.matrix:
             raise ValueError(f"{self.kind} goals require a matrix")
+        if self.matrix is not None and not _is_rectangular(self.matrix):
+            raise ValueError("goal matrices must be non-empty and rectangular")
         if self.kind == "solve" and self.symbol is not None and self.symbols:
             raise ValueError("solve goals use either symbol or symbols, not both")
         return self
@@ -184,6 +195,8 @@ class AnswerRecipe(Record):
         elif self.kind == "matrix":
             if self.matrix is None:
                 raise ValueError("matrix answer recipes require a matrix value")
+            if not _is_rectangular(self.matrix):
+                raise ValueError("matrix answer recipes require a rectangular matrix")
         elif self.kind == "boolean":
             if self.boolean is None:
                 raise ValueError("boolean answer recipes require a boolean value")

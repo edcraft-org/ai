@@ -193,7 +193,7 @@ def register_math_tools(
         item: MathItemSpec | None = None,
         template: MathTemplateSpec | None = None,
         candidate: MathTemplateCandidate | None = None,
-        max_variants: Annotated[int, Field(ge=1, le=512)] = 64,
+        max_variants: Annotated[int, Field(ge=1, le=512)] = MAX_IR_VARIANTS,
         timeout_seconds: Annotated[float, Field(gt=0, le=60)] = (
             DEFAULT_VALIDATION_TIMEOUT_SECONDS
         ),
@@ -222,8 +222,8 @@ def register_math_tools(
             "Check MCQ options deterministically: the engine must grade every "
             "distractor as incorrect while grading the answer recipe as correct, "
             "no two options may be the same value, and form-sensitive goals also "
-            "check option shape. Each option carries a misconception tag. "
-            "Inconclusive options block approval and route to review."
+            "check option shape. Each option carries a misconception tag. Any "
+            "refusal fails the option and blocks approval."
         ),
     )
     async def math_validate_options(
@@ -496,18 +496,14 @@ def _harness_evidence(
             if option.get("result", {}).get("status") != "passed"
         ]
         if failed_options:
-            ir_status = (
-                "inconclusive"
-                if all(
-                    option.get("result", {}).get("status") == "inconclusive"
-                    for option in failed_options
-                )
-                else "failed"
-            )
+            ir_status = "failed"
             findings = [
-                f"option {option.get('index')}: "
-                f"{option.get('result', {}).get('reason', '')}"
-                for option in failed_options
+                *findings,
+                *[
+                    f"option {option.get('index')}: "
+                    f"{option.get('result', {}).get('reason', '')}"
+                    for option in failed_options
+                ],
             ]
     if ir_status == "passed":
         status: Literal["passed", "failed"] = "passed"
@@ -540,7 +536,7 @@ def _harness_evidence(
             "findings": findings,
             "variants_checked": harness.get("variants_checked", 0),
             "variants_total": harness.get("variants_total", 0),
-            "checks": report.get("primitives", []),
+            "checks": report.get("checks", []),
             "options": options,
         },
         duration_ms=_elapsed_ms(started),

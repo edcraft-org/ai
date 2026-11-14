@@ -8,6 +8,7 @@ from fractions import Fraction
 from typing import Any
 
 from edcraft_validator.domains.math.ir.schema import MathItemSpec, MathTemplateSpec
+from edcraft_validator.domains.math.math_types import MAX_IR_VARIANTS
 from edcraft_validator.domains.math.validation.harness import (
     validate_item,
     validate_template,
@@ -38,7 +39,7 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
         template = MathTemplateSpec.model_validate(payload["template"])
         report = validate_template(
             template,
-            max_variants=int(payload.get("max_variants", 64)),
+            max_variants=int(payload.get("max_variants", MAX_IR_VARIANTS)),
         )
         return {"report": report.model_dump(mode="json")}
     raise ValueError(f"unknown validation operation {operation!r}")

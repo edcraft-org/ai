@@ -207,8 +207,8 @@ def derivative_ir_template():
         TextSpec,
     )
 
-    # The engine refuses power nodes whose exponent is not a bounded literal,
-    # so the fixture fixes the exponents and varies only the coefficients.
+    # The engine grades only exact real exponents, so the fixture fixes the
+    # exponents and varies only the coefficients.
     expression = ir_add(
         ir_mul(ir_param("a"), ir_pow(ir_sym("x"), ir_num(3))),
         ir_mul(ir_param("b"), ir_pow(ir_sym("x"), ir_num(2))),

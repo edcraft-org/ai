@@ -192,6 +192,4 @@ class MathQuestionInstance(BaseModel):
             raise ValueError("choices must be distinct")
         if self.choices[self.correct_index] != self.answer:
             raise ValueError("answer must equal the choice at correct_index")
-        if self.topic is None and set(self.parameters) != {"a", "b", "c"}:
-            raise ValueError("question parameters must be exactly a, b, and c")
         return self
