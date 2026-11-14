@@ -127,6 +127,67 @@ def quadratic_ir_template():
     )
 
 
+def linear_ir_template():
+    from edcraft_validator.domains.math.ir.schema import (
+        AnswerRecipe,
+        Distractor,
+        Given,
+        Goal,
+        MathItemSpec,
+        ParameterSpec,
+        Relation,
+        SymbolSpec,
+        TextSpec,
+    )
+
+    body = MathItemSpec(
+        topic="school.linear",
+        symbols=[SymbolSpec(name="x", domain="real")],
+        givens=[
+            Given(
+                id="equation",
+                relation=Relation(
+                    kind="eq",
+                    lhs=ir_add(ir_mul(ir_param("a"), ir_sym("x")), ir_param("b")),
+                    rhs=ir_param("c"),
+                ),
+            )
+        ],
+        goal=Goal(kind="solve", symbol="x", domain="real"),
+        answer_recipe=AnswerRecipe(
+            kind="set",
+            items=[ir_div(ir_sub(ir_param("c"), ir_param("b")), ir_param("a"))],
+        ),
+        distractors=[
+            Distractor(
+                value=ir_div(ir_sub(ir_param("b"), ir_param("c")), ir_param("a")),
+                misconception="SIGN_ERROR",
+                reason="Negates the numerator",
+            ),
+            Distractor(
+                value=ir_sub(ir_param("c"), ir_param("b")),
+                misconception="NO_DIVISION",
+                reason="Omits dividing by a",
+            ),
+            Distractor(
+                value=ir_div(ir_add(ir_param("c"), ir_param("b")), ir_param("a")),
+                misconception="ADD_NOT_SUBTRACT",
+                reason="Adds b instead of subtracting",
+            ),
+        ],
+        text=TextSpec(mode="symbolic", template="Solve {equation} for x."),
+    )
+    return ir_template(
+        "school.linear",
+        [
+            ParameterSpec(name="a", values=["2", "3", "5"]),
+            ParameterSpec(name="b", values=["1", "4"]),
+            ParameterSpec(name="c", values=["7", "10"]),
+        ],
+        body,
+    )
+
+
 def linear_system_ir_template():
     from edcraft_validator.domains.math.ir.schema import (
         AnswerRecipe,

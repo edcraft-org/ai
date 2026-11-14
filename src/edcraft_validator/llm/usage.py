@@ -78,6 +78,10 @@ class MeasuredProvider:
         )
         return self._call(operation, self.delegate.generate, request)
 
+    def generation_settings(self) -> dict:
+        settings = getattr(self.delegate, "generation_settings", None)
+        return dict(settings()) if settings is not None else {}
+
     def judge(self, request):
         return self._call("judging", self.delegate.generate, request)
 

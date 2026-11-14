@@ -10,6 +10,7 @@ from math_helpers import (
     determinant_ir_template,
     ir_candidate,
     ir_proposal,
+    linear_ir_template,
     linear_system_ir_template,
     percentage_ir_template,
     quadratic_ir_template,
@@ -54,6 +55,7 @@ from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
 TEMPLATES = (
     arithmetic_ir_template,
+    linear_ir_template,
     quadratic_ir_template,
     linear_system_ir_template,
     derivative_ir_template,
@@ -91,6 +93,29 @@ def test_generated_ir_questions_are_reproducible_and_well_formed(maker) -> None:
         assert first.choices[first.correct_index] == first.answer
         assert len(first.choices) == len(set(first.choices))
         assert first.requires_manual_review is True
+
+
+def test_linear_ir_template_is_graded_by_the_engine_and_form() -> None:
+    """Linear equations are an instance of the generic IR, not a legacy path."""
+    template = linear_ir_template()
+    report = validate_template(template)
+
+    assert report.report.status == "passed", report.report.findings
+    assert report.variants_checked == report.variants_total == 12
+    engine = [
+        check for check in report.report.checks if check.check == "engine_correctness"
+    ]
+    form = [check for check in report.report.checks if check.check == "form"]
+    assert engine and all(check.status == "passed" for check in engine)
+    assert form and all(check.status == "passed" for check in form)
+    assert report.report.answer.startswith("{") and report.report.answer.endswith("}")
+
+    instance = generate_math_question(_validated(template), 0)
+
+    assert instance.topic == "school.linear"
+    assert " = " in instance.equation
+    assert instance.answer.startswith("{") and instance.answer.endswith("}")
+    assert instance.choices[instance.correct_index] == instance.answer
 
 
 def test_quadratic_generation_offers_the_derived_root_set() -> None:
@@ -184,6 +209,35 @@ def test_ir_template_rejects_undeclared_parameter_nodes() -> None:
         )
 
 
+def test_ir_template_rejects_a_parameter_grid_above_the_sweep_bound() -> None:
+    values = [str(value) for value in range(1, 33)]
+    template = linear_ir_template()
+
+    with pytest.raises(ValidationError, match="at most 512"):
+        MathTemplateSpec(
+            topic=template.topic,
+            parameters=[
+                ParameterSpec(name=name, values=values) for name in ("a", "b", "c")
+            ],
+            body=template.body,
+        )
+
+
+def test_ir_template_accepts_a_parameter_grid_at_the_sweep_bound() -> None:
+    values = [str(value) for value in range(1, 9)]
+    template = linear_ir_template()
+
+    spec = MathTemplateSpec(
+        topic=template.topic,
+        parameters=[
+            ParameterSpec(name=name, values=values) for name in ("a", "b", "c")
+        ],
+        body=template.body,
+    )
+
+    assert len(spec.parameters) == 3
+
+
 def test_ir_template_rejects_unknown_text_placeholders() -> None:
     template = quadratic_ir_template()
     body = template.body.model_copy(
@@ -207,11 +261,7 @@ def test_ir_template_rejects_a_parameter_used_as_a_symbol() -> None:
     body = template.body.model_copy(
         update={
             "goal": template.body.goal.model_copy(
-                update={
-                    "expr": Expr(
-                        op="add", args=[Expr(sym="a"), Expr(param="b")]
-                    )
-                }
+                update={"expr": Expr(op="add", args=[Expr(sym="a"), Expr(param="b")])}
             )
         },
         deep=True,

@@ -8,10 +8,12 @@ model may only emit the fields and operators declared here. The compiler in
 from __future__ import annotations
 
 from collections.abc import Iterator
+from math import prod
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from edcraft_validator.domains.math.math_types import MAX_IR_VARIANTS
 from edcraft_validator.text_templates import template_fields
 
 IR_VERSION: Literal["math-ir/0.1"] = "math-ir/0.1"
@@ -331,9 +333,7 @@ def _item_expr_nodes(item: MathItemSpec) -> Iterator[Expr]:
 
 def item_parameters(item: MathItemSpec) -> set[str]:
     """Return every parameter name referenced by an item body."""
-    return {
-        node.param for node in _item_expr_nodes(item) if node.param is not None
-    }
+    return {node.param for node in _item_expr_nodes(item) if node.param is not None}
 
 
 def item_symbols(item: MathItemSpec) -> set[str]:
@@ -354,6 +354,12 @@ class MathTemplateSpec(Record):
         names = [parameter.name for parameter in self.parameters]
         if len(names) != len(set(names)):
             raise ValueError("template parameter names must be unique")
+        combinations = prod(len(parameter.values) for parameter in self.parameters)
+        if combinations > MAX_IR_VARIANTS:
+            raise ValueError(
+                f"template parameter grid has {combinations} combinations; "
+                f"the schema allows at most {MAX_IR_VARIANTS}"
+            )
         declared = set(names)
         ambiguous = sorted(declared & item_symbols(self.body))
         if ambiguous:
@@ -377,8 +383,7 @@ class MathTemplateSpec(Record):
         unused = sorted(declared - used - (fields - RESERVED_TEXT_FIELDS))
         if unused:
             raise ValueError(
-                "template declares parameters that are never used: "
-                + ", ".join(unused)
+                "template declares parameters that are never used: " + ", ".join(unused)
             )
         return self
 

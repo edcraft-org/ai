@@ -97,6 +97,9 @@ class StructuredGenerationRequest[ProposalT: BaseModel]:
     check_argument_models: tuple[tuple[str, type[BaseModel]], ...] = ()
     # Per-call override, so judge reasoning does not change authoring settings.
     reasoning_effort: str | None = None
+    # Opt in to one bounded initial schema repair. Domains whose schema is
+    # validated locally after the provider call set this; others keep one call.
+    repair_invalid_schema: bool = False
 
 
 class ModelProvider(Protocol):

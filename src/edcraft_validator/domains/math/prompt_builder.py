@@ -126,4 +126,5 @@ Supported distractor range: {MIN_DISTRACTORS} to {MAX_DISTRACTORS}
         prompt_version=f"{MATH_TEMPLATE_PROMPT_VERSION}+response-v1",
         schema_name="template_proposal_and_check_plan",
         check_argument_models=(),
+        repair_invalid_schema=True,
     )

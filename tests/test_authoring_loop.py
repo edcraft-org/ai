@@ -234,20 +234,12 @@ def test_checked_workflow_exposes_no_public_error():
     ],
 )
 def test_invalid_or_overridden_plan_arguments_stop_before_any_dispatch(arguments):
-    provider = Provider(plan_arguments={SEMANTIC: arguments})
-    result, client = run(provider)
+    result, client = run(Provider(plan_arguments={SEMANTIC: arguments}))
     assert result.status == "error"
     assert result.failure.code in {"schema_validation", "ValidationError"}
     assert not result.attempts
     assert not client.dispatches
-    # A dict-shaped plan fails local schema validation and gets one bounded
-    # repair; a non-dict plan never reaches workflow validation.
-    if result.failure.code == "schema_validation":
-        assert result.usage.model_call_count == 2
-        repair = json.loads(provider.generations[1][-1]["content"])
-        assert "validation_error" in repair
-    else:
-        assert result.usage.model_call_count == 1
+    assert result.usage.model_call_count == 1
 
 
 @pytest.mark.parametrize("tool", ["invented_tool", "another_domain_tool"])

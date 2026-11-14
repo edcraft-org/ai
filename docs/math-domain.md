@@ -37,15 +37,15 @@ instead of being skipped.
 A template declares `topic`, one to six `parameters`, and one `body`.
 
 - `parameters`: named values as exact decimal or rational strings, at most 32
-  values each. Keep the product at or below 512; a larger grid cannot be swept
-  and is reported as inconclusive.
+  values each. The declared product must be at most 512; the schema rejects a
+  larger grid instead of materialising it.
 - `body.symbols`: every variable, with domain facts (`real`/`integer`/`rational`,
   `positive`, `nonzero`).
 - `body.givens`: relations and domain facts. Finite data sets are accepted by
   the schema but have no engine representation, so such an item is refused.
 - `body.goal`: `kind` plus the expression, symbol(s), point, or matrix it needs.
 - `body.answer_recipe`: the answer, as typed expression trees (see below).
-- `body.distractors`: one to twelve recipes, each `value` (scalar), `items`
+- `body.distractors`: one to ten recipes, each `value` (scalar), `items`
   (finite set) or `components` (ordered tuple), plus a `misconception` tag.
 - `body.text.template`: learner-facing text using declared parameter placeholders
   and the reserved `{expr}`, `{equation}`, `{equations}` and `{matrix}`.
@@ -54,7 +54,7 @@ Expressions are closed data trees, never code. A node sets exactly one of
 `num` (exact literal), `sym` (variable), `param` (template parameter) or `op`
 with `args`. Supported operators: `add`, `sub`, `mul`, `div`, `pow`, `sqrt`,
 `abs`, `exp`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `log`. Trees are
-bounded in nodes, depth and exponent.
+bounded in nodes and depth; literal exponents are bounded to absolute value 12.
 
 ## Answer recipes
 
@@ -154,9 +154,9 @@ These reject rather than approximate:
 
 - `limit` and `eigenvalues` goals — no engine operation.
 - `interval` and `boolean` answers — no engine answer kind.
-- Power operations whose exponent is not an exact real number after parameter
-  binding, such as a symbolic exponent. A parameter exponent is bound to a
-  number first and is supported.
+- Power operations whose exponent is a symbol. The engine evaluates a power only
+  once its exponent is an exact number: a parameter exponent is bound first and
+  supported, while a symbolic exponent is refused.
 - Determinant matrices whose entries are not exact numbers after binding.
 - Authoring parameters as `sym` nodes instead of `param` nodes.
 - Templates whose distractor coincides with the key, or repeats another option,

@@ -203,15 +203,20 @@ class TemplateApplication:
             observer=on_progress,
         )
         try:
-            result.provider_settings = copy.deepcopy(
-                getattr(provider, "generation_settings", lambda: {})()
-            )
             with self._tool_connection() as client:
                 return self._prepare_and_run(job, client, on_catalogue_resolved)
         except Exception as exc:
             self._record_failure(result, exc, job.stage)
             return result
         finally:
+            # Read settings after generation so a transport fallback is recorded
+            # as what was actually sent, not as the configured default.
+            try:
+                result.provider_settings = copy.deepcopy(
+                    getattr(provider, "generation_settings", lambda: {})()
+                )
+            except Exception:
+                result.provider_settings = {}
             result.duration_ms = (time.perf_counter() - started) * 1000
             result.model_calls = measured.calls
             result.usage = summarize_usage(measured.calls)
@@ -221,15 +226,19 @@ class TemplateApplication:
         try:
             response = job.generate(_generate_author, job.provider, generation_request)
             self._validate_response(response, generation_request)
-            return response
         except GenerationSchemaError as exc:
+            if not generation_request.repair_invalid_schema:
+                raise
             response = job.generate(
                 _generate_author,
                 job.provider,
                 _schema_repair_request(generation_request, exc),
             )
             self._validate_response(response, generation_request)
-            return response
+        # Read settings after generation so a transport fallback is recorded as
+        # what was actually sent, not as the configured default.
+        job.result.provider_settings = copy.deepcopy(job.provider.generation_settings())
+        return response
 
     def _prepare_and_run(self, job, client, observer):
         capabilities = getattr(job.domain, "capabilities", None)

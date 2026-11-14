@@ -211,8 +211,8 @@ def test_application_revalidates_constructed_revisions_before_new_checks(kind):
     assert result.attempts[0].candidate["answer_expression"] == "a - b"
 
 
-def test_initial_schema_failure_gets_one_bounded_repair():
-    class RepairOnce(Provider):
+def test_code_schema_failure_is_not_repaired():
+    class FailsOnce(Provider):
         def __init__(self):
             super().__init__([proposal()])
             self.calls = 0
@@ -225,14 +225,33 @@ def test_initial_schema_failure_gets_one_bounded_repair():
                 )
             return super().generate(request)
 
-    provider = RepairOnce()
+    provider = FailsOnce()
 
     result, _ = run(provider)
 
-    assert result.status == "checked"
-    assert provider.calls == result.usage.model_call_count == 2
-    repair = json.loads(provider.generations[-1][-1]["content"])
-    assert "either symbol or symbols" in repair["validation_error"]
+    assert result.status == "error"
+    assert result.failure.code == "schema_validation"
+    assert provider.calls == 1
+
+
+def test_provider_settings_are_recorded_after_generation():
+    """A transport fallback must be recorded as the format actually sent."""
+
+    class LateSettings(Provider):
+        def __init__(self):
+            super().__init__([proposal()])
+            self.response_format = "json_schema"
+
+        def generation_settings(self):
+            return {"response_format": self.response_format}
+
+        def generate(self, request):
+            self.response_format = "json_object"
+            return super().generate(request)
+
+    result, _ = run(LateSettings())
+
+    assert result.provider_settings == {"response_format": "json_object"}
 
 
 @pytest.mark.parametrize(

@@ -2,11 +2,11 @@
 
 Status: proposed. This document is a plan, not an implementation record.
 
-The current domain is deliberately narrow (`ax + b = c`, exhaustive checks). The
-next step is not to add topics blindly. It is to remove the compatibility code
-that the pilot accumulated, replace the ad-hoc difficulty heuristic with a
-defensible rubric, make the linear-equation family genuinely varied, and only
-then widen the topic catalogue.
+The current domain authors a generic parameterised IR across the supported goal
+kinds, and checks every variant in a bounded finite parameter grid. The next
+step is not to add topics blindly. It is to remove the compatibility code that
+the pilot accumulated, replace the ad-hoc difficulty heuristic with a defensible
+rubric, and only then widen the topic catalogue.
 
 Recommended order:
 
