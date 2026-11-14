@@ -256,7 +256,7 @@ def test_template_sweep_blocks_a_failing_variant() -> None:
     assert report.variants_checked == 2
 
 
-def test_truncated_variant_sweep_is_inconclusive() -> None:
+def test_bounded_sample_reports_property_based_coverage() -> None:
     body = MathItemSpec(
         topic="school.quadratic",
         symbols=[SymbolSpec(name="x")],
@@ -293,10 +293,12 @@ def test_truncated_variant_sweep_is_inconclusive() -> None:
 
     report = validate_template(template, max_variants=1)
 
-    assert report.report.status == "inconclusive"
+    assert report.report.status == "passed"
+    assert report.checking_mode == "property_based"
+    assert report.seed == 0
     assert report.variants_checked == 1
     assert report.variants_total == 4
-    assert any("truncated" in finding for finding in report.report.findings)
+    assert not any("truncated" in finding for finding in report.report.findings)
 
 
 def test_recipe_parameters_compile_exactly() -> None:

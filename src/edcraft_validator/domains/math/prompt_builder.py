@@ -15,7 +15,7 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 
-MATH_TEMPLATE_PROMPT_VERSION = "math-template-v8"
+MATH_TEMPLATE_PROMPT_VERSION = "math-template-v9"
 
 MATH_TEMPLATE_SYSTEM_PROMPT = """\
 Generate one reusable mathematics multiple-choice template and recommend its
@@ -28,10 +28,15 @@ Return one generic item family in the `item` field.
 ITEM FAMILY (`item`)
 - `item.topic` is a stable dotted identifier such as `school.quadratic` or
   `university.derivative`.
-- `item.parameters` declares one to six named parameters. Values are exact
+- `item.parameters` declares one to twelve named parameters. Values are exact
   decimal or rational strings, for example "2", "-3", "1/2". Never use floats.
-  Keep the product of the declared value counts at or below 512; a larger
-  family cannot be swept exhaustively and is reported as inconclusive.
+  Give each parameter a broad, ordered value list: up to 512 values per axis is
+  allowed, and a large declared family produces more distinct questions.
+  Validation samples the declared family with boundary and seeded cases, so do
+  not shrink a domain to fit an exhaustive sweep.
+- Include negative, zero, positive and fractional values where the task supports
+  them, and keep the extremes meaningful. Sampling always checks both ends of
+  every value list, so a value that breaks the item is a real defect.
 - `item.body` is one typed item with parameter placeholders. Its `symbols`
   declare every variable. `givens` contain relations, domain facts or finite
   data sets. `goal.kind` is one of evaluate, solve, simplify, factor, expand,
@@ -68,7 +73,7 @@ ITEM FAMILY (`item`)
   parameters. Set `kind` to numeric or expression (exactly one `items` entry),
   set or tuple (one or more `items`), or matrix. Interval and boolean answers are
   not graded yet, so templates that use them are rejected. The deterministic
-  engine compiles the recipe and it must be exact for every parameter
+  engine compiles the recipe and it must be exact for every sampled parameter
   combination; `display` is never compared.
 - For solve goals use `kind: "set"` for one unknown and `kind: "tuple"` for a
   system's ordered solution; the form check rejects other answer kinds.
@@ -83,7 +88,7 @@ ITEM FAMILY (`item`)
   exactly one of `value` (a scalar Expr), `components` (an ordered tuple of
   Exprs), or `items` (a finite set of Exprs), plus a short `misconception` tag
   and an optional `reason`. Every distractor must be demonstrably wrong and
-  distinct from every other option for every declared combination.
+  distinct from every other option for every sampled combination.
 
 CHECK PLAN
 - Select a nonempty fixed subset of the available MCP tools using their supplied

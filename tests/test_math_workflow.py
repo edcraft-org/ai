@@ -61,7 +61,7 @@ def test_math_authoring_and_question_generation_round_trip() -> None:
     assert view.candidate["item"]["topic"] == "school.quadratic"
     assert view.language is None
     assert view.limits is not None
-    assert view.limits["checking_mode"] == "exhaustive_domain"
+    assert view.limits["checking_mode"] == "property_based"
 
     assert offered == [
         "assess_template_relevance",
@@ -74,7 +74,7 @@ def test_math_authoring_and_question_generation_round_trip() -> None:
     assert validated.authoring.domain == "math"
     assert validated.authoring.provider == "stub"
     assert len(validated.template.item.body.distractors) == 3
-    assert validated.validation.checking_mode == "exhaustive_domain"
+    assert validated.validation.checking_mode == "property_based"
     assert validated.validation.combinations_checked == 4
     assert {item.check for item in validated.validation.evidence} == {
         "assess_template_relevance",

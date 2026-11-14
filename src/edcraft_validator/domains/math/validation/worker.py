@@ -40,6 +40,7 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
         report = validate_template(
             template,
             max_variants=int(payload.get("max_variants", MAX_IR_VARIANTS)),
+            seed=int(payload.get("seed", 0)),
         )
         return {"report": report.model_dump(mode="json")}
     raise ValueError(f"unknown validation operation {operation!r}")

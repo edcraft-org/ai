@@ -6,8 +6,10 @@ deterministic engine adjudicates correctness and a separate form registry
 adjudicates shape. Nothing is solved or derived anywhere: the recipe the model
 authors *is* the answer, and the engine grades it.
 
-Every template has a finite parameter domain that is swept exhaustively before a
-human approves it.
+Every template has a finite parameter domain. Validation samples that domain
+deterministically with a bounded property-based check: explicit boundary cases
+plus seeded examples. A small domain is enumerated completely; a large one is
+never materialised.
 
 ## Trust model
 
@@ -18,9 +20,10 @@ model ──► problem IR + answer recipe + distractor recipes
                             └──► form registry        ──► pass?
 ```
 
-Approval requires **both** verdicts for **every** parameter combination. The two
-verdicts are recorded as separate evidence (`engine_correctness` and `form`) and
-are never collapsed into one boolean.
+Approval requires **both** verdicts for **every sampled parameter
+combination**. A domain that fits the sample budget is checked completely. The
+two verdicts are recorded as separate evidence (`engine_correctness` and
+`form`) and are never collapsed into one boolean.
 
 Refusals fail closed:
 
@@ -34,11 +37,11 @@ instead of being skipped.
 
 ## Template contract (`math-ir/0.1`)
 
-A template declares `topic`, one to six `parameters`, and one `body`.
+A template declares `topic`, one to twelve `parameters`, and one `body`.
 
-- `parameters`: named values as exact decimal or rational strings, at most 32
-  values each. The declared product must be at most 512; the schema rejects a
-  larger grid instead of materialising it.
+- `parameters`: named values as exact decimal or rational strings, at most 512
+  values each. The declared product is not capped; validation samples it
+  instead of materialising it.
 - `body.symbols`: every variable, with domain facts (`real`/`integer`/`rational`,
   `positive`, `nonzero`).
 - `body.givens`: relations and domain facts. Finite data sets are accepted by
@@ -122,7 +125,7 @@ wrong shape rejects the template.
 Technical checks gate approval:
 
 1. `math_verify_item_spec` — schema, bounded trees, goal/answer agreement, and
-   the per-variant engine and form sweep.
+   the sampled engine and form check.
 2. `math_validate_options` — every distractor is demonstrably wrong, distinct
    from the key, and pairwise distinct.
 3. `math_verify_text_fidelity` — prose text only; unknown placeholders, missing
@@ -137,13 +140,34 @@ Advisory `failed` or `unavailable` outcomes stay visible in review evidence and
 warnings; only technical failures, missing evidence, unsupported cases, or human
 rejection prevent a reusable artifact.
 
+## Validation sampling
+
+The declared parameter domain may be very large; only a bounded sample is
+graded. The sample is deterministic for a given seed and contains:
+
+- the all-low and all-high variants;
+- one variant per axis at each edge, with the other axes at both edges;
+- seeded examples until the sample budget is reached.
+
+A domain no larger than the budget is enumerated completely. If any sampled
+variant fails, the template is rejected; there is no "truncated" finding and no
+exhaustive-mode switch. The summary records `checking_mode="property_based"`,
+the number of variants checked, the declared domain size and the seed. The
+default budget is 100 variants (`MAX_IR_VARIANTS`); callers may request fewer.
+
+Generation samples the same declared domain independently of validation, so a
+generated question may use a variant that the validator did not sample. Each
+emitted variant is re-graded before use.
+
 ## Generation
 
 `generate_math_question(validated, seed)` is deterministic and performs no model,
-MCP, or network call. For the selected parameter combination it compiles the
-answer recipe, renders it, and then **re-grades** it: the engine must still say
-`correct` and the form registry must still say `pass`. Every distractor is
-re-graded as `incorrect`, and duplicate or display-identical options are refused.
+MCP, or network call. It samples the declared domain for the requested seed, so
+questions may use variants that validation did not sample. For the selected
+combination it compiles the answer recipe, renders it, and then **re-grades** it:
+the engine must still say `correct` and the form registry must still say `pass`.
+Every distractor is re-graded as `incorrect`, and duplicate or display-identical
+options are refused.
 
 A variant that fails any gate is skipped, and a template with no usable variant
 produces no question. Approval is not assumed to hold at expansion time.
@@ -160,7 +184,7 @@ These reject rather than approximate:
 - Determinant matrices whose entries are not exact numbers after binding.
 - Authoring parameters as `sym` nodes instead of `param` nodes.
 - Templates whose distractor coincides with the key, or repeats another option,
-  for any combination in the declared domain.
+  for any sampled combination in the declared domain.
 - Templates that need a model, tool, or Python execution at expansion time.
 
 ## Retired: the bounded linear-equation authoring mode

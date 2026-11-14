@@ -67,7 +67,7 @@ knows the topic.
                                         │
                     L1 formal gate (deterministic, CAS)
                     solve · unique? · answer · distractors ·
-                    domain · units · variant sweep
+                    domain · units · sampled variants
                                         │
                     L2 NL-fidelity gate (independent)
                     constrained render OR blind parse-back ·
@@ -335,7 +335,7 @@ format 1.0 remain stable:
 
 | Tool | Purpose |
 | --- | --- |
-| `math_verify_item_spec` | Compile and solve an IR item or sweep a finite template |
+| `math_verify_item_spec` | Compile and solve an IR item or sample a parameter template |
 | `math_validate_options` | Option-level MCQ checks against the derived key |
 | `math_verify_text_fidelity` | Blind parse-back plus anchor and ambiguity checks |
 

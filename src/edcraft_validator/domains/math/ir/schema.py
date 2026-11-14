@@ -8,12 +8,10 @@ model may only emit the fields and operators declared here. The compiler in
 from __future__ import annotations
 
 from collections.abc import Iterator
-from math import prod
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from edcraft_validator.domains.math.math_types import MAX_IR_VARIANTS
 from edcraft_validator.text_templates import template_fields
 
 IR_VERSION: Literal["math-ir/0.1"] = "math-ir/0.1"
@@ -293,8 +291,12 @@ class MathItemSpec(Record):
 
 
 class ParameterSpec(Record):
+    """One named axis of a template's declared, finite parameter domain."""
+
     name: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_]*$")
-    values: list[str] = Field(min_length=1, max_length=32)
+    # The declared domain may be far larger than the validation sample. The
+    # per-axis and parameter-count limits only keep authored JSON bounded.
+    values: list[str] = Field(min_length=1, max_length=512)
 
 
 def _expr_nodes(expr: Expr | None) -> Iterator[Expr]:
@@ -346,7 +348,7 @@ class MathTemplateSpec(Record):
 
     schema_version: Literal["math-ir/0.1"] = IR_VERSION
     topic: str = Field(min_length=1)
-    parameters: list[ParameterSpec] = Field(min_length=1, max_length=6)
+    parameters: list[ParameterSpec] = Field(min_length=1, max_length=12)
     body: MathItemSpec
 
     @model_validator(mode="after")
@@ -354,12 +356,6 @@ class MathTemplateSpec(Record):
         names = [parameter.name for parameter in self.parameters]
         if len(names) != len(set(names)):
             raise ValueError("template parameter names must be unique")
-        combinations = prod(len(parameter.values) for parameter in self.parameters)
-        if combinations > MAX_IR_VARIANTS:
-            raise ValueError(
-                f"template parameter grid has {combinations} combinations; "
-                f"the schema allows at most {MAX_IR_VARIANTS}"
-            )
         declared = set(names)
         ambiguous = sorted(declared & item_symbols(self.body))
         if ambiguous:

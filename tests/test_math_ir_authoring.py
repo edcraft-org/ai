@@ -19,7 +19,10 @@ from pydantic import ValidationError
 from test_code_relevance import Decisions
 
 from edcraft_validator.application.template_workflow import TemplateApplication
-from edcraft_validator.domains.math.ir.instantiate import representative_item
+from edcraft_validator.domains.math.ir.instantiate import (
+    declared_domain_size,
+    representative_item,
+)
 from edcraft_validator.domains.math.ir.schema import (
     Distractor,
     Expr,
@@ -209,22 +212,23 @@ def test_ir_template_rejects_undeclared_parameter_nodes() -> None:
         )
 
 
-def test_ir_template_rejects_a_parameter_grid_above_the_sweep_bound() -> None:
-    values = [str(value) for value in range(1, 33)]
+def test_ir_template_accepts_a_domain_far_above_the_sample_budget() -> None:
+    values = [str(value) for value in range(-16, 16)]
     template = linear_ir_template()
 
-    with pytest.raises(ValidationError, match="at most 512"):
-        MathTemplateSpec(
-            topic=template.topic,
-            parameters=[
-                ParameterSpec(name=name, values=values) for name in ("a", "b", "c")
-            ],
-            body=template.body,
-        )
+    spec = MathTemplateSpec(
+        topic=template.topic,
+        parameters=[
+            ParameterSpec(name=name, values=values) for name in ("a", "b", "c")
+        ],
+        body=template.body,
+    )
+
+    assert declared_domain_size(spec) == 32**3
 
 
-def test_ir_template_accepts_a_parameter_grid_at_the_sweep_bound() -> None:
-    values = [str(value) for value in range(1, 9)]
+def test_ir_template_accepts_more_values_per_parameter_than_the_old_sweep() -> None:
+    values = [str(value) for value in range(1, 65)]
     template = linear_ir_template()
 
     spec = MathTemplateSpec(
@@ -236,6 +240,7 @@ def test_ir_template_accepts_a_parameter_grid_at_the_sweep_bound() -> None:
     )
 
     assert len(spec.parameters) == 3
+    assert all(len(parameter.values) == 64 for parameter in spec.parameters)
 
 
 def test_ir_template_rejects_unknown_text_placeholders() -> None:
@@ -361,6 +366,58 @@ def test_math_domain_binds_ir_tools_without_model_arguments() -> None:
     assert "template" in spec_bindings
     assert "template" in options_bindings
     assert "item" in fidelity_bindings
+
+
+def test_ir_authoring_samples_a_domain_larger_than_the_budget() -> None:
+    base = arithmetic_ir_template()
+    values = [str(value) for value in range(1, 21)]
+    template = MathTemplateSpec(
+        topic=base.topic,
+        parameters=[
+            ParameterSpec(name="a", values=values),
+            ParameterSpec(name="b", values=values),
+        ],
+        body=base.body,
+    )
+    proposal = ir_proposal(template)
+
+    class StubProvider(RequestPendingTools):
+        provider = "stub"
+        model = "stub-model"
+
+        def generate(self, request):
+            return request.response_model.model_validate(
+                {
+                    "proposal": proposal.model_dump(mode="json"),
+                    "checks": [
+                        {"name": "math_verify_item_spec", "arguments": {}},
+                        {"name": "math_validate_options", "arguments": {}},
+                        {"name": "math_verify_text_fidelity", "arguments": {}},
+                        {"name": "assess_template_relevance", "arguments": {}},
+                    ],
+                }
+            )
+
+    server = create_validation_server(decision_provider_factory=Decisions)
+    application = TemplateApplication(tool_client=FastMcpToolClient(server))
+    validated = application.create_validated_template(
+        MathTemplateRequest(
+            prompt="Author a two-digit addition question.",
+            difficulty="easy",
+            num_distractors=3,
+        ),
+        domain=MathDomain(),
+        provider=StubProvider(),
+    )
+
+    assert validated.validation.checking_mode == "property_based"
+    assert validated.validation.combinations_checked == 100
+    assert validated.validation.max_combinations == 400
+
+    first = application.generate_question(validated, domain=MathDomain(), seed=1)
+    second = application.generate_question(validated, domain=MathDomain(), seed=2)
+    assert first.choices[first.correct_index] == first.answer
+    assert second.choices[second.correct_index] == second.answer
 
 
 def test_ir_authoring_round_trip_through_the_application() -> None:

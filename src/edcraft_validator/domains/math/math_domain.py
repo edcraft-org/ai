@@ -26,7 +26,6 @@ from edcraft_validator.domains.math.math_schemas import (
 )
 from edcraft_validator.domains.math.math_types import (
     MATH_ADVISORY_CHECK_NAMES,
-    MATH_CHECKING_MODE,
     MATH_DIFFICULTY_TOOL,
     MATH_FIDELITY_TOOL,
     MATH_ITEM_SPEC_TOOL,
@@ -161,10 +160,10 @@ class MathDomain:
             for item in evidence
         ]
         summary = MathValidationSummary(
-            checking_mode=MATH_CHECKING_MODE,
+            checking_mode=report.checking_mode,
             combinations_checked=report.variants_checked,
             max_combinations=report.variants_total,
-            seed=0,
+            seed=report.seed,
             evidence=saved_evidence,
         )
         return ValidatedMathTemplate(template=template, validation=summary)

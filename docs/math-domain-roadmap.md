@@ -3,8 +3,8 @@
 Status: proposed. This document is a plan, not an implementation record.
 
 The current domain authors a generic parameterised IR across the supported goal
-kinds, and checks every variant in a bounded finite parameter grid. The next
-step is not to add topics blindly. It is to remove the compatibility code that
+kinds, and validates a bounded, deterministic sample of the declared parameter
+domain. The next step is not to add topics blindly. It is to remove the compatibility code that
 the pilot accumulated, replace the ad-hoc difficulty heuristic with a defensible
 rubric, and only then widen the topic catalogue.
 
@@ -48,7 +48,7 @@ artifacts. If durable read compatibility is wanted later, put a three-line
 | --- | --- | --- |
 | `Difficulty = Literal["easy", "medium", "hard"]` | `code/code_types.py`, `math/math_types.py`, `application/authoring_contracts.py` | `domains/shared/difficulty.py` |
 | Placeholder parsing (`Formatter().parse`) | `code/text_rendering.py`, `math/math_schemas.py` | `domains/shared/text_template.py` |
-| Parameter-combination enumeration | `math/question_generator.py`, `mcp/math_tools.py` | `domains/math/parameters.py` |
+| Parameter-domain sampling | `math/question_generator.py`, `mcp/math_tools.py` | `domains/math/parameters.py` |
 | `template_sha256` | `code/candidate_builder.py`, `math/candidate_builder.py` | `domains/shared/hashing.py` |
 | Distractor/choice limits (1/3/10) | `code/code_types.py`, `math/math_types.py` | `domains/shared/limits.py` |
 | `MathProposalResponse` wrapper | `math/proposal_response.py` (7 lines) | Delete; use `MathTemplateContent` directly |
@@ -315,8 +315,9 @@ domains/math/
 - The prompt and the tool catalogue are generated from the registry, so adding a
   topic does not require editing prompt strings.
 - Capability tags: `domain:math`, `topic:<topic_id>`, `stage:school|university`.
-- The existing exhaustive-domain policy applies to every family with a small
-  finite domain. Symbolic topics declare `property_based` with seeded sampling.
+- Every family is validated by bounded property-based sampling. A domain that
+  fits the budget is enumerated completely; larger domains use explicit boundary
+  cases plus seeded examples.
 
 ### D3. Symbolic engine decision
 
@@ -334,8 +335,9 @@ domains/math/
 
 - Exact rational arithmetic everywhere. No floats in answers.
 - Property-based tests (Hypothesis): substitute the computed answer back into
-  the equation and require a zero residual for every declared combination.
-- Keep exhaustive domain verification for finite families.
+  the equation and require a zero residual on sampled variants.
+- Bounded property-based domain sampling replaces exhaustive verification for
+  finite families; explicit boundary cases are always included.
 - Differential tests: compare school-family solvers against SymPy in tests only.
 - Fixed-vector tests for `template_sha256` before and after deduplication.
 - Golden tests for the matrix anchors in B3 and for distractor tags.

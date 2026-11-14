@@ -6,7 +6,7 @@ from edcraft_validator.domains.math.math_schemas import MathTemplateRequest
 # --- Generic IR template fixtures -------------------------------------------
 #
 # These fixtures exercise the generic authoring path. They are deliberately
-# small finite families so the harness can sweep every combination.
+# small finite families so tests can enumerate every combination deterministically.
 
 
 def ir_num(value: int | str):

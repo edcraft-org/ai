@@ -8,7 +8,9 @@ It never executes model-authored code.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import hashlib
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass
 from fractions import Fraction
 from itertools import product
 
@@ -375,30 +377,141 @@ def substitute_item(item: MathItemSpec, params: Mapping[str, Fraction]) -> MathI
     )
 
 
+def declared_domain_size(template: MathTemplateSpec) -> int:
+    """Return the Cartesian size of the declared domain without materialising it."""
+    size = 1
+    for parameter in template.parameters:
+        size *= len(parameter.values)
+    return size
+
+
+def _combination_at(
+    template: MathTemplateSpec, indices: tuple[int, ...]
+) -> dict[str, Fraction] | None:
+    """Parse one index tuple, or ``None`` when a declared value is not a literal."""
+    try:
+        return {
+            parameter.name: Fraction(parameter.values[index])
+            for parameter, index in zip(template.parameters, indices, strict=True)
+        }
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
+def iter_parameter_combinations(
+    template: MathTemplateSpec,
+) -> Iterator[dict[str, Fraction]]:
+    """Yield the finite parameter grid lazily, skipping invalid literals."""
+    sizes = [len(parameter.values) for parameter in template.parameters]
+    for indices in product(*(range(size) for size in sizes)):
+        combination = _combination_at(template, indices)
+        if combination is not None:
+            yield combination
+
+
 def parameter_combinations(
     template: MathTemplateSpec,
 ) -> list[dict[str, Fraction]]:
-    """Enumerate the finite parameter grid, skipping invalid literals."""
-    names = [parameter.name for parameter in template.parameters]
-    combinations: list[dict[str, Fraction]] = []
-    for values in product(*(parameter.values for parameter in template.parameters)):
-        try:
-            combinations.append(
-                dict(zip(names, (Fraction(value) for value in values), strict=True))
+    """Materialise the finite parameter grid; only use this for small domains."""
+    return list(iter_parameter_combinations(template))
+
+
+@dataclass(frozen=True)
+class SampledDomain:
+    """A deterministic, bounded sample of a template's declared domain."""
+
+    combinations: list[dict[str, Fraction]]
+    declared_size: int
+    whole_domain: bool
+
+
+def _stable_index(seed: int, salt: str, size: int) -> int:
+    payload = f"{seed}:{salt}".encode()
+    return int.from_bytes(hashlib.sha256(payload).digest()[:8], "big") % size
+
+
+def _boundary_indices(sizes: list[int]) -> Iterator[tuple[int, ...]]:
+    """Cover each axis at both ends, with the other axes at both ends too."""
+    yield tuple(0 for _ in sizes)
+    yield tuple(size - 1 for size in sizes)
+    for axis, size in enumerate(sizes):
+        for edge in (0, size - 1):
+            for other_edge in (0, 1):
+                indices = [other_edge * (other - 1) for other in sizes]
+                indices[axis] = edge
+                yield tuple(indices)
+
+
+def sample_parameter_combinations(
+    template: MathTemplateSpec,
+    *,
+    limit: int,
+    seed: int = 0,
+) -> SampledDomain:
+    """Sample a declared domain deterministically, including boundary cases.
+
+    A domain that fits the budget is enumerated completely. Larger domains get
+    one variant per axis edge followed by seeded examples, so neither the
+    schema nor this function ever materialises the full product.
+    """
+    if limit < 1:
+        raise ValueError("sample limit must be positive")
+    declared_size = declared_domain_size(template)
+    if declared_size <= limit:
+        return SampledDomain(
+            combinations=list(iter_parameter_combinations(template)),
+            declared_size=declared_size,
+            whole_domain=True,
+        )
+    sizes = [len(parameter.values) for parameter in template.parameters]
+    selected: list[dict[str, Fraction]] = []
+    seen: set[tuple[int, ...]] = set()
+
+    def add(indices: tuple[int, ...]) -> None:
+        if indices in seen or len(selected) >= limit:
+            return
+        combination = _combination_at(template, indices)
+        if combination is None:
+            return
+        seen.add(indices)
+        selected.append(combination)
+
+    for indices in _boundary_indices(sizes):
+        add(indices)
+    attempt = 0
+    # Invalid literals are rare; cap the retries so a domain made mostly of
+    # unparseable values still terminates.
+    max_attempts = limit * 32
+    while len(selected) < limit and attempt < max_attempts:
+        add(
+            tuple(
+                _stable_index(seed, f"variant:{attempt}:{axis}", size)
+                for axis, size in enumerate(sizes)
             )
-        except (ValueError, ZeroDivisionError):
-            continue
-    return combinations
+        )
+        attempt += 1
+    return SampledDomain(
+        combinations=selected,
+        declared_size=declared_size,
+        whole_domain=len(selected) >= declared_size,
+    )
 
 
-def representative_item(template: MathTemplateSpec) -> MathItemSpec:
+def representative_item(
+    template: MathTemplateSpec,
+    *,
+    limit: int = 16,
+    seed: int = 0,
+) -> MathItemSpec:
     """Instantiate the first renderable combination for a concrete check.
 
     Prose fidelity and blind parse-back operate on a concrete item, not on
     unbound parameter nodes. Symbolic templates use the same projection for
-    consistency; their parse-back is skipped.
+    consistency; their parse-back is skipped. The domain is sampled, never
+    materialised.
     """
-    for params in parameter_combinations(template):
+    sample = sample_parameter_combinations(template, limit=limit, seed=seed)
+    for params in sample.combinations:
         try:
             return substitute_item(template.body, params)
         except (MathCompileError, ValueError, ZeroDivisionError):
@@ -452,9 +565,12 @@ def compile_distractor_value(
 
 __all__ = [
     "MathCompileError",
+    "SampledDomain",
     "compile_distractor_value",
+    "declared_domain_size",
     "display_sympy_value",
     "fraction_text",
+    "iter_parameter_combinations",
     "parameter_combinations",
     "render_authored_expr",
     "render_expr",
@@ -464,6 +580,7 @@ __all__ = [
     "render_relation",
     "render_relations",
     "representative_item",
+    "sample_parameter_combinations",
     "substitute_expr",
     "substitute_item",
 ]

@@ -11,9 +11,9 @@ from edcraft_validator.domains.math.ir.instantiate import (
     compile_distractor_value,
     display_sympy_value,
     fraction_text,
-    parameter_combinations,
     render_goal_display,
     render_item_text,
+    sample_parameter_combinations,
 )
 from edcraft_validator.domains.math.ir.schema import (
     AnswerRecipe,
@@ -25,6 +25,7 @@ from edcraft_validator.domains.math.math_schemas import (
     MathQuestionInstance,
     ValidatedMathTemplate,
 )
+from edcraft_validator.domains.math.math_types import MAX_IR_VARIANTS
 from edcraft_validator.domains.math.validation.answers import compile_answer_recipe
 from edcraft_validator.domains.math.validation.distinct import same_value
 from edcraft_validator.domains.math.validation.forms import check_form
@@ -49,11 +50,12 @@ def _generate_ir_question(
     template: MathTemplateSpec,
     seed: int,
 ) -> MathQuestionInstance:
-    combinations = parameter_combinations(template)
-    if not combinations:
-        raise ValueError("validated template has an empty parameter domain")
     if template.body.answer_recipe is None:
         raise ValueError("the template declares no answer recipe")
+    sample = sample_parameter_combinations(template, limit=MAX_IR_VARIANTS, seed=seed)
+    combinations = sample.combinations
+    if not combinations:
+        raise ValueError("validated template has an empty parameter domain")
     start = _seeded_index(
         validated.template.template_id, seed, "parameter-combination", len(combinations)
     )

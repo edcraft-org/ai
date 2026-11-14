@@ -36,8 +36,10 @@ MATH_DIFFICULTIES: tuple[Difficulty, ...] = DIFFICULTIES
 
 MAX_PROMPT_LENGTH = 4000
 
-# Upper bound for the finite parameter grid a single template may declare.
-MAX_IR_VARIANTS = 512
+# Sample budget for bounded property-based validation of a template's declared
+# parameter domain. The schema does not cap the domain itself; only this many
+# deterministic variants (boundary cases plus generated examples) are graded.
+MAX_IR_VARIANTS = 100
 
 MATH_DIFFICULTY_TOOL = "math_assess_template_difficulty"
 MATH_ITEM_SPEC_TOOL = "math_verify_item_spec"
@@ -50,7 +52,7 @@ MATH_FIDELITY_TOOL = "math_verify_text_fidelity"
 # than duplicated.
 MATH_ADVISORY_CHECK_NAMES = frozenset({MATH_DIFFICULTY_TOOL, TEMPLATE_RELEVANCE_CHECK})
 
-MATH_CHECKING_MODE: Literal["exhaustive_domain"] = "exhaustive_domain"
+MATH_CHECKING_MODE: Literal["property_based"] = "property_based"
 MATH_VALIDATOR_VERSION: Literal["mcp-math-template-v1"] = "mcp-math-template-v1"
 MATH_TOOL_VERSION = "1.0.0"
 MATH_IR_TOOL_VERSION = "1.1.0"

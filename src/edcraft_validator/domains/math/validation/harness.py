@@ -8,13 +8,14 @@ two independent oracles that are never collapsed into one field:
 * ``form`` -- the domain form registry says ``pass`` or the item is rejected.
 
 An item passes only when both pass and every distractor is demonstrably wrong.
-A failed check blocks approval. Only a truncated parameter sweep is reported as
-``inconclusive``, and it routes to review.
+A failed check blocks approval. Validation samples the declared parameter domain
+within a bounded budget, so a large authored domain never has to be materialised.
 """
 
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -23,7 +24,7 @@ from edcraft_validator.domains.math.ir.compile import MathCompileError
 from edcraft_validator.domains.math.ir.instantiate import (
     compile_distractor_value,
     display_sympy_value,
-    parameter_combinations,
+    sample_parameter_combinations,
 )
 from edcraft_validator.domains.math.ir.schema import (
     AnswerRecipe,
@@ -51,13 +52,15 @@ FORM_SENSITIVE_GOALS = frozenset({"expand", "factor"})
 
 
 class HarnessReport(BaseModel):
-    """One validation report plus the size of the variant sweep that produced it."""
+    """One validation report plus the sampled coverage that produced it."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
     report: ValidationReport
+    checking_mode: Literal["property_based"] = "property_based"
     variants_checked: int = 0
     variants_total: int = 0
+    seed: int = 0
 
     @property
     def passed(self) -> bool:
@@ -268,8 +271,9 @@ def validate_template(
     template: MathTemplateSpec,
     *,
     max_variants: int = MAX_VARIANTS,
+    seed: int = 0,
 ) -> HarnessReport:
-    """Sweep a finite parameter grid; any failed variant blocks the template."""
+    """Sample the declared domain; any sampled failure blocks the template."""
     if template.body.answer_recipe is None:
         return HarnessReport(
             report=ValidationReport(
@@ -280,21 +284,20 @@ def validate_template(
                 ],
             )
         )
-    combinations = parameter_combinations(template)
-    total_variants = len(combinations)
-    if not combinations:
+    sample = sample_parameter_combinations(template, limit=max_variants, seed=seed)
+    if not sample.combinations:
         return HarnessReport(
             report=ValidationReport(
                 status="failed",
                 findings=["template has no parameter combinations"],
-            )
+            ),
+            variants_total=sample.declared_size,
+            seed=seed,
         )
-    truncated = total_variants > max_variants
-    if truncated:
-        combinations = combinations[:max_variants]
-    reports: list[HarnessReport] = []
-    for combination in combinations:
-        reports.append(validate_item(template.body, params=combination))
+    reports: list[HarnessReport] = [
+        validate_item(template.body, params=combination)
+        for combination in sample.combinations
+    ]
     merged_findings: list[str] = []
     failed = [report for report in reports if report.report.status == "failed"]
     inconclusive = [
@@ -307,15 +310,10 @@ def validate_template(
             )
     if failed:
         status: CheckStatus = "failed"
-    elif inconclusive or truncated:
+    elif inconclusive:
         status = "inconclusive"
     else:
         status = "passed"
-    if truncated:
-        merged_findings.append(
-            f"variant sweep truncated to {len(combinations)} of "
-            f"{total_variants} combinations"
-        )
     return HarnessReport(
         report=ValidationReport(
             status=status,
@@ -325,7 +323,8 @@ def validate_template(
             findings=merged_findings,
         ),
         variants_checked=len(reports),
-        variants_total=total_variants,
+        variants_total=sample.declared_size,
+        seed=seed,
     )
 
 

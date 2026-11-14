@@ -14,7 +14,7 @@ from edcraft_validator.application.authoring_contracts import DifficultyOutcome
 from edcraft_validator.application.fidelity.engine import verify_text_fidelity
 from edcraft_validator.domains.math.candidate_builder import template_sha256
 from edcraft_validator.domains.math.fidelity import math_fidelity_plugin
-from edcraft_validator.domains.math.ir.instantiate import parameter_combinations
+from edcraft_validator.domains.math.ir.instantiate import declared_domain_size
 from edcraft_validator.domains.math.ir.schema import MathItemSpec, MathTemplateSpec
 from edcraft_validator.domains.math.math_schemas import MathTemplateCandidate
 from edcraft_validator.domains.math.math_types import (
@@ -54,7 +54,7 @@ CandidateArgument = Annotated[
 
 
 class MathSpecRequest(BaseModel):
-    """One IR item, a finite template sweep, or a math template candidate."""
+    """One IR item, a sampled parameter template, or a math template candidate."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -93,7 +93,7 @@ class MathFidelityRequest(BaseModel):
 
 
 class MathOptionsRequest(BaseModel):
-    """MCQ option checks for one concrete item, a finite template, or a candidate."""
+    """MCQ option checks for one concrete item, a sampled template, or a candidate."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -184,11 +184,12 @@ def register_math_tools(
             "openWorldHint": False,
         },
         description=(
-            "Compile a typed math IR item (or sweep a finite parameter template) "
-            "in a disposable process: the deterministic engine grades the authored "
-            "answer recipe and every distractor, and the form registry grades the "
-            "answer's shape. Returns passed, failed, or an inconclusive result that "
-            "must be reviewed. The tool never executes model-authored code."
+            "Compile a typed math IR item (or sample a parameter template's "
+            "declared domain) in a disposable process: the deterministic engine "
+            "grades the authored answer recipe and every distractor, and the form "
+            "registry grades the answer's shape. Returns passed, failed, or an "
+            "inconclusive result that must be reviewed. The tool never executes "
+            "model-authored code."
         ),
     )
     async def math_verify_item_spec(
@@ -644,7 +645,7 @@ def _estimate_difficulty(candidate: MathTemplateCandidate) -> Difficulty:
         for value in parameter.values
     ):
         score += 1
-    if len(parameter_combinations(template)) >= 60:
+    if declared_domain_size(template) >= 60:
         score += 1
     if len(template.body.distractors) >= 4:
         score += 1

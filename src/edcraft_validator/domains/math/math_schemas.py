@@ -96,12 +96,13 @@ class MathTemplateCandidate(MathTemplateContent):
 
 
 class MathValidationSummary(BaseModel):
-    """Complete-domain evidence without per-question answer tables."""
+    """Sampled-domain evidence without per-question answer tables."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
     validator_version: Literal["mcp-math-template-v1"] = MATH_VALIDATOR_VERSION
-    checking_mode: Literal["exhaustive_domain"] = MATH_CHECKING_MODE
+    checking_mode: Literal["property_based"] = MATH_CHECKING_MODE
+    # Samples graded by the harness and the template's declared domain size.
     combinations_checked: int = Field(ge=1)
     max_combinations: int = Field(ge=1)
     seed: int = 0
@@ -148,12 +149,12 @@ class MathValidationSummary(BaseModel):
         ):
             raise ValueError("checked templates require passing validation evidence")
         if self.combinations_checked > self.max_combinations:
-            raise ValueError("checked combinations exceed the bounded domain")
+            raise ValueError("checked combinations exceed the declared domain")
         return self
 
 
 class ValidatedMathTemplate(ValidatedTemplateArtifact):
-    """A template whose recipes passed exhaustive bounded checks."""
+    """A template whose recipes passed bounded property-based checks."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
