@@ -225,6 +225,21 @@ def test_ir_template_rejects_a_parameter_used_as_a_symbol() -> None:
         )
 
 
+def test_ir_template_rejects_a_parameter_that_is_never_used() -> None:
+    """A declared parameter must vary the body or the learner-facing text."""
+    template = arithmetic_ir_template()
+
+    with pytest.raises(ValidationError, match="never used: c"):
+        MathTemplateSpec(
+            topic=template.topic,
+            parameters=[
+                *template.parameters,
+                ParameterSpec(name="c", values=["2", "3"]),
+            ],
+            body=template.body,
+        )
+
+
 def test_representative_item_substitutes_parameters_and_text() -> None:
     template = quadratic_ir_template()
 

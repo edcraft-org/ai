@@ -15,7 +15,7 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 
-MATH_TEMPLATE_PROMPT_VERSION = "math-template-v7"
+MATH_TEMPLATE_PROMPT_VERSION = "math-template-v8"
 
 MATH_TEMPLATE_SYSTEM_PROMPT = """\
 Generate one reusable mathematics multiple-choice template and recommend its
@@ -47,6 +47,9 @@ ITEM FAMILY (`item`)
   as `{n}` refers to a parameter, while an expression node `{"sym": "n"}` refers
   to a symbol; reusing one name for both makes the generated question and its
   answer disagree.
+- Every declared parameter must be referenced by an expression node or a text
+  placeholder. A parameter that never appears adds no variation to the family
+  and is rejected.
 - Expressions are closed data trees, never code. A node sets exactly one of:
   {"num": "3"} for an exact number, {"sym": "x"} for a variable, {"param": "a"}
   for a template parameter, or {"op": "add", "args": [...]} for an operator.

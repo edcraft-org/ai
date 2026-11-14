@@ -374,6 +374,12 @@ class MathTemplateSpec(Record):
                 "text template uses unsupported placeholders: "
                 + ", ".join(unknown_fields)
             )
+        unused = sorted(declared - used - (fields - RESERVED_TEXT_FIELDS))
+        if unused:
+            raise ValueError(
+                "template declares parameters that are never used: "
+                + ", ".join(unused)
+            )
         return self
 
 

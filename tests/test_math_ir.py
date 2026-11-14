@@ -268,16 +268,18 @@ def test_truncated_variant_sweep_is_inconclusive() -> None:
                     lhs=add(
                         sub(
                             power(sym("x"), num(2)),
-                            mul(add(num(2), num(3)), sym("x")),
+                            mul(add(Expr(param="p"), Expr(param="q")), sym("x")),
                         ),
-                        mul(num(2), num(3)),
+                        mul(Expr(param="p"), Expr(param="q")),
                     ),
                     rhs=num(0),
                 ),
             )
         ],
         goal=Goal(kind="solve", symbol="x"),
-        answer_recipe=AnswerRecipe(kind="set", items=[num(2), num(3)]),
+        answer_recipe=AnswerRecipe(
+            kind="set", items=[Expr(param="p"), Expr(param="q")]
+        ),
         text=TextSpec(mode="symbolic", template="Solve for x."),
     )
     template = MathTemplateSpec(
