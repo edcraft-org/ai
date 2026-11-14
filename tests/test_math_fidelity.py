@@ -17,19 +17,17 @@ from edcraft_validator.domains.math.fidelity import (
     math_fidelity_plugin,
 )
 from edcraft_validator.domains.math.ir.schema import (
-    Answer,
+    AnswerRecipe,
     Distractor,
     Expr,
     Given,
     Goal,
     MathItemSpec,
     MathReconstruction,
-    PrimitiveSpec,
     Relation,
     SymbolSpec,
     TextMode,
     TextSpec,
-    ValidationSpec,
 )
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
 from edcraft_validator.llm.usage import TokenUsage
@@ -84,7 +82,6 @@ def _item(
         ],
         goal=Goal(kind="solve", symbol="x"),
         text=TextSpec(mode=mode, template=template, anchors=anchors),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="solution_set")]),
     )
 
 
@@ -339,18 +336,19 @@ def test_anchor_span_must_fit_the_template() -> None:
     assert any("invalid span" in reason for reason in verdict.reasons)
 
 
-def test_canonicalize_excludes_answer_distractors_and_validation() -> None:
+def test_canonicalize_excludes_answers_and_distractors() -> None:
     item = _item()
     enriched = item.model_copy(
         update={
-            "answer": Answer(kind="numeric", items=["3"], display="3"),
+            "answer_recipe": AnswerRecipe(
+                kind="numeric", items=[Expr(num="3")], display="3"
+            ),
             "distractors": [
                 Distractor(
                     value=Expr(num="4"),
                     misconception="arithmetic slip",
                 )
             ],
-            "validation": ValidationSpec(primitives=[PrimitiveSpec(type="numeric")]),
         }
     )
     assert PLUGIN.canonicalize(item).digest == PLUGIN.canonicalize(enriched).digest

@@ -27,7 +27,6 @@ from edcraft_validator.domains.math.math_types import (
     MAX_IR_VARIANTS,
     Difficulty,
 )
-from edcraft_validator.domains.math.validation.harness import Witness
 from edcraft_validator.domains.math.validation.isolation import (
     DEFAULT_VALIDATION_TIMEOUT_SECONDS,
     ValidationTimeout,
@@ -60,9 +59,7 @@ class MathSpecRequest(BaseModel):
     item: MathItemSpec | None = None
     template: MathTemplateSpec | None = None
     candidate: MathTemplateCandidate | None = None
-    witnesses: list[Witness] = Field(default_factory=list, max_length=32)
     max_variants: int = Field(default=512, ge=1, le=512)
-    check_distractors: bool = True
     timeout_seconds: float = Field(
         default=DEFAULT_VALIDATION_TIMEOUT_SECONDS, gt=0, le=60
     )
@@ -186,19 +183,17 @@ def register_math_tools(
         },
         description=(
             "Compile a typed math IR item (or sweep a finite parameter template) "
-            "in a disposable process, derive the answer with exact SymPy "
-            "arithmetic, compare any declared answer, and check every distractor. "
-            "Returns passed, failed, or an inconclusive result that must be "
-            "reviewed. The tool never executes model-authored code."
+            "in a disposable process: the deterministic engine grades the authored "
+            "answer recipe and every distractor, and the form registry grades the "
+            "answer's shape. Returns passed, failed, or an inconclusive result that "
+            "must be reviewed. The tool never executes model-authored code."
         ),
     )
     async def math_verify_item_spec(
         item: MathItemSpec | None = None,
         template: MathTemplateSpec | None = None,
         candidate: MathTemplateCandidate | None = None,
-        witnesses: list[Witness] | None = None,
         max_variants: Annotated[int, Field(ge=1, le=512)] = 64,
-        check_distractors: bool = True,
         timeout_seconds: Annotated[float, Field(gt=0, le=60)] = (
             DEFAULT_VALIDATION_TIMEOUT_SECONDS
         ),
@@ -208,9 +203,7 @@ def register_math_tools(
                 item=item,
                 template=template,
                 candidate=candidate,
-                witnesses=witnesses or [],
                 max_variants=max_variants,
-                check_distractors=check_distractors,
                 timeout_seconds=timeout_seconds,
             )
         )
@@ -226,11 +219,11 @@ def register_math_tools(
             "openWorldHint": False,
         },
         description=(
-            "Check MCQ options deterministically against the derived key: every "
-            "distractor must be demonstrably wrong, no distractor may equal the "
-            "key, and no two options may be equivalent. Each option carries a "
-            "misconception tag. Inconclusive options block approval and route to "
-            "review."
+            "Check MCQ options deterministically: the engine must grade every "
+            "distractor as incorrect while grading the answer recipe as correct, "
+            "no two options may be the same value, and form-sensitive goals also "
+            "check option shape. Each option carries a misconception tag. "
+            "Inconclusive options block approval and route to review."
         ),
     )
     async def math_validate_options(
@@ -349,9 +342,7 @@ def verify_item_spec(request: MathSpecRequest) -> ToolEvidence:
         operation = "validate_template"
     payload: dict[str, Any] = {
         "operation": operation,
-        "witnesses": [item.model_dump(mode="json") for item in request.witnesses],
         "max_variants": min(request.max_variants, MAX_IR_VARIANTS),
-        "check_distractors": request.check_distractors,
     }
     if template is not None:
         payload["template"] = template.model_dump(mode="json")
@@ -374,7 +365,6 @@ def validate_options(request: MathOptionsRequest) -> ToolEvidence:
             "operation": "validate_template",
             "template": template.model_dump(mode="json"),
             "max_variants": MAX_IR_VARIANTS,
-            "check_distractors": True,
         }
     else:
         item = request.item
@@ -385,7 +375,6 @@ def validate_options(request: MathOptionsRequest) -> ToolEvidence:
         payload = {
             "operation": "validate_item",
             "spec": item.model_dump(mode="json"),
-            "check_distractors": True,
         }
     return _run_isolated(MATH_OPTIONS_TOOL, payload, request.timeout_seconds)
 
@@ -549,10 +538,9 @@ def _harness_evidence(
             "routes_to_review": ir_status != "passed",
             "answer": report.get("answer", ""),
             "findings": findings,
-            "witnesses": harness.get("witnesses", []),
             "variants_checked": harness.get("variants_checked", 0),
             "variants_total": harness.get("variants_total", 0),
-            "primitives": report.get("primitives", []),
+            "checks": report.get("primitives", []),
             "options": options,
         },
         duration_ms=_elapsed_ms(started),

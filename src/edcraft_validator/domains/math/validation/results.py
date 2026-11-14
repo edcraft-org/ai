@@ -1,4 +1,4 @@
-"""Tri-state results shared by every math answer-type primitive."""
+"""Tri-state results shared by the engine and form checks."""
 
 from __future__ import annotations
 
@@ -6,16 +6,16 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-PrimitiveStatus = Literal["passed", "failed", "inconclusive"]
+CheckStatus = Literal["passed", "failed", "inconclusive"]
 
 
 class Result(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
 
 
-class PrimitiveResult(Result):
-    primitive: str
-    status: PrimitiveStatus
+class CheckResult(Result):
+    check: str
+    status: CheckStatus
     reason: str = ""
     evidence: dict[str, Any] = Field(default_factory=dict)
 
@@ -24,13 +24,13 @@ class OptionCheck(Result):
     index: int = Field(ge=0)
     value: str
     misconception: str = ""
-    result: PrimitiveResult
+    result: CheckResult
 
 
 class ValidationReport(Result):
-    status: PrimitiveStatus
+    status: CheckStatus
     answer: str = ""
-    primitives: list[PrimitiveResult] = Field(default_factory=list)
+    checks: list[CheckResult] = Field(default_factory=list)
     options: list[OptionCheck] = Field(default_factory=list)
     findings: list[str] = Field(default_factory=list)
 

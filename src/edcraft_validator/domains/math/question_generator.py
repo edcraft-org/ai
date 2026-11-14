@@ -26,8 +26,8 @@ from edcraft_validator.domains.math.math_schemas import (
     ValidatedMathTemplate,
 )
 from edcraft_validator.domains.math.validation.answers import compile_answer_recipe
+from edcraft_validator.domains.math.validation.distinct import same_value
 from edcraft_validator.domains.math.validation.forms import check_form
-from edcraft_validator.domains.math.validation.primitives import option_equivalent
 
 
 class UnusableVariant(ValueError):
@@ -93,7 +93,7 @@ def _build_ir_instance(
         value = compile_distractor_value(body, distractor, values)
         # An emitted question is graded again: approval is not assumed to hold.
         _require_engine(body, distractor, values, expected="incorrect")
-        if any(option_equivalent(value, other).status == "passed" for other in seen):
+        if any(same_value(value, other) for other in seen):
             raise UnusableVariant("distractor choices are not distinct")
         seen.append(value)
         display = display_sympy_value(value).strip()

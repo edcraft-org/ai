@@ -9,11 +9,9 @@ from edcraft_validator.domains.math.ir.schema import (
     Given,
     Goal,
     MathItemSpec,
-    PrimitiveSpec,
     Relation,
     SymbolSpec,
     TextSpec,
-    ValidationSpec,
 )
 from edcraft_validator.domains.math.validation.isolation import (
     ValidationTimeout,
@@ -35,7 +33,6 @@ def item() -> MathItemSpec:
         ],
         goal=Goal(kind="solve", symbol="x"),
         text=TextSpec(mode="symbolic", template="Solve x = 2."),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="solution_set")]),
     )
 
 

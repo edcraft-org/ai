@@ -35,17 +35,6 @@ GoalKind = Literal[
 AnswerKind = Literal[
     "numeric", "expression", "set", "interval", "tuple", "matrix", "boolean"
 ]
-PrimitiveKind = Literal[
-    "numeric",
-    "expression_equiv",
-    "solution_set",
-    "collection",
-    "interval",
-    "quantity",
-    "matrix_vector",
-    "string_choice",
-    "proof",
-]
 TextMode = Literal["symbolic", "prose"]
 
 
@@ -157,24 +146,6 @@ class Goal(Record):
         return self
 
 
-class Interval(Record):
-    lower: str | None = None
-    upper: str | None = None
-    lower_open: bool = True
-    upper_open: bool = True
-
-
-class Answer(Record):
-    """A derived answer. Validation compares SymPy objects, not this display."""
-
-    kind: AnswerKind
-    items: list[str] = Field(default_factory=list)
-    interval: Interval | None = None
-    matrix: list[list[str]] | None = None
-    boolean: bool | None = None
-    display: str = ""
-
-
 class RecipeInterval(Record):
     lower: Expr | None = None
     upper: Expr | None = None
@@ -270,20 +241,11 @@ class TextSpec(Record):
     anchors: dict[str, tuple[int, int]] = Field(default_factory=dict)
 
 
-class PrimitiveSpec(Record):
-    type: PrimitiveKind
-    params: dict[str, str | int | float | bool] = Field(default_factory=dict)
-
-
-class ValidationSpec(Record):
-    primitives: list[PrimitiveSpec] = Field(min_length=1)
-
-
 class MathItemSpec(Record):
-    """One concrete item, optionally with a derived answer attached.
+    """One concrete item with the answer recipe that the engine grades.
 
-    A template body must declare an ``answer_recipe``; a concrete item may use
-    either ``answer`` or ``answer_recipe``.
+    The recipe is the only answer representation: correctness is decided by the
+    deterministic engine and shape by the form registry. Nothing derives a key.
     """
 
     schema_version: Literal["math-ir/0.1"] = IR_VERSION
@@ -291,11 +253,9 @@ class MathItemSpec(Record):
     symbols: list[SymbolSpec] = Field(min_length=1)
     givens: list[Given] = Field(min_length=1)
     goal: Goal
-    answer: Answer | None = None
     answer_recipe: AnswerRecipe | None = None
     distractors: list[Distractor] = Field(default_factory=list)
     text: TextSpec
-    validation: ValidationSpec
 
     @model_validator(mode="after")
     def require_unique_names(self) -> MathItemSpec:

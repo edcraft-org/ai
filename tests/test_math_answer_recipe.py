@@ -11,7 +11,6 @@ from pydantic import ValidationError
 from edcraft_validator.domains.math.ir.compile import MathCompileError
 from edcraft_validator.domains.math.ir.instantiate import substitute_item
 from edcraft_validator.domains.math.ir.schema import (
-    Answer,
     AnswerRecipe,
     Expr,
     Given,
@@ -19,12 +18,10 @@ from edcraft_validator.domains.math.ir.schema import (
     MathItemSpec,
     MathTemplateSpec,
     ParameterSpec,
-    PrimitiveSpec,
     RecipeInterval,
     Relation,
     SymbolSpec,
     TextSpec,
-    ValidationSpec,
     item_parameters,
 )
 from edcraft_validator.domains.math.validation.answers import compile_answer_recipe
@@ -71,7 +68,6 @@ def recipe_item(recipe: AnswerRecipe | None) -> MathItemSpec:
         goal=Goal(kind="solve", symbol="x"),
         answer_recipe=recipe,
         text=TextSpec(mode="symbolic", template="Solve 2x + 3 = 11."),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="solution_set")]),
     )
 
 
@@ -355,12 +351,10 @@ def test_substitute_item_replaces_params_in_matrix_and_interval() -> None:
     ) == sympy.Interval(sympy.Rational(-1, 2), sympy.Integer(3), False, True)
 
 
-def test_substitute_item_leaves_answer_strings_untouched() -> None:
-    item = recipe_item(None).model_copy(
-        update={"answer": Answer(kind="numeric", items=["p + 1"])}
-    )
+def test_substitute_item_leaves_the_recipe_display_untouched() -> None:
+    item = recipe_item(AnswerRecipe(kind="numeric", items=[param("p")], display="{p}"))
     substituted = substitute_item(item, {"p": Fraction(1, 2)})
 
-    assert substituted.answer is not None
-    assert substituted.answer.items == ["p + 1"]
-    assert substituted.answer_recipe is None
+    assert substituted.answer_recipe is not None
+    assert substituted.answer_recipe.items == [num("1/2")]
+    assert substituted.answer_recipe.display == "{p}"

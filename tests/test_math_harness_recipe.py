@@ -13,11 +13,9 @@ from edcraft_validator.domains.math.ir.schema import (
     MathItemSpec,
     MathTemplateSpec,
     ParameterSpec,
-    PrimitiveSpec,
     RecipeInterval,
     SymbolSpec,
     TextSpec,
-    ValidationSpec,
 )
 from edcraft_validator.domains.math.validation.harness import (
     validate_item,
@@ -93,7 +91,6 @@ def _item(
         answer_recipe=recipe,
         distractors=distractors or [],
         text=TextSpec(mode="symbolic", template="Rewrite the expression."),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="expression_equiv")]),
     )
 
 
@@ -111,9 +108,9 @@ def factored_recipe() -> AnswerRecipe:
     )
 
 
-def primitive_named(report, name: str):
-    matches = [item for item in report.report.primitives if item.primitive == name]
-    assert len(matches) == 1, report.report.primitives
+def check_named(report, name: str):
+    matches = [item for item in report.report.checks if item.check == name]
+    assert len(matches) == 1, report.report.checks
     return matches[0]
 
 
@@ -121,11 +118,9 @@ def test_expanded_answer_passes_both_oracles() -> None:
     report = validate_item(expand_item(recipe=expanded_recipe()))
 
     assert report.report.status == "passed", report.report.findings
-    assert primitive_named(report, "engine_correctness").status == "passed"
-    assert (
-        primitive_named(report, "engine_correctness").evidence["outcome"] == "correct"
-    )
-    assert primitive_named(report, "form").status == "passed"
+    assert check_named(report, "engine_correctness").status == "passed"
+    assert check_named(report, "engine_correctness").evidence["outcome"] == "correct"
+    assert check_named(report, "form").status == "passed"
     assert report.report.answer == "x^2 + 3*x + 2"
 
 
@@ -133,8 +128,8 @@ def test_unexpanded_answer_is_correct_but_fails_the_form_check() -> None:
     report = validate_item(expand_item(recipe=factored_recipe()))
 
     assert report.report.status == "failed"
-    assert primitive_named(report, "engine_correctness").status == "passed"
-    form = primitive_named(report, "form")
+    assert check_named(report, "engine_correctness").status == "passed"
+    form = check_named(report, "form")
     assert form.status == "failed"
     assert form.evidence["status"] == "fail"
 
@@ -149,8 +144,8 @@ def test_expanded_answer_fails_a_factor_goal() -> None:
     report = validate_item(factor_item(recipe=expanded_recipe()))
 
     assert report.report.status == "failed"
-    assert primitive_named(report, "engine_correctness").status == "passed"
-    assert primitive_named(report, "form").status == "failed"
+    assert check_named(report, "engine_correctness").status == "passed"
+    assert check_named(report, "form").status == "failed"
 
 
 def test_wrong_recipe_fails_the_engine() -> None:
@@ -160,7 +155,7 @@ def test_wrong_recipe_fails_the_engine() -> None:
     report = validate_item(expand_item(recipe=wrong))
 
     assert report.report.status == "failed"
-    engine = primitive_named(report, "engine_correctness")
+    engine = check_named(report, "engine_correctness")
     assert engine.status == "failed"
     assert engine.evidence["outcome"] == "incorrect"
 
@@ -207,7 +202,7 @@ def test_unsupported_goal_fails_closed() -> None:
     report = validate_item(item)
 
     assert report.report.status == "failed"
-    engine = primitive_named(report, "engine_correctness")
+    engine = check_named(report, "engine_correctness")
     assert engine.status == "failed"
     assert "cannot grade" in engine.reason
 
@@ -224,8 +219,7 @@ def test_interval_answer_fails_closed() -> None:
 
     assert report.report.status == "failed"
     assert (
-        primitive_named(report, "engine_correctness").evidence["outcome"]
-        == "unsupported"
+        check_named(report, "engine_correctness").evidence["outcome"] == "unsupported"
     )
 
 

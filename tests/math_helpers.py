@@ -71,11 +71,9 @@ def quadratic_ir_template():
         Goal,
         MathItemSpec,
         ParameterSpec,
-        PrimitiveSpec,
         Relation,
         SymbolSpec,
         TextSpec,
-        ValidationSpec,
     )
 
     body = MathItemSpec(
@@ -118,7 +116,6 @@ def quadratic_ir_template():
             ),
         ],
         text=TextSpec(mode="symbolic", template="Solve {equation}."),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="solution_set")]),
     )
     return ir_template(
         "school.quadratic",
@@ -138,11 +135,9 @@ def linear_system_ir_template():
         Goal,
         MathItemSpec,
         ParameterSpec,
-        PrimitiveSpec,
         Relation,
         SymbolSpec,
         TextSpec,
-        ValidationSpec,
     )
 
     body = MathItemSpec(
@@ -189,7 +184,6 @@ def linear_system_ir_template():
             ),
         ],
         text=TextSpec(mode="symbolic", template="Solve the system {equations}."),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="solution_set")]),
     )
     return ir_template(
         "school.linear_system",
@@ -209,10 +203,8 @@ def derivative_ir_template():
         Goal,
         MathItemSpec,
         ParameterSpec,
-        PrimitiveSpec,
         SymbolSpec,
         TextSpec,
-        ValidationSpec,
     )
 
     # The engine refuses power nodes whose exponent is not a bounded literal,
@@ -261,7 +253,6 @@ def derivative_ir_template():
         text=TextSpec(
             mode="symbolic", template="Differentiate {expr} with respect to x."
         ),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="expression_equiv")]),
     )
     return ir_template(
         "university.derivative",
@@ -281,10 +272,8 @@ def determinant_ir_template():
         Goal,
         MathItemSpec,
         ParameterSpec,
-        PrimitiveSpec,
         SymbolSpec,
         TextSpec,
-        ValidationSpec,
     )
 
     body = MathItemSpec(
@@ -331,7 +320,6 @@ def determinant_ir_template():
             ),
         ],
         text=TextSpec(mode="symbolic", template="Find the determinant of {matrix}."),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="numeric")]),
     )
     return ir_template(
         "university.determinant",
@@ -353,10 +341,8 @@ def percentage_ir_template():
         Goal,
         MathItemSpec,
         ParameterSpec,
-        PrimitiveSpec,
         SymbolSpec,
         TextSpec,
-        ValidationSpec,
     )
 
     body = MathItemSpec(
@@ -391,7 +377,6 @@ def percentage_ir_template():
             ),
         ],
         text=TextSpec(mode="symbolic", template="Find {percent}% of {whole}."),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="numeric")]),
     )
     return ir_template(
         "school.percentage",

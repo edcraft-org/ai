@@ -3,8 +3,8 @@
 The `math` domain authors reusable item families as a closed, typed IR. The
 model authors the problem, the answer recipe and the distractor recipes; a
 deterministic engine adjudicates correctness and a separate form registry
-adjudicates shape. Nothing is solved by the model at expansion time, and nothing
-is derived by the solver at approval time.
+adjudicates shape. Nothing is solved or derived anywhere: the recipe the model
+authors *is* the answer, and the engine grades it.
 
 Every template has a finite parameter domain that is swept exhaustively before a
 human approves it.
@@ -48,7 +48,6 @@ A template declares `topic`, one to six `parameters`, and one `body`.
   (finite set) or `components` (ordered tuple), plus a `misconception` tag.
 - `body.text.template`: learner-facing text using declared parameter placeholders
   and the reserved `{expr}`, `{equation}`, `{equations}` and `{matrix}`.
-- `body.validation.primitives`: the comparison primitives used for witnesses.
 
 Expressions are closed data trees, never code. A node sets exactly one of
 `num` (exact literal), `sym` (variable), `param` (template parameter) or `op`
@@ -69,10 +68,9 @@ parameters, so one recipe is correct for every combination.
 | `interval` | `interval` (not graded yet; rejects) |
 | `boolean` | `boolean` (not graded yet; rejects) |
 
-`display` is never compared. The engine compiles the recipe and decides. A
-template body must declare an `answer_recipe`; a concrete item produced by a
-topic generator may instead carry a derived `Answer`, and the two are mutually
-exclusive.
+`display` is never compared. The engine compiles the recipe and decides. Every
+item and template body must declare an `answer_recipe`; it is the only answer
+representation in the IR.
 
 ## Correctness
 
@@ -93,8 +91,8 @@ Distractors are graded the same way, but the required verdict is inverted: a
 distractor must be `incorrect`. An `unknown` or `unsupported` distractor cannot
 be proven wrong, so it rejects the template.
 
-There is no second derivation. The solver is not consulted for template answers,
-so a model that authors a wrong recipe is rejected rather than corrected.
+There is no second derivation and no solver in the domain. A model that authors a
+wrong recipe is rejected rather than corrected.
 
 ## Form
 
@@ -170,6 +168,11 @@ The `equation_template` / `question_template` / `answer_expression` /
 evaluator are removed. Proposals carrying those fields are rejected. Legacy
 linear artifacts cannot be re-validated, because the evaluator that produced
 their keys no longer exists; they must be re-authored as IR templates.
+
+The SymPy primitive oracles, model-facing witnesses and the test-only topic
+fixture package are also removed. Correctness is decided only by the engine and
+shape only by the form registry; option collision checks use one internal
+distinctness helper.
 
 The only retained read-time migration is the advisory evidence name
 `math_assess_template_relevance` → `assess_template_relevance`.

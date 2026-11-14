@@ -28,6 +28,7 @@ from edcraft_validator.domains.math.ir.compile import (
     build_symbols,
     compile_expr,
     compile_relation,
+    goal_symbols,
 )
 from edcraft_validator.domains.math.ir.schema import (
     Expr,
@@ -35,8 +36,7 @@ from edcraft_validator.domains.math.ir.schema import (
     MathItemSpec,
     MathReconstruction,
 )
-from edcraft_validator.domains.math.ir.solve import goal_symbols
-from edcraft_validator.domains.math.validation.primitives import expression_equiv
+from edcraft_validator.domains.math.validation.distinct import expression_equivalence
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
 
 PROMPT_VERSION = "math-fidelity/1"
@@ -404,12 +404,7 @@ def _compare_optional_matrices(
 
 def _expressions_equivalent(left: sympy.Expr, right: sympy.Expr) -> bool | None:
     """Decide semantic equality; ``None`` means the comparison could not decide."""
-    result = expression_equiv(left, right)
-    if result.status == "passed":
-        return True
-    if result.status == "failed":
-        return False
-    return None
+    return expression_equivalence(left, right)
 
 
 def _canonical_payload(item: MathItemSpec) -> dict[str, Any]:

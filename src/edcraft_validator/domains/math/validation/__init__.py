@@ -1,15 +1,18 @@
-"""Tri-state answer primitives and the declarative item harness."""
+"""Recipe compilation, the declarative item harness, and option distinctness."""
 
 from edcraft_validator.domains.math.validation.answers import (
-    compile_answer,
     compile_answer_recipe,
-    parse_answer_expr,
+)
+from edcraft_validator.domains.math.validation.distinct import (
+    expression_equivalence,
+    same_value,
+)
+from edcraft_validator.domains.math.validation.forms import (
+    FormResult,
+    check_form,
 )
 from edcraft_validator.domains.math.validation.harness import (
     HarnessReport,
-    Witness,
-    WitnessOutcome,
-    check_answer,
     validate_item,
     validate_template,
 )
@@ -19,51 +22,28 @@ from edcraft_validator.domains.math.validation.isolation import (
     ValidationWorkerError,
     run_isolated,
 )
-from edcraft_validator.domains.math.validation.primitives import (
-    check_primitive,
-    collection_equal,
-    expression_equiv,
-    interval_equal,
-    matrix_equal,
-    numeric_equal,
-    option_equivalent,
-    quantity_equal,
-    solution_set_equal,
-    string_equal,
-)
 from edcraft_validator.domains.math.validation.results import (
+    CheckResult,
+    CheckStatus,
     OptionCheck,
-    PrimitiveResult,
-    PrimitiveStatus,
     ValidationReport,
 )
 
 __all__ = [
     "DEFAULT_VALIDATION_TIMEOUT_SECONDS",
+    "FormResult",
     "HarnessReport",
     "OptionCheck",
-    "PrimitiveResult",
-    "PrimitiveStatus",
+    "CheckResult",
+    "CheckStatus",
     "ValidationReport",
     "ValidationTimeout",
     "ValidationWorkerError",
-    "Witness",
-    "WitnessOutcome",
-    "check_answer",
-    "check_primitive",
-    "collection_equal",
-    "compile_answer",
+    "check_form",
     "compile_answer_recipe",
-    "expression_equiv",
-    "interval_equal",
-    "matrix_equal",
-    "numeric_equal",
-    "option_equivalent",
-    "parse_answer_expr",
-    "quantity_equal",
+    "expression_equivalence",
     "run_isolated",
-    "solution_set_equal",
-    "string_equal",
+    "same_value",
     "validate_item",
     "validate_template",
 ]

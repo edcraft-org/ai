@@ -12,12 +12,10 @@ from edcraft_validator.domains.math.ir.schema import (
     Given,
     Goal,
     MathItemSpec,
-    PrimitiveSpec,
     RecipeInterval,
     Relation,
     SymbolSpec,
     TextSpec,
-    ValidationSpec,
 )
 from edcraft_validator.domains.math.validation.forms import FormResult, check_form
 
@@ -57,7 +55,6 @@ def item(goal: Goal, *givens: Given, symbols: tuple[str, ...] = ("x",)) -> MathI
         givens=list(givens) or [Given(id="g0", kind="dataset", values=["0"])],
         goal=goal,
         text=TextSpec(mode="symbolic", template="Test item."),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="expression_equiv")]),
     )
 
 
@@ -71,7 +68,7 @@ LINEAR_RELATION = Relation(
 )
 
 
-def solve_item() -> MathItemSpec:
+def linear_item() -> MathItemSpec:
     return item(
         Goal(kind="solve", symbol="x"),
         Given(id="g1", relation=LINEAR_RELATION),
@@ -165,17 +162,17 @@ def test_factor_rejects_a_non_polynomial_answer() -> None:
 
 
 def test_solve_accepts_a_set_answer() -> None:
-    result = check_form(solve_item(), AnswerRecipe(kind="set", items=[num(4)]))
+    result = check_form(linear_item(), AnswerRecipe(kind="set", items=[num(4)]))
     assert result == FormResult("pass")
 
 
 def test_solve_accepts_a_tuple_answer() -> None:
-    result = check_form(solve_item(), AnswerRecipe(kind="tuple", items=[num(4)]))
+    result = check_form(linear_item(), AnswerRecipe(kind="tuple", items=[num(4)]))
     assert result == FormResult("pass")
 
 
 def test_solve_rejects_a_single_expression_answer() -> None:
-    result = check_form(solve_item(), one(num(4)))
+    result = check_form(linear_item(), one(num(4)))
     assert result.status == "fail"
     assert "set or an ordered tuple" in result.reason
 
@@ -287,7 +284,7 @@ def test_interval_answer_is_unsupported() -> None:
 
 
 def test_boolean_answer_is_unsupported() -> None:
-    spec = solve_item()
+    spec = linear_item()
     result = check_form(spec, AnswerRecipe(kind="boolean", boolean=True))
     assert result.status == "unsupported"
     assert "boolean" in result.reason

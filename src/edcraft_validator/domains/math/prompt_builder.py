@@ -67,10 +67,6 @@ ITEM FAMILY (`item`)
   Exprs), or `items` (a finite set of Exprs), plus a short `misconception` tag
   and an optional `reason`. Every distractor must be demonstrably wrong and
   distinct from every other option for every declared combination.
-- `item.body.validation.primitives` names the comparison used for the derived
-  key: `solution_set` for solve goals, `expression_equiv` for expressions,
-  `numeric` for numbers, `matrix_vector` for matrices, `collection` for sets or
-  lists. More than one primitive is allowed.
 
 CHECK PLAN
 - Select a nonempty fixed subset of the available MCP tools using their supplied

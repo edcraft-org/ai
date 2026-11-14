@@ -1,4 +1,4 @@
-"""Typed math IR, compiler and exact solver."""
+"""Typed math IR and its closed compiler."""
 
 from edcraft_validator.domains.math.ir.compile import (
     MathCompileError,
@@ -6,62 +6,44 @@ from edcraft_validator.domains.math.ir.compile import (
     compile_expr,
     compile_givens,
     compile_relation,
+    goal_symbols,
     parse_exact,
 )
 from edcraft_validator.domains.math.ir.schema import (
-    Answer,
     AnswerRecipe,
     Distractor,
     Expr,
     Given,
     Goal,
-    Interval,
     MathItemSpec,
     MathReconstruction,
     MathTemplateSpec,
     ParameterSpec,
-    PrimitiveSpec,
     RecipeInterval,
     Relation,
     SymbolSpec,
     TextSpec,
-    ValidationSpec,
-)
-from edcraft_validator.domains.math.ir.solve import (
-    SolveResult,
-    SolveUnavailable,
-    answer_from_sympy,
-    goal_symbols,
-    solve_item,
 )
 
 __all__ = [
-    "Answer",
     "AnswerRecipe",
     "Distractor",
     "Expr",
     "Given",
     "Goal",
-    "Interval",
     "MathCompileError",
     "MathItemSpec",
     "MathReconstruction",
     "MathTemplateSpec",
     "ParameterSpec",
-    "PrimitiveSpec",
     "RecipeInterval",
     "Relation",
-    "SolveResult",
-    "SolveUnavailable",
     "SymbolSpec",
     "TextSpec",
-    "ValidationSpec",
-    "answer_from_sympy",
     "build_symbols",
     "compile_expr",
     "compile_givens",
     "compile_relation",
     "goal_symbols",
     "parse_exact",
-    "solve_item",
 ]

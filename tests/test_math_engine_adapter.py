@@ -18,12 +18,10 @@ from edcraft_validator.domains.math.ir.schema import (
     Given,
     Goal,
     MathItemSpec,
-    PrimitiveSpec,
     RecipeInterval,
     Relation,
     SymbolSpec,
     TextSpec,
-    ValidationSpec,
 )
 
 
@@ -62,7 +60,6 @@ def item(
         givens=list(givens) or [Given(id="g0", kind="dataset", values=["0"])],
         goal=goal,
         text=TextSpec(mode="symbolic", template="Test item."),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="expression_equiv")]),
     )
 
 
@@ -72,7 +69,7 @@ LINEAR_RELATION = Relation(
 )
 
 
-def solve_item() -> MathItemSpec:
+def linear_item() -> MathItemSpec:
     return item(
         Goal(kind="solve", symbol="x"),
         Given(id="g1", relation=LINEAR_RELATION),
@@ -249,10 +246,10 @@ def test_grade_determinant_correct_and_incorrect() -> None:
 
 
 def test_grade_solve_accepts_set_answer() -> None:
-    assert grade(solve_item(), AnswerRecipe(kind="set", items=[num(4)])).outcome == (
+    assert grade(linear_item(), AnswerRecipe(kind="set", items=[num(4)])).outcome == (
         "correct"
     )
-    assert grade(solve_item(), AnswerRecipe(kind="set", items=[num(5)])).outcome == (
+    assert grade(linear_item(), AnswerRecipe(kind="set", items=[num(5)])).outcome == (
         "incorrect"
     )
 
@@ -295,14 +292,14 @@ def test_grade_expand_and_factor_goals_via_equivalence() -> None:
 def test_grade_distractor_kinds() -> None:
     assert (
         grade(
-            solve_item(),
+            linear_item(),
             Distractor(value=num(5), misconception="adds before dividing"),
         ).outcome
         == "incorrect"
     )
     assert (
         grade(
-            solve_item(),
+            linear_item(),
             Distractor(items=[num(4), num(5)], misconception="invents a root"),
         ).outcome
         == "incorrect"

@@ -21,10 +21,8 @@ from edcraft_validator.domains.math.ir.schema import (
     Goal,
     MathItemSpec,
     ParameterSpec,
-    PrimitiveSpec,
     SymbolSpec,
     TextSpec,
-    ValidationSpec,
 )
 from edcraft_validator.domains.math.math_domain import MathDomain
 from edcraft_validator.domains.math.math_schemas import MathTemplateRequest
@@ -66,7 +64,6 @@ def small_fraction_template():
             ),
         ],
         text=TextSpec(mode="symbolic", template="Find half of {half} divided by 2."),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="numeric")]),
     )
     return ir_template(
         "school.fraction_arithmetic",

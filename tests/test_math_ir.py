@@ -1,4 +1,4 @@
-"""Typed IR, solver, primitives, and harness tests."""
+"""Typed IR, recipe compilation, option distinctness, and harness tests."""
 
 from __future__ import annotations
 
@@ -6,39 +6,30 @@ from fractions import Fraction
 
 import pytest
 import sympy
+from pydantic import ValidationError
 
 from edcraft_validator.domains.math.ir.compile import MathCompileError, compile_expr
 from edcraft_validator.domains.math.ir.schema import (
-    Answer,
     AnswerRecipe,
     Distractor,
     Expr,
     Given,
     Goal,
-    Interval,
     MathItemSpec,
     MathTemplateSpec,
     ParameterSpec,
-    PrimitiveSpec,
     Relation,
     SymbolSpec,
     TextSpec,
-    ValidationSpec,
 )
-from edcraft_validator.domains.math.ir.solve import solve_item
+from edcraft_validator.domains.math.validation.answers import compile_answer_recipe
+from edcraft_validator.domains.math.validation.distinct import (
+    expression_equivalence,
+    same_value,
+)
 from edcraft_validator.domains.math.validation.harness import (
-    Witness,
     validate_item,
     validate_template,
-)
-from edcraft_validator.domains.math.validation.primitives import (
-    collection_equal,
-    expression_equiv,
-    interval_equal,
-    matrix_equal,
-    numeric_equal,
-    option_equivalent,
-    solution_set_equal,
 )
 
 
@@ -75,9 +66,10 @@ def linear_item(
     a: int = 2,
     b: int = 3,
     c: int = 11,
-    answer: Answer | None = None,
+    answer_recipe: AnswerRecipe | None = None,
     distractors: list[Distractor] | None = None,
 ) -> MathItemSpec:
+    """``a*x + b = c`` with the exact solution ``(c - b) / a`` as its recipe."""
     return MathItemSpec(
         topic="school.linear_equation",
         symbols=[SymbolSpec(name="x")],
@@ -92,10 +84,14 @@ def linear_item(
             )
         ],
         goal=Goal(kind="solve", symbol="x"),
-        answer=answer,
+        answer_recipe=answer_recipe
+        if answer_recipe is not None
+        else AnswerRecipe(
+            kind="set",
+            items=[div(sub(num(c), num(b)), num(a))],
+        ),
         distractors=distractors or [],
         text=TextSpec(mode="symbolic", template=f"Solve {a}x + {b} = {c}."),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="solution_set")]),
     )
 
 
@@ -118,161 +114,90 @@ def test_compile_rejects_unbounded_exponent_and_deep_tree() -> None:
         compile_expr(deep, symbols)
 
 
-def test_solve_linear_and_quadratic() -> None:
-    assert solve_item(linear_item()).answer.items == ["4"]
+def test_answer_recipes_compile_to_values() -> None:
+    assert compile_answer_recipe(
+        AnswerRecipe(kind="numeric", items=[div(num(1), num(3))]), []
+    ) == sympy.Rational(1, 3)
 
-    roots = MathItemSpec(
-        topic="school.quadratic",
-        symbols=[SymbolSpec(name="x")],
-        givens=[
-            Given(
-                id="g1",
-                relation=Relation(
-                    kind="eq",
-                    lhs=sub(power(sym("x"), num(2)), num(6)),
-                    rhs=mul(num(1), sym("x")),
-                ),
-            )
+    quadratic = AnswerRecipe(
+        kind="set",
+        items=[
+            div(add(num(6), num(2)), num(2)),
+            div(sub(num(6), num(2)), num(2)),
         ],
-        goal=Goal(kind="solve", symbol="x"),
-        text=TextSpec(mode="symbolic", template="x^2 - 6 = x"),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="solution_set")]),
     )
-    result = solve_item(roots)
-    assert result.answer.kind == "set"
-    assert set(result.answer.items) == {
-        sympy.sstr(sympy.Integer(-2)),
-        sympy.sstr(sympy.Integer(3)),
-    }
+    assert compile_answer_recipe(quadratic, []) == sympy.FiniteSet(4, 2)
 
+    assert compile_answer_recipe(
+        AnswerRecipe(kind="tuple", items=[num(3), num(2)]), []
+    ) == sympy.Tuple(3, 2)
 
-def test_solve_system_derivative_and_determinant() -> None:
-    system = MathItemSpec(
-        topic="school.linear_system",
-        symbols=[SymbolSpec(name="x"), SymbolSpec(name="y")],
-        givens=[
-            Given(
-                id="g1",
-                relation=Relation(kind="eq", lhs=add(sym("x"), sym("y")), rhs=num(5)),
-            ),
-            Given(
-                id="g2",
-                relation=Relation(kind="eq", lhs=sub(sym("x"), sym("y")), rhs=num(1)),
-            ),
-        ],
-        goal=Goal(kind="solve", symbols=["x", "y"]),
-        text=TextSpec(mode="symbolic", template="x+y=5, x-y=1"),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="solution_set")]),
+    matrix = compile_answer_recipe(
+        AnswerRecipe(kind="matrix", matrix=[[num(1), num(2)]]), []
     )
-    assert solve_item(system).answer.items == ["3", "2"]
+    assert matrix == sympy.Matrix([[1, 2]])
 
-    derivative = MathItemSpec(
-        topic="university.derivative",
-        symbols=[SymbolSpec(name="x")],
-        givens=[Given(id="g1", kind="domain", symbol="x", domain="real")],
-        goal=Goal(kind="derivative", symbol="x", expr=power(sym("x"), num(3))),
-        text=TextSpec(mode="symbolic", template="Differentiate x^3."),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="expression_equiv")]),
-    )
-    assert solve_item(derivative).answer.items == ["3*x**2"]
-
-    determinant = MathItemSpec(
-        topic="university.determinant",
-        symbols=[SymbolSpec(name="x")],
-        givens=[Given(id="g1", kind="domain", symbol="x", domain="real")],
-        goal=Goal(
-            kind="determinant",
-            matrix=[[num(1), num(2)], [num(3), num(4)]],
-        ),
-        text=TextSpec(mode="symbolic", template="det [[1,2],[3,4]]"),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="numeric")]),
-    )
-    assert solve_item(determinant).answer.items == ["-2"]
+    with pytest.raises(ValidationError, match="exactly one item"):
+        AnswerRecipe(kind="numeric", items=[num(1), num(2)])
 
 
-def test_primitives_are_tri_state() -> None:
+def test_expression_equivalence_is_tri_state() -> None:
     x = sympy.Symbol("x")
     assert (
-        expression_equiv(sympy.sin(x) ** 2 + sympy.cos(x) ** 2, sympy.Integer(1)).status
-        == "passed"
+        expression_equivalence(sympy.sin(x) ** 2 + sympy.cos(x) ** 2, sympy.Integer(1))
+        is True
     )
-    assert expression_equiv(x, x + 1).status == "failed"
-    assert numeric_equal(Fraction(1, 3), sympy.Rational(1, 3)).status == "passed"
-    assert solution_set_equal(sympy.FiniteSet(2), sympy.Integer(2)).status == "passed"
-    assert collection_equal([1, 2], [2, 1]).status == "passed"
-    assert collection_equal([1, 2], [2, 1], ordered=True).status == "failed"
-    assert (
-        interval_equal(
-            Interval(lower="0", upper="1", lower_open=False, upper_open=False),
-            Interval(lower="0", upper="1", lower_open=False, upper_open=False),
-        ).status
-        == "passed"
+    assert expression_equivalence(x, x + 1) is False
+
+
+def test_same_value_compares_supported_answer_shapes() -> None:
+    assert same_value(sympy.Tuple(1, 2), sympy.Tuple(1, 2))
+    assert not same_value(sympy.Tuple(1, 2), sympy.Integer(1))
+    assert same_value([[1, 2]], [[1, 2]])
+    assert not same_value([[1, 2]], [[1, 3]])
+    assert same_value(sympy.FiniteSet(1, 2), sympy.FiniteSet(2, 1))
+    assert not same_value(sympy.FiniteSet(1, 2), sympy.FiniteSet(1, 3))
+    assert not same_value("north", "south")
+    assert same_value(sympy.Integer(2), sympy.Rational(4, 2))
+
+
+def test_harness_accepts_a_correct_recipe_and_rejects_a_wrong_key() -> None:
+    assert validate_item(linear_item()).report.status == "passed"
+
+    wrong_key = validate_item(
+        linear_item(answer_recipe=AnswerRecipe(kind="set", items=[num(5)]))
     )
-    assert matrix_equal([[1, 2]], [[1, 2]]).status == "passed"
-
-
-def test_numeric_mismatch_is_inconclusive_not_a_counterexample() -> None:
-    assert numeric_equal("x", 2).status == "inconclusive"
-    assert numeric_equal(sympy.oo, 2).status == "inconclusive"
-
-
-def test_option_equivalence_compares_values_without_declared_primitives() -> None:
-    assert option_equivalent(sympy.Tuple(1, 2), sympy.Tuple(1, 2)).status == "passed"
-    assert option_equivalent(sympy.Tuple(1, 2), sympy.Integer(1)).status == "failed"
-    assert option_equivalent([[1, 2]], [[1, 2]]).status == "passed"
-    assert option_equivalent([[1, 2]], [[1, 3]]).status == "failed"
-    assert (
-        option_equivalent(sympy.FiniteSet(1, 2), sympy.FiniteSet(2, 1)).status
-        == "passed"
-    )
-    assert (
-        option_equivalent(sympy.FiniteSet(1, 2), sympy.FiniteSet(1, 3)).status
-        == "failed"
-    )
-    assert option_equivalent("north", "south").status == "failed"
-
-
-def test_harness_blocks_wrong_key_and_bad_distractors() -> None:
-    wrong_key = validate_item(linear_item(answer=Answer(kind="numeric", items=["5"])))
     assert wrong_key.report.status == "failed"
-    assert any("contradicts" in finding for finding in wrong_key.report.findings)
+    assert any(
+        result.check == "engine_correctness" and result.status == "failed"
+        for result in wrong_key.report.checks
+    )
 
+
+def test_harness_requires_an_answer_recipe() -> None:
+    item = linear_item().model_copy(update={"answer_recipe": None})
+    report = validate_item(item)
+    assert report.report.status == "failed"
+    assert any("answer_recipe" in finding for finding in report.report.findings)
+
+
+def test_harness_blocks_duplicate_and_correct_distractors() -> None:
     duplicate = validate_item(
         linear_item(
             distractors=[
-                Distractor(value=num(4), misconception="COPY_KEY"),
-                Distractor(value=num(4), misconception="COPY_AGAIN"),
+                Distractor(value=num(7), misconception="COPY_ONE"),
+                Distractor(value=num(7), misconception="COPY_TWO"),
             ]
         )
     )
     assert duplicate.report.status == "failed"
-    assert duplicate.report.options[0].result.status == "failed"
+    assert all(option.result.status == "failed" for option in duplicate.report.options)
 
-    witness = validate_item(
-        linear_item(),
-        witnesses=[
-            Witness(
-                name="wrong",
-                answer=Answer(kind="numeric", items=["5"]),
-                expected="rejected",
-            )
-        ],
+    key_like = validate_item(
+        linear_item(distractors=[Distractor(value=num(4), misconception="COPY_KEY")])
     )
-    assert witness.report.status == "passed"
-    assert witness.witnesses[0].passed
-
-
-def test_harness_reports_inconclusive_without_a_counterexample() -> None:
-    item = linear_item(
-        distractors=[Distractor(value=num(7), misconception="INVERSE")],
-        answer=None,
-    )
-    item = item.model_copy(
-        update={"validation": ValidationSpec(primitives=[PrimitiveSpec(type="proof")])}
-    )
-    report = validate_item(item)
-    assert report.report.status == "inconclusive"
-    assert report.report.options[0].result.status == "inconclusive"
+    assert key_like.report.status == "failed"
+    assert key_like.report.options[0].result.status == "failed"
 
 
 def test_template_sweep_blocks_a_failing_variant() -> None:
@@ -290,10 +215,12 @@ def test_template_sweep_blocks_a_failing_variant() -> None:
             )
         ],
         goal=Goal(kind="solve", symbol="x"),
-        answer_recipe=AnswerRecipe(kind="set", items=[num(4)]),
+        answer_recipe=AnswerRecipe(
+            kind="set",
+            items=[div(sub(Expr(param="c"), Expr(param="b")), Expr(param="a"))],
+        ),
         distractors=[Distractor(value=Expr(param="d"), misconception="WRONG_CONSTANT")],
         text=TextSpec(mode="symbolic", template="Solve for x."),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="solution_set")]),
     )
     template = MathTemplateSpec(
         topic="school.linear_equation",
@@ -301,7 +228,7 @@ def test_template_sweep_blocks_a_failing_variant() -> None:
             ParameterSpec(name="a", values=["2"]),
             ParameterSpec(name="b", values=["3"]),
             ParameterSpec(name="c", values=["11"]),
-            ParameterSpec(name="d", values=["5", "4"]),
+            ParameterSpec(name="d", values=["7", "4"]),
         ],
         body=body,
     )
@@ -333,7 +260,6 @@ def test_truncated_variant_sweep_is_inconclusive() -> None:
         goal=Goal(kind="solve", symbol="x"),
         answer_recipe=AnswerRecipe(kind="set", items=[num(2), num(3)]),
         text=TextSpec(mode="symbolic", template="Solve for x."),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="solution_set")]),
     )
     template = MathTemplateSpec(
         topic="school.quadratic",
@@ -352,17 +278,8 @@ def test_truncated_variant_sweep_is_inconclusive() -> None:
     assert any("truncated" in finding for finding in report.report.findings)
 
 
-def test_solution_set_unique_parameter_rejects_multiple_roots() -> None:
-    from edcraft_validator.domains.math.validation.primitives import check_primitive
-
-    primitive = PrimitiveSpec(type="solution_set", params={"unique": True})
-    two_roots = sympy.FiniteSet(-1, 1)
-
-    passed = check_primitive(
-        primitive, expected=sympy.FiniteSet(2), actual=sympy.FiniteSet(2)
-    )
-    failed = check_primitive(primitive, expected=two_roots, actual=two_roots)
-
-    assert passed.status == "passed"
-    assert failed.status == "failed"
-    assert "unique" in failed.reason
+def test_recipe_parameters_compile_exactly() -> None:
+    recipe = AnswerRecipe(kind="numeric", items=[div(Expr(param="a"), num(4))])
+    assert compile_answer_recipe(
+        recipe, [SymbolSpec(name="x")], {"a": Fraction(1, 2)}
+    ) == sympy.Rational(1, 8)

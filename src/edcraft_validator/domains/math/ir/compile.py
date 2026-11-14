@@ -16,6 +16,7 @@ import sympy
 from edcraft_validator.domains.math.ir.schema import (
     Expr,
     Given,
+    Goal,
     Relation,
     SymbolSpec,
 )
@@ -110,6 +111,15 @@ def _check_tree(expr: Expr, depth: int = 0) -> int:
         if count > MAX_NODES:
             raise MathCompileError("expression has too many nodes")
     return count
+
+
+def goal_symbols(goal: Goal) -> tuple[str, ...]:
+    """The symbols a goal asks about, in declared order."""
+    if goal.symbols:
+        return tuple(goal.symbols)
+    if goal.symbol is not None:
+        return (goal.symbol,)
+    return ()
 
 
 def compile_expr(

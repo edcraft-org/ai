@@ -151,10 +151,8 @@ def _expand_template(recipe, *, distractors=None):
         Goal,
         MathItemSpec,
         ParameterSpec,
-        PrimitiveSpec,
         SymbolSpec,
         TextSpec,
-        ValidationSpec,
     )
 
     body = MathItemSpec(
@@ -177,7 +175,6 @@ def _expand_template(recipe, *, distractors=None):
             )
         ],
         text=TextSpec(mode="symbolic", template="Expand the product."),
-        validation=ValidationSpec(primitives=[PrimitiveSpec(type="expression_equiv")]),
     )
     return MathTemplateSpec(
         topic=body.topic,
