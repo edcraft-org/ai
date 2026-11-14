@@ -105,12 +105,17 @@ def grade(
 # Problem side
 
 
+_DOMAIN_STRICTNESS = {"real": 0, "rational": 1, "integer": 2}
+
+
 def _reconciled_symbol_specs(item: MathItemSpec) -> list[SymbolSpec]:
     """Fold domain givens into the symbol specs the engine receives.
 
     The engine reads a symbol's domain from its :class:`SymbolSpec`, so a
-    ``domain`` given that is not forwarded would be silently ignored. Conflicting
-    facts and finite data sets have no engine representation and fail closed.
+    ``domain`` given that is not forwarded would be silently ignored. The
+    declared domains are nested (integer within rational within real), so the
+    stricter fact wins. Finite data sets have no engine representation and fail
+    closed.
     """
     specs = {spec.name: spec for spec in item.symbols}
     for given in item.givens:
@@ -123,13 +128,8 @@ def _reconciled_symbol_specs(item: MathItemSpec) -> list[SymbolSpec]:
         spec = specs.get(given.symbol)
         if spec is None:
             raise AdapterGap(f"domain given references unknown symbol {given.symbol!r}")
-        if spec.domain == "real":
+        if _DOMAIN_STRICTNESS[given.domain] >= _DOMAIN_STRICTNESS[spec.domain]:
             specs[given.symbol] = spec.model_copy(update={"domain": given.domain})
-        elif given.domain != "real" and given.domain != spec.domain:
-            raise AdapterGap(
-                f"domain given for {given.symbol!r} conflicts with its "
-                f"declared {spec.domain} domain"
-            )
     return list(specs.values())
 
 

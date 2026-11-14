@@ -40,6 +40,8 @@ from edcraft_validator.llm.judge_configuration import (
 from edcraft_validator.llm.judging import JudgeProviderFactory
 from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
 
+_MAX_EXPORTED_ITEMS = 128
+
 CandidateArgument = Annotated[
     MathTemplateCandidate,
     Field(
@@ -59,7 +61,7 @@ class MathSpecRequest(BaseModel):
     item: MathItemSpec | None = None
     template: MathTemplateSpec | None = None
     candidate: MathTemplateCandidate | None = None
-    max_variants: int = Field(default=512, ge=1, le=512)
+    max_variants: int = Field(default=MAX_IR_VARIANTS, ge=1, le=MAX_IR_VARIANTS)
     timeout_seconds: float = Field(
         default=DEFAULT_VALIDATION_TIMEOUT_SECONDS, gt=0, le=60
     )
@@ -193,7 +195,9 @@ def register_math_tools(
         item: MathItemSpec | None = None,
         template: MathTemplateSpec | None = None,
         candidate: MathTemplateCandidate | None = None,
-        max_variants: Annotated[int, Field(ge=1, le=512)] = MAX_IR_VARIANTS,
+        max_variants: Annotated[int, Field(ge=1, le=MAX_IR_VARIANTS)] = (
+            MAX_IR_VARIANTS
+        ),
         timeout_seconds: Annotated[float, Field(gt=0, le=60)] = (
             DEFAULT_VALIDATION_TIMEOUT_SECONDS
         ),
@@ -489,6 +493,7 @@ def _harness_evidence(
     else:
         ir_status = str(raw_status)
     options = report.get("options", [])
+    checks = report.get("checks", [])
     if name == MATH_OPTIONS_TOOL:
         failed_options = [
             option
@@ -536,8 +541,10 @@ def _harness_evidence(
             "findings": findings,
             "variants_checked": harness.get("variants_checked", 0),
             "variants_total": harness.get("variants_total", 0),
-            "checks": report.get("checks", []),
-            "options": options,
+            "checks": checks[:_MAX_EXPORTED_ITEMS],
+            "checks_truncated": len(checks) > _MAX_EXPORTED_ITEMS,
+            "options": options[:_MAX_EXPORTED_ITEMS],
+            "options_truncated": len(options) > _MAX_EXPORTED_ITEMS,
         },
         duration_ms=_elapsed_ms(started),
     )

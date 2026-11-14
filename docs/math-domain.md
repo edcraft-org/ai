@@ -41,7 +41,8 @@ A template declares `topic`, one to six `parameters`, and one `body`.
   and is reported as inconclusive.
 - `body.symbols`: every variable, with domain facts (`real`/`integer`/`rational`,
   `positive`, `nonzero`).
-- `body.givens`: relations, domain facts, or finite data sets.
+- `body.givens`: relations and domain facts. Finite data sets are accepted by
+  the schema but have no engine representation, so such an item is refused.
 - `body.goal`: `kind` plus the expression, symbol(s), point, or matrix it needs.
 - `body.answer_recipe`: the answer, as typed expression trees (see below).
 - `body.distractors`: one to twelve recipes, each `value` (scalar), `items`

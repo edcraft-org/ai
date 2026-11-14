@@ -6,10 +6,10 @@ it has the shape the goal's notation demands -- a fully expanded polynomial, a
 product of irreducible factors, a solution set, a finite scalar determinant,
 and so on.
 
-Every check is total: :func:`check_form` returns a :class:`FormResult` and
-never raises. SymPy inspection of the compiled answer happens only here; the
-registry selects a rule from the goal kind but never decides truth, so notation
-and correctness stay independent verdicts.
+Every malformed answer becomes a :class:`FormResult`; a genuine bug still
+raises so tests can see it. SymPy inspection of the compiled answer happens
+only here; the registry selects a rule from the goal kind but never decides
+truth, so notation and correctness stay independent verdicts.
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ def check_form(
     answer: AnswerRecipe,
     params: Mapping[str, Fraction] | None = None,
 ) -> FormResult:
-    """Check the answer's form for the item's goal; total, never raises."""
+    """Check the answer's form for the item's goal; malformed answers fail."""
     if answer.kind in {"interval", "boolean"}:
         return FormResult("unsupported", f"no form rule for {answer.kind} answers")
     rule = _FORM_RULES.get(item.goal.kind)

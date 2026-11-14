@@ -330,6 +330,21 @@ def test_domain_givens_reach_the_engine() -> None:
         grade(spec, AnswerRecipe(kind="set", items=[num("1/2")])).outcome != "correct"
     )
 
+    # The domains are nested, so a weaker given never widens a declared one.
+    strict = item(
+        Goal(kind="solve", symbol="x"),
+        Given(
+            id="g1",
+            relation=Relation(kind="eq", lhs=mul(num(2), sym("x")), rhs=num(1)),
+        ),
+        Given(id="dom", kind="domain", symbol="x", domain="real"),
+        symbols=("x",),
+    ).model_copy(update={"symbols": [SymbolSpec(name="x", domain="integer")]})
+    strict_request = to_correctness_request(
+        strict, AnswerRecipe(kind="set", items=[num("1/2")])
+    )
+    assert strict_request.problem.symbols[0].domain == "integer"
+
 
 def test_dataset_givens_are_refused() -> None:
     spec = item(Goal(kind="evaluate", expr=num(1))).model_copy(
