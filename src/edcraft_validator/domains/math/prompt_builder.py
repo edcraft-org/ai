@@ -15,7 +15,7 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 
-MATH_TEMPLATE_PROMPT_VERSION = "math-template-v4"
+MATH_TEMPLATE_PROMPT_VERSION = "math-template-v5"
 
 MATH_TEMPLATE_SYSTEM_PROMPT = """\
 Generate one reusable mathematics multiple-choice template and recommend its
@@ -38,6 +38,11 @@ ITEM FAMILY (`item`)
   derivative, integral, determinant. The deterministic engine grades exactly
   these goal kinds; limit and eigenvalues are not graded yet, so templates that
   use them are rejected.
+- Set each payload field exactly once. A solve goal sets either `symbol` (one
+  unknown) or `symbols` (two or more), never both. A domain given sets
+  `kind: "domain"`, `symbol` and `domain`, and no `relation`. A relation given
+  sets `kind: "relation"` and `relation`. A dataset given sets
+  `kind: "dataset"` and nonempty `values`.
 - Expressions are closed data trees, never code. A node sets exactly one of:
   {"num": "3"} for an exact number, {"sym": "x"} for a variable, {"param": "a"}
   for a template parameter, or {"op": "add", "args": [...]} for an operator.

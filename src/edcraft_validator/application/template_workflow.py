@@ -75,6 +75,38 @@ def _generate_author(provider, request):
         return provider.generate(request)
 
 
+MAX_SCHEMA_FEEDBACK = 2_000
+
+
+def _schema_repair_request(generation_request, error):
+    """Add one bounded repair hint after a locally rejected proposal."""
+    messages = [message.copy() for message in generation_request.messages]
+    messages.append(
+        {
+            "role": "user",
+            "content": json.dumps(
+                {
+                    "instruction": (
+                        "The previous response failed local schema validation and "
+                        "was discarded. Return one complete replacement proposal "
+                        "and check plan that satisfies the supplied schema exactly. "
+                        "Keep the author request, difficulty and required checks "
+                        "unchanged. Do not explain; return only the structured "
+                        "response."
+                    ),
+                    "validation_error": str(error)[:MAX_SCHEMA_FEEDBACK],
+                }
+            ),
+        }
+    )
+    return replace(
+        generation_request,
+        messages=messages,
+        schema_name=f"{generation_request.schema_name}_repair",
+        prompt_version=f"{generation_request.prompt_version}+schema-repair",
+    )
+
+
 @dataclass
 class _AuthoringJob:
     request: BaseModel
@@ -184,6 +216,21 @@ class TemplateApplication:
             result.model_calls = measured.calls
             result.usage = summarize_usage(measured.calls)
 
+    def _generate_proposal(self, job, generation_request):
+        """Generate once, then repair one schema-invalid initial response."""
+        try:
+            response = job.generate(_generate_author, job.provider, generation_request)
+            self._validate_response(response, generation_request)
+            return response
+        except GenerationSchemaError as exc:
+            response = job.generate(
+                _generate_author,
+                job.provider,
+                _schema_repair_request(generation_request, exc),
+            )
+            self._validate_response(response, generation_request)
+            return response
+
     def _prepare_and_run(self, job, client, observer):
         capabilities = getattr(job.domain, "capabilities", None)
         if capabilities is None:
@@ -204,8 +251,7 @@ class TemplateApplication:
             tool_catalogue=snapshot,
         )
         job.result.prompt_version = generation_request.prompt_version
-        response = job.generate(_generate_author, job.provider, generation_request)
-        self._validate_response(response, generation_request)
+        response = self._generate_proposal(job, generation_request)
         response = response.model_copy(deep=True)
         names = tuple(check.name for check in response.checks)
         job.result.fixed_plan = list(names)

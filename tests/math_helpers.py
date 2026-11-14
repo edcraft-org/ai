@@ -388,6 +388,62 @@ def percentage_ir_template():
     )
 
 
+def arithmetic_ir_template():
+    from edcraft_validator.domains.math.ir.schema import (
+        AnswerRecipe,
+        Distractor,
+        Given,
+        Goal,
+        MathItemSpec,
+        ParameterSpec,
+        SymbolSpec,
+        TextSpec,
+    )
+
+    body = MathItemSpec(
+        topic="school.two_digit_addition",
+        symbols=[
+            SymbolSpec(name="a", kind="given", domain="integer", integer=True),
+            SymbolSpec(name="b", kind="given", domain="integer", integer=True),
+        ],
+        givens=[
+            Given(id="a_domain", kind="domain", symbol="a", domain="integer"),
+            Given(id="b_domain", kind="domain", symbol="b", domain="integer"),
+        ],
+        goal=Goal(kind="evaluate", expr=ir_add(ir_param("a"), ir_param("b"))),
+        answer_recipe=AnswerRecipe(
+            kind="numeric",
+            items=[ir_add(ir_param("a"), ir_param("b"))],
+        ),
+        distractors=[
+            Distractor(
+                value=ir_add(ir_param("a"), ir_param("b"), ir_num(1)),
+                misconception="OFF_BY_ONE",
+                reason="Adds one extra unit",
+            ),
+            Distractor(
+                value=ir_sub(ir_add(ir_param("a"), ir_param("b")), ir_num(1)),
+                misconception="OFF_BY_ONE",
+                reason="Loses one unit",
+            ),
+            Distractor(
+                value=ir_add(ir_param("a"), ir_param("b"), ir_num(10)),
+                misconception="PLACE_VALUE_ERROR",
+                reason="Misaligns the tens column",
+            ),
+        ],
+        text=TextSpec(mode="symbolic", template="What is {expr}?"),
+    )
+    return ir_template(
+        "school.two_digit_addition",
+        [
+            ParameterSpec(name="a", values=["12", "23"]),
+            ParameterSpec(name="b", values=["14", "18"]),
+        ],
+        body,
+    )
+
+
 def ir_proposal(template):
     from edcraft_validator.domains.math.math_schemas import MathTemplateContent
 

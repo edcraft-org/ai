@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from authoring_helpers import RequestPendingTools
 from math_helpers import (
+    arithmetic_ir_template,
     derivative_ir_template,
     determinant_ir_template,
     ir_candidate,
@@ -52,6 +53,7 @@ from edcraft_validator.validation.check_contracts import ToolEvidence
 from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
 TEMPLATES = (
+    arithmetic_ir_template,
     quadratic_ir_template,
     linear_system_ir_template,
     derivative_ir_template,
@@ -143,6 +145,17 @@ def test_percentage_generation_keeps_the_authored_problem_text() -> None:
     assert instance.equation == instance.question
     assert "Find " in instance.question
     assert "%" in instance.question
+
+
+def test_symbolic_text_preserves_the_authored_expression() -> None:
+    artifact = _validated(arithmetic_ir_template())
+
+    instance = generate_math_question(artifact, 0)
+
+    first, second = (int(instance.parameters[name]) for name in ("a", "b"))
+    assert instance.question == f"What is {first} + {second}?"
+    assert instance.equation == instance.question
+    assert instance.answer == str(first + second)
 
 
 def test_ir_proposal_rejects_retired_linear_fields() -> None:

@@ -398,7 +398,8 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
     assert result.failure.stage == "generation"
     assert result.failure.code == generation_error.category
     assert not result.attempts
-    assert result.usage.model_call_count == 1
+    expected_calls = 2 if isinstance(generation_error, GenerationSchemaError) else 1
+    assert result.usage.model_call_count == expected_calls
     assert result.usage.input_tokens is None
     assert result.generation_duration_ms > 0
     assert captured_catalogues[0].names == ("double_value", "positive_value")
@@ -472,7 +473,9 @@ def test_unknown_recommended_check_stops_before_candidate_validation() -> None:
             provider=Provider(),
         )
     assert failure.value.result.failure.code == "schema_validation"
-    assert failure.value.result.usage.model_call_count == 1
+    # The unknown check fails initial validation, then one bounded repair since
+    # the scripted provider repeats the same invalid plan.
+    assert failure.value.result.usage.model_call_count == 2
 
 
 def test_non_code_domain_can_plan_typed_arguments_without_shared_tool_names():

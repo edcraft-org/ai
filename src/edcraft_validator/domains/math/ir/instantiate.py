@@ -20,6 +20,7 @@ from edcraft_validator.domains.math.ir.compile import (
     build_symbols,
     compile_expr,
     compile_relation,
+    parse_exact,
 )
 from edcraft_validator.domains.math.ir.schema import (
     Distractor,
@@ -42,6 +43,132 @@ def fraction_text(value: Fraction | int) -> str:
 def render_expr(value: sympy.Expr) -> str:
     """Render an exact SymPy value in the lightweight notation used in prompts."""
     return sympy.sstr(value).replace("**", "^")
+
+
+_PRECEDENCE = {"add": 1, "sub": 1, "mul": 2, "div": 2, "pow": 3}
+_FUNCTION_OPS = {
+    "sqrt",
+    "abs",
+    "exp",
+    "sin",
+    "cos",
+    "tan",
+    "asin",
+    "acos",
+    "atan",
+    "log",
+}
+
+
+def render_authored_expr(
+    expr: Expr,
+    symbols: Mapping[str, sympy.Symbol],
+    params: Mapping[str, Fraction] | None = None,
+) -> str:
+    """Render an authored expression tree without folding it to a value.
+
+    The engine compiles a separate tree for grading; learner-facing text keeps
+    the structure the model authored. A constant expression such as ``12 + 14``
+    therefore stays visible instead of collapsing to ``26`` before the learner
+    sees it.
+    """
+    # Compilation bounds the tree and rejects unknown symbols or parameters.
+    compile_expr(expr, symbols, params)
+    return _render_authored(expr, symbols, params or {})
+
+
+def _render_authored(
+    expr: Expr,
+    symbols: Mapping[str, sympy.Symbol],
+    params: Mapping[str, Fraction],
+) -> str:
+    if expr.num is not None:
+        return fraction_text(parse_exact(expr.num))
+    if expr.sym is not None:
+        if expr.sym not in symbols:
+            raise MathCompileError(f"unknown symbol {expr.sym!r}")
+        return expr.sym
+    if expr.param is not None:
+        try:
+            return fraction_text(params[expr.param])
+        except KeyError as exc:
+            raise MathCompileError(f"unbound parameter {expr.param!r}") from exc
+    if expr.op is None:
+        raise MathCompileError("expression node has no kind")
+    if expr.op in _PRECEDENCE:
+        return _render_operator(expr.op, expr.args, symbols, params)
+    if expr.op in _FUNCTION_OPS:
+        arity = {1, 2} if expr.op == "log" else {1}
+        if len(expr.args) not in arity:
+            raise MathCompileError(f"operator {expr.op!r} has the wrong arity")
+        arguments = ", ".join(
+            _render_authored(child, symbols, params) for child in expr.args
+        )
+        return f"{expr.op}({arguments})"
+    raise MathCompileError(f"unsupported operator {expr.op!r}")
+
+
+def _render_operator(
+    op: str,
+    args: list[Expr],
+    symbols: Mapping[str, sympy.Symbol],
+    params: Mapping[str, Fraction],
+) -> str:
+    if op in {"add", "mul"}:
+        if not args:
+            raise MathCompileError(f"operator {op!r} requires arguments")
+    elif len(args) != 2:
+        raise MathCompileError(f"operator {op!r} requires two arguments")
+    rendered = [_render_authored(child, symbols, params) for child in args]
+    if op == "add":
+        terms: list[str] = []
+        for index, (child, text) in enumerate(zip(args, rendered, strict=True)):
+            if child.op == "sub":
+                text = f"({text})"
+            if index == 0:
+                terms.append(text)
+            elif text.startswith("-"):
+                terms.append(f" - {text[1:]}")
+            else:
+                terms.append(f" + {text}")
+        return "".join(terms)
+    if op == "sub":
+        left, right = rendered
+        if args[0].op == "sub":
+            left = f"({left})"
+        if args[1].op in {"add", "sub"}:
+            right = f"({right})"
+        elif right.startswith("-"):
+            return f"{left} + {right[1:]}"
+        return f"{left} - {right}"
+    if op == "mul":
+        parts: list[str] = []
+        for index, (child, text) in enumerate(zip(args, rendered, strict=True)):
+            if child.op in {"add", "sub", "div"}:
+                text = f"({text})"
+            if index and text.startswith("-"):
+                text = f"({text})"
+            parts.append(text)
+        return "*".join(parts)
+    if op == "div":
+        left, right = rendered
+        if args[0].op in {"add", "sub", "div"}:
+            left = f"({left})"
+        if args[1].op in {"add", "sub", "mul", "div", "pow"} or right.startswith("-"):
+            right = f"({right})"
+        return f"{left}/{right}"
+    base, exponent = rendered
+    if args[0].op in {"add", "sub", "mul", "div", "pow"} or base.startswith("-"):
+        base = f"({base})"
+    simple_exponent = (
+        args[1].op is None
+        and not exponent.startswith("-")
+        and "/" not in exponent
+        and "^" not in exponent
+    )
+    if not simple_exponent:
+        exponent = f"({exponent})"
+    return f"{base}^{exponent}"
 
 
 def render_relation(
@@ -124,7 +251,7 @@ def render_item_text(
     if fields & {"expr"}:
         if item.goal.expr is None:
             raise ValueError("text template uses {{expr}} but the goal has none")
-        values["expr"] = render_expr(compile_expr(item.goal.expr, symbols, params))
+        values["expr"] = render_authored_expr(item.goal.expr, symbols, params)
     if fields & {"equation", "equations"}:
         if not relations:
             raise ValueError("text template uses an equation but the item has none")
@@ -329,6 +456,7 @@ __all__ = [
     "display_sympy_value",
     "fraction_text",
     "parameter_combinations",
+    "render_authored_expr",
     "render_expr",
     "render_goal_display",
     "render_item_text",

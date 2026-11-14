@@ -211,6 +211,30 @@ def test_application_revalidates_constructed_revisions_before_new_checks(kind):
     assert result.attempts[0].candidate["answer_expression"] == "a - b"
 
 
+def test_initial_schema_failure_gets_one_bounded_repair():
+    class RepairOnce(Provider):
+        def __init__(self):
+            super().__init__([proposal()])
+            self.calls = 0
+
+        def generate(self, request):
+            self.calls += 1
+            if self.calls == 1:
+                raise GenerationSchemaError(
+                    "solve goals use either symbol or symbols, not both"
+                )
+            return super().generate(request)
+
+    provider = RepairOnce()
+
+    result, _ = run(provider)
+
+    assert result.status == "checked"
+    assert provider.calls == result.usage.model_call_count == 2
+    repair = json.loads(provider.generations[-1][-1]["content"])
+    assert "either symbol or symbols" in repair["validation_error"]
+
+
 @pytest.mark.parametrize(
     "failure", [GenerationTimeoutError, GenerationResponseError, GenerationSchemaError]
 )
