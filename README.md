@@ -17,13 +17,13 @@ cp .env.example .env
 Configure authoring credentials for OpenAI, SocLaas or Ollama in `.env`. Select the
 authoring provider with `--provider`; `--model` overrides its configured default.
 SocLaas uses `SOCLAAS_API_KEY` and `SOCLAAS_BASE_URL`; its structured output defaults
-to strict JSON schema. Ollama must be running locally; thinking defaults to off.
+to JSON mode with local schema validation. Ollama must be running locally; thinking defaults to off.
 See [.env.example](.env.example) for transport settings and output budgets.
 
 For your own OpenAI-compatible endpoint, select `--provider openai` and configure
 `OPENAI_BASE_URL`, `OPENAI_API_KEY` and `OPENAI_MODEL`. Set
-`OPENAI_RESPONSE_FORMAT=json_object` if it lacks strict JSON schema support;
-responses still undergo local schema validation. Token budgets and reasoning
+`OPENAI_RESPONSE_FORMAT=json_schema` only if it supports strict JSON schema;
+responses undergo local schema validation either way. Token budgets and reasoning
 effort are optional settings in `.env.example`, subject to endpoint support.
 
 Difficulty decisions, reasoning fallback and relevance share one judge model,

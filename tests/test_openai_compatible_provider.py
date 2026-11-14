@@ -25,7 +25,6 @@ from edcraft_validator.llm.openai_compatible_provider import (
     _max_retries,
     _model,
     _timeout_seconds,
-    strict_schema_compatible,
 )
 from edcraft_validator.llm.tool_context import constrained_check_plan
 
@@ -140,9 +139,8 @@ def test_catalogue_names_are_wire_schema_choices_and_checked_locally(provider_na
     )
     result = provider.generate(request)
     assert type(result) is request.response_model
-    schema = client.chat.completions.arguments["response_format"]["json_schema"][
-        "schema"
-    ]
+    instruction = client.chat.completions.arguments["messages"][-1]["content"]
+    schema = json.loads(instruction.split("\n", 1)[1])
     assert (
         schema["$defs"]["CatalogueCheck_code_execution"]["properties"]["name"]["const"]
         == "code_execution"
@@ -159,7 +157,7 @@ def test_catalogue_names_are_wire_schema_choices_and_checked_locally(provider_na
 
 
 @pytest.mark.parametrize("provider_name", ["openai", "soclaas"])
-def test_generates_template_using_strict_structured_outputs(
+def test_generates_template_with_json_mode_by_default(
     monkeypatch, provider_name
 ) -> None:
     monkeypatch.delenv(f"{provider_name.upper()}_RESPONSE_FORMAT", raising=False)
@@ -176,13 +174,12 @@ def test_generates_template_using_strict_structured_outputs(
     assert client.chat.completions.arguments.get("max_tokens") == (
         32768 if provider_name == "soclaas" else None
     )
-    response_format = client.chat.completions.arguments["response_format"]
-    assert response_format["type"] == "json_schema"
-    assert response_format["json_schema"]["name"] == (
-        "template_proposal_and_check_plan"
-    )
-    assert response_format["json_schema"]["strict"] is True
-    schema = response_format["json_schema"]["schema"]
+    arguments = client.chat.completions.arguments
+    response_format = arguments["response_format"]
+    assert response_format == {"type": "json_object"}
+    instruction = arguments["messages"][-1]["content"]
+    assert "line breaks and indentation" in instruction
+    schema = json.loads(instruction.split("\n", 1)[1])
     assert set(schema["required"]) == set(schema["properties"])
     assert set(schema["properties"]) == {"proposal", "checks"}
     proposal_schema = schema["$defs"]["CodeProposalResponse"]
@@ -197,14 +194,14 @@ def test_generates_template_using_strict_structured_outputs(
     arguments_schema = schema["$defs"]["RecommendedCheckArguments"]
     assert arguments_schema["additionalProperties"] is False
     assert arguments_schema["properties"] == {}
-    messages = client.chat.completions.arguments["messages"]
+    messages = arguments["messages"]
     assert "property-based" in messages[0]["content"]
     assert "Create an arithmetic question" in messages[1]["content"]
     assert "at least 3 distractor candidates" in messages[1]["content"]
     assert "Use native JSON values" in messages[1]["content"]
     settings = provider.generation_settings()
-    assert settings["response_format"] == response_format["type"]
-    assert settings["strict"] == response_format["json_schema"]["strict"]
+    assert settings["response_format"] == "json_object"
+    assert settings["strict"] is False
     assert settings["sampling"] == "provider_defaults"
     assert "temperature" not in client.chat.completions.arguments
     assert "tools" not in client.chat.completions.arguments
@@ -265,7 +262,7 @@ def test_provider_accepts_a_schema_from_another_domain() -> None:
     assert '"equation"' in arguments["messages"][-1]["content"]
 
 
-def test_openai_falls_back_to_json_mode_for_a_non_strict_schema(
+def test_openai_uses_json_mode_for_a_non_strict_schema(
     monkeypatch,
 ) -> None:
     monkeypatch.delenv("OPENAI_RESPONSE_FORMAT", raising=False)
@@ -285,7 +282,7 @@ def test_openai_falls_back_to_json_mode_for_a_non_strict_schema(
     assert settings["strict"] is False
 
 
-def test_soclaas_keeps_strict_json_schema_for_the_same_request(monkeypatch) -> None:
+def test_soclaas_defaults_to_json_mode_for_the_same_request(monkeypatch) -> None:
     monkeypatch.delenv("SOCLAAS_RESPONSE_FORMAT", raising=False)
     client = client_with_content("{}")
     provider = SocLaasProvider(client=client, model="x-test-2")
@@ -294,69 +291,21 @@ def test_soclaas_keeps_strict_json_schema_for_the_same_request(monkeypatch) -> N
         provider.generate(defaulted_request())
 
     response_format = client.chat.completions.arguments["response_format"]
+    assert response_format == {"type": "json_object"}
+    assert provider.generation_settings()["strict"] is False
+
+
+def test_response_format_can_opt_into_strict_json_schema(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_RESPONSE_FORMAT", "json_schema")
+    client = client_with(code_response())
+    provider = OpenAIProvider(client=client, model="gpt-5-mini")
+
+    provider.generate(generation_request())
+
+    response_format = client.chat.completions.arguments["response_format"]
     assert response_format["type"] == "json_schema"
     assert response_format["json_schema"]["strict"] is True
     assert provider.generation_settings()["strict"] is True
-
-
-def test_strict_schema_compatibility_passes_a_fully_required_object() -> None:
-    schema = {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {"name": {"type": "string"}},
-        "required": ["name"],
-    }
-
-    assert strict_schema_compatible(schema) is True
-
-
-def test_strict_schema_compatibility_rejects_defaulted_properties() -> None:
-    schema = {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "name": {"type": "string"},
-            "kind": {"type": "string", "default": "unknown"},
-        },
-        "required": ["name"],
-    }
-
-    assert strict_schema_compatible(schema) is False
-
-
-def test_strict_schema_compatibility_rejects_free_form_mappings() -> None:
-    schema = {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "anchors": {
-                "type": "object",
-                "additionalProperties": {"type": "string"},
-            }
-        },
-        "required": ["anchors"],
-    }
-
-    assert strict_schema_compatible(schema) is False
-
-
-def test_strict_schema_compatibility_inspects_nested_definitions() -> None:
-    schema = {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {"item": {"$ref": "#/$defs/Item"}},
-        "required": ["item"],
-        "$defs": {
-            "Item": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {"value": {"type": "string"}},
-                "required": [],
-            }
-        },
-    }
-
-    assert strict_schema_compatible(schema) is False
 
 
 def test_reports_empty_template_response() -> None:
@@ -683,9 +632,8 @@ def test_provider_validates_feature_arguments_in_initial_structured_plan(provide
     )
     result = provider.generate(request)
     assert result.checks[0].arguments == {"required": ["loop"]}
-    schema = client.chat.completions.arguments["response_format"]["json_schema"][
-        "schema"
-    ]
+    instruction = client.chat.completions.arguments["messages"][-1]["content"]
+    schema = json.loads(instruction.split("\n", 1)[1])
     assert (
         schema["$defs"]["RequiredFeaturesArguments"]["properties"]["required"][
             "minItems"

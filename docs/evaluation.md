@@ -62,12 +62,9 @@ complete proposal and rechecks it under the frozen check plan. Current correctne
 checks use bounded Hypothesis samples, not exhaustive domain enumeration. Earlier
 native-tool/acknowledgement, patch-only or exhaustive-checking experiments describe
 their recorded revisions. Preserve those records rather than pooling them with the
-current workflow. SocLaas structured output defaults to `json_schema`;
-`json_object` is an explicit weaker wire option with local schema validation.
-Endpoints that enforce strict structured outputs, such as OpenAI, reject a
-`json_schema` request whose schema cannot satisfy `additionalProperties: false`
-and a complete `required` list, so the adapter sends those requests as
-`json_object` and validates the response locally.
+current workflow. Structured output defaults to `json_object` with local schema
+validation; `json_schema` remains an explicit opt-in for endpoints that support
+strict structured outputs.
 
 ## Mathematics correctness
 

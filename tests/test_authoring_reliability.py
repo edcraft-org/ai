@@ -234,26 +234,6 @@ def test_code_schema_failure_is_not_repaired():
     assert provider.calls == 1
 
 
-def test_provider_settings_are_recorded_after_generation():
-    """A transport fallback must be recorded as the format actually sent."""
-
-    class LateSettings(Provider):
-        def __init__(self):
-            super().__init__([proposal()])
-            self.response_format = "json_schema"
-
-        def generation_settings(self):
-            return {"response_format": self.response_format}
-
-        def generate(self, request):
-            self.response_format = "json_object"
-            return super().generate(request)
-
-    result, _ = run(LateSettings())
-
-    assert result.provider_settings == {"response_format": "json_object"}
-
-
 @pytest.mark.parametrize(
     "failure", [GenerationTimeoutError, GenerationResponseError, GenerationSchemaError]
 )

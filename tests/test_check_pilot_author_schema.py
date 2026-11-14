@@ -230,10 +230,9 @@ def test_provider_sends_closed_author_schema_and_normalizes_placeholders(
 
     arguments = completions.arguments
     assert arguments is not None
-    response_format = arguments["response_format"]
-    assert response_format["type"] == "json_schema"
-    assert response_format["json_schema"]["strict"] is True
-    wire_schema = response_format["json_schema"]["schema"]
+    assert arguments["response_format"] == {"type": "json_object"}
+    instruction = arguments["messages"][-1]["content"]
+    wire_schema = json.loads(instruction.split("\n", 1)[1])
     assert wire_schema == CheckAuthorProposal.model_json_schema()
     assert_strict_object_shapes(wire_schema)
     wire_steps = wire_schema["$defs"]["RecipeStep"]["anyOf"]
@@ -267,7 +266,8 @@ def test_template_author_proposal_still_round_trips_through_provider(
     assert result.family.degree == 1
     assert result.family.num_distractors == 3
     assert result.family.coefficients[0].values == [-2, 1, 3]
-    wire_schema = completions.arguments["response_format"]["json_schema"]["schema"]
+    instruction = completions.arguments["messages"][-1]["content"]
+    wire_schema = json.loads(instruction.split("\n", 1)[1])
     assert wire_schema == TemplateAuthorProposal.model_json_schema()
     assert_strict_object_shapes(wire_schema)
 
