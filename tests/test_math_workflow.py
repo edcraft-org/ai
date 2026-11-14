@@ -1,14 +1,11 @@
 """End-to-end math authoring through the generic template application."""
 
-import json
-
 from authoring_helpers import RequestPendingTools
 from math_helpers import ir_proposal, quadratic_ir_template
 
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.domains.math.math_domain import MathDomain
 from edcraft_validator.domains.math.math_schemas import MathTemplateRequest
-from edcraft_validator.llm.llm_errors import GenerationSchemaError
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.server import create_validation_server
 from tests.test_code_relevance import Decisions
@@ -94,54 +91,6 @@ def test_math_authoring_and_question_generation_round_trip() -> None:
     assert instance == application.generate_question(
         validated, domain=MathDomain(), seed=7
     )
-
-
-def test_math_initial_schema_failure_gets_one_bounded_repair() -> None:
-    proposal = ir_proposal(quadratic_ir_template())
-
-    class RepairOnce(RequestPendingTools):
-        provider = "stub"
-        model = "stub-model"
-
-        def __init__(self):
-            self.calls = 0
-            self.last_message = ""
-
-        def generate(self, request):
-            self.calls += 1
-            self.last_message = request.messages[-1]["content"]
-            if self.calls == 1:
-                raise GenerationSchemaError(
-                    "solve goals use either symbol or symbols, not both"
-                )
-            return request.response_model.model_validate(
-                {
-                    "proposal": proposal.model_dump(mode="json"),
-                    "checks": [
-                        {"name": "math_verify_item_spec", "arguments": {}},
-                        {"name": "math_validate_options", "arguments": {}},
-                    ],
-                }
-            )
-
-    provider = RepairOnce()
-    server = create_validation_server(decision_provider_factory=Decisions)
-    application = TemplateApplication(tool_client=FastMcpToolClient(server))
-
-    result = application.author_template(
-        MathTemplateRequest(
-            prompt="Author a quadratic equation question with integer roots.",
-            difficulty="easy",
-            num_distractors=3,
-        ),
-        domain=MathDomain(),
-        provider=provider,
-    )
-
-    assert result.status == "checked"
-    assert provider.calls == result.usage.model_call_count == 2
-    repair = json.loads(provider.last_message)
-    assert "either symbol or symbols" in repair["validation_error"]
 
 
 def test_math_tools_are_tagged_and_listed_for_the_domain() -> None:

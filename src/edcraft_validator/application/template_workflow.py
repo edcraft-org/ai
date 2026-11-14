@@ -75,38 +75,6 @@ def _generate_author(provider, request):
         return provider.generate(request)
 
 
-MAX_SCHEMA_FEEDBACK = 2_000
-
-
-def _schema_repair_request(generation_request, error):
-    """Add one bounded repair hint after a locally rejected proposal."""
-    messages = [message.copy() for message in generation_request.messages]
-    messages.append(
-        {
-            "role": "user",
-            "content": json.dumps(
-                {
-                    "instruction": (
-                        "The previous response failed local schema validation and "
-                        "was discarded. Return one complete replacement proposal "
-                        "and check plan that satisfies the supplied schema exactly. "
-                        "Keep the author request, difficulty and required checks "
-                        "unchanged. Do not explain; return only the structured "
-                        "response."
-                    ),
-                    "validation_error": str(error)[:MAX_SCHEMA_FEEDBACK],
-                }
-            ),
-        }
-    )
-    return replace(
-        generation_request,
-        messages=messages,
-        schema_name=f"{generation_request.schema_name}_repair",
-        prompt_version=f"{generation_request.prompt_version}+schema-repair",
-    )
-
-
 @dataclass
 class _AuthoringJob:
     request: BaseModel
@@ -217,19 +185,9 @@ class TemplateApplication:
             result.usage = summarize_usage(measured.calls)
 
     def _generate_proposal(self, job, generation_request):
-        """Generate once, then repair one schema-invalid initial response."""
-        try:
-            response = job.generate(_generate_author, job.provider, generation_request)
-            self._validate_response(response, generation_request)
-        except GenerationSchemaError as exc:
-            if not generation_request.repair_invalid_schema:
-                raise
-            response = job.generate(
-                _generate_author,
-                job.provider,
-                _schema_repair_request(generation_request, exc),
-            )
-            self._validate_response(response, generation_request)
+        """Generate one schema-validated proposal from the author provider."""
+        response = job.generate(_generate_author, job.provider, generation_request)
+        self._validate_response(response, generation_request)
         return response
 
     def _prepare_and_run(self, job, client, observer):
