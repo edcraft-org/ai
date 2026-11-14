@@ -15,7 +15,7 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 
-MATH_TEMPLATE_PROMPT_VERSION = "math-template-v5"
+MATH_TEMPLATE_PROMPT_VERSION = "math-template-v6"
 
 MATH_TEMPLATE_SYSTEM_PROMPT = """\
 Generate one reusable mathematics multiple-choice template and recommend its
@@ -47,7 +47,9 @@ ITEM FAMILY (`item`)
   {"num": "3"} for an exact number, {"sym": "x"} for a variable, {"param": "a"}
   for a template parameter, or {"op": "add", "args": [...]} for an operator.
   Supported operators are add, sub (2 args), mul, div (2 args), pow (2 args),
-  sqrt, abs, exp, sin, cos, tan, asin, acos, atan, log.
+  sqrt, abs, exp, sin, cos, tan, asin, acos, atan, log. An exponent must be a
+  bounded integer literal with absolute value at most 12, never a symbol or a
+  parameter; the deterministic engine does not evaluate symbolic powers.
 - `item.body.text.template` is learner-facing text. It may use declared parameter
   placeholders such as `{a}` and these reserved placeholders:
   `{expr}` (the goal expression), `{equation}` (the first relation),
