@@ -154,11 +154,11 @@ Add domain behavior through `DomainModule` and register its factory. Implement
 every registered domain registers at least one tool. Add model
 communication through the provider registry. Avoid new branches for domain names
 inside shared orchestration. Keep deterministic reuse independent of model/tool
-services. Python features are explicitly bounded, preserve worker isolation,
+services. Python features are explicitly limited. Preserve worker isolation,
 resource budgets, schema checks and rejection of unsupported code.
 
 Shared checks that several domains can reuse are registered once with a
-`capability:<name>` tag, a domain opts in by declaring `capabilities` on its
+`capability:<name>` tag. A domain opts in by declaring `capabilities` on its
 `DomainModule`, and `resolve_domain_tools` offers both its domain tools and those
 capability tools. A registry coverage test checks that every selectable domain has
 discoverable tools. Evaluation orchestration belongs to the application layer.
