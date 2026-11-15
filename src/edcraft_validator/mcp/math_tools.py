@@ -20,6 +20,7 @@ from edcraft_validator.domains.math.math_schemas import MathTemplateCandidate
 from edcraft_validator.domains.math.math_types import (
     MATH_DIFFICULTY_TOOL,
     MATH_FIDELITY_TOOL,
+    MATH_FORM_TOOL,
     MATH_IR_TOOL_VERSION,
     MATH_ITEM_SPEC_TOOL,
     MATH_OPTIONS_TOOL,
@@ -186,10 +187,10 @@ def register_math_tools(
         description=(
             "Compile a typed math IR item (or sample a parameter template's "
             "declared domain) in a disposable process: the deterministic engine "
-            "grades the authored answer recipe and every distractor, and the form "
-            "registry grades the answer's shape. Returns passed, failed, or an "
-            "inconclusive result that must be reviewed. The tool never executes "
-            "model-authored code."
+            "grades the authored answer recipe and every distractor. It decides "
+            "correctness only; answer form is a separate check. Returns passed, "
+            "failed, or an inconclusive result that must be reviewed. The tool "
+            "never executes model-authored code."
         ),
     )
     async def math_verify_item_spec(
@@ -226,9 +227,8 @@ def register_math_tools(
         description=(
             "Check MCQ options deterministically: the engine must grade every "
             "distractor as incorrect while grading the answer recipe as correct, "
-            "no two options may be the same value, and form-sensitive goals also "
-            "check option shape. Each option carries a misconception tag. Any "
-            "refusal fails the option and blocks approval."
+            "and no two options may be the same value. Each option carries a "
+            "misconception tag. Any refusal fails the option and blocks approval."
         ),
     )
     async def math_validate_options(
@@ -244,6 +244,46 @@ def register_math_tools(
                 item=item,
                 template=template,
                 candidate=candidate,
+                timeout_seconds=timeout_seconds,
+            )
+        )
+
+    @server.tool(
+        name=MATH_FORM_TOOL,
+        version=MATH_IR_TOOL_VERSION,
+        tags={"domain:math", "validation:form"},
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+        description=(
+            "Check that the authored answer has the shape its goal demands, for "
+            "example a fully expanded polynomial for expand or a product of "
+            "irreducible factors for factor. Factor and expand goals apply the "
+            "same rule to every distractor. The check does not decide "
+            "correctness. It is required for factor and expand goals and "
+            "optional for every other goal."
+        ),
+    )
+    async def math_verify_answer_form(
+        item: MathItemSpec | None = None,
+        template: MathTemplateSpec | None = None,
+        candidate: MathTemplateCandidate | None = None,
+        max_variants: Annotated[int, Field(ge=1, le=MAX_IR_VARIANTS)] = (
+            MAX_IR_VARIANTS
+        ),
+        timeout_seconds: Annotated[float, Field(gt=0, le=60)] = (
+            DEFAULT_VALIDATION_TIMEOUT_SECONDS
+        ),
+    ) -> ToolEvidence:
+        return verify_answer_form(
+            MathSpecRequest(
+                item=item,
+                template=template,
+                candidate=candidate,
+                max_variants=max_variants,
                 timeout_seconds=timeout_seconds,
             )
         )
@@ -339,6 +379,16 @@ async def verify_text_fidelity_tool(
 
 
 def verify_item_spec(request: MathSpecRequest) -> ToolEvidence:
+    return _verify_spec(MATH_ITEM_SPEC_TOOL, request, aspect="correctness")
+
+
+def verify_answer_form(request: MathSpecRequest) -> ToolEvidence:
+    return _verify_spec(MATH_FORM_TOOL, request, aspect="form")
+
+
+def _verify_spec(
+    name: str, request: MathSpecRequest, *, aspect: Literal["correctness", "form"]
+) -> ToolEvidence:
     operation = "validate_item"
     template = request.template
     if request.candidate is not None:
@@ -347,6 +397,7 @@ def verify_item_spec(request: MathSpecRequest) -> ToolEvidence:
         operation = "validate_template"
     payload: dict[str, Any] = {
         "operation": operation,
+        "aspect": aspect,
         "max_variants": min(request.max_variants, MAX_IR_VARIANTS),
     }
     if template is not None:
@@ -354,9 +405,9 @@ def verify_item_spec(request: MathSpecRequest) -> ToolEvidence:
     else:
         item = request.item
         if item is None:
-            return _missing_subject(MATH_ITEM_SPEC_TOOL, "item or template")
+            return _missing_subject(name, "item or template")
         payload["spec"] = item.model_dump(mode="json")
-    return _run_isolated(MATH_ITEM_SPEC_TOOL, payload, request.timeout_seconds)
+    return _run_isolated(name, payload, request.timeout_seconds)
 
 
 def validate_options(request: MathOptionsRequest) -> ToolEvidence:
@@ -542,6 +593,7 @@ def _harness_evidence(
             "findings": findings,
             "variants_checked": harness.get("variants_checked", 0),
             "variants_total": harness.get("variants_total", 0),
+            "seed": harness.get("seed", 0),
             "checks": checks[:_MAX_EXPORTED_ITEMS],
             "checks_truncated": len(checks) > _MAX_EXPORTED_ITEMS,
             "options": options[:_MAX_EXPORTED_ITEMS],
@@ -590,7 +642,7 @@ def assess_template_difficulty(
         "advisory": True,
         "provisional": True,
         "calibrated": False,
-        "template_sha256": template_sha256(candidate),
+        "subject_sha256": template_sha256(candidate),
         "requested_difficulty": candidate.difficulty,
         "difficulty_outcome": outcome.model_dump(mode="json"),
         **outcome.model_dump(

@@ -125,7 +125,11 @@ def test_validation_summary_migrates_legacy_relevance_on_read() -> None:
         evidence=[
             ValidationEvidence(check="math_verify_item_spec", status="passed"),
             ValidationEvidence(check="math_validate_options", status="passed"),
-            ValidationEvidence(check="math_assess_template_relevance", status="failed"),
+            ValidationEvidence(
+                check="math_assess_template_relevance",
+                status="failed",
+                details={"advisory": True},
+            ),
         ],
     )
 
@@ -139,8 +143,16 @@ def test_validation_summary_drops_stale_legacy_relevance_duplicate() -> None:
         max_combinations=4,
         evidence=[
             ValidationEvidence(check="math_verify_item_spec", status="passed"),
-            ValidationEvidence(check="math_assess_template_relevance", status="failed"),
-            ValidationEvidence(check="assess_template_relevance", status="failed"),
+            ValidationEvidence(
+                check="math_assess_template_relevance",
+                status="failed",
+                details={"advisory": True},
+            ),
+            ValidationEvidence(
+                check="assess_template_relevance",
+                status="failed",
+                details={"advisory": True},
+            ),
         ],
     )
 

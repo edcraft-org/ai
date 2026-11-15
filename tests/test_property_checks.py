@@ -157,4 +157,6 @@ def test_finalization_keeps_evidence_uniqueness_validation():
         details=details,
     )
     with pytest.raises(ValueError, match="unique"):
-        CodeDomain().finalize_checked_template(candidate, [evidence, evidence])
+        CodeDomain().finalize_checked_template(
+            candidate, [evidence, evidence], advisory_checks=frozenset()
+        )

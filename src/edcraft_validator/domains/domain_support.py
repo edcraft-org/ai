@@ -6,11 +6,38 @@ import hashlib
 import json
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
+from edcraft_validator.domain_types import (
+    DEFAULT_DISTRACTORS,
+    MAX_DISTRACTORS,
+    MIN_DISTRACTORS,
+    Difficulty,
+)
 from edcraft_validator.validation.check_contracts import ToolEvidence
 from edcraft_validator.validation.validation_contracts import ValidationEvidence
+
+MAX_PROMPT_LENGTH = 4000
+
+
+class TemplateRequest(BaseModel):
+    """Free-form authoring request shared by every domain."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    prompt: str = Field(min_length=1, max_length=MAX_PROMPT_LENGTH)
+    difficulty: Difficulty
+    num_distractors: int = Field(
+        default=DEFAULT_DISTRACTORS, ge=MIN_DISTRACTORS, le=MAX_DISTRACTORS
+    )
+
+    @field_validator("prompt")
+    @classmethod
+    def reject_blank_prompt(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("prompt must not be blank")
+        return value
 
 
 class ReviewTemplateView(BaseModel):
@@ -52,6 +79,46 @@ def content_sha256(model: BaseModel) -> str:
     ).hexdigest()
 
 
+def build_template_id(
+    domain_name: str, request: TemplateRequest, proposal: BaseModel
+) -> str:
+    """Derive a stable template id from the request and the model proposal."""
+    identity_payload = json.dumps(
+        {
+            "request": request.model_dump(mode="json"),
+            "proposal": proposal.model_dump(mode="json"),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    digest = hashlib.sha256(identity_payload).hexdigest()[:12]
+    return f"{domain_name}.{request.difficulty}.{digest}"
+
+
+def seeded_index(key: str, seed: int, name: str, size: int) -> int:
+    """Pick a reproducible index so seeded generation needs no random state."""
+    payload = f"{key}:{seed}:{name}".encode()
+    return int.from_bytes(hashlib.sha256(payload).digest()[:8], "big") % size
+
+
+def require_checked(
+    evidence: list[ToolEvidence],
+    *,
+    required: frozenset[str],
+    advisory_checks: frozenset[str],
+) -> None:
+    """Refuse packaging unless every blocking check passed and none is missing."""
+    if not evidence or any(
+        item.status != "passed" and item.tool not in advisory_checks
+        for item in evidence
+    ):
+        raise ValueError("All selected checks must pass")
+    passed = {item.tool for item in evidence if item.status == "passed"}
+    missing = sorted(required - passed)
+    if missing:
+        raise ValueError("Missing passing required checks: " + ", ".join(missing))
+
+
 def require_type[ModelT: BaseModel](value: BaseModel, model: type[ModelT]) -> ModelT:
     """Narrow a protocol argument to the domain's concrete model."""
     if not isinstance(value, model):
@@ -63,10 +130,10 @@ def save_checked_evidence(
     item: ToolEvidence,
     expected_sha256: str,
     *,
-    advisory_names: frozenset[str],
+    advisory_checks: frozenset[str],
 ) -> ValidationEvidence:
     """Keep technical passes and advisory verdicts distinct in saved evidence."""
-    if item.tool not in advisory_names:
+    if item.tool not in advisory_checks:
         return ValidationEvidence(
             check=item.tool,
             status="passed",
@@ -77,6 +144,7 @@ def save_checked_evidence(
     details: dict[str, Any] = {"tool_version": item.version, **item.details}
     recorded_sha256 = item.details.get("subject_sha256")
     if recorded_sha256 is None:
+        # Evidence written before the key was standardised.
         recorded_sha256 = item.details.get("template_sha256")
     if recorded_sha256 is None:
         details.update(
@@ -100,6 +168,9 @@ def save_checked_evidence(
         status = "incomplete"
     else:
         status = "passed"
+    # Saved artifacts identify advisory rows by this flag, so it is set here
+    # from application policy and never taken from the tool's own details.
+    details["advisory"] = True
     return ValidationEvidence(
         check=item.tool,
         status=status,

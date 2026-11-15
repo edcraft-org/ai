@@ -131,8 +131,15 @@ def test_finalization_only_packages_checked_content_and_evidence(monkeypatch):
     monkeypatch.setattr(Provider, "generate", unexpected_call)
     monkeypatch.setattr(FastMcpToolClient, "call_tool", unexpected_call)
     domain = CodeDomain()
-    finalized = domain.finalize_checked_template(candidate, evidence)
-    assert finalized == domain.finalize_checked_template(candidate, evidence)
+    advisory = frozenset(
+        execution.tool for execution in attempt.executions if execution.advisory
+    )
+    finalized = domain.finalize_checked_template(
+        candidate, evidence, advisory_checks=advisory
+    )
+    assert finalized == domain.finalize_checked_template(
+        candidate, evidence, advisory_checks=advisory
+    )
     assert candidate == original
     assert evidence == original_evidence
     # Only the existing evidence-derived answer/recipe projection is permitted.

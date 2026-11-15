@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from code_validation_helpers import CODE_ADVISORY_CHECKS
 from fastmcp import Client
 from judge_helpers import TemplateJudge, candidate, proposal
 from test_authoring_loop import REQUEST, SEMANTIC, STRUCTURE, Executor, Provider
@@ -130,7 +131,7 @@ async def test_direct_mcp_maps_relevance_status_and_saves_evidence(
     evidence = result.structured_content
     assert evidence["status"] == status
     assert evidence["tool"] == TEMPLATE_RELEVANCE_TOOL
-    assert evidence["details"]["template_sha256"] == template_sha256(original)
+    assert evidence["details"]["subject_sha256"] == template_sha256(original)
     assert (
         evidence["details"]["relevance"]["decision"]["request_text"] == REQUEST.prompt
     )
@@ -216,7 +217,7 @@ def test_advisory_relevance_mismatch_is_saved_and_replays_without_models(
     details = saved.details
     assert saved.status == "failed"
     assert details["advisory"] is True
-    assert details["template_sha256"] == template_sha256(result.artifact.template)
+    assert details["subject_sha256"] == template_sha256(result.artifact.template)
     assert details["score"] == details["relevance"]["decision"]["score"] == 0.1
     assert details["threshold"] == details["relevance"]["decision"]["threshold"] == 0.94
     assert details["provider"] == "scripted"
@@ -227,10 +228,12 @@ def test_advisory_relevance_mismatch_is_saved_and_replays_without_models(
         item.evidence.model_copy(deep=True) for item in result.attempts[0].executions
     ]
     next(item for item in stale if item.tool == TEMPLATE_RELEVANCE_TOOL).details[
-        "template_sha256"
+        "subject_sha256"
     ] = "stale"
     stale_artifact = CodeDomain().finalize_checked_template(
-        CodeTemplateCandidate.model_validate(result.attempts[0].candidate), stale
+        CodeTemplateCandidate.model_validate(result.attempts[0].candidate),
+        stale,
+        advisory_checks=CODE_ADVISORY_CHECKS,
     )
     stale_saved = next(
         item
@@ -250,7 +253,7 @@ def test_advisory_relevance_mismatch_is_saved_and_replays_without_models(
     )
     assert loaded_saved.status == "failed"
     assert loaded_saved.details["advisory"] is True
-    assert loaded_saved.details["template_sha256"] == template_sha256(loaded.template)
+    assert loaded_saved.details["subject_sha256"] == template_sha256(loaded.template)
 
     def unexpected_call(*args, **kwargs):
         pytest.fail("Model-free replay must not call a model, MCP or executor")
@@ -355,5 +358,5 @@ def test_assessments_run_independently_in_either_order(plan):
     assert candidates[0] == candidates[1]
     checked = CodeTemplateCandidate.model_validate(candidates[0])
     assert {
-        item.evidence.details["template_sha256"] for item in executions.values()
+        item.evidence.details["subject_sha256"] for item in executions.values()
     } == {template_sha256(checked)}

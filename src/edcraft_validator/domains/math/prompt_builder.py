@@ -15,7 +15,7 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 
-MATH_TEMPLATE_PROMPT_VERSION = "math-template-v9"
+MATH_TEMPLATE_PROMPT_VERSION = "math-template-v10"
 
 MATH_TEMPLATE_SYSTEM_PROMPT = """\
 Generate one reusable mathematics multiple-choice template and recommend its
@@ -76,7 +76,7 @@ ITEM FAMILY (`item`)
   engine compiles the recipe and it must be exact for every sampled parameter
   combination; `display` is never compared.
 - For solve goals use `kind: "set"` for one unknown and `kind: "tuple"` for a
-  system's ordered solution; the form check rejects other answer kinds.
+  system's ordered solution.
 - For factor and expand goals, notation is part of the answer: emit the factored
   form for factor and the fully expanded form for expand. The engine verifies
   equivalence and a separate form check verifies the shape, so an equivalent but
@@ -84,7 +84,8 @@ ITEM FAMILY (`item`)
   a product of factors, for example `(x - 2)*(x - 3)`, never the expanded
   polynomial `x^2 - 5*x + 6`; for expand it must be the expanded polynomial,
   never a product.
-- Provide at least the requested number of distractors. Each distractor sets
+- Provide exactly the requested number of distractors; fewer is rejected and
+  extra ones are dropped. Each distractor sets
   exactly one of `value` (a scalar Expr), `components` (an ordered tuple of
   Exprs), or `items` (a finite set of Exprs), plus a short `misconception` tag
   and an optional `reason`. Every distractor must be demonstrably wrong and
@@ -95,12 +96,15 @@ CHECK PLAN
   descriptions. Use each tool name at most once and do not invent names. Supply
   each selected check's model-owned arguments using its planning schema; use {}
   for checks without model-owned arguments.
-- Select math_verify_item_spec, math_validate_options,
-  math_verify_text_fidelity, math_assess_template_difficulty, and
-  assess_template_relevance.
-- The fidelity check skips its model call for symbolic text and is required for
-  prose text. Relevance and difficulty are advisory evidence for educator review;
-  they never block a technically checked template.
+- The application always runs math_verify_item_spec and math_validate_options.
+  It also runs math_verify_text_fidelity for prose text and
+  math_verify_answer_form for factor and expand goals, whether or not you
+  select them.
+- Select math_assess_template_difficulty and assess_template_relevance. They are
+  advisory evidence for educator review and never block a technically checked
+  template.
+- For other goals, select math_verify_answer_form only when the request asks for
+  the answer in a particular shape.
 """
 
 RESPONSE_GUIDANCE = """\

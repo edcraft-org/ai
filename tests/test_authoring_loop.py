@@ -347,12 +347,15 @@ def test_tool_execution_failure_is_reported_as_a_check_error():
     )
 
 
-def test_structure_only_success_cannot_fabricate_reusable_answers():
+def test_application_adds_the_required_check_the_model_omitted():
     result, _ = run(Provider(plan=(STRUCTURE,)))
-    assert result.status == "needs_review"
-    assert result.attempts[0].passed
-    assert result.artifact is None
-    assert "Missing execution-derived" in result.reason
+    assert result.status == "checked"
+    assert result.fixed_plan == [STRUCTURE, SEMANTIC]
+    assert [item.tool for item in result.attempts[0].executions] == [
+        STRUCTURE,
+        SEMANTIC,
+    ]
+    assert result.attempts[0].executions[1].requested_arguments == {}
 
 
 def test_application_injects_exact_candidate_and_original_request_count():

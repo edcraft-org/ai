@@ -505,6 +505,55 @@ def arithmetic_ir_template():
     )
 
 
+def factor_ir_template(*, factored_answer=True):
+    """Factor x^2 + (p+q)x + pq; the answer is factored or left expanded."""
+    from edcraft_validator.domains.math.ir.schema import (
+        AnswerRecipe,
+        Distractor,
+        Given,
+        Goal,
+        MathItemSpec,
+        ParameterSpec,
+        SymbolSpec,
+        TextSpec,
+    )
+
+    x, p, q = ir_sym("x"), ir_param("p"), ir_param("q")
+    expanded = ir_add(ir_pow(x, ir_num(2)), ir_mul(ir_add(p, q), x), ir_mul(p, q))
+
+    def product(left, right):
+        return ir_mul(left, right)
+
+    answer = product(ir_add(x, p), ir_add(x, q)) if factored_answer else expanded
+    body = MathItemSpec(
+        topic="school.factor",
+        symbols=[SymbolSpec(name="x", domain="real")],
+        givens=[Given(id="g1", kind="domain", symbol="x", domain="real")],
+        goal=Goal(kind="factor", expr=expanded),
+        answer_recipe=AnswerRecipe(kind="expression", items=[answer]),
+        distractors=[
+            Distractor(
+                value=product(ir_sub(x, p), ir_sub(x, q)), misconception="SIGNS"
+            ),
+            Distractor(
+                value=product(ir_add(x, p), ir_sub(x, q)), misconception="ONE_SIGN"
+            ),
+            Distractor(
+                value=product(ir_sub(x, p), ir_add(x, q)), misconception="OTHER_SIGN"
+            ),
+        ],
+        text=TextSpec(mode="symbolic", template="Factor {expr}."),
+    )
+    return ir_template(
+        "school.factor",
+        [
+            ParameterSpec(name="p", values=["2", "3"]),
+            ParameterSpec(name="q", values=["5", "7"]),
+        ],
+        body,
+    )
+
+
 def ir_proposal(template):
     from edcraft_validator.domains.math.math_schemas import MathTemplateContent
 

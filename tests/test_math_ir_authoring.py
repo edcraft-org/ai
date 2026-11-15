@@ -112,9 +112,11 @@ def test_linear_ir_template_is_graded_by_the_engine_and_form() -> None:
     engine = [
         check for check in report.report.checks if check.check == "engine_correctness"
     ]
-    form = [check for check in report.report.checks if check.check == "form"]
+    form = validate_template(template, aspect="form").report.checks
     assert engine and all(check.status == "passed" for check in engine)
-    assert form and all(check.status == "passed" for check in form)
+    assert form and all(
+        check.check == "form" and check.status == "passed" for check in form
+    )
     assert report.report.answer.startswith("{") and report.report.answer.endswith("}")
 
     instance = generate_math_question(_validated(template), 0)
@@ -353,13 +355,18 @@ def test_ir_finalization_rejects_too_many_distractors() -> None:
         body=body,
     )
 
+    # The builder trims to the requested count, so bypass it to reach the guard.
+    candidate = ir_candidate(template).model_copy(update={"item": bloated})
+    assert len(ir_candidate(bloated).item.body.distractors) == 3
+
     with pytest.raises(ValueError, match="at most"):
         MathDomain().finalize_checked_template(
-            ir_candidate(bloated),
+            candidate,
             [
                 _passing_evidence(MATH_ITEM_SPEC_TOOL),
                 _passing_evidence(MATH_OPTIONS_TOOL),
             ],
+            advisory_checks=frozenset(),
         )
 
 

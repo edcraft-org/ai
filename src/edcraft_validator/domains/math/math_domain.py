@@ -8,6 +8,7 @@ from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.domains.domain_support import (
     ReviewTemplateView,
     build_review_view,
+    require_checked,
     require_type,
     save_checked_evidence,
 )
@@ -25,13 +26,13 @@ from edcraft_validator.domains.math.math_schemas import (
     ValidatedMathTemplate,
 )
 from edcraft_validator.domains.math.math_types import (
-    MATH_ADVISORY_CHECK_NAMES,
-    MATH_DIFFICULTY_TOOL,
+    FORM_SENSITIVE_GOALS,
+    MATH_CHECKING_MODE,
     MATH_FIDELITY_TOOL,
+    MATH_FORM_TOOL,
     MATH_ITEM_SPEC_TOOL,
     MATH_OPTIONS_TOOL,
     MAX_DISTRACTORS,
-    MAX_IR_VARIANTS,
     MIN_DISTRACTORS,
 )
 from edcraft_validator.domains.math.prompt_builder import (
@@ -39,7 +40,6 @@ from edcraft_validator.domains.math.prompt_builder import (
 )
 from edcraft_validator.domains.math.question_generator import generate_math_question
 from edcraft_validator.domains.math.relevance import template_relevance_text
-from edcraft_validator.domains.math.validation.harness import validate_template
 from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     StructuredGenerationRequest,
@@ -95,43 +95,53 @@ class MathDomain:
                 "question_text": template_relevance_text(typed_candidate),
                 "subject_sha256": template_sha256(typed_candidate),
             }
-        if tool_name == MATH_ITEM_SPEC_TOOL:
-            return {"template": template.model_dump(mode="json")}
-        if tool_name == MATH_OPTIONS_TOOL:
+        if tool_name in {MATH_ITEM_SPEC_TOOL, MATH_OPTIONS_TOOL, MATH_FORM_TOOL}:
             return {"template": template.model_dump(mode="json")}
         if tool_name == MATH_FIDELITY_TOOL:
-            # Prose parse-back needs a concrete item: parameter nodes are not
-            # expressions the blind reconstruction can compare.
-            return {"item": representative_item(template).model_dump(mode="json")}
-        if tool_name == MATH_DIFFICULTY_TOOL:
-            return {"candidate": typed_candidate.model_dump(mode="json")}
+            # Blind parse-back needs concrete text, so one representative
+            # combination is substituted. Anchors are spans of the authored
+            # text, so the item keeps that text and the substituted reading
+            # is passed separately.
+            concrete = representative_item(template)
+            authored = concrete.model_copy(update={"text": template.body.text})
+            return {
+                "item": authored.model_dump(mode="json"),
+                "text": concrete.text.template,
+            }
         return {"candidate": typed_candidate.model_dump(mode="json")}
 
+    def distractor_count(self, candidate: BaseModel) -> int:
+        template = require_type(candidate, MathTemplateCandidate).item
+        return 0 if template is None else len(template.body.distractors)
+
+    def required_checks(self, candidate: BaseModel) -> frozenset[str]:
+        """Correctness and options always; fidelity and form only when needed."""
+        template = require_type(candidate, MathTemplateCandidate).item
+        required = {MATH_ITEM_SPEC_TOOL, MATH_OPTIONS_TOOL}
+        if template is not None:
+            if template.body.text.mode == "prose":
+                required.add(MATH_FIDELITY_TOOL)
+            if template.body.goal.kind in FORM_SENSITIVE_GOALS:
+                required.add(MATH_FORM_TOOL)
+        return frozenset(required)
+
     def finalize_checked_template(
-        self, candidate: BaseModel, evidence: list[ToolEvidence]
+        self,
+        candidate: BaseModel,
+        evidence: list[ToolEvidence],
+        *,
+        advisory_checks: frozenset[str],
     ) -> ValidatedMathTemplate:
-        """Package actual checked outputs without re-execution or repair."""
+        """Package the isolated checks' evidence without running them again."""
         template = require_type(candidate, MathTemplateCandidate)
-        if not evidence or any(
-            item.status != "passed" and item.tool not in MATH_ADVISORY_CHECK_NAMES
-            for item in evidence
-        ):
-            raise ValueError("All selected checks must pass")
-        item_spec = next(
-            (item for item in evidence if item.tool == MATH_ITEM_SPEC_TOOL),
-            None,
-        )
-        if item_spec is None or item_spec.status != "passed":
-            raise ValueError("Missing passing generic item-spec evidence")
-        options = next(
-            (item for item in evidence if item.tool == MATH_OPTIONS_TOOL),
-            None,
-        )
-        if options is None or options.status != "passed":
-            raise ValueError("Missing passing option-check evidence")
         template_spec = template.item
         if template_spec is None:
             raise ValueError("Generic finalization requires an item template")
+        require_checked(
+            evidence,
+            required=self.required_checks(template),
+            advisory_checks=advisory_checks,
+        )
         distractor_count = len(template_spec.body.distractors)
         if distractor_count < MIN_DISTRACTORS:
             raise ValueError("Generic templates require at least one distractor")
@@ -139,31 +149,22 @@ class MathDomain:
             raise ValueError(
                 f"Generic templates allow at most {MAX_DISTRACTORS} distractors"
             )
-        if template_spec.body.text.mode == "prose":
-            fidelity = next(
-                (item for item in evidence if item.tool == MATH_FIDELITY_TOOL),
-                None,
-            )
-            if fidelity is None or fidelity.status != "passed":
-                raise ValueError("Prose items require passing text-fidelity evidence")
-        report = validate_template(template_spec, max_variants=MAX_IR_VARIANTS)
-        if not report.passed:
-            detail = "; ".join(report.report.findings) or report.report.status
-            raise ValueError(f"IR validation did not pass: {detail}")
-        if report.variants_checked < 1:
+        item_spec = next(item for item in evidence if item.tool == MATH_ITEM_SPEC_TOOL)
+        combinations_checked = item_spec.details.get("variants_checked", 0)
+        if combinations_checked < 1:
             raise ValueError("IR validation checked no parameter combinations")
         expected_sha256 = template_sha256(template)
         saved_evidence = [
             save_checked_evidence(
-                item, expected_sha256, advisory_names=MATH_ADVISORY_CHECK_NAMES
+                item, expected_sha256, advisory_checks=advisory_checks
             )
             for item in evidence
         ]
         summary = MathValidationSummary(
-            checking_mode=report.checking_mode,
-            combinations_checked=report.variants_checked,
-            max_combinations=report.variants_total,
-            seed=report.seed,
+            checking_mode=MATH_CHECKING_MODE,
+            combinations_checked=combinations_checked,
+            max_combinations=item_spec.details.get("variants_total", 0),
+            seed=item_spec.details.get("seed", 0),
             evidence=saved_evidence,
         )
         return ValidatedMathTemplate(template=template, validation=summary)
@@ -175,17 +176,8 @@ class MathDomain:
         tool_name: str,
         evidence: list[ToolEvidence],
     ) -> dict[str, Any]:
-        """Assess exactly the reusable template produced by correctness checks."""
-        typed = require_type(candidate, MathTemplateCandidate)
-        checked_evidence = [
-            item
-            for item in evidence
-            if item.status == "passed"
-            and item.tool
-            in {MATH_ITEM_SPEC_TOOL, MATH_OPTIONS_TOOL, MATH_FIDELITY_TOOL}
-        ]
-        checked = self.finalize_checked_template(typed, checked_evidence)
-        return self.tool_bindings(request, checked.template, tool_name)
+        """Checking never rewrites a math template, so the candidate is bound."""
+        return self.tool_bindings(request, candidate, tool_name)
 
     def generate_question(
         self, validated: BaseModel, *, seed: int

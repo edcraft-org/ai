@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
-
-from edcraft_validator.domains.domain_support import content_sha256
+from edcraft_validator.domains.domain_support import (
+    build_template_id,
+    content_sha256,
+)
 from edcraft_validator.domains.math.math_schemas import (
     MathTemplateCandidate,
     MathTemplateContent,
@@ -16,21 +16,22 @@ from edcraft_validator.domains.math.math_schemas import (
 def build_math_candidate(
     request: MathTemplateRequest, proposal: MathTemplateContent
 ) -> MathTemplateCandidate:
-    """Build the canonical math template from the generic IR proposal."""
-    identity_payload = json.dumps(
-        {
-            "request": request.model_dump(mode="json"),
-            "proposal": proposal.model_dump(mode="json"),
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode()
-    digest = hashlib.sha256(identity_payload).hexdigest()[:12]
-    template_id = f"math.{request.difficulty}.{digest}"
+    """Build the canonical math template from the generic IR proposal.
+
+    Every saved distractor appears in every generated question, so extra
+    distractors beyond the requested number are dropped here. Too few is left
+    for the application to report.
+    """
+    item = proposal.item
+    if item is not None and len(item.body.distractors) > request.num_distractors:
+        kept = item.body.distractors[: request.num_distractors]
+        item = item.model_copy(
+            update={"body": item.body.model_copy(update={"distractors": kept})}
+        )
     return MathTemplateCandidate(
-        template_id=template_id,
+        template_id=build_template_id("math", request, proposal),
         difficulty=request.difficulty,
-        item=proposal.item,
+        item=item,
         question_type="mcq",
     )
 

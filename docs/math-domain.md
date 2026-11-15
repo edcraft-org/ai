@@ -20,10 +20,13 @@ model ──► problem IR + answer recipe + distractor recipes
                             └──► form registry        ──► pass?
 ```
 
-Approval requires **both** verdicts for **every sampled parameter
-combination**. A domain that fits the sample budget is checked completely. The
-two verdicts are recorded as separate evidence (`engine_correctness` and
-`form`) and are never collapsed into one boolean.
+Each verdict comes from its own check and is saved as its own evidence
+(`engine_correctness` from `math_verify_item_spec`, `form` from
+`math_verify_answer_form`). Correctness is required for every template. Form is
+required for `factor` and `expand` goals, where notation is part of the answer,
+and is optional for other goals. A required verdict must hold for **every
+sampled parameter combination**. A domain that fits the sample budget is
+checked completely.
 
 Refusals fail closed:
 
@@ -122,19 +125,33 @@ wrong shape rejects the template.
 
 ## Check plan
 
-Technical checks gate approval:
+Technical checks gate approval. `MathDomain.required_checks` decides which
+ones a candidate needs, and the application adds any that the model did not
+select:
 
-1. `math_verify_item_spec` — schema, bounded trees, goal/answer agreement, and
-   the sampled engine and form check.
-2. `math_validate_options` — every distractor is demonstrably wrong, distinct
-   from the key, and pairwise distinct.
-3. `math_verify_text_fidelity` — prose text only; unknown placeholders, missing
-   anchors and paraphrase drift.
+1. `math_verify_item_spec` — always required. Schema, bounded trees,
+   goal/answer agreement and the sampled engine check.
+2. `math_validate_options` — always required. Every distractor is demonstrably
+   wrong, distinct from the key, and pairwise distinct.
+3. `math_verify_answer_form` — required for `factor` and `expand` goals. The
+   answer and every distractor have the shape the goal demands. The model may
+   select it for other goals.
+4. `math_verify_text_fidelity` — required for prose text. Unknown placeholders,
+   missing anchors and paraphrase drift. Anchors are checked against the
+   authored text, and the blind parse-back reads one substituted variant.
+
+The application also compares the number of distractors with the request. Too
+few is reported to the author model as a failed check
+(`application_distractor_count`). Extra distractors are dropped when the
+candidate is built, so a generated question has exactly the requested number.
+
+Finalisation packages the evidence these isolated checks returned. It does not
+run validation again in the application process.
 
 Advisory checks never gate approval:
 
-4. `math_assess_template_difficulty` — deterministic provisional heuristic.
-5. `assess_template_relevance` — the shared semantic relevance classifier.
+5. `math_assess_template_difficulty` — deterministic provisional heuristic.
+6. `assess_template_relevance` — the shared semantic relevance classifier.
 
 Advisory `failed` or `unavailable` outcomes stay visible in review evidence and
 warnings; only technical failures, missing evidence, unsupported cases, or human
@@ -165,7 +182,8 @@ emitted variant is re-graded before use.
 MCP, or network call. It samples the declared domain for the requested seed, so
 questions may use variants that validation did not sample. For the selected
 combination it compiles the answer recipe, renders it, and then **re-grades** it:
-the engine must still say `correct` and the form registry must still say `pass`.
+the engine must still say `correct`, and for `factor` and `expand` goals the
+form registry must still say `pass`.
 Every distractor is re-graded as `incorrect`, and duplicate or display-identical
 options are refused.
 

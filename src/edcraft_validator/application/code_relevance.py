@@ -103,5 +103,5 @@ async def assess_code_template_relevance(
     return build_relevance_evidence(
         report,
         tool=TEMPLATE_RELEVANCE_TOOL,
-        identity={"template_sha256": template_sha256(candidate)},
+        identity={"subject_sha256": template_sha256(candidate)},
     )

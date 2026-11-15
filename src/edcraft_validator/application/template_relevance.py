@@ -21,9 +21,9 @@ def build_relevance_evidence(
 ) -> ToolEvidence:
     """Map one shared decision into the authoring check contract.
 
-    ``identity`` records the exact checked subject under the key its reader
-    expects. Code keeps ``template_sha256`` for historical artifacts; newer
-    shared checks use ``subject_sha256``.
+    ``identity`` records the exact checked subject under ``subject_sha256``.
+    Saved evidence written before that key was standardised used
+    ``template_sha256``, which readers still accept.
     """
     status: Literal["passed", "failed", "error"] = "passed"
     findings: list[ToolFinding] = []

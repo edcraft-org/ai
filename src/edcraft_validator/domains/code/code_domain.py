@@ -16,10 +16,7 @@ from edcraft_validator.domains.code.code_schemas import (
     TemplateValidationSummary,
     ValidatedCodeTemplate,
 )
-from edcraft_validator.domains.code.code_types import (
-    CODE_ADVISORY_CHECK_NAMES,
-    MIN_DISTRACTORS,
-)
+from edcraft_validator.domains.code.code_types import MIN_DISTRACTORS
 from edcraft_validator.domains.code.prompt_builder import (
     build_code_generation_request,
 )
@@ -29,6 +26,7 @@ from edcraft_validator.domains.code.relevance import TEMPLATE_RELEVANCE_TOOL
 from edcraft_validator.domains.domain_support import (
     ReviewTemplateView,
     build_review_view,
+    require_checked,
     require_type,
     save_checked_evidence,
 )
@@ -37,6 +35,8 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 from edcraft_validator.validation.check_contracts import ToolEvidence
+
+SEMANTIC_CHECK = "code_validate_answers_and_distractors"
 
 
 class CodeDomain:
@@ -80,34 +80,34 @@ class CodeDomain:
             bindings["author_request"] = require_type(
                 request, CodeTemplateRequest
             ).prompt
-        if tool_name == "code_validate_answers_and_distractors":
+        if tool_name == SEMANTIC_CHECK:
             bindings["required_distractors"] = require_type(
                 request, CodeTemplateRequest
             ).num_distractors
         return bindings
 
+    def distractor_count(self, candidate: BaseModel) -> int:
+        return len(require_type(candidate, CodeTemplateCandidate).distractors)
+
+    def required_checks(self, candidate: BaseModel) -> frozenset[str]:
+        """Only this check yields the execution-derived answers a template needs."""
+        return frozenset({SEMANTIC_CHECK})
+
     def finalize_checked_template(
-        self, candidate: BaseModel, evidence: list[ToolEvidence]
+        self,
+        candidate: BaseModel,
+        evidence: list[ToolEvidence],
+        *,
+        advisory_checks: frozenset[str],
     ) -> ValidatedCodeTemplate:
         """Package actual MCP outputs without re-execution or answer repair."""
         template = require_type(candidate, CodeTemplateCandidate)
-        if not evidence or any(
-            item.status != "passed" and item.tool not in CODE_ADVISORY_CHECK_NAMES
-            for item in evidence
-        ):
-            raise ValueError("All selected checks must pass")
-        semantic = next(
-            (
-                item
-                for item in evidence
-                if item.tool == "code_validate_answers_and_distractors"
-            ),
-            None,
+        require_checked(
+            evidence,
+            required=self.required_checks(template),
+            advisory_checks=advisory_checks,
         )
-        if semantic is None or semantic.status != "passed":
-            raise ValueError(
-                "Missing execution-derived canonical answers and distractors"
-            )
+        semantic = next(item for item in evidence if item.tool == SEMANTIC_CHECK)
         selected = [
             DistractorRecipe.model_validate(item)
             for item in semantic.details["selected_distractors"]
@@ -126,7 +126,7 @@ class CodeDomain:
         expected_sha256 = template_sha256(reusable)
         saved_evidence = [
             save_checked_evidence(
-                item, expected_sha256, advisory_names=CODE_ADVISORY_CHECK_NAMES
+                item, expected_sha256, advisory_checks=advisory_checks
             )
             for item in evidence
         ]
@@ -157,10 +157,11 @@ class CodeDomain:
         semantic = [
             item
             for item in evidence
-            if item.tool == "code_validate_answers_and_distractors"
-            and item.status == "passed"
+            if item.tool == SEMANTIC_CHECK and item.status == "passed"
         ]
-        checked = self.finalize_checked_template(candidate, semantic)
+        checked = self.finalize_checked_template(
+            candidate, semantic, advisory_checks=frozenset()
+        )
         return self.tool_bindings(request, checked.template, tool_name)
 
     def generate_question(

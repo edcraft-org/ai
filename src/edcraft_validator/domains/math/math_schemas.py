@@ -7,17 +7,13 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
+from edcraft_validator.domains.domain_support import TemplateRequest
 from edcraft_validator.domains.math.ir.schema import MathTemplateSpec
 from edcraft_validator.domains.math.math_types import (
-    DEFAULT_DISTRACTORS,
     LEGACY_MATH_RELEVANCE_TOOL,
-    MATH_ADVISORY_CHECK_NAMES,
     MATH_CHECKING_MODE,
     MATH_FORMAT_VERSION,
     MATH_VALIDATOR_VERSION,
-    MAX_DISTRACTORS,
-    MAX_PROMPT_LENGTH,
-    MIN_DISTRACTORS,
     Difficulty,
 )
 from edcraft_validator.validation.check_names import TEMPLATE_RELEVANCE_CHECK
@@ -34,23 +30,8 @@ _LEGACY_AUTHORING_FIELDS = (
 )
 
 
-class MathTemplateRequest(BaseModel):
-    """Free-form authoring request for one reusable math template."""
-
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    prompt: str = Field(min_length=1, max_length=MAX_PROMPT_LENGTH)
-    difficulty: Difficulty
-    num_distractors: int = Field(
-        default=DEFAULT_DISTRACTORS, ge=MIN_DISTRACTORS, le=MAX_DISTRACTORS
-    )
-
-    @field_validator("prompt")
-    @classmethod
-    def reject_blank_prompt(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("prompt must not be blank")
-        return value
+# One request shape serves every domain; the name is kept for existing imports.
+MathTemplateRequest = TemplateRequest
 
 
 class MathTemplateContent(BaseModel):
@@ -144,7 +125,7 @@ class MathValidationSummary(BaseModel):
         if len(checks) != len(set(checks)):
             raise ValueError("validation evidence checks must be unique")
         if any(
-            item.status != "passed" and item.check not in MATH_ADVISORY_CHECK_NAMES
+            item.status != "passed" and item.details.get("advisory") is not True
             for item in self.evidence
         ):
             raise ValueError("checked templates require passing validation evidence")

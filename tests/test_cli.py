@@ -57,10 +57,16 @@ class ExampleDomain:
     def build_candidate(self, request, proposal):
         return ExampleCandidate(lesson=request.lesson, value=proposal.value)
 
+    def required_checks(self, candidate):
+        return frozenset()
+
+    def distractor_count(self, candidate):
+        return 0
+
     def tool_bindings(self, request, candidate, tool_name):
         return {"value": candidate.value}
 
-    def finalize_checked_template(self, candidate, evidence):
+    def finalize_checked_template(self, candidate, evidence, *, advisory_checks):
         assert evidence[0].status == "passed"
         return ExampleValidated(lesson=candidate.lesson, value=candidate.value)
 

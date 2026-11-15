@@ -224,10 +224,16 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
             events.append("build")
             return ExampleTemplate(value=proposal.value)
 
+        def required_checks(self, candidate):
+            return frozenset()
+
+        def distractor_count(self, candidate):
+            return 0
+
         def tool_bindings(self, request, candidate, tool_name):
             return {"value": candidate.value}
 
-        def finalize_checked_template(self, candidate, evidence):
+        def finalize_checked_template(self, candidate, evidence, *, advisory_checks):
             events.append("finalize")
             assert evidence[0].details == {"input": 12, "value": 24}
             return ExampleValidated(value=evidence[0].details["value"])
@@ -373,6 +379,12 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
         def build_candidate(self, request, proposal):
             pytest.fail("Generation failures must stop before candidate construction")
 
+        def required_checks(self, candidate):
+            return frozenset()
+
+        def distractor_count(self, candidate):
+            return 0
+
         def tool_bindings(self, request, candidate, tool_name):
             pytest.fail("Generation failures must stop before validation")
 
@@ -448,6 +460,12 @@ def test_unknown_recommended_check_stops_before_candidate_validation() -> None:
                 "Unknown recommended checks must stop before candidate building"
             )
 
+        def required_checks(self, candidate):
+            return frozenset()
+
+        def distractor_count(self, candidate):
+            return 0
+
         def tool_bindings(self, request, candidate, tool_name):
             pytest.fail("Unknown recommended checks must stop before validation")
 
@@ -508,10 +526,16 @@ def test_non_code_domain_can_plan_typed_arguments_without_shared_tool_names():
         def build_candidate(self, request, proposal):
             return ExampleTemplate(value=proposal.value)
 
+        def required_checks(self, candidate):
+            return frozenset()
+
+        def distractor_count(self, candidate):
+            return 0
+
         def tool_bindings(self, request, candidate, name):
             return {"value": candidate.value}
 
-        def finalize_checked_template(self, candidate, evidence):
+        def finalize_checked_template(self, candidate, evidence, *, advisory_checks):
             return ExampleValidated(value=candidate.value)
 
     class Provider:
@@ -576,10 +600,16 @@ def test_non_code_full_revision_enforces_domain_constraints_before_checking(
                 raise ValueError("Candidate exceeds the original request maximum")
             return ExampleTemplate(value=proposal.value)
 
+        def required_checks(self, candidate):
+            return frozenset()
+
+        def distractor_count(self, candidate):
+            return 0
+
         def tool_bindings(self, request, candidate, name):
             return {"value": candidate.value}
 
-        def finalize_checked_template(self, candidate, evidence):
+        def finalize_checked_template(self, candidate, evidence, *, advisory_checks):
             assert evidence[0].details["value"] == candidate.value
             return ExampleValidated(value=candidate.value)
 
@@ -636,6 +666,12 @@ def test_run_checks_accepts_legacy_raw_catalogue_definitions() -> None:
     }
 
     class Domain:
+        def required_checks(self, candidate):
+            return frozenset()
+
+        def distractor_count(self, candidate):
+            return 0
+
         def tool_bindings(self, request, candidate, name):
             return {}
 
@@ -683,10 +719,16 @@ def test_authoring_rejects_a_domain_that_returns_no_shared_artifact():
         def build_candidate(self, request, proposal):
             return Candidate(value=proposal.value)
 
+        def required_checks(self, candidate):
+            return frozenset()
+
+        def distractor_count(self, candidate):
+            return 0
+
         def tool_bindings(self, request, candidate, tool_name):
             return {"value": candidate.value}
 
-        def finalize_checked_template(self, candidate, evidence):
+        def finalize_checked_template(self, candidate, evidence, *, advisory_checks):
             return candidate
 
     class Provider(RequestPendingTools):

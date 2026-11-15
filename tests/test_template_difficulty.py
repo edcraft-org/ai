@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from code_validation_helpers import CODE_ADVISORY_CHECKS
 from fastmcp import Client
 from judge_helpers import TemplateJudge, candidate, proposal
 from pydantic import ValidationError
@@ -44,7 +45,7 @@ async def test_template_tool_gets_full_domain_without_correctness_execution():
     assert evidence["status"] == "passed"
     assert 309 < evidence["details"]["judge"]["timeout_seconds"] <= 310
     assert evidence["details"]["advisory"] is True
-    assert evidence["details"]["template_sha256"] == template_sha256(original)
+    assert evidence["details"]["subject_sha256"] == template_sha256(original)
     assert evidence["details"]["usage"]["model_call_count"] == 1
     payload = json.loads(judge.requests[0].messages[1]["content"])
     assert payload == {
@@ -118,7 +119,7 @@ def test_direct_template_tool_mismatch_is_advisory_and_reuse_stays_local():
     assert final_check.evidence.status == "failed"
     assert final_check.evidence.findings[0].code == "DIFFICULTY_MISMATCH"
     assert final_check.evidence.details["decision"] == "advisory_mismatch"
-    assert final_check.evidence.details["template_sha256"] == template_sha256(
+    assert final_check.evidence.details["subject_sha256"] == template_sha256(
         result.artifact.template
     )
     saved = next(
@@ -130,7 +131,7 @@ def test_direct_template_tool_mismatch_is_advisory_and_reuse_stays_local():
     assert saved.details["advisory"] is True
     assert saved.details["requested_difficulty"] == "easy"
     assert saved.details["estimated_difficulty"] == "hard"
-    assert saved.details["template_sha256"] == template_sha256(result.artifact.template)
+    assert saved.details["subject_sha256"] == template_sha256(result.artifact.template)
     assert final_check.application_arguments["candidate"] == (
         result.artifact.template.model_dump(mode="json")
     )
@@ -185,10 +186,12 @@ def test_saved_artifact_marks_bad_difficulty_identity_unavailable(change, reason
     result, _, _ = run(["easy"])
     evidence = [e.evidence for e in result.attempts[0].executions]
     if change == "stale":
-        evidence[-1].details["template_sha256"] = "stale"
+        evidence[-1].details["subject_sha256"] = "stale"
     else:
-        evidence[-1].details.pop("template_sha256")
-    artifact = CodeDomain().finalize_checked_template(candidate(), evidence)
+        evidence[-1].details.pop("subject_sha256")
+    artifact = CodeDomain().finalize_checked_template(
+        candidate(), evidence, advisory_checks=CODE_ADVISORY_CHECKS
+    )
     saved = next(
         item
         for item in artifact.validation.evidence
@@ -215,7 +218,9 @@ def test_forged_technical_advisory_details_still_block(tool):
     )
     evidence = [item for item in evidence if item.tool != STRUCTURE] + [forged]
     with pytest.raises(ValueError, match="All selected checks must pass"):
-        CodeDomain().finalize_checked_template(candidate(), evidence)
+        CodeDomain().finalize_checked_template(
+            candidate(), evidence, advisory_checks=CODE_ADVISORY_CHECKS
+        )
 
 
 def test_rubric_unavailable_is_typed_and_not_stale(monkeypatch):
@@ -235,7 +240,7 @@ def test_rubric_unavailable_is_typed_and_not_stale(monkeypatch):
     )
     assert saved.status == "incomplete"
     assert saved.details["advisory"] is True
-    assert saved.details["template_sha256"] == template_sha256(result.artifact.template)
+    assert saved.details["subject_sha256"] == template_sha256(result.artifact.template)
     assert saved.details["unavailable"] is True
     assert "different template" not in saved.details["unavailable_reason"]
     outcome = saved.details["difficulty_outcome"]

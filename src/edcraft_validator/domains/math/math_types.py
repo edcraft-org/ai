@@ -30,11 +30,8 @@ from edcraft_validator.domain_types import (
 from edcraft_validator.domain_types import (
     Difficulty as Difficulty,
 )
-from edcraft_validator.validation.check_names import TEMPLATE_RELEVANCE_CHECK
 
 MATH_DIFFICULTIES: tuple[Difficulty, ...] = DIFFICULTIES
-
-MAX_PROMPT_LENGTH = 4000
 
 # Sample budget for bounded property-based validation of a template's declared
 # parameter domain. The schema does not cap the domain itself; only this many
@@ -44,13 +41,12 @@ MAX_IR_VARIANTS = 100
 MATH_DIFFICULTY_TOOL = "math_assess_template_difficulty"
 MATH_ITEM_SPEC_TOOL = "math_verify_item_spec"
 MATH_OPTIONS_TOOL = "math_validate_options"
+MATH_FORM_TOOL = "math_verify_answer_form"
 MATH_FIDELITY_TOOL = "math_verify_text_fidelity"
 
-# Domain-owned advisory identities. Application policy never derives these from
-# untrusted tool evidence or model arguments. Relevance is a shared check the
-# math domain opts into by capability, so its identifier is imported rather
-# than duplicated.
-MATH_ADVISORY_CHECK_NAMES = frozenset({MATH_DIFFICULTY_TOOL, TEMPLATE_RELEVANCE_CHECK})
+# Only these goals turn notation into mathematics, so only they require the
+# form check. For every other goal the form check is optional.
+FORM_SENSITIVE_GOALS = frozenset({"expand", "factor"})
 
 MATH_CHECKING_MODE: Literal["property_based"] = "property_based"
 MATH_VALIDATOR_VERSION: Literal["mcp-math-template-v1"] = "mcp-math-template-v1"

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
 from fractions import Fraction
 
+from edcraft_validator.domains.domain_support import seeded_index
 from edcraft_validator.domains.math.engine_adapter import AdapterGap, grade
 from edcraft_validator.domains.math.ir.compile import MathCompileError
 from edcraft_validator.domains.math.ir.instantiate import (
@@ -25,7 +25,10 @@ from edcraft_validator.domains.math.math_schemas import (
     MathQuestionInstance,
     ValidatedMathTemplate,
 )
-from edcraft_validator.domains.math.math_types import MAX_IR_VARIANTS
+from edcraft_validator.domains.math.math_types import (
+    FORM_SENSITIVE_GOALS,
+    MAX_IR_VARIANTS,
+)
 from edcraft_validator.domains.math.validation.answers import compile_answer_recipe
 from edcraft_validator.domains.math.validation.distinct import same_value
 from edcraft_validator.domains.math.validation.forms import check_form
@@ -56,7 +59,7 @@ def _generate_ir_question(
     combinations = sample.combinations
     if not combinations:
         raise ValueError("validated template has an empty parameter domain")
-    start = _seeded_index(
+    start = seeded_index(
         validated.template.template_id, seed, "parameter-combination", len(combinations)
     )
     for offset in range(len(combinations)):
@@ -87,7 +90,9 @@ def _build_ir_instance(
     if not answer:
         raise UnusableVariant("the answer recipe renders an empty answer")
     _require_engine(body, recipe, values, expected="correct")
-    _require_form(body, recipe, values)
+    # Mirrors authoring: form is a required check only for these goals.
+    if body.goal.kind in FORM_SENSITIVE_GOALS:
+        _require_form(body, recipe, values)
 
     distractor_choices: list[str] = []
     seen: list[object] = []
@@ -105,7 +110,7 @@ def _build_ir_instance(
     if not distractor_choices:
         raise UnusableVariant("the template declares no distractors")
     choices = list(distractor_choices)
-    correct_index = _seeded_index(
+    correct_index = seeded_index(
         validated.template.template_id, seed, "correct-index", len(choices) + 1
     )
     choices.insert(correct_index, answer)
@@ -151,8 +156,3 @@ def _require_form(
         raise UnusableVariant(
             f"the form check returned {result.status!r}: {result.reason}"
         )
-
-
-def _seeded_index(template_id: str, seed: int, name: str, size: int) -> int:
-    payload = f"{template_id}:{seed}:{name}".encode()
-    return int.from_bytes(hashlib.sha256(payload).digest()[:8], "big") % size

@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 import sys
 from fractions import Fraction
-from typing import Any
+from typing import Any, get_args
 
 from edcraft_validator.domains.math.ir.schema import MathItemSpec, MathTemplateSpec
 from edcraft_validator.domains.math.math_types import MAX_IR_VARIANTS
 from edcraft_validator.domains.math.validation.harness import (
+    Aspect,
     validate_item,
     validate_template,
 )
@@ -31,9 +32,14 @@ def main() -> int:
 
 def _run(payload: dict[str, Any]) -> dict[str, Any]:
     operation = payload.get("operation")
+    aspect = payload.get("aspect", "correctness")
+    if aspect not in get_args(Aspect):
+        raise ValueError(f"unknown validation aspect {aspect!r}")
     if operation == "validate_item":
         spec = MathItemSpec.model_validate(payload["spec"])
-        report = validate_item(spec, params=_params(payload.get("params")))
+        report = validate_item(
+            spec, params=_params(payload.get("params")), aspect=aspect
+        )
         return {"report": report.model_dump(mode="json")}
     if operation == "validate_template":
         template = MathTemplateSpec.model_validate(payload["template"])
@@ -41,6 +47,7 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
             template,
             max_variants=int(payload.get("max_variants", MAX_IR_VARIANTS)),
             seed=int(payload.get("seed", 0)),
+            aspect=aspect,
         )
         return {"report": report.model_dump(mode="json")}
     raise ValueError(f"unknown validation operation {operation!r}")

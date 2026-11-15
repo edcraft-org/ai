@@ -35,7 +35,12 @@ exports. Application construction and deterministic expansion do not connect too
 authoring obtains a connection when needed. Inject a tool client for tests.
 
 The authoring coordinator prepares a frozen plan, executes attempts, and either
-revises or finalizes. Check definitions are decoded once before dispatch; the
+revises or finalizes. The model's selection is frozen, and the application adds
+any check that `DomainModule.required_checks(candidate)` names and the model
+left out, so required checks need no model-supplied arguments. The application
+also enforces the requested distractor count through
+`DomainModule.distractor_count`, and passes the advisory check names from the
+catalogue into `finalize_checked_template`. Domains keep no advisory name lists. Check definitions are decoded once before dispatch; the
 attempt loop reads only decoded metadata and does not interpret FastMCP tags.
 `policy:advisory` marks assessments whose failed or error evidence is saved for
 review but never requests revision or blocks technical success. Keep schema

@@ -83,11 +83,4 @@ CODE_DIFFICULTIES: tuple[Difficulty, ...] = DIFFICULTIES
 MIN_CONCRETE_DISTRACTORS = 2
 MAX_CONCRETE_DISTRACTORS = 3
 
-# Domain-owned advisory identities. Application policy never derives this from
-# untrusted tool evidence or model arguments.
-CODE_ADVISORY_CHECK_NAMES = frozenset(
-    {"code_assess_template_difficulty", "code_assess_template_relevance"}
-)
-
-
 ParameterValue = int | bool | str | list[int]

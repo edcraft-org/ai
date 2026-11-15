@@ -70,7 +70,7 @@ async def assess_template_difficulty(
             details={
                 "advisory": True,
                 "retryable": False,
-                "template_sha256": template_sha256(candidate),
+                "subject_sha256": template_sha256(candidate),
                 "requested_difficulty": candidate.difficulty,
                 "difficulty_outcome": outcome.model_dump(mode="json"),
                 **outcome.model_dump(
@@ -194,7 +194,7 @@ def _build_evidence(candidate, rubric, settings, screen, reasoning, outcome, sta
         "high_confidence_threshold": settings.reasoning_threshold,
         "decision_confidence_threshold": settings.decision_threshold,
         "confidence_calibrated": False,
-        "template_sha256": template_sha256(candidate),
+        "subject_sha256": template_sha256(candidate),
         "requested_difficulty": candidate.difficulty,
         "rubric_version": rubric.version,
         "rubric_sha256": rubric.sha256,

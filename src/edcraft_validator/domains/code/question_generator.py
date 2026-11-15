@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 
 from edcraft_validator.domains.code.code_schemas import (
     CodeQuestionInstance,
@@ -17,6 +16,7 @@ from edcraft_validator.domains.code.question_values import (
 )
 from edcraft_validator.domains.code.safe_expressions import SafeExpression
 from edcraft_validator.domains.code.text_rendering import render_template
+from edcraft_validator.domains.domain_support import seeded_index
 
 
 def generate_code_question(
@@ -83,6 +83,4 @@ def generate_code_question(
 def _seeded_choice[ValueT](
     values: list[ValueT], digest: str, seed: int, name: str
 ) -> ValueT:
-    payload = f"{digest}:{seed}:{name}".encode()
-    index = int.from_bytes(hashlib.sha256(payload).digest()[:8], "big") % len(values)
-    return values[index]
+    return values[seeded_index(digest, seed, name, len(values))]

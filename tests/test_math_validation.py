@@ -28,6 +28,8 @@ from edcraft_validator.domains.math.math_domain import MathDomain
 from edcraft_validator.domains.math.math_schemas import MathTemplateRequest
 from edcraft_validator.domains.math.math_types import (
     MATH_DIFFICULTY_TOOL,
+    MATH_FIDELITY_TOOL,
+    MATH_FORM_TOOL,
     MATH_ITEM_SPEC_TOOL,
     MATH_OPTIONS_TOOL,
     MATH_TOOL_VERSION,
@@ -73,12 +75,21 @@ def small_fraction_template():
 
 
 def passing_evidence(tool: str) -> ToolEvidence:
+    # The item-spec check is the one whose sampled coverage finalisation saves.
+    details = (
+        {"variants_checked": 4, "variants_total": 4, "seed": 0}
+        if tool == MATH_ITEM_SPEC_TOOL
+        else {}
+    )
     return ToolEvidence(
         tool=tool,
         version=MATH_TOOL_VERSION,
         status="passed",
-        details={},
+        details=details,
     )
+
+
+ADVISORY = frozenset({MATH_DIFFICULTY_TOOL, TEMPLATE_RELEVANCE_CHECK})
 
 
 def test_difficulty_bands_follow_the_documented_heuristic() -> None:
@@ -139,11 +150,75 @@ def test_finalize_accepts_complete_technical_evidence() -> None:
             passing_evidence(MATH_ITEM_SPEC_TOOL),
             passing_evidence(MATH_OPTIONS_TOOL),
         ],
+        advisory_checks=ADVISORY,
     )
 
     assert artifact.template == candidate
     assert artifact.validation.combinations_checked == 4
     assert artifact.validation.max_combinations == 4
+
+
+def test_finalize_saves_the_coverage_the_isolated_check_reported() -> None:
+    """Finalisation packages evidence; it does not run validation again."""
+    candidate = ir_candidate(quadratic_ir_template())
+    item_spec = passing_evidence(MATH_ITEM_SPEC_TOOL).model_copy(
+        update={"details": {"variants_checked": 3, "variants_total": 9, "seed": 5}}
+    )
+
+    artifact = MathDomain().finalize_checked_template(
+        candidate,
+        [item_spec, passing_evidence(MATH_OPTIONS_TOOL)],
+        advisory_checks=ADVISORY,
+    )
+
+    assert artifact.validation.combinations_checked == 3
+    assert artifact.validation.max_combinations == 9
+    assert artifact.validation.seed == 5
+
+
+def test_finalize_rejects_evidence_without_checked_combinations() -> None:
+    candidate = ir_candidate(quadratic_ir_template())
+    empty = passing_evidence(MATH_ITEM_SPEC_TOOL).model_copy(update={"details": {}})
+
+    with pytest.raises(ValueError, match="checked no parameter combinations"):
+        MathDomain().finalize_checked_template(
+            candidate,
+            [empty, passing_evidence(MATH_OPTIONS_TOOL)],
+            advisory_checks=ADVISORY,
+        )
+
+
+def test_required_checks_follow_the_candidate() -> None:
+    domain = MathDomain()
+    solve = ir_candidate(quadratic_ir_template())
+    assert domain.required_checks(solve) == {MATH_ITEM_SPEC_TOOL, MATH_OPTIONS_TOOL}
+
+    body = solve.item.body
+    prose = solve.model_copy(
+        update={
+            "item": solve.item.model_copy(
+                update={
+                    "body": body.model_copy(
+                        update={"text": body.text.model_copy(update={"mode": "prose"})}
+                    )
+                }
+            )
+        }
+    )
+    assert MATH_FIDELITY_TOOL in domain.required_checks(prose)
+
+    factor = solve.model_copy(
+        update={
+            "item": solve.item.model_copy(
+                update={
+                    "body": body.model_copy(
+                        update={"goal": body.goal.model_copy(update={"kind": "factor"})}
+                    )
+                }
+            )
+        }
+    )
+    assert MATH_FORM_TOOL in domain.required_checks(factor)
 
 
 def test_finalize_keeps_advisory_failures() -> None:
@@ -171,6 +246,7 @@ def test_finalize_keeps_advisory_failures() -> None:
             passing_evidence(MATH_OPTIONS_TOOL),
             failed_advisory,
         ],
+        advisory_checks=ADVISORY,
     )
 
     saved = next(
@@ -179,6 +255,7 @@ def test_finalize_keeps_advisory_failures() -> None:
         if item.check == MATH_DIFFICULTY_TOOL
     )
     assert saved.status == "failed"
+    assert saved.details["advisory"] is True
 
 
 def test_finalize_rejects_missing_or_failed_technical_evidence() -> None:
@@ -191,15 +268,18 @@ def test_finalize_rejects_missing_or_failed_technical_evidence() -> None:
     )
 
     with pytest.raises(ValueError, match="All selected checks must pass"):
-        MathDomain().finalize_checked_template(candidate, [])
+        MathDomain().finalize_checked_template(candidate, [], advisory_checks=ADVISORY)
 
-    with pytest.raises(ValueError, match="Missing passing option-check"):
+    with pytest.raises(ValueError, match="Missing passing required checks"):
         MathDomain().finalize_checked_template(
-            candidate, [passing_evidence(MATH_ITEM_SPEC_TOOL)]
+            candidate,
+            [passing_evidence(MATH_ITEM_SPEC_TOOL)],
+            advisory_checks=ADVISORY,
         )
 
     with pytest.raises(ValueError, match="All selected checks must pass"):
         MathDomain().finalize_checked_template(
             candidate,
             [failed_spec, passing_evidence(MATH_OPTIONS_TOOL)],
+            advisory_checks=ADVISORY,
         )

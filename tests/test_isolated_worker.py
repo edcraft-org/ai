@@ -248,3 +248,10 @@ def test_worker_module_names_stay_application_constants() -> None:
     assert isolated_process.BOOTSTRAP_MODULE == (
         "edcraft_validator.tools.isolated_worker_bootstrap"
     )
+
+
+def test_worker_rejects_an_unknown_validation_aspect() -> None:
+    from edcraft_validator.domains.math.validation.worker import _run
+
+    with pytest.raises(ValueError, match="unknown validation aspect"):
+        _run({"operation": "validate_item", "aspect": "style", "spec": {}})

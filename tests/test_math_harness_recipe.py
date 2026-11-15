@@ -115,21 +115,38 @@ def check_named(report, name: str):
 
 
 def test_expanded_answer_passes_both_oracles() -> None:
-    report = validate_item(expand_item(recipe=expanded_recipe()))
+    item = expand_item(recipe=expanded_recipe())
+    report = validate_item(item)
+    form_report = validate_item(item, aspect="form")
 
     assert report.report.status == "passed", report.report.findings
     assert check_named(report, "engine_correctness").status == "passed"
     assert check_named(report, "engine_correctness").evidence["outcome"] == "correct"
-    assert check_named(report, "form").status == "passed"
+    assert form_report.report.status == "passed", form_report.report.findings
+    assert check_named(form_report, "form").status == "passed"
     assert report.report.answer == "x^2 + 3*x + 2"
 
 
-def test_unexpanded_answer_is_correct_but_fails_the_form_check() -> None:
-    report = validate_item(expand_item(recipe=factored_recipe()))
+def test_each_aspect_reports_only_its_own_check() -> None:
+    item = expand_item(recipe=expanded_recipe())
 
-    assert report.report.status == "failed"
+    assert [check.check for check in validate_item(item).report.checks] == [
+        "engine_correctness"
+    ]
+    assert [
+        check.check for check in validate_item(item, aspect="form").report.checks
+    ] == ["form"]
+
+
+def test_unexpanded_answer_is_correct_but_fails_the_form_check() -> None:
+    item = expand_item(recipe=factored_recipe())
+    report = validate_item(item)
+    form_report = validate_item(item, aspect="form")
+
+    assert report.report.status == "passed", report.report.findings
     assert check_named(report, "engine_correctness").status == "passed"
-    form = check_named(report, "form")
+    assert form_report.report.status == "failed"
+    form = check_named(form_report, "form")
     assert form.status == "failed"
     assert form.evidence["status"] == "fail"
 
@@ -141,11 +158,13 @@ def test_factored_answer_passes_a_factor_goal() -> None:
 
 
 def test_expanded_answer_fails_a_factor_goal() -> None:
-    report = validate_item(factor_item(recipe=expanded_recipe()))
+    item = factor_item(recipe=expanded_recipe())
+    report = validate_item(item)
+    form_report = validate_item(item, aspect="form")
 
-    assert report.report.status == "failed"
     assert check_named(report, "engine_correctness").status == "passed"
-    assert check_named(report, "form").status == "failed"
+    assert form_report.report.status == "failed"
+    assert check_named(form_report, "form").status == "failed"
 
 
 def test_wrong_recipe_fails_the_engine() -> None:
@@ -269,3 +288,14 @@ def test_a_recipe_that_is_wrong_for_any_variant_blocks_the_template(
 
     assert report.report.status == "failed"
     assert any("engine_correctness" in finding for finding in report.report.findings)
+
+
+def test_form_sensitive_goals_apply_the_form_rule_to_distractors() -> None:
+    expanded = Distractor(value=expanded_recipe().items[0], misconception="expanded")
+    report = validate_item(
+        factor_item(recipe=factored_recipe(), distractors=[expanded]), aspect="form"
+    )
+
+    assert report.report.status == "failed"
+    assert report.report.options[0].result.check == "distractor_form"
+    assert any("option 0: distractor form" in f for f in report.report.findings)

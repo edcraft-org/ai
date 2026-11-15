@@ -7,6 +7,11 @@ from edcraft_validator.mcp.code_tools import (
 )
 from edcraft_validator.mcp.evidence import ToolEvidence
 
+# The workflow reads this set from the catalogue's policy:advisory tag.
+CODE_ADVISORY_CHECKS = frozenset(
+    {"code_assess_template_difficulty", "code_assess_template_relevance"}
+)
+
 
 def validate_code(candidate, *, execution_tool, num_distractors=3):
     details = validate_answers_and_distractors(
@@ -22,4 +27,5 @@ def validate_code(candidate, *, execution_tool, num_distractors=3):
                 details=details,
             )
         ],
+        advisory_checks=CODE_ADVISORY_CHECKS,
     )

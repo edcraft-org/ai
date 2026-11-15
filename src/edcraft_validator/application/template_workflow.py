@@ -29,6 +29,7 @@ from edcraft_validator.domains.domain_contract import DomainModule
 from edcraft_validator.llm.llm_contracts import (
     ModelProvider,
     PlannedGenerationResponse,
+    RecommendedCheck,
     ToolCatalogueSnapshot,
 )
 from edcraft_validator.llm.llm_errors import (
@@ -50,6 +51,10 @@ from edcraft_validator.mcp.catalogue import (
 from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
 
 REVISION_POLICY = "full-candidate-v1"
+# Reported like a check so the author model can revise, but owned by the
+# application: it compares the candidate with the request and calls no tool.
+DISTRACTOR_COUNT_CHECK = "application_distractor_count"
+DISTRACTOR_COUNT_VERSION = "1.0.0"
 
 
 def _has_technical_check_error(attempt) -> bool:
@@ -212,23 +217,27 @@ class TemplateApplication:
         job.result.prompt_version = generation_request.prompt_version
         response = self._generate_proposal(job, generation_request)
         response = response.model_copy(deep=True)
-        names = tuple(check.name for check in response.checks)
-        job.result.fixed_plan = list(names)
-        job.result.check_plan = [
-            check.model_copy(deep=True) for check in response.checks
-        ]
         definitions = check_definitions(tools)
-        planned_arguments = {
-            check.name: json.dumps(check.arguments) for check in response.checks
-        }
 
         for number in range(1, job.max_attempts + 1):
             job.stage = "template_building"
             candidate = job.domain.build_candidate(job.request, response.proposal)
+            response = self._with_required_checks(
+                response, job.domain.required_checks(candidate), definitions
+            )
+            names = tuple(check.name for check in response.checks)
+            job.result.fixed_plan = list(names)
+            job.result.check_plan = [
+                check.model_copy(deep=True) for check in response.checks
+            ]
+            planned_arguments = {
+                check.name: json.dumps(check.arguments) for check in response.checks
+            }
             attempt = self._build_attempt(number, candidate, names)
             job.result.attempts.append(attempt)
             job.stage = "checking"
             job.notify("checking")
+            self._check_distractor_count(attempt, job, candidate)
             self._run_checks(
                 attempt,
                 names,
@@ -255,6 +264,59 @@ class TemplateApplication:
                 phase="correcting",
             )
         raise AssertionError("Authoring loop must return within its attempt limit")
+
+    @staticmethod
+    def _with_required_checks(response, required, definitions):
+        """Add the checks the domain requires that the model did not select.
+
+        The model still chooses the optional checks. The plan only ever grows,
+        so a revision that needs a further check gets it.
+        """
+        selected = {check.name for check in response.checks}
+        missing = sorted(required - selected)
+        unavailable = [name for name in missing if name not in definitions]
+        if unavailable:
+            raise ToolCatalogueError(
+                "domain requires checks the catalogue does not offer: "
+                + ", ".join(unavailable)
+            )
+        if not missing:
+            return response
+        added = [RecommendedCheck(name=name, arguments={}) for name in missing]
+        return response.model_copy(update={"checks": [*response.checks, *added]})
+
+    @staticmethod
+    def _check_distractor_count(attempt, job, candidate):
+        """Record a failed check when the candidate offers too few distractors."""
+        requested = getattr(job.request, "num_distractors", None)
+        if requested is None:
+            return
+        offered = job.domain.distractor_count(candidate)
+        if offered >= requested:
+            return
+        attempt.executions.append(
+            CheckExecution(
+                call_id=f"attempt-{attempt.number}:{DISTRACTOR_COUNT_CHECK}",
+                tool=DISTRACTOR_COUNT_CHECK,
+                requested_arguments={},
+                evidence=ToolEvidence(
+                    tool=DISTRACTOR_COUNT_CHECK,
+                    version=DISTRACTOR_COUNT_VERSION,
+                    status="failed",
+                    findings=[
+                        ToolFinding(
+                            code="TOO_FEW_DISTRACTORS",
+                            message=(
+                                f"The request needs {requested} distractors but "
+                                f"the template offers {offered}."
+                            ),
+                            field="distractors",
+                        )
+                    ],
+                    details={"requested": requested, "offered": offered},
+                ),
+            )
+        )
 
     @staticmethod
     def _should_revise(attempt, number, max_attempts):
@@ -323,7 +385,8 @@ class TemplateApplication:
                             "requirements; do not change a field only because an "
                             "advisory verdict differs. "
                             "Distinguish observations from requirements you supplied. "
-                            "Check names and model-owned arguments are fixed. "
+                            "Check names and model-owned arguments are fixed; the "
+                            "application may add checks your replacement requires. "
                             "The model_arguments below were selected in the initial "
                             "plan, not supplied by the educator. Do not change or "
                             "weaken the plan. Preserve the request's scope and "
@@ -336,8 +399,8 @@ class TemplateApplication:
                             "recheck your replacement. A check with skip_reason "
                             "was not run "
                             "and is not an observed defect. "
-                            "Do not return checks; the application keeps "
-                            "the original check plan."
+                            "Do not return checks; the application owns "
+                            "the check plan."
                         ),
                         "revision_policy": REVISION_POLICY,
                         "author_request": author_request,
@@ -412,8 +475,13 @@ class TemplateApplication:
             for execution in attempt.executions
             if execution.evidence is not None
         ]
+        advisory_checks = frozenset(
+            execution.tool for execution in attempt.executions if execution.advisory
+        )
         try:
-            artifact = job.domain.finalize_checked_template(candidate, evidence)
+            artifact = job.domain.finalize_checked_template(
+                candidate, evidence, advisory_checks=advisory_checks
+            )
         except ValueError as exc:
             result.status = "needs_review"
             result.reason = f"Selected checks passed; artifact unavailable: {exc}"

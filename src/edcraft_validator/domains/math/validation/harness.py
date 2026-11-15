@@ -1,13 +1,14 @@
 """Declarative validation harness for math IR items and templates.
 
 The harness owns the *test*, not the topic. Authored recipe items are graded by
-two independent oracles that are never collapsed into one field:
+two independent oracles, each requested as its own aspect:
 
-* ``engine_correctness`` -- the deterministic engine answers ``correct`` or the
-  item is rejected, whatever the engine refused with;
-* ``form`` -- the domain form registry says ``pass`` or the item is rejected.
+* ``correctness`` -- the deterministic engine answers ``correct`` for the key
+  and ``incorrect`` for every distractor, and no two options share a value;
+* ``form`` -- the domain form registry says the key has the shape its goal
+  demands. Form-sensitive goals apply the same rule to every distractor.
 
-An item passes only when both pass and every distractor is demonstrably wrong.
+Neither aspect implies the other, so a caller that needs both runs both.
 A failed check blocks approval. Validation samples the declared parameter domain
 within a bounded budget, so a large authored domain never has to be materialised.
 """
@@ -32,7 +33,10 @@ from edcraft_validator.domains.math.ir.schema import (
     MathItemSpec,
     MathTemplateSpec,
 )
-from edcraft_validator.domains.math.math_types import MAX_IR_VARIANTS
+from edcraft_validator.domains.math.math_types import (
+    FORM_SENSITIVE_GOALS,
+    MAX_IR_VARIANTS,
+)
 from edcraft_validator.domains.math.validation.answers import compile_answer_recipe
 from edcraft_validator.domains.math.validation.distinct import same_value
 from edcraft_validator.domains.math.validation.forms import check_form
@@ -45,10 +49,7 @@ from edcraft_validator.domains.math.validation.results import (
 
 MAX_VARIANTS = MAX_IR_VARIANTS
 
-# Only these goals turn notation into mathematics. For every other goal an
-# equivalent distractor is indistinguishable from the key, so applying the form
-# rule to options would reject sound misconceptions.
-FORM_SENSITIVE_GOALS = frozenset({"expand", "factor"})
+Aspect = Literal["correctness", "form"]
 
 
 class HarnessReport(BaseModel):
@@ -71,8 +72,9 @@ def validate_item(
     spec: MathItemSpec,
     *,
     params: dict[str, Fraction] | None = None,
+    aspect: Aspect = "correctness",
 ) -> HarnessReport:
-    """Grade an authored answer recipe, then prove every distractor wrong."""
+    """Check one aspect of an authored item: its correctness or its form."""
     recipe = spec.answer_recipe
     if recipe is None:
         return HarnessReport(
@@ -91,16 +93,22 @@ def validate_item(
             )
         )
 
-    checks = [
-        _engine_correctness(spec, recipe, params),
-        _recipe_form(spec, recipe, params),
-    ]
+    if aspect == "form":
+        checks = [_recipe_form(spec, recipe, params)]
+        options = _check_distractor_forms(spec, params)
+        option_findings = [
+            f"option {option.index}: {option.result.reason}"
+            for option in options
+            if option.result.status == "failed"
+        ]
+    else:
+        checks = [_engine_correctness(spec, recipe, params)]
+        options, option_findings = _check_recipe_distractors(spec, params)
     findings = [
         f"{result.check}: {result.reason}"
         for result in checks
         if result.status == "failed" and result.reason
     ]
-    options, option_findings = _check_recipe_distractors(spec, params)
     findings.extend(option_findings)
     return HarnessReport(
         report=ValidationReport(
@@ -175,7 +183,6 @@ def _check_recipe_distractors(
     findings: list[str] = []
     checks: list[OptionCheck] = []
     compiled: list[tuple[int, object]] = []
-    form_sensitive = spec.goal.kind in FORM_SENSITIVE_GOALS
     for index, distractor in enumerate(spec.distractors):
         try:
             value = compile_distractor_value(spec, distractor, params)
@@ -196,11 +203,6 @@ def _check_recipe_distractors(
         compiled.append((index, value))
         grading = _engine_correctness(spec, distractor, params)
         outcome = str(grading.evidence.get("outcome", "error"))
-        form = (
-            _recipe_form(spec, _recipe_from_distractor(distractor), params)
-            if form_sensitive
-            else CheckResult(check="form", status="passed")
-        )
         if grading.status == "passed":
             # The engine solved the problem with this option: it is the key.
             status: CheckStatus = "failed"
@@ -210,9 +212,6 @@ def _check_recipe_distractors(
             reason = (
                 f"could not prove the distractor wrong: engine returned {outcome!r}"
             )
-        elif form.status == "failed":
-            status = "failed"
-            reason = f"distractor form: {form.reason}"
         else:
             status = "passed"
             reason = "distractor is demonstrably wrong"
@@ -225,10 +224,7 @@ def _check_recipe_distractors(
                     check="distractor",
                     status=status,
                     reason=reason,
-                    evidence={
-                        "engine": grading.evidence,
-                        "form": form.evidence or {"status": form.status},
-                    },
+                    evidence={"engine": grading.evidence},
                 ),
             )
         )
@@ -258,6 +254,38 @@ def _check_recipe_distractors(
     return checks, findings
 
 
+def _check_distractor_forms(
+    spec: MathItemSpec,
+    params: dict[str, Fraction] | None,
+) -> list[OptionCheck]:
+    """Apply the key's form rule to distractors, for form-sensitive goals only.
+
+    For every other goal an equivalent distractor is indistinguishable from
+    the key, so a form rule on options would reject sound misconceptions.
+    """
+    if spec.goal.kind not in FORM_SENSITIVE_GOALS:
+        return []
+    checks: list[OptionCheck] = []
+    for index, distractor in enumerate(spec.distractors):
+        form = _recipe_form(spec, _recipe_from_distractor(distractor), params)
+        checks.append(
+            OptionCheck(
+                index=index,
+                value=_distractor_display(distractor),
+                misconception=distractor.misconception,
+                result=form.model_copy(
+                    update={
+                        "check": "distractor_form",
+                        "reason": f"distractor form: {form.reason}"
+                        if form.status == "failed"
+                        else "",
+                    }
+                ),
+            )
+        )
+    return checks
+
+
 def _recipe_from_distractor(distractor: Distractor) -> AnswerRecipe:
     """Project a distractor onto the answer kinds the form registry understands."""
     if distractor.value is not None:
@@ -272,6 +300,7 @@ def validate_template(
     *,
     max_variants: int = MAX_VARIANTS,
     seed: int = 0,
+    aspect: Aspect = "correctness",
 ) -> HarnessReport:
     """Sample the declared domain; any sampled failure blocks the template."""
     if template.body.answer_recipe is None:
@@ -295,7 +324,7 @@ def validate_template(
             seed=seed,
         )
     reports: list[HarnessReport] = [
-        validate_item(template.body, params=combination)
+        validate_item(template.body, params=combination, aspect=aspect)
         for combination in sample.combinations
     ]
     merged_findings: list[str] = []

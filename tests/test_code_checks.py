@@ -111,12 +111,16 @@ def test_finalization_rejects_unsuccessful_evidence(status):
         findings=[{"code": "TEST_FAILURE", "message": "failed"}],
     )
     with pytest.raises(ValueError, match="All selected checks must pass"):
-        CodeDomain().finalize_checked_template(candidate(), [evidence])
+        CodeDomain().finalize_checked_template(
+            candidate(), [evidence], advisory_checks=frozenset()
+        )
 
 
 def test_finalization_requires_canonical_answers():
     evidence = ToolEvidence(
         tool="code_verify_template_structure", version="1", status="passed"
     )
-    with pytest.raises(ValueError, match="Missing execution-derived canonical answers"):
-        CodeDomain().finalize_checked_template(candidate(), [evidence])
+    with pytest.raises(ValueError, match="Missing passing required checks"):
+        CodeDomain().finalize_checked_template(
+            candidate(), [evidence], advisory_checks=frozenset()
+        )

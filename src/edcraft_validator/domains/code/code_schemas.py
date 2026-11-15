@@ -10,16 +10,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.domains.code.code_types import (
-    CODE_ADVISORY_CHECK_NAMES,
-    DEFAULT_DISTRACTORS,
     MAX_DISTRACTOR_CANDIDATES,
-    MAX_DISTRACTORS,
     MIN_DISTRACTORS,
     AnswerTarget,
     Difficulty,
     ParameterValue,
     ProgrammingTopic,
 )
+from edcraft_validator.domains.domain_support import TemplateRequest
 from edcraft_validator.validation.validation_contracts import (
     ValidationEvidence,
     ValidationFailure,
@@ -57,23 +55,8 @@ class GeneratedQuestion(BaseModel):
         return value
 
 
-class CodeTemplateRequest(BaseModel):
-    """Free-form authoring request for one reusable code template."""
-
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    prompt: str = Field(min_length=1, max_length=4000)
-    difficulty: Difficulty
-    num_distractors: int = Field(
-        default=DEFAULT_DISTRACTORS, ge=MIN_DISTRACTORS, le=MAX_DISTRACTORS
-    )
-
-    @field_validator("prompt")
-    @classmethod
-    def reject_blank_prompt(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("prompt must not be blank")
-        return value
+# One request shape serves every domain; the name is kept for existing imports.
+CodeTemplateRequest = TemplateRequest
 
 
 MAX_STRING_LENGTH = 40
@@ -249,7 +232,7 @@ class TemplateValidationSummary(BaseModel):
         if len(checks) != len(set(checks)):
             raise ValueError("validation evidence checks must be unique")
         if any(
-            item.status != "passed" and item.check not in CODE_ADVISORY_CHECK_NAMES
+            item.status != "passed" and item.details.get("advisory") is not True
             for item in self.evidence
         ):
             raise ValueError("checked templates require passing validation evidence")

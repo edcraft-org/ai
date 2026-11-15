@@ -35,9 +35,27 @@ class DomainModule(Protocol):
         self, request: BaseModel, candidate: BaseModel, tool_name: str
     ) -> dict[str, Any]: ...
 
+    def distractor_count(self, candidate: BaseModel) -> int:
+        """Number of distractors the candidate offers for the requested count."""
+        ...
+
+    def required_checks(self, candidate: BaseModel) -> frozenset[str]:
+        """Checks this candidate cannot be saved without.
+
+        The application adds any the model did not select, so they must need
+        no model-supplied arguments. Other offered checks stay optional.
+        """
+        ...
+
     def finalize_checked_template(
-        self, candidate: BaseModel, evidence: list[ToolEvidence]
-    ) -> ValidatedTemplateArtifact: ...
+        self,
+        candidate: BaseModel,
+        evidence: list[ToolEvidence],
+        *,
+        advisory_checks: frozenset[str],
+    ) -> ValidatedTemplateArtifact:
+        """Package a checked candidate; ``advisory_checks`` never block it."""
+        ...
 
     def checked_tool_bindings(
         self,

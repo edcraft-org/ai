@@ -2,32 +2,23 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
-
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
     CodeTemplateContent,
     CodeTemplateRequest,
 )
-from edcraft_validator.domains.domain_support import content_sha256
+from edcraft_validator.domains.domain_support import (
+    build_template_id,
+    content_sha256,
+)
 
 
 def build_code_candidate(
     request: CodeTemplateRequest, proposal: CodeTemplateContent
 ) -> CodeTemplateCandidate:
     """Build the canonical code template from a model proposal."""
-    identity_payload = json.dumps(
-        {
-            "request": request.model_dump(mode="json"),
-            "proposal": proposal.model_dump(mode="json"),
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode()
-    digest = hashlib.sha256(identity_payload).hexdigest()[:12]
     return CodeTemplateCandidate(
-        template_id=f"code.{request.difficulty}.{digest}",
+        template_id=build_template_id("code", request, proposal),
         difficulty=request.difficulty,
         code=proposal.code,
         entry_function=proposal.entry_function,
