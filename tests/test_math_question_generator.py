@@ -48,7 +48,11 @@ def validated(template, artifact_id: str = "artifact-1") -> ValidatedMathTemplat
 
 
 def unchecked_artifact(template) -> ValidatedMathTemplate:
-    """Build an artifact without the harness gate, for refusal-path tests."""
+    """Build an artifact that bypasses the authoring gate.
+
+    Generation trusts an approved template, so these tests can hand it a recipe
+    the authoring checks would have rejected and still see a question emitted.
+    """
     return ValidatedMathTemplate(
         artifact_id="artifact-1",
         template=ir_candidate(template),
@@ -183,7 +187,7 @@ def _expand_template(recipe, *, distractors=None):
     )
 
 
-def test_generator_emits_a_form_checked_expand_answer():
+def test_generator_emits_an_expand_answer_from_the_approved_recipe():
     expanded = AnswerRecipe(
         kind="expression",
         items=[
@@ -203,7 +207,8 @@ def test_generator_emits_a_form_checked_expand_answer():
     assert instance.choices[instance.correct_index] == instance.answer
 
 
-def test_generator_refuses_an_equivalent_answer_with_the_wrong_form():
+def test_generator_emits_an_equivalent_answer_with_the_wrong_form():
+    """Form is an authoring check, so generation renders the factored recipe."""
     factored = AnswerRecipe(
         kind="expression",
         items=[
@@ -211,23 +216,30 @@ def test_generator_refuses_an_equivalent_answer_with_the_wrong_form():
         ],
     )
 
-    with pytest.raises(ValueError, match="Could not produce"):
-        generate_math_question(unchecked_artifact(_expand_template(factored)), 0)
+    instance = generate_math_question(unchecked_artifact(_expand_template(factored)), 0)
+
+    assert instance.answer == "(x + 1)*(x + 2)"
+    assert instance.choices[instance.correct_index] == instance.answer
 
 
-def test_generator_refuses_a_wrong_answer_recipe():
+def test_generator_emits_a_wrong_answer_recipe_without_re_grading():
+    """Correctness is an authoring check, so generation renders the recipe as is."""
     wrong = AnswerRecipe(kind="set", items=[ir_add(ir_param("p"), ir_num(1000))])
     template = quadratic_ir_template()
     body = template.body.model_copy(update={"answer_recipe": wrong}, deep=True)
 
-    with pytest.raises(ValueError, match="Could not produce"):
-        generate_math_question(
-            unchecked_artifact(
-                MathTemplateSpec(
-                    topic=template.topic,
-                    parameters=template.parameters,
-                    body=body,
-                )
-            ),
-            0,
-        )
+    instance = generate_math_question(
+        unchecked_artifact(
+            MathTemplateSpec(
+                topic=template.topic,
+                parameters=template.parameters,
+                body=body,
+            )
+        ),
+        0,
+    )
+
+    shifted = int(instance.parameters["p"]) + 1000
+    assert instance.answer == f"{{{shifted}}}"
+    assert instance.choices[instance.correct_index] == instance.answer
+    assert instance.parameters["q"] not in instance.answer

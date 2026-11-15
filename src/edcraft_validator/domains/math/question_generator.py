@@ -1,11 +1,16 @@
-"""Deterministically expand validated math templates into questions."""
+"""Deterministically expand approved math templates into questions.
+
+Generation evaluates the approved recipes and renders them. It rejects unusable
+option combinations, such as choices that are not distinct, but it does not
+re-grade the answer or the distractors. Correctness and form were checked at
+authoring time by the engine and the form registry.
+"""
 
 from __future__ import annotations
 
 from fractions import Fraction
 
 from edcraft_validator.domains.domain_support import seeded_index
-from edcraft_validator.domains.math.engine_adapter import AdapterGap, grade
 from edcraft_validator.domains.math.ir.compile import MathCompileError
 from edcraft_validator.domains.math.ir.instantiate import (
     compile_distractor_value,
@@ -15,23 +20,14 @@ from edcraft_validator.domains.math.ir.instantiate import (
     render_item_text,
     sample_parameter_combinations,
 )
-from edcraft_validator.domains.math.ir.schema import (
-    AnswerRecipe,
-    Distractor,
-    MathItemSpec,
-    MathTemplateSpec,
-)
+from edcraft_validator.domains.math.ir.schema import MathTemplateSpec
 from edcraft_validator.domains.math.math_schemas import (
     MathQuestionInstance,
     ValidatedMathTemplate,
 )
-from edcraft_validator.domains.math.math_types import (
-    FORM_SENSITIVE_GOALS,
-    MAX_IR_VARIANTS,
-)
+from edcraft_validator.domains.math.math_types import MAX_IR_VARIANTS
 from edcraft_validator.domains.math.validation.answers import compile_answer_recipe
 from edcraft_validator.domains.math.validation.distinct import same_value
-from edcraft_validator.domains.math.validation.forms import check_form
 
 
 class UnusableVariant(ValueError):
@@ -41,7 +37,7 @@ class UnusableVariant(ValueError):
 def generate_math_question(
     validated: ValidatedMathTemplate, seed: int
 ) -> MathQuestionInstance:
-    """Expand one validated template without AI calls or external I/O."""
+    """Expand one approved template without AI calls, engine calls or external I/O."""
     template = validated.template
     if template.item is not None:
         return _generate_ir_question(validated, template.item, seed)
@@ -77,7 +73,7 @@ def _build_ir_instance(
     seed: int,
     values: dict[str, Fraction],
 ) -> MathQuestionInstance:
-    """Grade the authored recipe, then render it; nothing is solved here."""
+    """Evaluate the approved recipes and render them. Nothing is solved here."""
     body = template.body
     recipe = body.answer_recipe
     if recipe is None:  # pragma: no cover - guarded by _generate_ir_question
@@ -89,17 +85,12 @@ def _build_ir_instance(
     answer = display_sympy_value(compiled).strip()
     if not answer:
         raise UnusableVariant("the answer recipe renders an empty answer")
-    _require_engine(body, recipe, values, expected="correct")
-    # Mirrors authoring: form is a required check only for these goals.
-    if body.goal.kind in FORM_SENSITIVE_GOALS:
-        _require_form(body, recipe, values)
 
     distractor_choices: list[str] = []
-    seen: list[object] = []
+    # The key counts as a choice, so a distractor equal to it in value is rejected.
+    seen: list[object] = [compiled]
     for distractor in body.distractors:
         value = compile_distractor_value(body, distractor, values)
-        # An emitted question is graded again: approval is not assumed to hold.
-        _require_engine(body, distractor, values, expected="incorrect")
         if any(same_value(value, other) for other in seen):
             raise UnusableVariant("distractor choices are not distinct")
         seen.append(value)
@@ -126,33 +117,3 @@ def _build_ir_instance(
         answer=answer,
         topic=template.topic,
     )
-
-
-def _require_engine(
-    body: MathItemSpec,
-    answer: AnswerRecipe | Distractor,
-    values: dict[str, Fraction],
-    *,
-    expected: str,
-) -> None:
-    """Refuse to emit a variant the engine does not grade as we require."""
-    try:
-        result = grade(body, answer, values)
-    except (AdapterGap, MathCompileError) as exc:
-        raise UnusableVariant(f"the engine cannot grade this item: {exc}") from exc
-    if result.outcome != expected:
-        raise UnusableVariant(
-            f"the engine returned {result.outcome!r}, expected {expected!r}"
-        )
-
-
-def _require_form(
-    body: MathItemSpec,
-    recipe: AnswerRecipe,
-    values: dict[str, Fraction],
-) -> None:
-    result = check_form(body, recipe, values)
-    if result.status != "pass":
-        raise UnusableVariant(
-            f"the form check returned {result.status!r}: {result.reason}"
-        )

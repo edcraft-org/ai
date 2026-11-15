@@ -174,21 +174,28 @@ default budget is 100 variants (`MAX_IR_VARIANTS`); callers may request fewer.
 
 Generation samples the same declared domain independently of validation, so a
 generated question may use a variant that the validator did not sample. Each
-emitted variant is re-graded before use.
+emitted variant is rendered from the approved recipes.
 
 ## Generation
 
 `generate_math_question(validated, seed)` is deterministic and performs no model,
 MCP, or network call. It samples the declared domain for the requested seed, so
 questions may use variants that validation did not sample. For the selected
-combination it compiles the answer recipe, renders it, and then **re-grades** it:
-the engine must still say `correct`, and for `factor` and `expand` goals the
-form registry must still say `pass`.
-Every distractor is re-graded as `incorrect`, and duplicate or display-identical
-options are refused.
+combination it compiles the answer recipe and every distractor recipe, renders
+them, and rejects unusable option combinations:
 
-A variant that fails any gate is skipped, and a template with no usable variant
-produces no question. Approval is not assumed to hold at expansion time.
+- duplicate choices, by value or by display text;
+- a choice that repeats the key;
+- a template that declares no distractors.
+
+A rejected combination is skipped and the next parameter combination is tried,
+and a template with no usable combination produces no question.
+
+Generation does not re-grade. The authoring-time checks are the evidence that
+the answer is correct and in the required form, so the approved recipes are
+trusted in the same way the code domain trusts the recipe it is given. The engine
+and the form registry are asked only while a template is being approved, never
+again at expansion time.
 
 ## Unsupported cases
 
