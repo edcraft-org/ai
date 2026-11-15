@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import signal
 import subprocess
 
 import pytest
@@ -83,6 +84,46 @@ def test_malformed_error_envelope_is_mapped_safely(
 
     with pytest.raises(ValidationWorkerError, match="error: bad worker"):
         run_isolated({"operation": "noop"}, timeout_seconds=30)
+
+
+class CodedFailure(isolated_process.CodedWorkerError):
+    """Local coded error mirroring a caller's public exception type."""
+
+
+def _run_coded() -> dict[str, object]:
+    return isolated_process.run_json_worker(
+        {},
+        module="edcraft_validator.domains.math.validation.worker",
+        timeout_seconds=30,
+        timeout_error=TimeoutError,
+        worker_error=CodedFailure,
+        description="coded test worker",
+    )
+
+
+@pytest.mark.parametrize(
+    ("process", "failure_kind"),
+    [
+        (completed(-signal.SIGKILL), "signal"),
+        (completed(7, stderr="worker exploded\n"), "exit"),
+        (completed(stdout="{not json"), "invalid_output"),
+        (completed(stdout="[]"), "invalid_output"),
+        (completed(stdout='{"error": "bad worker"}'), "worker_error"),
+    ],
+)
+def test_coded_worker_errors_record_the_failure_kind(
+    monkeypatch: pytest.MonkeyPatch,
+    process: subprocess.CompletedProcess[str],
+    failure_kind: str,
+) -> None:
+    monkeypatch.setattr(
+        isolated_process.subprocess, "run", lambda *args, **kwargs: process
+    )
+
+    with pytest.raises(CodedFailure) as caught:
+        _run_coded()
+
+    assert caught.value.failure_kind == failure_kind
 
 
 def test_worker_environment_keeps_runtime_inputs_only(

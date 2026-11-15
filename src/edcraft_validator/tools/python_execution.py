@@ -1,11 +1,12 @@
 """Local adapter for executing a batch with the Python tracing tool."""
 
-import re
 from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
 from edcraft_validator.tools.isolated_process import (
     DEFAULT_MEMORY_LIMIT_BYTES,
+    CodedWorkerError,
+    MemoryLimitUnavailable,
     cpu_limit_for_timeout,
     run_json_worker,
 )
@@ -17,7 +18,7 @@ class PythonToolTimeout(TimeoutError):
     """The Python execution worker exceeded its wall-clock deadline."""
 
 
-class PythonToolWorkerError(RuntimeError):
+class PythonToolWorkerError(CodedWorkerError):
     """The Python execution worker failed before returning a usable result."""
 
 
@@ -107,65 +108,50 @@ class LocalPythonTool:
                 error_code="EXECUTION_TIMEOUT",
                 error_message="Python tool exceeded its execution timeout",
             )
-        except MemoryError:
-            return ExecutionResult(
-                ok=False,
-                error_code="RESOURCE_LIMIT_EXCEEDED",
-                error_message="Python tool was stopped by an operating-system limit",
-            )
         except RuntimeError as exc:
             return _worker_failure(exc)
 
-        if not isinstance(response, dict):
-            return ExecutionResult(
-                ok=False,
-                error_code="INVALID_TOOL_OUTPUT",
-                error_message="Python tool returned a non-object result",
-            )
         return response
-
-
-_OS_SIGNAL_EXIT = re.compile(r"exited with -\d+")
-_INVALID_OUTPUT_MARKERS = ("returned invalid JSON", "returned a non-object")
 
 
 def _worker_failure(exc: RuntimeError) -> ExecutionResult:
     """Map a runner failure onto the historical execution error codes.
 
-    ``run_json_worker`` distinguishes memory failures with a dedicated error
-    type. Its remaining transport failures all share one worker-error type, so
-    the message is the only signal that separates invalid output and an
-    operating-system kill from an ordinary worker crash.
+    The error message can contain up to ``MAX_STDERR_CHARS`` of the untrusted
+    program's stderr, so classification uses only the exception type and the
+    runner's ``failure_kind`` marker.
     """
-    message = str(exc)
-    if isinstance(exc, PythonToolMemoryError) or (
-        "memory limit" in message and "exceeded" in message
-    ):
+    if isinstance(exc, PythonToolMemoryError):
         return ExecutionResult(
             ok=False,
             error_code="RESOURCE_LIMIT_EXCEEDED",
             error_message="Python tool was stopped by an operating-system limit",
         )
-    if any(marker in message for marker in _INVALID_OUTPUT_MARKERS):
-        return ExecutionResult(
-            ok=False,
-            error_code="INVALID_TOOL_OUTPUT",
-            error_message=(
-                "Python tool returned invalid JSON"
-                if "invalid JSON" in message
-                else "Python tool returned a non-object result"
-            ),
-        )
-    if _OS_SIGNAL_EXIT.search(message):
-        return ExecutionResult(
-            ok=False,
-            error_code="RESOURCE_LIMIT_EXCEEDED",
-            error_message="Python tool was stopped by an operating-system limit",
-        )
+    if isinstance(exc, MemoryLimitUnavailable):
+        # The runner builds this as a subclass of the caller's worker error. It
+        # is a policy gap rather than a limit violation, so it stays a failure.
+        return _tool_failure(exc)
+    if isinstance(exc, CodedWorkerError):
+        if exc.failure_kind == "signal":
+            return ExecutionResult(
+                ok=False,
+                error_code="RESOURCE_LIMIT_EXCEEDED",
+                error_message="Python tool was stopped by an operating-system limit",
+            )
+        if exc.failure_kind == "invalid_output":
+            return ExecutionResult(
+                ok=False,
+                error_code="INVALID_TOOL_OUTPUT",
+                error_message="Python tool returned invalid JSON",
+            )
+    return _tool_failure(exc)
+
+
+def _tool_failure(exc: RuntimeError) -> ExecutionResult:
     return ExecutionResult(
         ok=False,
         error_code="TOOL_FAILURE",
-        error_message=message or "Python tool failed",
+        error_message=str(exc) or "Python tool failed",
     )
 
 

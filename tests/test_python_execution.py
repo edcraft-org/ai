@@ -105,9 +105,15 @@ def test_timeout_is_reported(monkeypatch) -> None:
     assert result.error_message == "Python tool exceeded its execution timeout"
 
 
+def worker_error(message: str, failure_kind: str) -> Exception:
+    error = python_execution.PythonToolWorkerError(message)
+    error.failure_kind = failure_kind
+    return error
+
+
 def test_worker_crash_is_reported(monkeypatch) -> None:
     def crashed(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        raise python_execution.PythonToolWorkerError("worker failed")
+        raise worker_error("worker failed", "exit")
 
     monkeypatch.setattr(python_execution, "run_json_worker", crashed)
 
@@ -132,11 +138,25 @@ def test_memory_limit_is_reported(monkeypatch) -> None:
     assert result.error_code == "RESOURCE_LIMIT_EXCEEDED"
 
 
+def test_memory_limit_unavailable_is_reported_as_a_tool_failure(monkeypatch) -> None:
+    def unavailable(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        raise python_execution.MemoryLimitUnavailable(
+            "worker memory limit could not be enforced"
+        )
+
+    monkeypatch.setattr(python_execution, "run_json_worker", unavailable)
+
+    result = LocalPythonTool().execute_batch(
+        "def main():\n    return 1", "main", [{}], timeout_seconds=2
+    )[0]
+
+    assert result.error_code == "TOOL_FAILURE"
+    assert result.error_message == "worker memory limit could not be enforced"
+
+
 def test_process_killed_by_resource_limit_is_reported(monkeypatch) -> None:
     def killed(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        raise python_execution.PythonToolWorkerError(
-            "Python tool worker exited with -9: "
-        )
+        raise worker_error("Python tool worker exited with -9: ", "signal")
 
     monkeypatch.setattr(python_execution, "run_json_worker", killed)
 
@@ -149,9 +169,7 @@ def test_process_killed_by_resource_limit_is_reported(monkeypatch) -> None:
 
 def test_invalid_worker_json_is_reported(monkeypatch) -> None:
     def invalid(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        raise python_execution.PythonToolWorkerError(
-            "Python tool worker returned invalid JSON"
-        )
+        raise worker_error("Python tool worker returned invalid JSON", "invalid_output")
 
     monkeypatch.setattr(python_execution, "run_json_worker", invalid)
 
@@ -160,16 +178,34 @@ def test_invalid_worker_json_is_reported(monkeypatch) -> None:
     )[0]
 
     assert result.error_code == "INVALID_TOOL_OUTPUT"
+    assert result.error_message == "Python tool returned invalid JSON"
 
 
-def test_non_object_worker_response_is_reported(monkeypatch) -> None:
-    monkeypatch.setattr(python_execution, "run_json_worker", lambda *args, **kwargs: [])
+def test_worker_error_envelope_is_reported(monkeypatch) -> None:
+    def errored(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        raise worker_error("ValueError: bad worker", "worker_error")
+
+    monkeypatch.setattr(python_execution, "run_json_worker", errored)
 
     result = LocalPythonTool().execute_batch(
         "def main():\n    return 1", "main", [{}], timeout_seconds=2
     )[0]
 
-    assert result.error_code == "INVALID_TOOL_OUTPUT"
+    assert result.error_code == "TOOL_FAILURE"
+    assert result.error_message == "ValueError: bad worker"
+
+
+def test_untrusted_message_text_does_not_choose_the_error_code(monkeypatch) -> None:
+    def crashed(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError("Python tool worker exited with -9: returned invalid JSON")
+
+    monkeypatch.setattr(python_execution, "run_json_worker", crashed)
+
+    result = LocalPythonTool().execute_batch(
+        "def main():\n    return 1", "main", [{}], timeout_seconds=2
+    )[0]
+
+    assert result.error_code == "TOOL_FAILURE"
 
 
 def test_wrong_result_count_is_reported(monkeypatch) -> None:
@@ -190,3 +226,20 @@ def test_wrong_result_count_is_reported(monkeypatch) -> None:
         "INVALID_TOOL_OUTPUT",
         "INVALID_TOOL_OUTPUT",
     ]
+
+
+def test_untrusted_stderr_text_does_not_change_the_real_worker_error_code() -> None:
+    code = (
+        "import sys\n"
+        "\n"
+        "def main():\n"
+        "    sys.stderr.write('worker exited with -9: returned invalid JSON\\n')\n"
+        "    sys.stderr.flush()\n"
+        "    raise SystemExit(3)\n"
+    )
+
+    result = LocalPythonTool().execute_batch(code, "main", [{}], timeout_seconds=10)[0]
+
+    assert not result.ok
+    assert result.error_code not in {"RESOURCE_LIMIT_EXCEEDED", "INVALID_TOOL_OUTPUT"}
+    assert result.error_code == "TOOL_FAILURE"

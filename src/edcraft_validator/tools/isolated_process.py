@@ -46,10 +46,34 @@ class CodedWorkerError(RuntimeError):
     """Worker failure that may carry an explicit boundary error code.
 
     Subclassing opts an error type into receiving the worker's ``code`` field,
-    so transport failures and untyped callers are unaffected.
+    so transport failures and untyped callers are unaffected. Subclasses also
+    receive ``failure_kind``, a transport-level classification that does not
+    depend on the (untrusted) error message:
+
+    - ``"signal"`` when the worker exited with a negative return code, i.e. it
+      was killed by a signal,
+    - ``"exit"`` for any other non-zero return code,
+    - ``"invalid_output"`` for invalid JSON, an invalid envelope payload, or a
+      non-object response,
+    - ``"worker_error"`` when the worker returned an ``{"error": ...}``
+      response.
+
+    It stays ``None`` for failures raised before the worker produced a
+    response, such as a memory-limit violation.
     """
 
     code: str | None = None
+    failure_kind: str | None = None
+
+
+def _coded_failure(
+    worker_error: type[RuntimeError], message: str, failure_kind: str
+) -> RuntimeError:
+    """Build a worker error, recording the transport failure kind if coded."""
+    failure = worker_error(message)
+    if isinstance(failure, CodedWorkerError):
+        failure.failure_kind = failure_kind
+    return failure
 
 
 class MemoryLimitUnavailable(RuntimeError):
@@ -538,21 +562,36 @@ def run_json_worker(
         ):
             raise _memory_limit_unavailable(worker_error)
     if completed.returncode != 0:
-        raise worker_error(
+        failure_kind = "signal" if completed.returncode < 0 else "exit"
+        raise _coded_failure(
+            worker_error,
             f"{worker_label} exited with {completed.returncode}: "
-            f"{completed.stderr.strip()[:MAX_STDERR_CHARS]}"
+            f"{completed.stderr.strip()[:MAX_STDERR_CHARS]}",
+            failure_kind,
         )
     if envelope is not None:
         if envelope.get("payload_valid") is not True:
-            raise worker_error(f"{worker_label} returned invalid JSON")
+            raise _coded_failure(
+                worker_error,
+                f"{worker_label} returned invalid JSON",
+                "invalid_output",
+            )
         response = envelope.get("payload")
     else:
         try:
             response = json.loads(completed.stdout)
         except json.JSONDecodeError as exc:
-            raise worker_error(f"{worker_label} returned invalid JSON") from exc
+            raise _coded_failure(
+                worker_error,
+                f"{worker_label} returned invalid JSON",
+                "invalid_output",
+            ) from exc
     if not isinstance(response, dict):
-        raise worker_error(f"{worker_label} returned a non-object")
+        raise _coded_failure(
+            worker_error,
+            f"{worker_label} returned a non-object",
+            "invalid_output",
+        )
     if "error" in response:
         error = response["error"]
         code = ""
@@ -563,7 +602,9 @@ def run_json_worker(
         else:
             error_type = "error"
             message = str(error)[:MAX_ERROR_MESSAGE_CHARS]
-        failure = worker_error(f"{error_type}: {message}")
+        failure = _coded_failure(
+            worker_error, f"{error_type}: {message}", "worker_error"
+        )
         if code and isinstance(failure, CodedWorkerError):
             failure.code = code
         raise failure
