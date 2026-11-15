@@ -19,14 +19,14 @@ from edcraft_validator.llm.judge_configuration import (
 )
 from edcraft_validator.llm.judging import DEFAULT_JUDGE_TIMEOUT_SECONDS
 from edcraft_validator.mcp import code_tools
-from edcraft_validator.mcp.code_checks.property_checks import (
-    PropertyCheckRun,
-    PropertyCheckSettings,
-)
 from edcraft_validator.mcp.code_tools import CODE_TOOL_VERSION
 from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.mcp.tool_dependencies import ToolDependencies
 from edcraft_validator.tools.python_execution import ExecutionResult
+from edcraft_validator.validation.property_checks import (
+    PropertyCheckRun,
+    PropertyCheckSettings,
+)
 
 
 def candidate() -> CodeTemplateCandidate:
