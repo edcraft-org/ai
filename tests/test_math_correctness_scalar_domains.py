@@ -17,10 +17,8 @@ from edcraft_validator.domains.math.engine.contracts import (
     MathProblem,
 )
 from edcraft_validator.domains.math.engine.scalar import check_scalar
-from edcraft_validator.domains.math.engine.scalar_domains import (
-    _expr_sign,
-    condition_implied,
-)
+from edcraft_validator.domains.math.engine.scalar_domains import condition_implied
+from edcraft_validator.domains.math.engine.scalar_signs import expr_sign
 from edcraft_validator.domains.math.ir.schema import Expr, SymbolSpec
 
 A, B = sympy.symbols("a b", real=True)
@@ -74,8 +72,8 @@ def test_even_root_sign_requires_a_positive_base() -> None:
 
     assert condition_implied(conditions, Condition("gt", A), ctx) is not True
     assert condition_implied(conditions, Condition("gt", sympy.sqrt(A)), ctx) is None
-    assert _expr_sign(conditions, sympy.sqrt(A)) is None
-    assert _expr_sign(conditions, sympy.sqrt(A) * sympy.sqrt(B)) is None
+    assert expr_sign(conditions, sympy.sqrt(A)) is None
+    assert expr_sign(conditions, sympy.sqrt(A) * sympy.sqrt(B)) is None
 
 
 def test_even_root_sign_rejects_nonzero_and_negative_bases() -> None:
@@ -84,8 +82,8 @@ def test_even_root_sign_rejects_nonzero_and_negative_bases() -> None:
 
     assert condition_implied((Condition("ne", A),), asserted, ctx) is None
     assert condition_implied((Condition("lt", A),), asserted, ctx) is None
-    assert _expr_sign((Condition("ne", A),), sympy.sqrt(A)) is None
-    assert _expr_sign((Condition("lt", A),), sympy.sqrt(A)) is None
+    assert expr_sign((Condition("ne", A),), sympy.sqrt(A)) is None
+    assert expr_sign((Condition("lt", A),), sympy.sqrt(A)) is None
 
 
 def test_even_and_odd_root_signs_with_a_positive_base() -> None:
@@ -93,13 +91,13 @@ def test_even_and_odd_root_signs_with_a_positive_base() -> None:
     conditions = (Condition("gt", A),)
 
     assert condition_implied(conditions, Condition("gt", sympy.sqrt(A)), ctx) is True
-    assert _expr_sign(conditions, sympy.sqrt(A)) == 1
+    assert expr_sign(conditions, sympy.sqrt(A)) == 1
 
     # An odd denominator is a real cube (or higher odd) root, so the strict
     # positive base keeps the strict sign path it already had.
     cube_root = A ** sympy.Rational(1, 3)
     assert condition_implied(conditions, Condition("gt", cube_root), ctx) is True
-    assert _expr_sign(conditions, cube_root) == 1
+    assert expr_sign(conditions, cube_root) == 1
 
 
 def test_sqrt_product_identity_needs_individual_signs() -> None:

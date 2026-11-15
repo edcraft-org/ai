@@ -8,8 +8,6 @@ components, and uses only exact rational witnesses to *reject* an answer.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from itertools import combinations
-from random import Random
 
 import sympy
 from sympy.calculus.util import continuous_domain
@@ -23,8 +21,27 @@ from edcraft_validator.domains.math.engine.conditions import (
     symbol_domain,
 )
 from edcraft_validator.domains.math.engine.context import EngineContext
-from edcraft_validator.domains.math.engine.contracts import (
-    EngineUnsupported,
+from edcraft_validator.domains.math.engine.contracts import EngineUnsupported
+from edcraft_validator.domains.math.engine.scalar_sampling import (
+    as_bool,
+    find_condition_violation,
+    find_satisfying_point,
+    point_in_domain,
+    relational_truth,
+    sample_points,
+    simple_zero,
+    value_is_nonzero,
+    value_is_zero,
+)
+from edcraft_validator.domains.math.engine.scalar_signs import (
+    expr_sign,
+    log_arguments_positive,
+    nonzero_implied,
+    same_expr,
+    sign_category,
+    symbols_provably_nonnegative,
+    symbols_provably_positive,
+    zero_on_nonnegative_boundary,
 )
 from edcraft_validator.domains.math.ir.schema import Expr
 
@@ -163,14 +180,6 @@ def intersect_domains(left: Domain, right: Domain) -> Domain:
     return Domain(conditions, variable, point_set)
 
 
-def _as_bool(value: object) -> bool | None:
-    if value is True or value is sympy.true:
-        return True
-    if value is False or value is sympy.false:
-        return False
-    return None
-
-
 def _countable_set(points: sympy.Set) -> bool:
     if isinstance(points, sympy.FiniteSet) or points is sympy.EmptySet:
         return True
@@ -188,7 +197,7 @@ def domain_is_empty(domain: Domain) -> bool | None:
     if domain.point_set is not None:
         if domain.point_set is sympy.EmptySet:
             return True
-        empty = _as_bool(domain.point_set.is_empty)
+        empty = as_bool(domain.point_set.is_empty)
         if empty is not None:
             return empty
         if isinstance(domain.point_set, sympy.Complement):
@@ -216,7 +225,7 @@ def domain_nonempty(ctx: EngineContext, domain: Domain) -> bool | None:
         return True
     if not domain.conditions:
         return True
-    point = _find_satisfying_point(ctx, domain)
+    point = find_satisfying_point(ctx, domain)
     if point is not None:
         return True
     return None
@@ -231,14 +240,14 @@ def domain_covered(
     if source.point_set is not None and candidate.point_set is not None:
         if source.point_set.dummy_eq(candidate.point_set):
             return True
-        subset = _as_bool(source.point_set.is_subset(candidate.point_set))
+        subset = as_bool(source.point_set.is_subset(candidate.point_set))
         if subset is True:
             return True
         if subset is False:
             return False
         try:
             difference = source.point_set - candidate.point_set
-            empty = _as_bool(difference.is_empty)
+            empty = as_bool(difference.is_empty)
             if difference is sympy.EmptySet or empty is True:
                 return True
             if empty is False:
@@ -263,7 +272,7 @@ def condition_implied(
     for candidate in source_conditions:
         if _same_condition(candidate, target):
             return True
-        if _same_expr(candidate.expr, target.expr):
+        if same_expr(candidate.expr, target.expr):
             if candidate.kind == target.kind:
                 return True
             if target.kind in _IMPLIED_KINDS[candidate.kind]:
@@ -285,7 +294,7 @@ def condition_implied(
     if assumed is False:
         return False
 
-    sign = _expr_sign(source_conditions, target.expr)
+    sign = expr_sign(source_conditions, target.expr)
     if target.kind == "gt" and sign == 1:
         return True
     if target.kind == "ge" and sign in {0, 1}:
@@ -301,10 +310,10 @@ def condition_implied(
     if target.kind in {"lt", "le"} and sign == 1:
         return False
 
-    # ``_expr_sign`` only commits to a single sign. Non-strict guards such as
+    # ``expr_sign`` only commits to a single sign. Non-strict guards such as
     # ``ge``/``le`` describe a *set* of possible signs, and products of such
     # quantities (``sqrt(x)*sqrt(y)``) are nonnegative without being positive.
-    category = _sign_category(source_conditions, target.expr)
+    category = sign_category(source_conditions, target.expr)
     if category is not None:
         if target.kind == "gt" and category == frozenset({1}):
             return True
@@ -317,10 +326,10 @@ def condition_implied(
         if target.kind == "ne" and 0 not in category:
             return True
 
-    if target.kind == "ne" and _nonzero_implied(source_conditions, target.expr):
+    if target.kind == "ne" and nonzero_implied(source_conditions, target.expr):
         return True
 
-    witness = _find_condition_violation(source_conditions, target, ctx)
+    witness = find_condition_violation(source_conditions, target, ctx)
     if witness is not None:
         return False
     return None
@@ -328,7 +337,7 @@ def condition_implied(
 
 def provably_zero(expr: sympy.Expr, domain: Domain | None = None) -> bool:
     """Prove an expression is exactly zero on the supplied domain."""
-    if _simple_zero(expr):
+    if simple_zero(expr):
         return True
     if domain is not None:
         # On a domain excluding f=0, sign(f)=f/Abs(f) for real f.
@@ -336,20 +345,20 @@ def provably_zero(expr: sympy.Expr, domain: Domain | None = None) -> bool:
             term: term.args[0] / sympy.Abs(term.args[0])
             for term in expr.atoms(sympy.sign)
             if term.args[0].is_real is True
-            and _nonzero_implied(domain.conditions, term.args[0])
+            and nonzero_implied(domain.conditions, term.args[0])
         }
-        if substitutions and _simple_zero(expr.xreplace(substitutions)):
+        if substitutions and simple_zero(expr.xreplace(substitutions)):
             return True
-    if domain is not None and _symbols_provably_positive(
+    if domain is not None and symbols_provably_positive(
         expr.free_symbols, domain.conditions
     ):
         try:
             posified, _ = sympy.posify(expr)
         except (TypeError, ValueError):
             posified = expr
-        if _simple_zero(posified):
+        if simple_zero(posified):
             return True
-    if domain is not None and _symbols_provably_nonnegative(
+    if domain is not None and symbols_provably_nonnegative(
         expr.free_symbols, domain.conditions
     ):
         # ``posify`` proves the identity on the open positive orthant. The
@@ -359,17 +368,17 @@ def provably_zero(expr: sympy.Expr, domain: Domain | None = None) -> bool:
             posified, _ = sympy.posify(expr)
         except (TypeError, ValueError):
             posified = expr
-        if _simple_zero(posified) and _zero_on_nonnegative_boundary(
+        if simple_zero(posified) and zero_on_nonnegative_boundary(
             expr, domain.conditions
         ):
             return True
-    if domain is not None and _log_arguments_positive(expr, domain.conditions):
+    if domain is not None and log_arguments_positive(expr, domain.conditions):
         try:
             combined = sympy.logcombine(expr, force=True)
             expanded = sympy.expand_log(expr, force=True)
         except (TypeError, ValueError):
             combined = expanded = expr
-        if _simple_zero(combined) or _simple_zero(expanded):
+        if simple_zero(combined) or simple_zero(expanded):
             return True
     if domain is None or domain.variable is None or domain.point_set is None:
         return False
@@ -384,7 +393,7 @@ def provably_zero(expr: sympy.Expr, domain: Domain | None = None) -> bool:
         (positive, sympy.Q.positive(variable)),
         (negative, sympy.Q.negative(variable)),
     ):
-        empty = _as_bool(part.is_empty)
+        empty = as_bool(part.is_empty)
         if empty is True:
             continue
         if empty is not False:
@@ -394,14 +403,14 @@ def provably_zero(expr: sympy.Expr, domain: Domain | None = None) -> bool:
             refined = sympy.refine(expr, assumption)
         except (TypeError, ValueError):
             return False
-        if not _simple_zero(refined):
+        if not simple_zero(refined):
             return False
-    zero_empty = _as_bool(zero.is_empty)
+    zero_empty = as_bool(zero.is_empty)
     if zero_empty is not True:
         if zero_empty is not False:
             return False
         checked_any = True
-        if not _value_is_zero(expr, {variable: sympy.S.Zero}):
+        if not value_is_zero(expr, {variable: sympy.S.Zero}):
             return False
     return checked_any
 
@@ -421,10 +430,10 @@ def counterexample(
     if domain.variable is not None:
         symbols.add(domain.variable)
     ordered = sorted(symbols, key=lambda item: item.name)
-    for point in _sample_points(ordered, ctx):
-        if not _point_in_domain(point, domain):
+    for point in sample_points(ordered, ctx):
+        if not point_in_domain(point, domain):
             continue
-        if _value_is_nonzero(expr, point):
+        if value_is_nonzero(expr, point):
             return {symbol.name: value for symbol, value in point.items()}
     return None
 
@@ -552,31 +561,11 @@ def _constant_condition_truth(condition: Condition) -> bool | None:
     relation = _relation_for(condition)
     if relation is None:
         return None
-    return _relational_truth(relation)
-
-
-def _relational_truth(relation: sympy.Rel) -> bool | None:
-    direct = _as_bool(relation)
-    if direct is not None:
-        return direct
-    try:
-        simplified = sympy.simplify(relation)
-    except (TypeError, ValueError):
-        simplified = relation
-    return _as_bool(simplified)
+    return relational_truth(relation)
 
 
 def _same_condition(left: Condition, right: Condition) -> bool:
-    return left.kind == right.kind and _same_expr(left.expr, right.expr)
-
-
-def _same_expr(left: sympy.Expr, right: sympy.Expr) -> bool:
-    if left == right:
-        return True
-    try:
-        return sympy.simplify(left - right) == 0
-    except (TypeError, ValueError):
-        return False
+    return left.kind == right.kind and same_expr(left.expr, right.expr)
 
 
 _IMPLIED_KINDS: dict[ConditionKind, frozenset[ConditionKind]] = {
@@ -592,7 +581,7 @@ def _has_condition(
     conditions: tuple[Condition, ...], kind: ConditionKind, expr: sympy.Expr
 ) -> bool:
     return any(
-        condition.kind == kind and _same_expr(condition.expr, expr)
+        condition.kind == kind and same_expr(condition.expr, expr)
         for condition in conditions
     )
 
@@ -617,456 +606,3 @@ def _assumption_truth(condition: Condition) -> bool | None:
         if expr.is_zero is False:
             return True
     return None
-
-
-def _sign_category(
-    conditions: tuple[Condition, ...], expr: sympy.Expr
-) -> frozenset[int] | None:
-    """Return every sign an expression can take on the source domain.
-
-    ``_expr_sign`` commits to one sign; this helper carries non-strict facts
-    such as "nonnegative". Products and powers of guarded quantities can then
-    be classified exactly without sampling.
-    """
-    if expr.is_zero is True:
-        return frozenset({0})
-    if expr.is_positive is True:
-        return frozenset({1})
-    if expr.is_negative is True:
-        return frozenset({-1})
-    if expr.is_nonnegative is True:
-        return frozenset({0, 1})
-    if expr.is_nonpositive is True:
-        return frozenset({-1, 0})
-    if expr.is_nonzero is True:
-        return frozenset({-1, 1})
-    for condition in conditions:
-        if not _same_expr(condition.expr, expr):
-            continue
-        if condition.kind == "gt":
-            return frozenset({1})
-        if condition.kind == "ge":
-            return frozenset({0, 1})
-        if condition.kind == "lt":
-            return frozenset({-1})
-        if condition.kind == "le":
-            return frozenset({-1, 0})
-        if condition.kind == "ne":
-            return frozenset({-1, 1})
-    if isinstance(expr, sympy.Mul):
-        categories = [_sign_category(conditions, argument) for argument in expr.args]
-        if any(category is None for category in categories):
-            return None
-        result = frozenset({1})
-        for category in categories:
-            assert category is not None
-            result = frozenset(left * right for left in result for right in category)
-        return result
-    if isinstance(expr, sympy.Add):
-        categories = [_sign_category(conditions, argument) for argument in expr.args]
-        if any(category is None for category in categories):
-            return None
-        if all(category == frozenset({1}) for category in categories):
-            return frozenset({1})
-        if all(category == frozenset({-1}) for category in categories):
-            return frozenset({-1})
-        if all(category <= frozenset({0, 1}) for category in categories):
-            return frozenset({0, 1})
-        if all(category <= frozenset({-1, 0}) for category in categories):
-            return frozenset({-1, 0})
-        return None
-    if isinstance(expr, sympy.Pow):
-        base, exponent = expr.args
-        base_category = _sign_category(conditions, base)
-        if base_category is None:
-            return None
-        if exponent.is_zero is True:
-            return frozenset({1})
-        if exponent.is_Integer:
-            if exponent % 2 == 0:
-                if base_category == frozenset({0}):
-                    return frozenset({0})
-                if 0 not in base_category:
-                    return frozenset({1})
-                return frozenset({0, 1})
-            return base_category
-        if exponent.is_Rational and exponent.q % 2 != 0 and exponent > 0:
-            if base_category == frozenset({1}):
-                return frozenset({1})
-            if base_category <= frozenset({0, 1}):
-                return frozenset({0, 1})
-        return None
-    if isinstance(expr, sympy.Abs):
-        argument_category = _sign_category(conditions, expr.args[0])
-        if argument_category is None:
-            return None
-        if argument_category == frozenset({0}):
-            return frozenset({0})
-        if 0 not in argument_category:
-            return frozenset({1})
-        return frozenset({0, 1})
-    if isinstance(expr, sympy.exp):
-        return frozenset({1})
-    if isinstance(expr, sympy.sign):
-        return frozenset({-1, 0, 1})
-    return None
-
-
-def _expr_sign(conditions: tuple[Condition, ...], expr: sympy.Expr) -> int | None:
-    if expr.is_zero is True:
-        return 0
-    if expr.is_positive is True:
-        return 1
-    if expr.is_negative is True:
-        return -1
-    for condition in conditions:
-        if not _same_expr(condition.expr, expr):
-            continue
-        if condition.kind == "gt":
-            return 1
-        if condition.kind == "lt":
-            return -1
-    if isinstance(expr, sympy.Mul):
-        signs = [_expr_sign(conditions, argument) for argument in expr.args]
-        if any(sign == 0 for sign in signs):
-            return 0
-        if all(sign not in (None, 0) for sign in signs):
-            result = 1
-            for sign in signs:
-                assert sign is not None
-                result *= sign
-            return result
-        return None
-    if isinstance(expr, sympy.Pow):
-        base, exponent = expr.args
-        base_sign = _expr_sign(conditions, base)
-        if exponent.is_positive is True:
-            if base_sign == 0:
-                return 0
-            if exponent.is_Integer and exponent % 2 == 0:
-                if base_sign in {-1, 1} or _nonzero_implied(conditions, base):
-                    return 1
-                return None
-            if exponent.is_Rational and exponent.q % 2 == 0:
-                # An even denominator is a principal square (or higher even)
-                # root: it is real and positive only on a strictly positive
-                # base. Nonzero is not enough (sqrt(-2) is imaginary), and a
-                # proven-negative base is not enough either, so only a strict
-                # positive proof may commit to +1.
-                if base_sign == 1:
-                    return 1
-                return None
-            if base_sign is None:
-                return None
-            if exponent.is_Integer:
-                return base_sign
-            if base_sign == 1:
-                return 1
-        return None
-    if isinstance(expr, sympy.Abs):
-        argument_sign = _expr_sign(conditions, expr.args[0])
-        if argument_sign == 0:
-            return 0
-        if argument_sign in {-1, 1}:
-            return 1
-        if _nonzero_implied(conditions, expr.args[0]):
-            return 1
-        return None
-    if isinstance(expr, sympy.Add):
-        signs = [_expr_sign(conditions, argument) for argument in expr.args]
-        if all(sign == 1 for sign in signs):
-            return 1
-        if all(sign == -1 for sign in signs):
-            return -1
-        return None
-    if isinstance(expr, sympy.exp):
-        return 1
-    return None
-
-
-def _symbols_provably_positive(
-    symbols: set[sympy.Symbol], conditions: tuple[Condition, ...]
-) -> bool:
-    return all(_expr_sign(conditions, symbol) == 1 for symbol in symbols)
-
-
-def _symbols_provably_nonnegative(
-    symbols: set[sympy.Symbol], conditions: tuple[Condition, ...]
-) -> bool:
-    for symbol in symbols:
-        category = _sign_category(conditions, symbol)
-        if category is None or not category <= frozenset({0, 1}):
-            return False
-    return True
-
-
-def _zero_on_nonnegative_boundary(
-    expr: sympy.Expr, conditions: tuple[Condition, ...]
-) -> bool:
-    zeroable = sorted(
-        (
-            symbol
-            for symbol in expr.free_symbols
-            if (category := _sign_category(conditions, symbol)) is not None
-            and 0 in category
-        ),
-        key=lambda symbol: symbol.name,
-    )
-    if len(zeroable) > 6:
-        return False
-    for size in range(1, len(zeroable) + 1):
-        for subset in combinations(zeroable, size):
-            point = {symbol: sympy.S.Zero for symbol in subset}
-            try:
-                restricted = sympy.sympify(expr).subs(point)
-            except (TypeError, ValueError):
-                return False
-            if restricted.has(sympy.nan, sympy.zoo, sympy.oo, -sympy.oo):
-                return False
-            if not _simple_zero(restricted):
-                return False
-    return True
-
-
-def _log_arguments_positive(
-    expr: sympy.Expr, conditions: tuple[Condition, ...]
-) -> bool:
-    arguments: list[sympy.Expr] = []
-
-    def collect(value: sympy.Expr) -> None:
-        if isinstance(value, sympy.log):
-            arguments.append(value.args[0])
-        for argument in value.args:
-            collect(argument)
-
-    collect(expr)
-    return bool(arguments) and all(
-        _expr_sign(conditions, argument) == 1 for argument in arguments
-    )
-
-
-def _nonzero_implied(conditions: tuple[Condition, ...], expr: sympy.Expr) -> bool:
-    if expr.is_zero is True:
-        return False
-    if expr.is_nonzero is True:
-        return True
-    if isinstance(expr, sympy.Mul):
-        return all(_nonzero_implied(conditions, argument) for argument in expr.args)
-    if isinstance(expr, sympy.Pow):
-        base, exponent = expr.args
-        if exponent.is_zero is not True:
-            return _nonzero_implied(conditions, base)
-        return True
-    if isinstance(expr, sympy.Abs):
-        return _nonzero_implied(conditions, expr.args[0])
-    for condition in conditions:
-        if condition.kind in {"ne", "gt", "lt"}:
-            if _same_expr(condition.expr, expr):
-                return True
-            if isinstance(condition.expr, sympy.Abs) and _same_expr(
-                condition.expr.args[0], expr
-            ):
-                return True
-            for factor in _nonzero_factors(condition.expr):
-                if _same_expr(factor, expr):
-                    return True
-    return False
-
-
-def _nonzero_factors(expr: sympy.Expr) -> tuple[sympy.Expr, ...]:
-    if isinstance(expr, sympy.Mul):
-        return tuple(expr.args)
-    if isinstance(expr, sympy.Pow) and expr.exp.is_zero is not True:
-        return (expr.base,)
-    return ()
-
-
-_SUBS_VALUES = (
-    sympy.S.Zero,
-    sympy.S.One,
-    sympy.S.NegativeOne,
-    sympy.S(2),
-    sympy.S(-2),
-    sympy.Rational(1, 2),
-    sympy.Rational(-1, 2),
-    sympy.S(3),
-    sympy.S(-3),
-    sympy.Rational(1, 3),
-    sympy.Rational(-1, 3),
-    sympy.S(4),
-    sympy.S(-4),
-)
-
-
-def _sample_points(
-    symbols: list[sympy.Symbol], ctx: EngineContext
-) -> list[dict[sympy.Symbol, sympy.Expr]]:
-    if not symbols:
-        return [{}]
-    values = _SUBS_VALUES if len(symbols) <= 3 else _SUBS_VALUES[:8]
-    per_symbol = [
-        [value for value in values if _sample_allowed(symbol, value, ctx)]
-        for symbol in symbols
-    ]
-    if any(not choices for choices in per_symbol):
-        return []
-    # A fixed seed keeps the engine deterministic. Diagonals plus independent
-    # draws cover all coordinates without walking a Cartesian prefix.
-    rng = Random(0)
-    combinations = [
-        tuple(choices[index % len(choices)] for choices in per_symbol)
-        for index in range(max(map(len, per_symbol)))
-    ]
-    combinations.extend(
-        tuple(rng.choice(choices) for choices in per_symbol) for _ in range(96)
-    )
-    unique = dict.fromkeys(combinations)
-    return [dict(zip(symbols, values, strict=True)) for values in unique]
-
-
-def _sample_allowed(
-    symbol: sympy.Symbol, value: sympy.Expr, ctx: EngineContext
-) -> bool:
-    spec = next(
-        (item for item in ctx.request.problem.symbols if item.name == symbol.name),
-        None,
-    )
-    if spec is None:
-        return True
-    if (spec.domain == "integer" or spec.integer) and value.q != 1:
-        return False
-    if spec.domain == "rational" and not value.is_rational:
-        return False
-    if spec.positive and value <= 0:
-        return False
-    if spec.nonzero and value == 0:
-        return False
-    return True
-
-
-def _find_satisfying_point(
-    ctx: EngineContext, domain: Domain
-) -> dict[sympy.Symbol, sympy.Expr] | None:
-    symbols: set[sympy.Symbol] = set()
-    if domain.variable is not None:
-        symbols.add(domain.variable)
-    for condition in domain.conditions:
-        symbols.update(condition.expr.free_symbols)
-    ordered = sorted(symbols, key=lambda item: item.name)
-    for point in _sample_points(ordered, ctx):
-        if _point_in_domain(point, domain):
-            return point
-    return None
-
-
-def _find_condition_violation(
-    source_conditions: tuple[Condition, ...],
-    target: Condition,
-    ctx: EngineContext,
-) -> dict[sympy.Symbol, sympy.Expr] | None:
-    symbols = set(target.expr.free_symbols)
-    for condition in source_conditions:
-        symbols.update(condition.expr.free_symbols)
-    ordered = sorted(symbols, key=lambda item: item.name)
-    for point in _sample_points(ordered, ctx):
-        if not all(
-            _condition_truth_at(condition, point) is True
-            for condition in source_conditions
-        ):
-            continue
-        if _condition_truth_at(target, point) is False:
-            return point
-    return None
-
-
-def _condition_truth_at(
-    condition: Condition,
-    point: dict[sympy.Symbol, sympy.Expr],
-) -> bool | None:
-    try:
-        substituted = sympy.sympify(condition.expr).subs(point)
-    except (TypeError, ValueError):
-        return None
-    if substituted.has(sympy.nan, sympy.zoo, sympy.oo, -sympy.oo):
-        return None
-    try:
-        relation = {
-            "ne": lambda: sympy.Ne(substituted, 0),
-            "gt": lambda: sympy.Gt(substituted, 0),
-            "ge": lambda: sympy.Ge(substituted, 0),
-            "lt": lambda: sympy.Lt(substituted, 0),
-            "le": lambda: sympy.Le(substituted, 0),
-        }[condition.kind]()
-    except TypeError:
-        # The condition is not real at this exact point (e.g. ``gt sqrt(a)`` at
-        # ``a = -1``). That is not a violation of the condition; the point is
-        # simply outside its real domain, so its truth stays unknown.
-        return None
-    return _relational_truth(relation)
-
-
-def _point_in_domain(point: dict[sympy.Symbol, sympy.Expr], domain: Domain) -> bool:
-    if domain.point_set is not None and domain.variable is not None:
-        value = point.get(domain.variable)
-        if value is None:
-            return False
-        try:
-            contains = _as_bool(domain.point_set.contains(value))
-        except (TypeError, ValueError):
-            contains = None
-        if contains is not True:
-            return False
-    return all(
-        _condition_truth_at(condition, point) is True for condition in domain.conditions
-    )
-
-
-def _value_is_zero(expr: sympy.Expr, point: dict[sympy.Symbol, sympy.Expr]) -> bool:
-    value = _evaluate_exact(expr, point)
-    return value is not None and value == 0
-
-
-def _value_is_nonzero(expr: sympy.Expr, point: dict[sympy.Symbol, sympy.Expr]) -> bool:
-    value = _evaluate_exact(expr, point)
-    if value is None or value == 0 or value.is_real is not True:
-        return False
-    return value.is_zero is False
-
-
-def _evaluate_exact(
-    expr: sympy.Expr, point: dict[sympy.Symbol, sympy.Expr]
-) -> sympy.Expr | None:
-    try:
-        value = sympy.sympify(expr).subs(point)
-    except (TypeError, ValueError):
-        return None
-    if value.free_symbols:
-        return None
-    try:
-        value = sympy.simplify(value)
-    except (TypeError, ValueError):
-        return None
-    if value.has(sympy.nan, sympy.zoo, sympy.oo, -sympy.oo):
-        return None
-    return value
-
-
-def _simple_zero(expr: sympy.Expr) -> bool:
-    if expr == 0 or expr.is_zero is True:
-        return True
-    transforms = (
-        sympy.simplify,
-        lambda value: sympy.cancel(sympy.together(value)),
-        sympy.expand,
-        sympy.trigsimp,
-        sympy.factor,
-        sympy.radsimp,
-    )
-    for transform in transforms:
-        try:
-            result = transform(expr)
-        except (TypeError, ValueError):
-            continue
-        if result == 0 or result.is_zero is True:
-            return True
-    return False

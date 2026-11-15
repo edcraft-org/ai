@@ -89,12 +89,12 @@ The corpus exposed four false verdicts, now fixed in the owned engine files:
    nonnegative boundary by exact zero checks. This path is exercised by
    `tests/test_math_correctness_scalar_domains.py::test_sqrt_product_identity_on_nonnegative_source_domain`
    (the two square roots contribute non-strict `ge` guards), not by
-   `expand/restricted-source-domain`, which makes no `_sign_category` calls.
+   `expand/restricted-source-domain`, which makes no `sign_category` calls.
    The corpus keeps the converse direction honest:
    `expand/sqrt-product-needs-nonnegative-factors` shows that a signed product
    (even `x*y > 0`) does not justify the identity when both factors may be
    negative.
-4. **Even-root sign inference used nonzero instead of positive.** `_expr_sign`
+4. **Even-root sign inference used nonzero instead of positive.** `expr_sign`
    returned `+1` for `sqrt(a)` whenever `a*b > 0` proved `a` nonzero, although
    `sqrt(-2)` is imaginary. Even-denominator rational powers now require a
    strict positive proof of the base; odd denominators keep the existing strict
