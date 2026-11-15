@@ -186,7 +186,7 @@ def test_math_fidelity_tool_skips_parse_back_for_symbolic_templates() -> None:
     ]
 
 
-def _author(template, selected, *, num_distractors=3):
+def _author(template, selected, *, num_distractors=3, difficulty="easy"):
     proposal = ir_proposal(template)
 
     class StubProvider(RequestPendingTools):
@@ -212,12 +212,43 @@ def _author(template, selected, *, num_distractors=3):
     return application.author_template(
         MathTemplateRequest(
             prompt="Author a mathematics question.",
-            difficulty="easy",
+            difficulty=difficulty,
             num_distractors=num_distractors,
         ),
         domain=MathDomain(),
         provider=StubProvider(),
     )
+
+
+def test_maths_difficulty_mismatch_is_advisory_and_keeps_the_artifact() -> None:
+    result = _author(
+        quadratic_ir_template(),
+        [
+            "math_verify_item_spec",
+            "math_validate_options",
+            "assess_template_difficulty",
+        ],
+        difficulty="hard",
+    )
+
+    assert result.status == "checked", result.reason
+    execution = next(
+        item
+        for item in result.attempts[0].executions
+        if item.tool == "assess_template_difficulty"
+    )
+    assert execution.evidence.status == "failed"
+    assert execution.evidence.details["decision"] == "advisory_mismatch"
+    assert result.artifact is not None
+
+    saved = next(
+        item
+        for item in result.artifact.validation.evidence
+        if item.check == "assess_template_difficulty"
+    )
+    assert saved.status == "failed"
+    assert saved.details["requested_difficulty"] == "hard"
+    assert saved.details["estimated_difficulty"] == "easy"
 
 
 def test_application_adds_the_required_checks_the_model_omits() -> None:

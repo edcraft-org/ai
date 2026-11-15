@@ -16,7 +16,7 @@ from edcraft_validator.application.difficulty_rubrics import (
 )
 from edcraft_validator.domains.math.math_schemas import MathTemplateCandidate
 
-MATH_DIFFICULTY_RUBRIC_ID = "math-ir-v0.1"
+MATH_DIFFICULTY_RUBRIC_ID = "math"
 MATH_TEMPLATE_DIFFICULTY_PROMPT_VERSION = "math-template-difficulty-v1-provisional"
 MATH_TEMPLATE_DIFFICULTY_DECISION_PROMPT_VERSION = (
     "math-template-difficulty-decision-v1-provisional"

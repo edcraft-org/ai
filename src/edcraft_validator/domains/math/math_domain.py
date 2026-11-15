@@ -84,6 +84,7 @@ class MathDomain:
 
     def register_tools(self, server: FastMCP, dependencies: ToolDependencies) -> None:
         """Register the math domain's authoritative and advisory tools."""
+        register_difficulty_rubric(load_math_difficulty_rubric())
         register_math_tools(
             server,
             fidelity_provider_factory=dependencies.fidelity_provider_factory,
@@ -237,7 +238,3 @@ def _checked_property_details(item_spec: ToolEvidence) -> dict[str, Any]:
     if checked["examples_checked"] < 1:
         raise ValueError("IR validation checked no parameter combinations")
     return checked
-
-
-# Register once at import so direct domain tests and the shared tool agree.
-register_difficulty_rubric(load_math_difficulty_rubric())

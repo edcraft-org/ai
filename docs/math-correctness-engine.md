@@ -133,7 +133,7 @@ layer and are intentionally not implemented: `normalized_answer`,
 ## Property-based template qualification
 
 Python `qualify_math_template` samples a parameterised correctness request.
-Parameters can be bounded integer ranges or explicit exact numeric values. A
+Parameters can be limited integer ranges or explicit exact numeric values. A
 `param` node is substituted structurally in both the problem and candidate, so
 free text and arbitrary code are never executed.
 

@@ -34,9 +34,9 @@ from edcraft_validator.domains.math.math_schemas import MathTemplateRequest
 from edcraft_validator.domains.math.math_types import (
     MATH_FIDELITY_TOOL,
     MATH_FORM_TOOL,
+    MATH_IR_TOOL_VERSION,
     MATH_ITEM_SPEC_TOOL,
     MATH_OPTIONS_TOOL,
-    MATH_TOOL_VERSION,
 )
 from edcraft_validator.domains.math.relevance import template_relevance_text
 from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
@@ -98,7 +98,7 @@ def passing_evidence(tool: str) -> ToolEvidence:
     details = dict(PROPERTY_DETAILS) if tool == MATH_ITEM_SPEC_TOOL else {}
     return ToolEvidence(
         tool=tool,
-        version=MATH_TOOL_VERSION,
+        version=MATH_IR_TOOL_VERSION,
         status="passed",
         details=details,
     )

@@ -6,10 +6,15 @@ from pathlib import Path
 import pytest
 from code_validation_helpers import CODE_ADVISORY_CHECKS
 from fastmcp import Client
-from judge_helpers import TemplateJudge, candidate, difficulty_arguments, proposal
+from judge_helpers import (
+    ForbiddenExecutor,
+    TemplateJudge,
+    candidate,
+    difficulty_arguments,
+    proposal,
+)
 from pydantic import ValidationError
 from test_authoring_loop import SEMANTIC, STRUCTURE, Executor, Provider
-from test_difficulty_tool import ForbiddenExecutor
 
 from edcraft_validator.application.template_difficulty import (
     assess_template_difficulty,

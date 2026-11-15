@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
+from judge_helpers import question
 
 from edcraft_validator.application.relevance import assess_relevance
 from edcraft_validator.domains.code.code_checks import (
@@ -23,7 +24,6 @@ from edcraft_validator.domains.code.relevance import (
 from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.relevance_contracts import RelevanceInput, RelevanceReport
 from tests.test_code_relevance import Decisions
-from tests.test_difficulty_tool import question
 
 
 async def test_shared_service_preserves_non_python_text():

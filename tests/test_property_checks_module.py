@@ -3,6 +3,7 @@
 from fractions import Fraction
 
 import pytest
+from hypothesis import assume
 
 from edcraft_validator.validation.property_checks import (
     PropertyCheckRun,
@@ -97,6 +98,18 @@ def test_default_details_report_no_whole_domain_coverage():
     run, _, _ = record_run({"a": [0, 1]}, [{"a": 0}])
 
     assert run.details()["whole_domain"] is False
+
+
+def test_heavily_filtered_samples_do_not_raise_a_health_check():
+    def property_check(inputs, budget):
+        assume(inputs["n"] >= 90)
+        return inputs
+
+    run = PropertyCheckRun(PropertyCheckSettings(max_examples=5, seed=3))
+    result = run.check({"n": list(range(100))}, [], property_check)
+
+    assert result
+    assert all(inputs["n"] >= 90 for inputs in result)
 
 
 def test_fraction_values_are_sampled_and_deduplicated():

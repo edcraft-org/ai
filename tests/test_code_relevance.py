@@ -5,11 +5,9 @@ import json
 import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
+from judge_helpers import question
 from pydantic import ValidationError
 
-from edcraft_validator.domains.code.code_difficulty import (
-    assess_code_question_difficulty,
-)
 from edcraft_validator.domains.code.code_relevance import (
     CodeRelevanceReview,
     review_code_question_relevance,
@@ -25,7 +23,6 @@ from edcraft_validator.domains.code.relevance import (
 )
 from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.tools.python_execution import ExecutionResult
-from tests.test_difficulty_tool import Provider, question
 
 
 class Decisions:
@@ -205,45 +202,6 @@ def test_counts_use_trace_summary_instead_of_return_value(target):
         1,
     )
     assert result.status == "passed" and result.canonical_answer == 10
-
-
-@pytest.mark.parametrize("difficulty_error", [False, True])
-async def test_difficulty_success_or_failure_cannot_affect_relevance(
-    difficulty_error,
-):
-    provider = Provider(
-        RuntimeError("PRIVATE REMOTE ERROR") if difficulty_error else None
-    )
-    executor = Executor()
-
-    difficulty = await assess_code_question_difficulty(
-        question(), provider_factory=lambda: provider
-    )
-    server = create_validation_server(
-        difficulty_provider_factory=lambda: provider,
-        decision_provider_factory=Decisions,
-        code_execution_tool=executor,
-    )
-
-    async with Client(server) as client:
-        relevance = await client.call_tool(
-            "assess_relevance",
-            {
-                "request": relevance_input(
-                    question(), CodeQuestionRequest(prompt="Arithmetic")
-                ).model_dump(mode="json"),
-            },
-        )
-
-    assert len(provider.requests) == 1
-    assert difficulty.status == ("error" if difficulty_error else "assessed")
-    if not difficulty_error:
-        assert difficulty.judge.assessment.quality_concerns
-    data = relevance.structured_content
-    assert data["status"] == "assessed" and executor.calls == 0
-    assert data["decision"]["relevant"] is True
-    assert "difficulty_quality" not in data and "judge" not in data
-    assert "PRIVATE REMOTE ERROR" not in json.dumps(data)
 
 
 async def test_configuration_errors_are_explicit_and_do_not_leak_secrets():

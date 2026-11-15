@@ -26,8 +26,8 @@ from edcraft_validator.domains.code.code_schemas import (
 from edcraft_validator.domains.domain_registry import available_domains, create_domain
 from edcraft_validator.domains.math.math_schemas import MathTemplateRequest
 from edcraft_validator.llm.judge_configuration import (
+    JudgeSettings,
     configured_judge_provider,
-    load_judge_settings,
 )
 from edcraft_validator.llm.judging import DEFAULT_JUDGE_TIMEOUT_SECONDS
 from edcraft_validator.mcp.catalogue import resolve_domain_tools
@@ -86,7 +86,7 @@ def _validation_server() -> FastMCP:
 @cache
 def _cached_passing_evidence(domain_name: str) -> tuple[ToolEvidence, ...]:
     """Run the domain's required checks once through the real MCP server."""
-    case = DOMAIN_CASES[domain_name]
+    case = _case(domain_name)
     domain = create_domain(domain_name)
     request, candidate = case.request(), case.candidate()
     with FastMcpToolClient(_validation_server()) as client:
@@ -150,8 +150,18 @@ DOMAIN_CASES: dict[str, DomainCase] = {
 }
 
 
+def _case(domain_name: str) -> DomainCase:
+    try:
+        return DOMAIN_CASES[domain_name]
+    except KeyError:
+        pytest.fail(
+            f"No conformance case for the registered domain {domain_name!r}. "
+            "Add its request, candidate and evidence to DOMAIN_CASES."
+        )
+
+
 def _tool_dependencies() -> ToolDependencies:
-    settings = load_judge_settings()
+    settings = JudgeSettings()
     provider_factory = partial(configured_judge_provider, settings)
     return ToolDependencies(
         execution_tool=_ArithmeticExecutor(),
@@ -166,7 +176,7 @@ def _tool_dependencies() -> ToolDependencies:
 
 
 def _finalized_artifact(domain_name: str):
-    case = DOMAIN_CASES[domain_name]
+    case = _case(domain_name)
     return create_domain(domain_name).finalize_checked_template(
         case.candidate(),
         case.required_evidence(),
@@ -186,7 +196,7 @@ async def test_register_tools_registers_a_domain_tagged_tool(domain_name) -> Non
 
 @pytest.mark.parametrize("domain_name", available_domains())
 def test_resolve_domain_tools_offers_every_required_check(domain_name) -> None:
-    case = DOMAIN_CASES[domain_name]
+    case = _case(domain_name)
     domain = create_domain(domain_name)
     required = domain.required_checks(case.candidate())
     assert required
@@ -204,7 +214,7 @@ def test_resolve_domain_tools_offers_every_required_check(domain_name) -> None:
 
 @pytest.mark.parametrize("domain_name", available_domains())
 def test_tool_bindings_are_json_serialisable_for_required_checks(domain_name) -> None:
-    case = DOMAIN_CASES[domain_name]
+    case = _case(domain_name)
     domain = create_domain(domain_name)
     request, candidate = case.request(), case.candidate()
 
@@ -224,20 +234,21 @@ def test_finalize_accepts_passing_evidence_for_required_checks(domain_name) -> N
 
 @pytest.mark.parametrize("domain_name", available_domains())
 def test_finalize_rejects_a_missing_required_check(domain_name) -> None:
-    case = DOMAIN_CASES[domain_name]
+    case = _case(domain_name)
     domain = create_domain(domain_name)
-    missing = min(domain.required_checks(case.candidate()))
-    remaining = [item for item in case.required_evidence() if item.tool != missing]
+    evidence = case.required_evidence()
 
-    with pytest.raises(ValueError):
-        domain.finalize_checked_template(
-            case.candidate(), remaining, advisory_checks=frozenset()
-        )
+    for missing in sorted(domain.required_checks(case.candidate())):
+        remaining = [item for item in evidence if item.tool != missing]
+        with pytest.raises(ValueError):
+            domain.finalize_checked_template(
+                case.candidate(), remaining, advisory_checks=frozenset()
+            )
 
 
 @pytest.mark.parametrize("domain_name", available_domains())
 def test_finalize_rejects_a_failed_required_check(domain_name) -> None:
-    case = DOMAIN_CASES[domain_name]
+    case = _case(domain_name)
     domain = create_domain(domain_name)
     failed_tool = min(domain.required_checks(case.candidate()))
     evidence = [
@@ -265,7 +276,7 @@ def test_finalize_rejects_a_failed_required_check(domain_name) -> None:
 
 @pytest.mark.parametrize("domain_name", available_domains())
 def test_finalized_validation_uses_the_shared_property_summary(domain_name) -> None:
-    case = DOMAIN_CASES[domain_name]
+    case = _case(domain_name)
     summary = _finalized_artifact(domain_name).validation
 
     assert isinstance(summary, PropertyCheckSummary)
@@ -317,7 +328,7 @@ def test_generate_question_is_deterministic_without_external_calls(
 
 @pytest.mark.parametrize("domain_name", available_domains())
 def test_distractor_count_matches_the_candidate_distractors(domain_name) -> None:
-    case = DOMAIN_CASES[domain_name]
+    case = _case(domain_name)
     candidate = case.candidate()
     expected = len(case.distractors(candidate))
 
@@ -328,7 +339,7 @@ def test_distractor_count_matches_the_candidate_distractors(domain_name) -> None
 @pytest.mark.parametrize("domain_name", available_domains())
 def test_domain_uses_the_shared_advisory_capabilities(domain_name) -> None:
     """Difficulty and relevance are shared checks, so a domain only supplies data."""
-    case = DOMAIN_CASES[domain_name]
+    case = _case(domain_name)
     domain = create_domain(domain_name)
     request, candidate = case.request(), case.candidate()
 
@@ -341,4 +352,47 @@ def test_domain_uses_the_shared_advisory_capabilities(domain_name) -> None:
         json.dumps(domain.tool_bindings(request, candidate, name))
 
     difficulty = domain.tool_bindings(request, candidate, TEMPLATE_DIFFICULTY_CHECK)
-    assert difficulty_rubric(difficulty["rubric_id"]) is not None
+    rubric = difficulty_rubric(difficulty["rubric_id"])
+    assert rubric.rubric_id == difficulty["rubric_id"]
+    assert rubric.dimensions_model.model_fields
+
+
+@pytest.mark.parametrize("domain_name", available_domains())
+def test_failed_advisory_evidence_never_blocks_finalization(domain_name) -> None:
+    """Advisory checks are never required, so their failure stays advisory."""
+    case = _case(domain_name)
+    domain = create_domain(domain_name)
+    request, candidate = case.request(), case.candidate()
+
+    assert {
+        TEMPLATE_DIFFICULTY_CHECK,
+        TEMPLATE_RELEVANCE_CHECK,
+    }.isdisjoint(domain.required_checks(candidate))
+
+    bindings = domain.tool_bindings(request, candidate, TEMPLATE_DIFFICULTY_CHECK)
+    failed = ToolEvidence(
+        tool=TEMPLATE_DIFFICULTY_CHECK,
+        version="conformance",
+        status="failed",
+        findings=[
+            ToolFinding(
+                code="ADVISORY_MISMATCH",
+                message="Synthetic advisory mismatch",
+            )
+        ],
+        details={"subject_sha256": bindings["subject_sha256"]},
+    )
+
+    artifact = domain.finalize_checked_template(
+        candidate,
+        [*case.required_evidence(), failed],
+        advisory_checks=frozenset({TEMPLATE_DIFFICULTY_CHECK}),
+    )
+
+    saved = next(
+        item
+        for item in artifact.validation.evidence
+        if item.check == TEMPLATE_DIFFICULTY_CHECK
+    )
+    assert saved.status == "failed"
+    assert saved.details["advisory"] is True

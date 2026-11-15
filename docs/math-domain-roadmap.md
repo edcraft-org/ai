@@ -3,10 +3,10 @@
 Status: proposed. This document is a plan, not an implementation record.
 
 The current domain authors a generic parameterised IR across the supported goal
-kinds, and validates a bounded, deterministic sample of the declared parameter
+kinds, and validates a limited, deterministic sample of the declared parameter
 domain. The next step is not to add topics blindly. It is to remove the compatibility code that
-the pilot accumulated, replace the ad-hoc difficulty heuristic with a defensible
-rubric, and only then widen the topic catalogue.
+the pilot accumulated, use the shared difficulty rubric for every family, and
+only then widen the topic catalogue.
 
 Recommended order:
 

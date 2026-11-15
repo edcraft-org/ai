@@ -79,6 +79,7 @@ class CodeDomain:
 
     def register_tools(self, server: FastMCP, dependencies: ToolDependencies) -> None:
         """Register the code domain's authoritative and advisory tools."""
+        register_difficulty_rubric(load_code_difficulty_rubric())
         register_code_validation_tools(
             server,
             execution_tool=dependencies.execution_tool,
@@ -219,7 +220,3 @@ def _validation_summary(
     return TemplateValidationSummary.model_validate(
         {**property_details(semantic.details), "evidence": saved_evidence}
     )
-
-
-# Register once at import so direct domain tests and the shared tool agree.
-register_difficulty_rubric(load_code_difficulty_rubric())

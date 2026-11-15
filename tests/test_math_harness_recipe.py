@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pytest
+from hypothesis.errors import Unsatisfiable
+from math_helpers import quadratic_ir_template
 
 from edcraft_validator.domains.math.ir.schema import (
     AnswerRecipe,
@@ -299,3 +301,133 @@ def test_form_sensitive_goals_apply_the_form_rule_to_distractors() -> None:
     assert report.report.status == "failed"
     assert report.report.options[0].result.check == "distractor_form"
     assert any("option 0: distractor form" in f for f in report.report.findings)
+
+
+def _one_parameter_template(values: list[str]) -> MathTemplateSpec:
+    return MathTemplateSpec(
+        topic="school.recipe",
+        parameters=[ParameterSpec(name="a", values=values)],
+        body=_item(
+            goal=Goal(kind="evaluate", expr=add(param("a"), num(1))),
+            recipe=AnswerRecipe(kind="numeric", items=[add(param("a"), num(1))]),
+        ),
+    )
+
+
+def test_inconclusive_variant_makes_the_template_inconclusive(monkeypatch) -> None:
+    from edcraft_validator.domains.math.validation import harness
+
+    def undecided(*args, **kwargs):
+        return harness.HarnessReport(
+            report=harness.ValidationReport(
+                status="inconclusive", findings=["the engine could not decide"]
+            )
+        )
+
+    monkeypatch.setattr(harness, "validate_item", undecided)
+
+    report = validate_template(_one_parameter_template(["1", "2"]))
+
+    assert report.report.status == "inconclusive"
+    assert any("could not decide" in finding for finding in report.report.findings)
+
+
+def test_unsatisfiable_assumptions_are_rejected(monkeypatch) -> None:
+    from edcraft_validator.domains.math.validation import harness
+
+    def unsatisfiable(self, *args, **kwargs):
+        raise Unsatisfiable("every generated combination was assumed away")
+
+    monkeypatch.setattr(harness.PropertyCheckRun, "check", unsatisfiable)
+
+    report = validate_template(_one_parameter_template(["1", "2"]))
+
+    assert report.report.status == "failed"
+    assert report.report.findings == ["template has no parameter combinations"]
+
+
+def test_no_valid_combinations_are_rejected() -> None:
+    report = validate_template(_one_parameter_template(["not-a-number"]))
+
+    assert report.report.status == "failed"
+    assert report.report.findings == ["template has no parameter combinations"]
+
+
+def test_invalid_literals_mixed_with_valid_ones_pass() -> None:
+    report = validate_template(_one_parameter_template(["1", "not-a-number"]))
+
+    assert report.report.status == "passed", report.report.findings
+    assert report.examples_checked >= 1
+
+
+def test_budget_exhaustion_without_a_failure_reports_the_budget() -> None:
+    from edcraft_validator.validation import property_checks
+
+    def exhausted(self) -> None:
+        raise property_checks._BudgetExceeded()
+
+    original = property_checks.PropertyCheckRun.reserve_execution
+    try:
+        property_checks.PropertyCheckRun.reserve_execution = exhausted
+        report = validate_template(_one_parameter_template(["1", "2"]))
+    finally:
+        property_checks.PropertyCheckRun.reserve_execution = original
+
+    assert report.report.status == "failed"
+    assert any(
+        "PROPERTY_CHECK_BUDGET_EXCEEDED" in finding
+        for finding in report.report.findings
+    )
+
+
+def test_budget_after_a_recorded_failure_reports_that_failure() -> None:
+    from edcraft_validator.validation import property_checks
+
+    original = property_checks.PropertyCheckRun.reserve_execution
+    calls = 0
+
+    def budget_after_first(self) -> None:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise property_checks._BudgetExceeded()
+        original(self)
+
+    template = MathTemplateSpec(
+        topic="school.recipe",
+        parameters=[ParameterSpec(name="a", values=["1", "2"])],
+        body=_item(
+            goal=Goal(kind="evaluate", expr=add(param("a"), num(1))),
+            recipe=AnswerRecipe(kind="numeric", items=[add(param("a"), num(2))]),
+        ),
+    )
+    try:
+        property_checks.PropertyCheckRun.reserve_execution = budget_after_first
+        report = validate_template(template, max_variants=1)
+    finally:
+        property_checks.PropertyCheckRun.reserve_execution = original
+
+    assert report.report.status == "failed"
+    assert any(finding.startswith("variant ") for finding in report.report.findings)
+    assert not any(
+        "PROPERTY_CHECK_BUDGET_EXCEEDED" in finding
+        for finding in report.report.findings
+    )
+
+
+def test_a_distractor_graded_correct_carries_a_finding() -> None:
+    template = quadratic_ir_template()
+    template = template.model_copy(
+        update={
+            "parameters": [
+                ParameterSpec(name="p", values=["1"]),
+                ParameterSpec(name="q", values=["1"]),
+            ]
+        }
+    )
+
+    report = validate_template(template)
+
+    assert report.report.status == "failed"
+    assert report.report.findings
+    assert any("distractor" in finding for finding in report.report.findings)

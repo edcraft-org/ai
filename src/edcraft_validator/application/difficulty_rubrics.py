@@ -3,12 +3,14 @@
 A domain owns its rubric document, prompt components and dimensions model. The
 record keeps those parts together so the shared judging cascade can build the
 same decision and reasoning requests for every domain. Domains register their
-record once at import, and the shared MCP tool looks it up by identifier.
+record when their tools are registered, and the shared MCP tool looks it up by
+identifier.
 """
 
 import hashlib
 import re
 from dataclasses import dataclass
+from importlib import import_module
 from importlib.resources import files
 from pathlib import Path
 from typing import Annotated, Literal
@@ -69,23 +71,34 @@ def register_difficulty_rubric(rubric: DifficultyRubric) -> None:
     """Register one domain rubric for the shared difficulty cascade."""
     if not _RUBRIC_ID.fullmatch(rubric.rubric_id):
         raise ValueError(f"Invalid difficulty rubric id {rubric.rubric_id!r}.")
-    if rubric.rubric_id in _RUBRICS:
-        raise ValueError(
-            f"Difficulty rubric {rubric.rubric_id!r} is already registered."
-        )
+    existing = _RUBRICS.get(rubric.rubric_id)
+    if existing is not None:
+        if existing != rubric:
+            raise ValueError(
+                f"A different difficulty rubric is already registered as "
+                f"{rubric.rubric_id!r}."
+            )
+        return
 
     _RUBRICS[rubric.rubric_id] = rubric
 
 
-def unregister_difficulty_rubric(rubric_id: str) -> None:
-    """Remove a previously registered rubric."""
+def ensure_difficulty_rubric(rubric_id: str) -> None:
+    """Load a domain's rubric on demand when no server registered it yet."""
+    if rubric_id in _RUBRICS or not _RUBRIC_ID.fullmatch(rubric_id):
+        return
+
+    module_name = f"edcraft_validator.domains.{rubric_id}.difficulty"
+    function_name = f"load_{rubric_id.replace('-', '_')}_difficulty_rubric"
     try:
-        del _RUBRICS[rubric_id]
-    except KeyError as exc:
-        raise ValueError(f"Difficulty rubric {rubric_id!r} is not registered.") from exc
+        loader = getattr(import_module(module_name), function_name)
+    except (ImportError, AttributeError):
+        return
+    register_difficulty_rubric(loader())
 
 
 def difficulty_rubric(rubric_id: str) -> DifficultyRubric:
+    ensure_difficulty_rubric(rubric_id)
     try:
         return _RUBRICS[rubric_id]
     except KeyError as exc:

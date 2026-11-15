@@ -14,10 +14,7 @@ from edcraft_validator.application.difficulty_rubrics import (
     format_rubric_reference,
     load_rubric_document,
 )
-from edcraft_validator.domains.code.code_types import AnswerTarget, Difficulty
-from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
-
-DIFFICULTY_PROMPT_VERSION = "code-difficulty-v6-runtime-exact-options"
+from edcraft_validator.domains.code.code_types import AnswerTarget
 
 CODE_DIFFICULTY_RUBRIC_ID = "code"
 TEMPLATE_DIFFICULTY_PROMPT_VERSION = "code-template-difficulty-v3-sampled-confidence"
@@ -81,41 +78,6 @@ class DifficultyDimensions(Record):
     changing_state: DimensionAssessment
     conceptual_interaction: DimensionAssessment
     answer_discrimination: DimensionAssessment
-
-
-class OptionAssessment(Record):
-    option_id: OptionID
-    reasoning: Text
-    hypothesised_error: str | None
-    shortcut_or_cue: str | None
-
-
-class DifficultyAssessment(Record):
-    estimated_difficulty: Difficulty | None
-    dimensions: DifficultyDimensions
-    reason: Text
-    solution_reasoning: Text
-    concepts_and_dependencies: Text
-    shortcuts: Text
-    nearest_anchor: Text
-    option_evidence: list[OptionAssessment] = Field(min_length=3, max_length=4)
-    unable_to_assess_reason: Text | None = Field(
-        description=(
-            "Required when essential question information is missing and the "
-            "estimate is null. Borderline difficulty is not missing information: "
-            "choose the closest easy/medium/hard anchor. Otherwise use null."
-        )
-    )
-    quality_concerns: list[Text]
-
-    @model_validator(mode="after")
-    def validate_assessment(self):
-        ids = [o.option_id for o in self.option_evidence]
-        if len(ids) != len(set(ids)):
-            raise ValueError("option evidence must not repeat an option")
-        if self.estimated_difficulty is None and self.unable_to_assess_reason is None:
-            raise ValueError("null estimates require an unable-to-assess reason")
-        return self
 
 
 TEMPLATE_SCOPE = (
@@ -222,12 +184,3 @@ def load_code_difficulty_rubric() -> DifficultyRubric:
         reasoning_schema_name=TEMPLATE_DIFFICULTY_SCHEMA_NAME,
         decision_schema_name=TEMPLATE_DIFFICULTY_DECISION_SCHEMA_NAME,
     )
-
-
-def build_difficulty_request(
-    question: CodeDifficultyQuestion,
-    rubric: DifficultyRubric,
-) -> StructuredGenerationRequest:
-    from edcraft_validator.domains.code.difficulty_request import build_judge_request
-
-    return build_judge_request(question, rubric)

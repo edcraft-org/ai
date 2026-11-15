@@ -343,10 +343,12 @@ format 1.0 remain stable:
 Template validation uses the same property checker as the code domain
 (`validation/property_checks.py`). It runs explicit boundary examples first and
 enumerates a small domain completely. A larger domain is checked within a
-limited budget, 100 examples by default. The first failing combination is
-shrunk and reported as `variant <parameters>:`. Exhausting the budget is a
-failure, never a partial pass. The checked summary carries the shared
-`PropertyCheckSummary` coverage fields plus the template's declared domain size.
+limited budget, 100 examples by default. A failing generated combination is
+shrunk and reported as `variant <parameters>:`. Explicit boundary examples run
+first and are not shrunk, so a failing boundary example is reported exactly as
+declared. Exhausting the budget is a failure and records no partial pass. The
+checked summary carries the shared `PropertyCheckSummary` coverage fields plus
+the template's declared domain size.
 
 ## 9. MCQ-specific validation
 

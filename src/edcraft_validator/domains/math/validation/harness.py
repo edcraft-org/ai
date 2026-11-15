@@ -16,6 +16,7 @@ from fractions import Fraction
 from typing import Any, Literal
 
 from hypothesis import assume
+from hypothesis.errors import Unsatisfiable
 from pydantic import BaseModel, ConfigDict
 
 from edcraft_validator.domains.math.engine_adapter import AdapterGap, grade
@@ -71,9 +72,9 @@ class HarnessReport(BaseModel):
     checking_mode: Literal["property_based"] = "property_based"
     examples_checked: int = 0
     execution_calls: int = 0
-    max_examples: int = PropertyCheckSettings.max_examples
-    max_execution_calls: int = PropertyCheckSettings.max_execution_calls
-    timeout_seconds: float = PropertyCheckSettings.timeout_seconds
+    max_examples: int = MAX_VARIANTS
+    max_execution_calls: int = 4 * MAX_VARIANTS
+    timeout_seconds: float = PROPERTY_CHECK_TIMEOUT_SECONDS
     seed: int = 0
     whole_domain: bool = False
     declared_domain_size: int = 0
@@ -106,7 +107,8 @@ def validate_item(
         option_findings = _failed_option_findings(options)
     else:
         checks = [_engine_correctness(spec, recipe, params)]
-        options, option_findings = _check_recipe_distractors(spec, params)
+        options, duplicate_findings = _check_recipe_distractors(spec, params)
+        option_findings = [*duplicate_findings, *_failed_option_findings(options)]
 
     findings = _failed_check_findings(checks)
     findings.extend(option_findings)
@@ -121,14 +123,17 @@ def _item_report(
     findings: list[str],
 ) -> HarnessReport:
     """Combine the aspect's checks and options into one report."""
+    status = _aggregate(
+        [
+            *[result.status for result in checks],
+            *[option.result.status for option in options],
+        ]
+    )
+    if status == "failed" and not findings:
+        findings = ["the parameter combination failed validation"]
     return HarnessReport(
         report=ValidationReport(
-            status=_aggregate(
-                [
-                    *[result.status for result in checks],
-                    *[option.result.status for option in options],
-                ]
-            ),
+            status=status,
             answer=display_sympy_value(declared),
             checks=checks,
             options=options,
@@ -415,18 +420,21 @@ def validate_template(
         seed=seed,
     )
     run = PropertyCheckRun(config)
+    first_failure: list[tuple[str, HarnessReport]] = []
 
     def check_case(
         combination: dict[str, Any], budget: PropertyCheckRun
     ) -> HarnessReport:
-        if not _is_valid_combination(combination):
-            # The declared domain may contain literals that are not exact
-            # numbers. They are not members of the checkable domain.
-            assume(False)
-            raise AssertionError("an invalid combination was assumed away")
+        # The declared domain may contain literals that are not exact numbers.
+        # They are not members of the checkable domain, so reject the sample.
+        assume(_is_valid_combination(combination))
         budget.reserve_execution()
         result = validate_item(template.body, params=combination, aspect=aspect)
-        if result.report.status != "passed":
+        if result.report.status == "failed":
+            if not first_failure:
+                # Shrinking spends execution calls, so keep this report in case
+                # the budget runs out before the property run finishes.
+                first_failure.append((_variant_text(combination), result))
             raise ValidationFailure(
                 "a parameter combination failed validation",
                 code=_VARIANT_FAILED,
@@ -444,7 +452,21 @@ def validate_template(
             check_case,
             cover_small_domain=True,
         )
+    except Unsatisfiable:
+        return _failed_harness_report(
+            "template has no parameter combinations",
+            declared_domain_size=declared_size,
+            seed=seed,
+        )
     except ValidationFailure as exc:
+        if exc.code == "PROPERTY_CHECK_BUDGET_EXCEEDED" and first_failure:
+            variant, failing = first_failure[0]
+            return _variant_failure_report(
+                variant,
+                failing,
+                details=run.details(),
+                declared_domain_size=declared_size,
+            )
         return _property_failure_report(exc, declared_domain_size=declared_size)
 
     details = run.details()
@@ -549,16 +571,35 @@ def _property_failure_report(
         raise failure
 
     failing = HarnessReport.model_validate(failure.context["harness_report"])
-    prefix = f"variant {failure.context['variant']}:"
+    return _variant_failure_report(
+        failure.context["variant"],
+        failing,
+        details=checked,
+        declared_domain_size=declared_domain_size,
+    )
+
+
+def _variant_failure_report(
+    variant: str,
+    failing: HarnessReport,
+    *,
+    details: dict[str, Any],
+    declared_domain_size: int,
+) -> HarnessReport:
+    """Report one failed variant, keeping its findings and coverage."""
+    prefix = f"variant {variant}:"
+    findings = [f"{prefix} {finding}" for finding in failing.report.findings]
+    if not findings:
+        findings = [f"{prefix} the variant failed validation"]
     return HarnessReport(
         report=ValidationReport(
             status="failed",
             answer=failing.report.answer,
             checks=failing.report.checks,
             options=failing.report.options,
-            findings=[f"{prefix} {finding}" for finding in failing.report.findings],
+            findings=findings,
         ),
-        **checked,
+        **details,
         declared_domain_size=declared_domain_size,
     )
 

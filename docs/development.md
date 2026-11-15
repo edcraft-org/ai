@@ -104,11 +104,11 @@ domain. The code domain's relevance evidence is recorded under
 `domain:code` tags were removed so both domains use the shared capability.
 
 The shared difficulty capability works the same way. Each domain registers one
-rubric record at import and binds its rubric identifier, blinded payload, distractor
+rubric record in `register_tools` and binds its rubric identifier, blinded payload, distractor
 count, requested level and checked subject hash to `assess_template_difficulty`.
 The tool is registered once, uses the same decision-then-reasoning cascade and
-returns the same advisory evidence shape. The maths rubric `math-ir-v0.1` is
-provisional and uncalibrated. The former domain-specific difficulty tools and the
+returns the same advisory evidence shape. The maths rubric (`math` identifier,
+document version `math-ir-v0.1`) is provisional and uncalibrated. The former domain-specific difficulty tools and the
 maths heuristic were removed. Template
 identity belongs to `candidate_builder.py`, independently of either
 judge. The domain binds the original author prompt, the checked template hash and the
@@ -184,7 +184,8 @@ when `tests/test_domain_conformance.py` passes for it.
    and register the factory with `register_domain`. Reuse `TemplateRequest`,
    `build_template_id` and `seeded_index` from `domains/domain_support.py`.
 2. **Tools.** Implement `register_tools` to add the domain's blocking checks, tagged
-   `domain:<name>`. Name them `<domain>_verify_<thing>` for blocking checks and
+   `domain:<name>`, and to register its difficulty rubric. Do not register either
+   at import. Name the checks `<domain>_verify_<thing>` for blocking checks and
    `<domain>_assess_<thing>` for advisory ones.
 3. **Required checks.** Return from `required_checks(candidate)` the checks that must
    pass for this candidate. The application adds any the model leaves out.

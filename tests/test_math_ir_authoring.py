@@ -42,9 +42,9 @@ from edcraft_validator.domains.math.math_schemas import (
     ValidatedMathTemplate,
 )
 from edcraft_validator.domains.math.math_types import (
+    MATH_IR_TOOL_VERSION,
     MATH_ITEM_SPEC_TOOL,
     MATH_OPTIONS_TOOL,
-    MATH_TOOL_VERSION,
     MAX_DISTRACTORS,
 )
 from edcraft_validator.domains.math.question_generator import generate_math_question
@@ -333,7 +333,7 @@ def test_representative_item_skips_parameter_only_guards() -> None:
 def _passing_evidence(tool: str) -> ToolEvidence:
     return ToolEvidence(
         tool=tool,
-        version=MATH_TOOL_VERSION,
+        version=MATH_IR_TOOL_VERSION,
         status="passed",
         details={},
     )

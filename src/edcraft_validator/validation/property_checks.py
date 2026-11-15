@@ -1,4 +1,4 @@
-"""Domain-neutral bounded property sampling, replay and shrinking.
+"""Domain-neutral limited property sampling, replay and shrinking.
 
 A caller supplies finite parameter domains, a few explicit boundary examples,
 and a predicate over one input mapping. The run samples inputs with Hypothesis
@@ -31,7 +31,7 @@ class PropertyCheckSettings:
     timeout_seconds: float = 30.0
     seed: int = 0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if (
             any(
                 type(n) is not int or n <= 0
@@ -56,19 +56,19 @@ class PropertyCheckRun:
     whole_domain: bool = False
 
     @property
-    def remaining_seconds(self):
+    def remaining_seconds(self) -> float:
         remaining = self.config.timeout_seconds - (time.perf_counter() - self.started)
         if remaining <= 0:
             raise _BudgetExceeded()
         return remaining
 
-    def reserve_execution(self):
+    def reserve_execution(self) -> None:
         _ = self.remaining_seconds
         if self.execution_calls >= self.config.max_execution_calls:
             raise _BudgetExceeded()
         self.execution_calls += 1
 
-    def details(self):
+    def details(self) -> dict[str, Any]:
         return dict(
             checking_mode="property_based",
             examples_checked=len(self.passed),
@@ -84,10 +84,10 @@ class PropertyCheckRun:
         self,
         parameters: Mapping[str, Sequence[Any]],
         boundary: list[dict[str, Any]],
-        property_check: Callable[[dict, PropertyCheckRun], Any],
+        property_check: Callable[[dict[str, Any], PropertyCheckRun], Any],
         *,
         cover_small_domain: bool = False,
-    ):
+    ) -> list[Any]:
         strategy = st.fixed_dictionaries(
             {name: st.sampled_from(values) for name, values in parameters.items()}
         )

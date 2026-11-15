@@ -43,8 +43,8 @@ instead of being skipped.
 A template declares `topic`, one to twelve `parameters`, and one `body`.
 
 - `parameters`: named values as exact decimal or rational strings, at most 512
-  values each. The declared product is not capped; validation checks it within
-  a limited budget instead of materialising it.
+  values each. The declared product has no schema limit. Validation checks it
+  within a limited budget instead of materialising it.
 - `body.symbols`: every variable, with domain facts (`real`/`integer`/`rational`,
   `positive`, `nonzero`).
 - `body.givens`: relations and domain facts. Finite data sets are accepted by
@@ -151,7 +151,7 @@ run validation again in the application process.
 Advisory checks never gate approval:
 
 5. `assess_template_difficulty` — the shared provisional difficulty cascade, using
-   the `math-ir-v0.1` rubric.
+   the `math` rubric (document version `math-ir-v0.1`).
 6. `assess_template_relevance` — the shared semantic relevance classifier.
 
 Advisory `failed` or `unavailable` outcomes stay visible in review evidence and
@@ -174,10 +174,12 @@ checked. A larger domain is checked within the budget and the full product is
 never materialised. The default budget is 100 examples (`MAX_IR_VARIANTS`), and
 callers may request fewer.
 
-If a combination fails, the template is rejected. The property checker shrinks
-the first failing combination and reports it in a `variant <parameters>:`
-finding. Exhausting the execution-call or wall-clock budget is also a failure
-(`PROPERTY_CHECK_BUDGET_EXCEEDED`), never a partial pass. The summary records
+If a generated combination fails, the template is rejected. The property checker
+shrinks that combination and reports it in a `variant <parameters>:` finding.
+Explicit boundary examples run before generated samples, and Hypothesis does not
+shrink them, so a failing boundary example is reported exactly as declared.
+Exhausting the execution-call or wall-clock budget is also a failure
+(`PROPERTY_CHECK_BUDGET_EXCEEDED`) and records no partial pass. The summary records
 the shared property-check coverage (`checking_mode`, `examples_checked`,
 `execution_calls`, the checking budgets, `whole_domain` and `seed`) plus the
 template's declared domain size. Generation samples the same declared domain

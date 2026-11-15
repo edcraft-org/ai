@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pytest
 
-from edcraft_validator.domains.code import code_difficulty
 from scripts import evaluate_code_relevance as evaluation
 from tests.test_code_relevance import Decisions
 
@@ -60,10 +59,6 @@ async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreem
                 raise RuntimeError("PRIVATE REMOTE ERROR")
             return super().score(request_text, question_text)
 
-    def forbidden(*args, **kwargs):
-        pytest.fail("Relevance evaluation must not start another judge call")
-
-    monkeypatch.setattr(code_difficulty, "run_judge", forbidden)
     monkeypatch.setattr(evaluation, "ConfiguredDecisionProvider", PartialDecisions)
     before = evaluation.DATASET.read_bytes()
     output = tmp_path / "review.jsonl"
