@@ -6,10 +6,10 @@ deterministic engine adjudicates correctness and a separate form registry
 adjudicates shape. Nothing is solved or derived anywhere: the recipe the model
 authors *is* the answer, and the engine grades it.
 
-Every template has a finite parameter domain. Validation samples that domain
-deterministically with a bounded property-based check: explicit boundary cases
-plus seeded examples. A small domain is enumerated completely; a large one is
-never materialised.
+Every template has a finite parameter domain. Validation checks that domain
+with the shared Hypothesis property checker: explicit boundary examples run
+first, a small domain is enumerated completely, and a larger domain is checked
+within a limited budget. The full product is never materialised.
 
 ## Trust model
 
@@ -25,8 +25,8 @@ Each verdict comes from its own check and is saved as its own evidence
 `math_verify_answer_form`). Correctness is required for every template. Form is
 required for `factor` and `expand` goals, where notation is part of the answer,
 and is optional for other goals. A required verdict must hold for **every
-sampled parameter combination**. A domain that fits the sample budget is
-checked completely.
+checked parameter combination**. A domain that fits the budget is checked
+completely.
 
 Refusals fail closed:
 
@@ -43,8 +43,8 @@ instead of being skipped.
 A template declares `topic`, one to twelve `parameters`, and one `body`.
 
 - `parameters`: named values as exact decimal or rational strings, at most 512
-  values each. The declared product is not capped; validation samples it
-  instead of materialising it.
+  values each. The declared product is not capped; validation checks it within
+  a limited budget instead of materialising it.
 - `body.symbols`: every variable, with domain facts (`real`/`integer`/`rational`,
   `positive`, `nonzero`).
 - `body.givens`: relations and domain facts. Finite data sets are accepted by
@@ -130,7 +130,7 @@ ones a candidate needs, and the application adds any that the model did not
 select:
 
 1. `math_verify_item_spec` — always required. Schema, bounded trees,
-   goal/answer agreement and the sampled engine check.
+   goal/answer agreement and the property-based engine check.
 2. `math_validate_options` — always required. Every distractor is demonstrably
    wrong, distinct from the key, and pairwise distinct.
 3. `math_verify_answer_form` — required for `factor` and `expand` goals. The
@@ -159,28 +159,34 @@ rejection prevent a reusable artifact.
 
 ## Validation sampling
 
-The declared parameter domain may be very large; only a bounded sample is
-graded. The sample is deterministic for a given seed and contains:
+The declared parameter domain may be very large. Validation uses the shared
+Hypothesis property checker in `validation/property_checks.py`, the same
+checker the code domain uses. It receives:
 
-- the all-low and all-high variants;
-- one variant per axis at each edge, with the other axes at both edges;
-- seeded examples until the sample budget is reached.
+- the declared values of each parameter, in declaration order
+- explicit boundary examples, checked first: the all-first and all-last
+  combinations, each parameter at its last value with the others at their
+  first value, and 0 where 0 is an allowed value
 
-A domain no larger than the budget is enumerated completely. If any sampled
-variant fails, the template is rejected; there is no "truncated" finding and no
-exhaustive-mode switch. The summary records `checking_mode="property_based"`,
-the number of variants checked, the declared domain size and the seed. The
-default budget is 100 variants (`MAX_IR_VARIANTS`); callers may request fewer.
+A domain that fits the budget is enumerated completely, so every combination is
+checked. A larger domain is checked within the budget and the full product is
+never materialised. The default budget is 100 examples (`MAX_IR_VARIANTS`), and
+callers may request fewer.
 
-Generation samples the same declared domain independently of validation, so a
-generated question may use a variant that the validator did not sample. Each
-emitted variant is rendered from the approved recipes.
+If a combination fails, the template is rejected. The property checker shrinks
+the first failing combination and reports it in a `variant <parameters>:`
+finding. Exhausting the execution-call or wall-clock budget is also a failure
+(`PROPERTY_CHECK_BUDGET_EXCEEDED`), never a partial pass. The summary records
+`checking_mode="property_based"`, the number of variants checked, the declared
+domain size and the seed. Generation samples the same declared domain
+independently, so a generated question may use a variant that validation did
+not check. Each emitted variant is rendered from the approved recipes.
 
 ## Generation
 
 `generate_math_question(validated, seed)` is deterministic and performs no model,
 MCP, or network call. It samples the declared domain for the requested seed, so
-questions may use variants that validation did not sample. For the selected
+questions may use variants that validation did not check. For the selected
 combination it compiles the answer recipe and every distractor recipe, renders
 them, and rejects unusable option combinations:
 
@@ -209,7 +215,7 @@ These reject rather than approximate:
 - Determinant matrices whose entries are not exact numbers after binding.
 - Authoring parameters as `sym` nodes instead of `param` nodes.
 - Templates whose distractor coincides with the key, or repeats another option,
-  for any sampled combination in the declared domain.
+  for any checked combination in the declared domain.
 - Templates that need a model, tool, or Python execution at expansion time.
 
 ## Retired: the bounded linear-equation authoring mode

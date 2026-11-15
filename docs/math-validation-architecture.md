@@ -67,7 +67,7 @@ knows the topic.
                                         │
                     L1 formal gate (deterministic, CAS)
                     solve · unique? · answer · distractors ·
-                    domain · units · sampled variants
+                    domain · units · checked variants
                                         │
                     L2 NL-fidelity gate (independent)
                     constrained render OR blind parse-back ·
@@ -335,10 +335,17 @@ format 1.0 remain stable:
 
 | Tool | Purpose |
 | --- | --- |
-| `math_verify_item_spec` | Compile and solve an IR item or sample a parameter template (correctness only) |
+| `math_verify_item_spec` | Compile and solve an IR item or check a parameter template with the shared property checker (correctness only) |
 | `math_verify_answer_form` | Check the answer's shape for its goal, required for factor and expand |
 | `math_validate_options` | Option-level MCQ checks against the derived key |
 | `math_verify_text_fidelity` | Blind parse-back plus anchor and ambiguity checks |
+
+Template validation uses the same property checker as the code domain
+(`validation/property_checks.py`). It runs explicit boundary examples first and
+enumerates a small domain completely. A larger domain is checked within a
+limited budget, 100 examples by default. The first failing combination is
+shrunk and reported as `variant <parameters>:`. Exhausting the budget is a
+failure, never a partial pass.
 
 ## 9. MCQ-specific validation
 
@@ -405,7 +412,7 @@ families**.
 | --- | --- | --- | --- |
 | V0 | IR schema + closed-vocabulary compiler to SymPy | 2-3 d | Linear equation round-trips; unknown ops rejected; no `eval` |
 | V1 | Primitives: numeric, expression_equiv, solution_set, collection, interval, string_choice | 3-5 d | Tri-state results; substitute-back; process timeout |
-| V2 | Declarative test harness (key + wrong witness + invalid witness + variant sweep) | 2-3 d | A failing witness blocks approval; STACK-style |
+| V2 | Declarative test harness (key + wrong witness + invalid witness + property-based variant sweep) | 2-3 d | A failing witness blocks approval; STACK-style |
 | V3 | Migrate the existing linear domain to IR + generic gate | 1-2 d | Parity with current suite; no wire changes |
 | V4 | NL fidelity gate: constrained renderer, then blind parse-back + anchors | 2-3 d | Mismatch quarantines; anchors enforced |
 | V5 | MCQ option checks + misconception tags | 1-2 d | Two-correct and duplicate options rejected |

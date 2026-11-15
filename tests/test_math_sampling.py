@@ -12,7 +12,17 @@ from edcraft_validator.domains.math.ir.instantiate import (
     representative_item,
     sample_parameter_combinations,
 )
-from edcraft_validator.domains.math.ir.schema import MathTemplateSpec, ParameterSpec
+from edcraft_validator.domains.math.ir.schema import (
+    AnswerRecipe,
+    Expr,
+    Given,
+    Goal,
+    MathItemSpec,
+    MathTemplateSpec,
+    ParameterSpec,
+    SymbolSpec,
+    TextSpec,
+)
 from edcraft_validator.domains.math.math_schemas import (
     MathValidationSummary,
     ValidatedMathTemplate,
@@ -89,8 +99,27 @@ def test_validation_samples_a_large_domain_and_records_coverage() -> None:
     assert report.report.status == "passed", report.report.findings
     assert report.checking_mode == "property_based"
     assert report.seed == 5
-    assert report.variants_checked == 12
+    assert 1 <= report.variants_checked <= 12
     assert report.variants_total == 10_000
+
+
+def test_large_domain_sampling_is_deterministic_per_seed() -> None:
+    template = _large_template()
+
+    first = validate_template(template, max_variants=12, seed=5)
+    second = validate_template(template, max_variants=12, seed=5)
+    other = validate_template(template, max_variants=12, seed=6)
+
+    assert first.model_dump() == second.model_dump()
+    assert first.model_dump() != other.model_dump()
+
+
+def test_a_large_domain_checks_no_more_than_the_variant_budget() -> None:
+    template = _large_template()
+
+    for max_variants in (1, 4, 12, 20):
+        report = validate_template(template, max_variants=max_variants, seed=3)
+        assert 1 <= report.variants_checked <= max_variants
 
 
 def test_representative_item_renders_from_a_large_domain() -> None:
@@ -98,6 +127,49 @@ def test_representative_item_renders_from_a_large_domain() -> None:
 
     assert item.text.template.startswith("What is ")
     assert "{" not in item.text.template
+
+
+def test_a_single_wrong_parameter_value_rejects_the_template() -> None:
+    def num(value: int) -> Expr:
+        return Expr(num=str(value))
+
+    def add(*args: Expr) -> Expr:
+        return Expr(op="add", args=list(args))
+
+    def sub(left: Expr, right: Expr) -> Expr:
+        return Expr(op="sub", args=[left, right])
+
+    def mul(*args: Expr) -> Expr:
+        return Expr(op="mul", args=list(args))
+
+    parameter = Expr(param="a")
+    body = MathItemSpec(
+        topic="school.evaluate",
+        symbols=[SymbolSpec(name="x", domain="rational")],
+        givens=[Given(id="x_domain", kind="domain", symbol="x", domain="rational")],
+        goal=Goal(kind="evaluate", expr=add(parameter, num(1))),
+        # Correct for a = 1 and a = 2, wrong for a = 3.
+        answer_recipe=AnswerRecipe(
+            kind="numeric",
+            items=[
+                add(
+                    add(parameter, num(1)),
+                    mul(sub(parameter, num(1)), sub(parameter, num(2))),
+                )
+            ],
+        ),
+        text=TextSpec(mode="symbolic", template="Evaluate {expr}."),
+    )
+    template = MathTemplateSpec(
+        topic="school.evaluate",
+        parameters=[ParameterSpec(name="a", values=["1", "2", "3"])],
+        body=body,
+    )
+
+    report = validate_template(template)
+
+    assert report.report.status == "failed"
+    assert any(finding.startswith("variant a=3:") for finding in report.report.findings)
 
 
 def test_generation_draws_variants_beyond_the_validated_sample() -> None:

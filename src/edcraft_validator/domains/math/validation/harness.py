@@ -5,23 +5,26 @@ independent aspects, each requested separately. ``correctness`` asks the engine
 to grade the key correct and every distractor incorrect, with no two options
 sharing a value. ``form`` asks the form registry whether the key has the shape
 its goal demands, and form-sensitive goals apply the same rule to distractors.
-Neither aspect implies the other. Validation samples the declared parameter
-domain within a limited budget.
+Neither aspect implies the other. Validation checks the declared parameter
+domain through the shared Hypothesis property checker, with explicit boundary
+examples and exhaustive coverage of small domains.
 """
 
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Literal
+from typing import Any, Literal
 
+from hypothesis import assume
 from pydantic import BaseModel, ConfigDict
 
 from edcraft_validator.domains.math.engine_adapter import AdapterGap, grade
 from edcraft_validator.domains.math.ir.compile import MathCompileError
 from edcraft_validator.domains.math.ir.instantiate import (
     compile_distractor_value,
+    declared_domain_size,
     display_sympy_value,
-    sample_parameter_combinations,
+    fraction_text,
 )
 from edcraft_validator.domains.math.ir.schema import (
     AnswerRecipe,
@@ -42,8 +45,18 @@ from edcraft_validator.domains.math.validation.results import (
     OptionCheck,
     ValidationReport,
 )
+from edcraft_validator.validation.property_checks import (
+    PropertyCheckRun,
+    PropertyCheckSettings,
+)
+from edcraft_validator.validation.validation_contracts import ValidationFailure
 
 MAX_VARIANTS = MAX_IR_VARIANTS
+
+# A property-check deadline that stays inside the default 20 s worker deadline.
+PROPERTY_CHECK_TIMEOUT_SECONDS = 15.0
+
+_VARIANT_FAILED = "MATH_VARIANT_FAILED"
 
 Aspect = Literal["correctness", "form"]
 
@@ -362,23 +375,78 @@ def validate_template(
     seed: int = 0,
     aspect: Aspect = "correctness",
 ) -> HarnessReport:
-    """Sample the declared domain. Any sampled failure blocks the template."""
+    """Check the declared domain. Any failing combination blocks the template."""
     if template.body.answer_recipe is None:
         return _failed_harness_report(
             "template body must declare an answer_recipe; an answer "
             "cannot be derived for it"
         )
-    sample = sample_parameter_combinations(template, limit=max_variants, seed=seed)
 
-    if not sample.combinations:
+    declared_size = declared_domain_size(template)
+    parameters = _parameter_axes(template)
+    if not _has_valid_combination(parameters):
         return _failed_harness_report(
             "template has no parameter combinations",
-            variants_total=sample.declared_size,
+            variants_total=declared_size,
             seed=seed,
         )
 
-    reports = _variant_reports(template, sample.combinations, aspect)
+    boundary = _boundary_examples(template)
+    if declared_size <= max_variants:
+        # A small domain is enumerated completely, so the generation budget
+        # does not need to leave room for generated examples.
+        generation_budget = max_variants
+    else:
+        # Keep the whole run within the requested variant budget. At least one
+        # generated example remains so the seed still changes the sample, and
+        # the boundary examples fill the rest.
+        generation_budget = min(max(1, max_variants - len(boundary)), max_variants)
+        boundary = boundary[: max_variants - generation_budget]
+    config = PropertyCheckSettings(
+        max_examples=generation_budget,
+        max_execution_calls=4 * max_variants,
+        timeout_seconds=PROPERTY_CHECK_TIMEOUT_SECONDS,
+        seed=seed,
+    )
+    run = PropertyCheckRun(config)
 
+    def check_case(
+        combination: dict[str, Any], budget: PropertyCheckRun
+    ) -> HarnessReport:
+        if not _is_valid_combination(combination):
+            # The declared domain may contain literals that are not exact
+            # numbers. They are not members of the checkable domain.
+            assume(False)
+            raise AssertionError("an invalid combination was assumed away")
+        budget.reserve_execution()
+        result = validate_item(template.body, params=combination, aspect=aspect)
+        if result.report.status != "passed":
+            raise ValidationFailure(
+                "a parameter combination failed validation",
+                code=_VARIANT_FAILED,
+                context={
+                    "variant": _variant_text(combination),
+                    "harness_report": result.model_dump(mode="json"),
+                },
+            )
+        return result
+
+    try:
+        reports = run.check(
+            parameters,
+            boundary,
+            check_case,
+            cover_small_domain=True,
+        )
+    except ValidationFailure as exc:
+        return _property_failure_report(
+            exc,
+            variants_checked=int(exc.context.get("examples_checked", 0)),
+            variants_total=declared_size,
+            seed=seed,
+        )
+
+    details = run.details()
     return HarnessReport(
         report=ValidationReport(
             status=_sampled_status(reports),
@@ -387,22 +455,115 @@ def validate_template(
             options=[item for report in reports for item in report.report.options],
             findings=_variant_findings(reports),
         ),
-        variants_checked=len(reports),
-        variants_total=sample.declared_size,
+        variants_checked=details["examples_checked"],
+        variants_total=declared_size,
         seed=seed,
     )
 
 
-def _variant_reports(
-    template: MathTemplateSpec,
-    combinations: list[dict[str, Fraction]],
-    aspect: Aspect,
-) -> list[HarnessReport]:
-    """Check each sampled parameter combination as one item."""
-    return [
-        validate_item(template.body, params=combination, aspect=aspect)
-        for combination in combinations
-    ]
+def _parameter_axes(template: MathTemplateSpec) -> dict[str, list[Any]]:
+    """Declared values per parameter, in declaration order.
+
+    Exact literals become ``Fraction`` values. A literal that is not an exact
+    number stays as its raw string so the checker can skip that combination
+    instead of silently treating it as a member of the domain.
+    """
+    return {
+        parameter.name: [_exact_value(value) for value in parameter.values]
+        for parameter in template.parameters
+    }
+
+
+def _exact_value(value: str) -> Any:
+    try:
+        return Fraction(value)
+    except (ValueError, ZeroDivisionError):
+        return value
+
+
+def _is_valid_combination(combination: dict[str, Any]) -> bool:
+    return all(isinstance(value, Fraction) for value in combination.values())
+
+
+def _has_valid_combination(parameters: dict[str, list[Any]]) -> bool:
+    """Whether every axis declares at least one exact value."""
+    return all(
+        any(isinstance(value, Fraction) for value in values)
+        for values in parameters.values()
+    )
+
+
+def _boundary_examples(template: MathTemplateSpec) -> list[dict[str, Fraction]]:
+    """A few axis boundaries, mirroring the code domain's boundary examples."""
+    declared = _parameter_axes(template)
+    axes = {
+        name: [value for value in values if isinstance(value, Fraction)]
+        for name, values in declared.items()
+    }
+    if not _has_valid_combination(axes):
+        return []
+
+    base = {name: values[0] for name, values in axes.items()}
+    examples = [base, {name: values[-1] for name, values in axes.items()}]
+    for parameter in template.parameters:
+        values = axes[parameter.name]
+        examples.append(base | {parameter.name: values[-1]})
+        if Fraction(0) in values:
+            examples.append(base | {parameter.name: Fraction(0)})
+
+    unique: dict[tuple[tuple[str, str], ...], dict[str, Fraction]] = {}
+    for example in examples:
+        unique[_combination_key(example)] = example
+    return list(unique.values())
+
+
+def _combination_key(combination: dict[str, Any]) -> tuple[tuple[str, str], ...]:
+    return tuple((name, str(value)) for name, value in sorted(combination.items()))
+
+
+def _variant_text(combination: dict[str, Any]) -> str:
+    """Render one combination for a finding, using the question's notation."""
+    return ", ".join(
+        f"{name}={fraction_text(value) if isinstance(value, Fraction) else value}"
+        for name, value in combination.items()
+    )
+
+
+def _property_failure_report(
+    failure: ValidationFailure,
+    *,
+    variants_checked: int,
+    variants_total: int,
+    seed: int,
+) -> HarnessReport:
+    """Turn a property-check failure into a failed harness report."""
+    if failure.code == "PROPERTY_CHECK_BUDGET_EXCEEDED":
+        return HarnessReport(
+            report=ValidationReport(
+                status="failed",
+                findings=[f"{failure} ({failure.code})"],
+            ),
+            variants_checked=variants_checked,
+            variants_total=variants_total,
+            seed=seed,
+        )
+    if failure.code != _VARIANT_FAILED:
+        raise failure
+
+    failing = HarnessReport.model_validate(failure.context["harness_report"])
+    prefix = f"variant {failure.context['variant']}:"
+    return HarnessReport(
+        report=ValidationReport(
+            status="failed",
+            answer=failing.report.answer,
+            checks=failing.report.checks,
+            options=failing.report.options,
+            findings=[f"{prefix} {finding}" for finding in failing.report.findings],
+        ),
+        variants_checked=variants_checked,
+        variants_total=variants_total,
+        seed=seed,
+    )
 
 
 def _variant_findings(reports: list[HarnessReport]) -> list[str]:

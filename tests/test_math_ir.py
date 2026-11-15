@@ -254,7 +254,8 @@ def test_template_sweep_blocks_a_failing_variant() -> None:
 
     report = validate_template(template)
     assert report.report.status == "failed"
-    assert report.variants_checked == 2
+    assert report.variants_checked == 1
+    assert report.variants_total == 2
 
 
 def test_bounded_sample_reports_property_based_coverage() -> None:
@@ -297,6 +298,8 @@ def test_bounded_sample_reports_property_based_coverage() -> None:
     assert report.report.status == "passed"
     assert report.checking_mode == "property_based"
     assert report.seed == 0
+    # A one-variant budget leaves no room for boundary examples, so exactly one
+    # generated example is checked rather than the whole four-combination domain.
     assert report.variants_checked == 1
     assert report.variants_total == 4
     assert not any("truncated" in finding for finding in report.report.findings)

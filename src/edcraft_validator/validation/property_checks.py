@@ -102,7 +102,10 @@ class PropertyCheckRun:
             database=None,
             report_multiple_bugs=False,
             phases=(Phase.explicit, Phase.generate, Phase.shrink),
-            suppress_health_check=[HealthCheck.too_slow],
+            suppress_health_check=[
+                HealthCheck.too_slow,
+                HealthCheck.filter_too_much,
+            ],
         )
         @given(inputs=strategy)
         def check_case(inputs):

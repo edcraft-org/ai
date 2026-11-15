@@ -444,7 +444,7 @@ def test_ir_authoring_samples_a_domain_larger_than_the_budget() -> None:
     )
 
     assert validated.validation.checking_mode == "property_based"
-    assert validated.validation.combinations_checked == 100
+    assert 80 <= validated.validation.combinations_checked <= 100
     assert validated.validation.max_combinations == 400
 
     first = application.generate_question(validated, domain=MathDomain(), seed=1)
