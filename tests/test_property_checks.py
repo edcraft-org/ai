@@ -9,8 +9,8 @@ from test_code_templates import ArithmeticExecutor, template
 
 from edcraft_validator.domains.code.code_schemas import ValidatedCodeTemplate
 from edcraft_validator.domains.code.question_generator import generate_code_question
-from edcraft_validator.mcp.code_checks.property_checks import PropertyCheckSettings
 from edcraft_validator.mcp.code_tools import validate_answers_and_distractors
+from edcraft_validator.validation.property_checks import PropertyCheckSettings
 from edcraft_validator.validation.validation_contracts import ValidationFailure
 
 

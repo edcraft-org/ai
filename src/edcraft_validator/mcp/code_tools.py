@@ -31,11 +31,7 @@ from edcraft_validator.mcp.code_checks.distractor_checks import (
     check_proposed_distractor_selection,
 )
 from edcraft_validator.mcp.code_checks.execution_check import ExecutionCheck
-from edcraft_validator.mcp.code_checks.property_checks import (
-    PropertyCheckRun,
-    PropertyCheckSettings,
-    boundary_examples,
-)
+from edcraft_validator.mcp.code_checks.property_checks import boundary_examples
 from edcraft_validator.mcp.code_checks.structure_checks import (
     check_rendering,
     check_structure,
@@ -46,6 +42,10 @@ from edcraft_validator.mcp.code_checks.validation_context import (
 )
 from edcraft_validator.tools.python_execution import PythonExecutionTool
 from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
+from edcraft_validator.validation.property_checks import (
+    PropertyCheckRun,
+    PropertyCheckSettings,
+)
 from edcraft_validator.validation.validation_contracts import ValidationFailure
 from edcraft_validator.value_comparison import equivalent, same_value_shape
 
@@ -383,7 +383,11 @@ def validate_answers_and_distractors(
         check_distractors(single)
         return (inputs, actual, all_candidates)
 
-    rows = run.check(candidate, check_case)
+    rows = run.check(
+        {p.name: p.values for p in candidate.parameters},
+        boundary_examples(candidate),
+        check_case,
+    )
     context.inputs_cases = [row[0] for row in rows]
     context.canonical_answers = [row[1] for row in rows]
     context.eligible_indices = list(range(len(rows)))

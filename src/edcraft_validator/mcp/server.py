@@ -24,13 +24,13 @@ from edcraft_validator.llm.judging import (
     DEFAULT_JUDGE_TIMEOUT_SECONDS,
     JudgeProviderFactory,
 )
-from edcraft_validator.mcp.code_checks.property_checks import PropertyCheckSettings
 from edcraft_validator.mcp.relevance_tools import register_relevance_tools
 from edcraft_validator.mcp.tool_dependencies import ToolDependencies
 from edcraft_validator.tools.python_execution import (
     LocalPythonTool,
     PythonExecutionTool,
 )
+from edcraft_validator.validation.property_checks import PropertyCheckSettings
 
 
 def create_validation_server(

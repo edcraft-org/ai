@@ -4,8 +4,8 @@ from dataclasses import dataclass
 
 from edcraft_validator.llm.judge_configuration import JudgeSettings
 from edcraft_validator.llm.judging import JudgeProviderFactory
-from edcraft_validator.mcp.code_checks.property_checks import PropertyCheckSettings
 from edcraft_validator.tools.python_execution import PythonExecutionTool
+from edcraft_validator.validation.property_checks import PropertyCheckSettings
 
 
 @dataclass(frozen=True)
