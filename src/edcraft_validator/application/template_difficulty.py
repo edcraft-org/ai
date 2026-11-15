@@ -281,17 +281,6 @@ def _rubric_unavailable(
             "subject_sha256": subject_sha256,
             "requested_difficulty": requested_difficulty,
             "difficulty_outcome": outcome.model_dump(mode="json"),
-            **outcome.model_dump(
-                mode="json",
-                include={
-                    "assessment_path",
-                    "requested_difficulty",
-                    "estimated_difficulty",
-                    "confidence",
-                    "confidence_source",
-                    "decision",
-                },
-            ),
         },
         duration_ms=(time.perf_counter() - started) * 1000,
     )
@@ -399,18 +388,6 @@ def _build_evidence(
         "difficulty_outcome": outcome.model_dump(mode="json"),
         "usage": summarize_usage(calls).model_dump(mode="json"),
         "model_calls": [call.model_dump(mode="json") for call in calls],
-        # Retain the existing flat fields while clients migrate to the typed outcome.
-        **outcome.model_dump(
-            mode="json",
-            include={
-                "assessment_path",
-                "requested_difficulty",
-                "estimated_difficulty",
-                "confidence",
-                "confidence_source",
-                "decision",
-            },
-        ),
     }
 
     if outcome.estimated_difficulty is not None:

@@ -63,10 +63,16 @@ async def test_confidence_070_accepts_decision_and_mismatch_is_advisory(
     result = await assess_template_difficulty(
         **difficulty_arguments(), provider_factory=lambda: judge
     )
-    assert result.status == status and result.details["decision"] == decision
+    assert (
+        result.status == status
+        and result.details["difficulty_outcome"]["decision"] == decision
+    )
     assert len(judge.decisions) == 1 and judge.requests == []
-    assert result.details["confidence_source"] == "first_token_label_mass"
-    assert result.details["estimated_difficulty"] == label
+    assert (
+        result.details["difficulty_outcome"]["confidence_source"]
+        == "first_token_label_mass"
+    )
+    assert result.details["difficulty_outcome"]["estimated_difficulty"] == label
     assert result.details["screen"]["assessment"]["served_model"] == "served-model"
     assert result.details["usage"]["model_call_count"] == 1
     assert result.details["usage"]["input_tokens"] == 7
@@ -92,14 +98,17 @@ async def test_low_confidence_routes_to_same_model_and_keeps_reasoning_policy(
     result = await assess_template_difficulty(
         **difficulty_arguments(), provider_factory=factory
     )
-    assert result.status == status and result.details["assessment_path"] == "reasoning"
+    assert (
+        result.status == status
+        and result.details["difficulty_outcome"]["assessment_path"] == "reasoning"
+    )
     assert len(judges) == 2 and {j.model for j in judges} == {"same-model"}
     assert len(judges[0].decisions) == 1 and not judges[0].requests
     assert len(judges[1].requests) == 1 and not judges[1].decisions
     assert judges[1].requests[0].reasoning_effort == "medium"
     assert result.details["usage"]["model_call_count"] == 2
     assert result.details["usage"]["input_tokens"] == 107
-    assert result.details["confidence_source"] == "self_reported"
+    assert result.details["difficulty_outcome"]["confidence_source"] == "self_reported"
 
 
 async def test_failed_decision_falls_back_once_and_failed_reasoning_cannot_pass():
@@ -132,11 +141,11 @@ def test_advisory_decision_mismatch_saves_checked_artifact_and_reuse_stays_local
 
     first = result.attempts[0].executions[-1].evidence
     assert first.status == "failed"
-    assert first.details["decision"] == "advisory_mismatch"
+    assert first.details["difficulty_outcome"]["decision"] == "advisory_mismatch"
     saved = result.artifact.validation.evidence[-1].details
-    assert saved["estimated_difficulty"] == "hard"
+    assert saved["difficulty_outcome"]["estimated_difficulty"] == "hard"
     assert saved["requested_difficulty"] == "easy"
-    assert saved["confidence_source"] == "first_token_label_mass"
+    assert saved["difficulty_outcome"]["confidence_source"] == "first_token_label_mass"
 
     before = len(judges)
     app = TemplateApplication()

@@ -131,48 +131,6 @@ def test_validation_summary_rejects_failed_technical_evidence() -> None:
         )
 
 
-def test_validation_summary_migrates_legacy_relevance_on_read() -> None:
-    summary = MathValidationSummary(
-        **coverage(),
-        evidence=[
-            ValidationEvidence(check="math_verify_item_spec", status="passed"),
-            ValidationEvidence(check="math_validate_options", status="passed"),
-            ValidationEvidence(
-                check="math_assess_template_relevance",
-                status="failed",
-                details={"advisory": True},
-            ),
-        ],
-    )
-
-    assert summary.evidence[-1].check == "assess_template_relevance"
-    assert summary.evidence[-1].status == "failed"
-
-
-def test_validation_summary_drops_stale_legacy_relevance_duplicate() -> None:
-    summary = MathValidationSummary(
-        **coverage(),
-        evidence=[
-            ValidationEvidence(check="math_verify_item_spec", status="passed"),
-            ValidationEvidence(
-                check="math_assess_template_relevance",
-                status="failed",
-                details={"advisory": True},
-            ),
-            ValidationEvidence(
-                check="assess_template_relevance",
-                status="failed",
-                details={"advisory": True},
-            ),
-        ],
-    )
-
-    assert [item.check for item in summary.evidence] == [
-        "math_verify_item_spec",
-        "assess_template_relevance",
-    ]
-
-
 def test_validated_artifact_round_trips() -> None:
     candidate = ir_candidate(quadratic_ir_template())
     artifact = ValidatedMathTemplate(
@@ -271,10 +229,3 @@ def test_generation_request_schema_is_json_serializable() -> None:
     assert "MathTemplateContent" in encoded
     assert "item" in encoded
     assert "parameters" in encoded
-
-
-def test_proposal_response_alias_keeps_downstream_imports_working() -> None:
-    from edcraft_validator.domains.math.math_schemas import MathTemplateContent
-    from edcraft_validator.domains.math.proposal_response import MathProposalResponse
-
-    assert MathProposalResponse is MathTemplateContent

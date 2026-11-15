@@ -145,7 +145,7 @@ def test_low_confidence_mismatch_returns_warning_without_revision_or_relabelling
     assert saved.issues[0].code == result.warnings[0].code
     assert saved.details["requested_difficulty"] == "easy"
     assert saved.details["judge"]["assessment"]["estimated_difficulty"] == "hard"
-    assert saved.details["decision"] == "advisory_mismatch"
+    assert saved.details["difficulty_outcome"]["decision"] == "advisory_mismatch"
     assert saved.details["confidence_calibrated"] is False
 
 

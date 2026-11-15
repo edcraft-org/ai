@@ -191,7 +191,10 @@ def test_direct_template_tool_mismatch_is_advisory_and_reuse_stays_local():
     final_check = result.attempts[0].executions[-1]
     assert final_check.evidence.status == "failed"
     assert final_check.evidence.findings[0].code == "DIFFICULTY_MISMATCH"
-    assert final_check.evidence.details["decision"] == "advisory_mismatch"
+    assert (
+        final_check.evidence.details["difficulty_outcome"]["decision"]
+        == "advisory_mismatch"
+    )
     assert final_check.evidence.details["subject_sha256"] == template_sha256(
         result.artifact.template
     )
@@ -204,7 +207,7 @@ def test_direct_template_tool_mismatch_is_advisory_and_reuse_stays_local():
     assert saved.status == "failed"
     assert saved.details["advisory"] is True
     assert saved.details["requested_difficulty"] == "easy"
-    assert saved.details["estimated_difficulty"] == "hard"
+    assert saved.details["difficulty_outcome"]["estimated_difficulty"] == "hard"
     assert saved.details["subject_sha256"] == template_sha256(result.artifact.template)
     assert final_check.application_arguments["question_payload"] == (
         blinded_template_payload(result.artifact.template)

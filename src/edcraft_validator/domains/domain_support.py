@@ -173,7 +173,7 @@ def _advisory_status(
     details: dict[str, Any],
 ) -> EvidenceStatus:
     """Decide the saved verdict for one advisory assessment."""
-    recorded_sha256 = _recorded_sha256(item)
+    recorded_sha256 = item.details.get("subject_sha256")
     if recorded_sha256 is None:
         details.update(
             unavailable=True,
@@ -195,12 +195,3 @@ def _advisory_status(
         )
         return "incomplete"
     return "passed"
-
-
-def _recorded_sha256(item: ToolEvidence) -> str | None:
-    """Read the subject identity, including the older key name."""
-    recorded_sha256 = item.details.get("subject_sha256")
-    if recorded_sha256 is None:
-        # Evidence written before the key was standardised.
-        recorded_sha256 = item.details.get("template_sha256")
-    return recorded_sha256

@@ -238,7 +238,10 @@ def test_maths_difficulty_mismatch_is_advisory_and_keeps_the_artifact() -> None:
         if item.tool == "assess_template_difficulty"
     )
     assert execution.evidence.status == "failed"
-    assert execution.evidence.details["decision"] == "advisory_mismatch"
+    assert (
+        execution.evidence.details["difficulty_outcome"]["decision"]
+        == "advisory_mismatch"
+    )
     assert result.artifact is not None
 
     saved = next(
@@ -248,7 +251,7 @@ def test_maths_difficulty_mismatch_is_advisory_and_keeps_the_artifact() -> None:
     )
     assert saved.status == "failed"
     assert saved.details["requested_difficulty"] == "hard"
-    assert saved.details["estimated_difficulty"] == "easy"
+    assert saved.details["difficulty_outcome"]["estimated_difficulty"] == "easy"
 
 
 def test_application_adds_the_required_checks_the_model_omits() -> None:

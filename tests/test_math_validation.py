@@ -268,7 +268,7 @@ def test_finalize_keeps_advisory_failures() -> None:
                 )
             ],
             "details": {
-                "template_sha256": template_sha256(candidate),
+                "subject_sha256": template_sha256(candidate),
             },
         }
     )

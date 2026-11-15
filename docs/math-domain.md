@@ -234,6 +234,3 @@ The SymPy primitive oracles, model-facing witnesses and the test-only topic
 fixture package are also removed. Correctness is decided only by the engine and
 shape only by the form registry; option collision checks use one internal
 distinctness helper.
-
-The only retained read-time migration is the advisory evidence name
-`math_assess_template_relevance` → `assess_template_relevance`.

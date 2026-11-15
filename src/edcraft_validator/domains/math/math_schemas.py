@@ -4,19 +4,17 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.domains.domain_support import TemplateRequest
 from edcraft_validator.domains.math.ir.schema import MathTemplateSpec
 from edcraft_validator.domains.math.math_types import (
-    LEGACY_MATH_RELEVANCE_TOOL,
     MATH_CHECKING_MODE,
     MATH_FORMAT_VERSION,
     MATH_VALIDATOR_VERSION,
     Difficulty,
 )
-from edcraft_validator.validation.check_names import TEMPLATE_RELEVANCE_CHECK
 from edcraft_validator.validation.property_summary import PropertyCheckSummary
 from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
@@ -84,38 +82,6 @@ class MathValidationSummary(PropertyCheckSummary):
     checking_mode: Literal["property_based"] = MATH_CHECKING_MODE
     declared_domain_size: int = Field(ge=1)
     evidence: list[ValidationEvidence] = Field(min_length=1)
-
-    @field_validator("evidence", mode="before")
-    @classmethod
-    def migrate_legacy_relevance(cls, value: object) -> object:
-        """Rewrite the retired relevance check name while reading old artifacts."""
-        if not isinstance(value, list):
-            return value
-        migrated: list[object] = []
-        seen: set[str] = set()
-
-        for item in value:
-            if isinstance(item, BaseModel):
-                data = item.model_dump()
-            elif isinstance(item, dict):
-                data = dict(item)
-            else:
-                migrated.append(item)
-                continue
-            legacy = data.get("check") == LEGACY_MATH_RELEVANCE_TOOL
-            if legacy:
-                data["check"] = TEMPLATE_RELEVANCE_CHECK
-            check = data.get("check")
-            if isinstance(check, str):
-                # An artifact rewritten after the rename can carry both names.
-                # Evidence checks are unique by contract, so read-compat keeps
-                # the first row for each name instead of rejecting old files.
-                if check in seen:
-                    continue
-                seen.add(check)
-            migrated.append(data)
-
-        return migrated
 
 
 class ValidatedMathTemplate(ValidatedTemplateArtifact):

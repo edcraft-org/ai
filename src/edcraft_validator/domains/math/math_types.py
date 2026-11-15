@@ -51,8 +51,3 @@ MATH_CHECKING_MODE: Literal["property_based"] = "property_based"
 MATH_VALIDATOR_VERSION: Literal["mcp-math-template-v1"] = "mcp-math-template-v1"
 MATH_IR_TOOL_VERSION = "1.1.0"
 MATH_FORMAT_VERSION: Literal["1.0.0"] = "1.0.0"
-
-# Retired public identifier, retained as a constant alias so downstream imports
-# keep working. It is read-compatibility only; new evidence uses the shared
-# relevance check name.
-LEGACY_MATH_RELEVANCE_TOOL = "math_assess_template_relevance"
