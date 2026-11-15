@@ -1,11 +1,28 @@
 """Local adapter for executing a batch with the Python tracing tool."""
 
-import json
-import os
-import subprocess
-import sys
+import re
 from dataclasses import dataclass, replace
 from typing import Any, Protocol
+
+from edcraft_validator.tools.isolated_process import (
+    DEFAULT_MEMORY_LIMIT_BYTES,
+    cpu_limit_for_timeout,
+    run_json_worker,
+)
+
+WORKER_MODULE = "edcraft_validator.tools.python_worker"
+
+
+class PythonToolTimeout(TimeoutError):
+    """The Python execution worker exceeded its wall-clock deadline."""
+
+
+class PythonToolWorkerError(RuntimeError):
+    """The Python execution worker failed before returning a usable result."""
+
+
+class PythonToolMemoryError(RuntimeError):
+    """The Python execution worker exceeded its memory limit."""
 
 
 @dataclass
@@ -72,45 +89,33 @@ class LocalPythonTool:
         payload: dict[str, Any], *, host_timeout: float
     ) -> dict[str, Any] | ExecutionResult:
         try:
-            process = subprocess.run(
-                [sys.executable, "-m", "edcraft_validator.tools.python_worker"],
-                input=json.dumps(payload, allow_nan=False),
-                capture_output=True,
-                text=True,
-                timeout=host_timeout,
-                check=False,
-                env={
-                    "PATH": os.environ.get("PATH", ""),
-                    "PYTHONIOENCODING": "utf-8",
-                },
+            response = run_json_worker(
+                payload,
+                module=WORKER_MODULE,
+                timeout_seconds=host_timeout,
+                timeout_error=PythonToolTimeout,
+                worker_error=PythonToolWorkerError,
+                memory_error=PythonToolMemoryError,
+                description="Python tool",
+                worker_description="Python tool worker",
+                cpu_seconds=cpu_limit_for_timeout(host_timeout),
+                memory_bytes=DEFAULT_MEMORY_LIMIT_BYTES,
             )
-        except subprocess.TimeoutExpired:
+        except TimeoutError:
             return ExecutionResult(
                 ok=False,
                 error_code="EXECUTION_TIMEOUT",
                 error_message="Python tool exceeded its execution timeout",
             )
-
-        if process.returncode < 0:
+        except MemoryError:
             return ExecutionResult(
                 ok=False,
                 error_code="RESOURCE_LIMIT_EXCEEDED",
                 error_message="Python tool was stopped by an operating-system limit",
             )
-        if process.returncode != 0:
-            return ExecutionResult(
-                ok=False,
-                error_code="TOOL_FAILURE",
-                error_message=process.stderr.strip() or "Python tool failed",
-            )
-        try:
-            response = json.loads(process.stdout)
-        except json.JSONDecodeError:
-            return ExecutionResult(
-                ok=False,
-                error_code="INVALID_TOOL_OUTPUT",
-                error_message="Python tool returned invalid JSON",
-            )
+        except RuntimeError as exc:
+            return _worker_failure(exc)
+
         if not isinstance(response, dict):
             return ExecutionResult(
                 ok=False,
@@ -118,6 +123,50 @@ class LocalPythonTool:
                 error_message="Python tool returned a non-object result",
             )
         return response
+
+
+_OS_SIGNAL_EXIT = re.compile(r"exited with -\d+")
+_INVALID_OUTPUT_MARKERS = ("returned invalid JSON", "returned a non-object")
+
+
+def _worker_failure(exc: RuntimeError) -> ExecutionResult:
+    """Map a runner failure onto the historical execution error codes.
+
+    ``run_json_worker`` distinguishes memory failures with a dedicated error
+    type. Its remaining transport failures all share one worker-error type, so
+    the message is the only signal that separates invalid output and an
+    operating-system kill from an ordinary worker crash.
+    """
+    message = str(exc)
+    if isinstance(exc, PythonToolMemoryError) or (
+        "memory limit" in message and "exceeded" in message
+    ):
+        return ExecutionResult(
+            ok=False,
+            error_code="RESOURCE_LIMIT_EXCEEDED",
+            error_message="Python tool was stopped by an operating-system limit",
+        )
+    if any(marker in message for marker in _INVALID_OUTPUT_MARKERS):
+        return ExecutionResult(
+            ok=False,
+            error_code="INVALID_TOOL_OUTPUT",
+            error_message=(
+                "Python tool returned invalid JSON"
+                if "invalid JSON" in message
+                else "Python tool returned a non-object result"
+            ),
+        )
+    if _OS_SIGNAL_EXIT.search(message):
+        return ExecutionResult(
+            ok=False,
+            error_code="RESOURCE_LIMIT_EXCEEDED",
+            error_message="Python tool was stopped by an operating-system limit",
+        )
+    return ExecutionResult(
+        ok=False,
+        error_code="TOOL_FAILURE",
+        error_message=message or "Python tool failed",
+    )
 
 
 def _to_result(result: dict[str, Any]) -> ExecutionResult:
