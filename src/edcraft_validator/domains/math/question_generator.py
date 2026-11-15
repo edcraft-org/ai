@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import sympy
+
 from edcraft_validator.domains.domain_support import seeded_index
 from edcraft_validator.domains.math.ir.compile import MathCompileError
 from edcraft_validator.domains.math.ir.instantiate import (
@@ -85,11 +87,8 @@ def _build_ir_instance(
         compiled = compile_answer_recipe(recipe, body.symbols, values)
     except MathCompileError as exc:
         raise UnusableVariant(f"the answer recipe does not compile: {exc}") from exc
-    answer = display_sympy_value(compiled).strip()
-    if not answer:
-        raise UnusableVariant("the answer recipe renders an empty answer")
 
-    distractor_choices: list[str] = []
+    distractor_values: list[object] = []
     # The key counts as a choice, so a distractor equal to it in value is rejected.
     seen: list[object] = [compiled]
     for distractor in body.distractors:
@@ -97,12 +96,18 @@ def _build_ir_instance(
         if any(same_value(value, other) for other in seen):
             raise UnusableVariant("distractor choices are not distinct")
         seen.append(value)
-        display = display_sympy_value(value).strip()
-        if not display or display == answer or display in distractor_choices:
-            raise UnusableVariant("distractor choices are not distinct")
-        distractor_choices.append(display)
-    if not distractor_choices:
+        distractor_values.append(value)
+    if not distractor_values:
         raise UnusableVariant("the template declares no distractors")
+
+    answer, distractor_choices = _render_choices(compiled, distractor_values)
+    if not answer:
+        raise UnusableVariant("the answer recipe renders an empty answer")
+    rendered_choices: list[str] = [answer]
+    for display in distractor_choices:
+        if not display or display in rendered_choices:
+            raise UnusableVariant("distractor choices are not distinct")
+        rendered_choices.append(display)
 
     choices = list(distractor_choices)
     correct_index = seeded_index(
@@ -122,3 +127,42 @@ def _build_ir_instance(
         answer=answer,
         topic=template.topic,
     )
+
+
+def _render_choices(key: object, distractors: list[object]) -> tuple[str, list[str]]:
+    """Render the key and distractors with one consistent set form.
+
+    A one-element set and a plain scalar are both shown bare, so a lone root
+    never stands out with braces. If that does not describe every choice and
+    the key is a set, every choice is shown as a set and scalar distractors are
+    wrapped as one-element sets. Other keys keep the existing rendering.
+    """
+    values = [key, *distractors]
+    if all(_is_bare_choice(value) for value in values):
+        rendered = [_render_bare_choice(value) for value in values]
+    elif isinstance(key, sympy.FiniteSet):
+        rendered = [_render_set_choice(value) for value in values]
+    else:
+        rendered = [display_sympy_value(value).strip() for value in values]
+    return rendered[0], rendered[1:]
+
+
+def _is_bare_choice(value: object) -> bool:
+    """Whether a choice is a scalar or a one-element set that can show bare."""
+    if isinstance(value, sympy.FiniteSet):
+        return len(value.args) == 1
+    return not isinstance(value, sympy.Set)
+
+
+def _render_bare_choice(value: object) -> str:
+    """Render a scalar directly, or a one-element set as its element."""
+    if isinstance(value, sympy.FiniteSet):
+        return display_sympy_value(next(iter(value.args))).strip()
+    return display_sympy_value(value).strip()
+
+
+def _render_set_choice(value: object) -> str:
+    """Render a set directly, or wrap a scalar as a one-element set."""
+    if isinstance(value, sympy.FiniteSet):
+        return display_sympy_value(value).strip()
+    return display_sympy_value(sympy.FiniteSet(value)).strip()
