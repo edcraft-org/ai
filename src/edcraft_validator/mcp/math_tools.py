@@ -153,7 +153,6 @@ def register_math_tools(
         version=MATH_TOOL_VERSION,
         tags={
             "domain:math",
-            "quality:math",
             "stage:after-validation",
             "policy:advisory",
         },

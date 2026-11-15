@@ -16,14 +16,7 @@ from edcraft_validator.domains.math.engine.contracts import (
 )
 from edcraft_validator.domains.math.engine.validation import validate_request
 from edcraft_validator.tools.isolated_process import run_json_worker
-from edcraft_validator.validation.check_contracts import (
-    ToolEvidence,
-    ToolFinding,
-    ToolStatus,
-)
 
-TOOL_NAME = "math_check_correctness"
-TOOL_VERSION = "1.0.0"
 WORKER_MODULE = "edcraft_validator.domains.math.engine.worker"
 DEFAULT_TIMEOUT_SECONDS = 10.0
 
@@ -86,28 +79,4 @@ def check_math_correctness(
 
     return result.model_copy(
         update={"duration_ms": (time.perf_counter() - started) * 1000}
-    )
-
-
-def correctness_evidence(result: CorrectnessResult) -> ToolEvidence:
-    """Preserve unresolved outcomes inside the shared three-state transport."""
-    status: ToolStatus = (
-        "passed"
-        if result.outcome == "correct"
-        else "failed"
-        if result.outcome == "incorrect"
-        else "error"
-    )
-
-    return ToolEvidence(
-        tool=TOOL_NAME,
-        version=TOOL_VERSION,
-        status=status,
-        findings=[]
-        if status == "passed"
-        else [
-            ToolFinding(code="MATH_" + result.outcome.upper(), message=result.reason)
-        ],
-        details=result.model_dump(mode="json"),
-        duration_ms=result.duration_ms,
     )

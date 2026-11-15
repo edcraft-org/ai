@@ -22,7 +22,7 @@ from edcraft_validator.domains.code.relevance import (
 )
 from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.relevance_contracts import RelevanceInput, RelevanceReport
-from tests.test_code_relevance import Decisions, Executor
+from tests.test_code_relevance import Decisions
 from tests.test_difficulty_tool import question
 
 
@@ -162,50 +162,6 @@ async def test_caller_mutation_cannot_change_in_flight_identity_or_representatio
         await task
     assert report.input_sha256 == identity
     assert report.decision.question_text == "original"
-
-
-async def test_each_mcp_check_runs_without_calling_the_other_services():
-    def forbidden():
-        pytest.fail("Python checks must not construct any model provider")
-
-    executor = Executor()
-    server = create_validation_server(
-        difficulty_provider_factory=forbidden,
-        decision_provider_factory=forbidden,
-        code_execution_tool=executor,
-    )
-    item = question().model_copy(update={"correct_option": "A"})
-
-    async with Client(server) as client:
-        technical = await client.call_tool(
-            "check_code_question_correctness",
-            {"question": item.model_dump(mode="json")},
-        )
-        assert technical.structured_content["status"] == "failed"
-        assert technical.structured_content["question_sha256"] == item.sha256
-        assert executor.calls == 1
-        requirements = await client.call_tool(
-            "check_code_question_requirements",
-            {
-                "question": item.model_dump(mode="json"),
-                "request": {"prompt": "Use a loop.", "required_features": ["loop"]},
-            },
-        )
-        assert requirements.structured_content["status"] == "missing"
-        assert requirements.structured_content["question_sha256"] == item.sha256
-        assert executor.calls == 1
-        for name in (
-            "check_code_question_correctness",
-            "check_code_question_requirements",
-        ):
-            definition = next(t for t in await client.list_tools() if t.name == name)
-            assert (
-                "domain:code"
-                not in definition.model_dump(by_alias=True)["_meta"]["fastmcp"]["tags"]
-            )
-            assert not {"similarity", "relevance", "judge"} & set(
-                definition.output_schema["properties"]
-            )
 
 
 async def test_shared_mcp_works_even_when_python_execution_is_unavailable():

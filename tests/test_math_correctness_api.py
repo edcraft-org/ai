@@ -1,11 +1,9 @@
-"""Public-engine outcomes, resource limits and MCP integration."""
+"""Public-engine outcomes and resource limits."""
 
 import pytest
-from fastmcp import Client
 
 from edcraft_validator.domains.math.engine.contracts import CorrectnessRequest
 from edcraft_validator.domains.math.math_correctness import check_math_correctness
-from edcraft_validator.mcp.server import create_validation_server
 
 
 def derivative_request(coefficient="3"):
@@ -77,22 +75,6 @@ def test_hard_deadline_returns_timeout():
 def test_invalid_deadline_is_rejected(timeout):
     with pytest.raises(ValueError):
         check_math_correctness(derivative_request(), timeout_seconds=timeout)
-
-
-async def test_mcp_exposes_one_deterministic_correctness_check():
-    async with Client(create_validation_server()) as client:
-        result = await client.call_tool(
-            "math_check_correctness", {"request": derivative_request()}
-        )
-        tools = await client.list_tools()
-
-    assert not result.is_error
-    evidence = result.structured_content
-    assert evidence["status"] == "passed"
-    assert evidence["details"]["outcome"] == "correct"
-    tool = next(t for t in tools if t.name == "math_check_correctness")
-    assert not tool.annotations.open_world_hint
-    assert tool.annotations.idempotent_hint
 
 
 def test_request_json_roundtrip_preserves_answer_kind():

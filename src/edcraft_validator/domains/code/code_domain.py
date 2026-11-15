@@ -39,7 +39,6 @@ from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     StructuredGenerationRequest,
 )
-from edcraft_validator.mcp.code_question_tools import register_code_question_tools
 from edcraft_validator.mcp.code_tools import register_code_validation_tools
 from edcraft_validator.mcp.difficulty_tools import register_difficulty_tools
 from edcraft_validator.mcp.tool_dependencies import ToolDependencies
@@ -77,11 +76,6 @@ class CodeDomain:
             provider_factory=dependencies.difficulty_provider_factory,
             judge_timeout_seconds=dependencies.difficulty_judge_timeout_seconds,
             settings=dependencies.judge_settings,
-        )
-        register_code_question_tools(
-            server,
-            execution_tool=dependencies.execution_tool,
-            execution_timeout_seconds=dependencies.code_execution_timeout_seconds,
         )
 
     def review_view(

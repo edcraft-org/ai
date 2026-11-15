@@ -7,6 +7,9 @@ from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from pydantic import ValidationError
 
+from edcraft_validator.domains.code.code_difficulty import (
+    assess_code_question_difficulty,
+)
 from edcraft_validator.domains.code.code_relevance import (
     CodeRelevanceReview,
     review_code_question_relevance,
@@ -205,13 +208,17 @@ def test_counts_use_trace_summary_instead_of_return_value(target):
 
 
 @pytest.mark.parametrize("difficulty_error", [False, True])
-async def test_mcp_difficulty_success_or_failure_cannot_affect_relevance(
+async def test_difficulty_success_or_failure_cannot_affect_relevance(
     difficulty_error,
 ):
     provider = Provider(
         RuntimeError("PRIVATE REMOTE ERROR") if difficulty_error else None
     )
     executor = Executor()
+
+    difficulty = await assess_code_question_difficulty(
+        question(), provider_factory=lambda: provider
+    )
     server = create_validation_server(
         difficulty_provider_factory=lambda: provider,
         decision_provider_factory=Decisions,
@@ -219,10 +226,6 @@ async def test_mcp_difficulty_success_or_failure_cannot_affect_relevance(
     )
 
     async with Client(server) as client:
-        difficulty = await client.call_tool(
-            "assess_code_difficulty", {"question": question().model_dump(mode="json")}
-        )
-
         relevance = await client.call_tool(
             "assess_relevance",
             {
@@ -233,11 +236,9 @@ async def test_mcp_difficulty_success_or_failure_cannot_affect_relevance(
         )
 
     assert len(provider.requests) == 1
-    assert difficulty.structured_content["status"] == (
-        "error" if difficulty_error else "assessed"
-    )
+    assert difficulty.status == ("error" if difficulty_error else "assessed")
     if not difficulty_error:
-        assert difficulty.structured_content["judge"]["assessment"]["quality_concerns"]
+        assert difficulty.judge.assessment.quality_concerns
     data = relevance.structured_content
     assert data["status"] == "assessed" and executor.calls == 0
     assert data["decision"]["relevant"] is True

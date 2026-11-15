@@ -1,17 +1,8 @@
 """Explicit advisory tools kept outside the authoritative validation catalogue."""
 
-from typing import Annotated
-
 from fastmcp import FastMCP
-from pydantic import Field
 
-from edcraft_validator.domains.code.code_difficulty import (
-    CodeDifficultyReport,
-    assess_code_question_difficulty,
-)
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
-from edcraft_validator.domains.code.code_types import Difficulty
-from edcraft_validator.domains.code.difficulty import CodeDifficultyQuestion
 from edcraft_validator.domains.code.difficulty_assessment import (
     assess_template_difficulty,
 )
@@ -30,48 +21,10 @@ def register_difficulty_tools(
     # Model responses are not deterministic; read-only still sends question data
     # to the host-configured provider and may incur inference cost.
     @server.tool(
-        name="assess_code_difficulty",
-        version="2.0.0",
-        tags={"quality:code"},
-        annotations={
-            "readOnlyHint": True,
-            "destructiveHint": False,
-            "idempotentHint": False,
-            "openWorldHint": True,
-        },
-        description=(
-            "Explicit advisory assessment of one complete concrete Python tracing MCQ. "
-            "Sends the supplied MCQ and answer designation to a "
-            "host-configured LLM judge using the versioned difficulty rubric. "
-            "Requested difficulty is hidden during estimation and compared afterwards. "
-            "Selects one closest level, or unable_to_assess for missing information. "
-            "Makes one assessment call and reports diagnostics, usage and latency; "
-            "assessed means an assessment was produced, not a correctness pass or "
-            "a difficulty match. Does not execute code or verify correctness; "
-            "correctness checks belong to other tools. No template-wide "
-            "difficulty or learner calibration is established. May incur model cost."
-        ),
-    )
-    async def assess_code_difficulty(
-        question: CodeDifficultyQuestion,
-        requested_difficulty: Annotated[
-            Difficulty | None,
-            Field(description="Optional authoring target, hidden from the LLM judge."),
-        ] = None,
-    ) -> CodeDifficultyReport:
-        return await assess_code_question_difficulty(
-            question,
-            requested_difficulty=requested_difficulty,
-            provider_factory=provider_factory,
-            judge_timeout_seconds=judge_timeout_seconds,
-        )
-
-    @server.tool(
         name="code_assess_template_difficulty",
         version="1.2.0",
         tags={
             "domain:code",
-            "quality:code",
             "stage:after-validation",
             "policy:advisory",
         },

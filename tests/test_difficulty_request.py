@@ -3,10 +3,12 @@
 import json
 
 import pytest
-from fastmcp import Client
 from pydantic import ValidationError
-from test_difficulty_tool import ForbiddenExecutor, Provider, assessment, question
+from test_difficulty_tool import Provider, assessment, question
 
+from edcraft_validator.domains.code.code_difficulty import (
+    assess_code_question_difficulty,
+)
 from edcraft_validator.domains.code.difficulty import (
     DifficultyAssessment,
     build_difficulty_request,
@@ -18,7 +20,6 @@ from edcraft_validator.domains.code.difficulty_request import (
     worked_anchors,
 )
 from edcraft_validator.llm.judge_configuration import configured_judge_provider
-from edcraft_validator.mcp.server import create_validation_server
 
 
 def keyed_payload(count=4):
@@ -90,7 +91,7 @@ def test_runtime_has_only_three_original_anchors_and_no_review_prerequisites():
     assert "Do not sum dimension ratings" in prompt
 
 
-async def test_request_is_blinded_single_pass_and_mcp_output_remains_canonical():
+async def test_request_is_blinded_single_pass_and_output_remains_canonical():
     providers = []
 
     def factory():
@@ -98,23 +99,13 @@ async def test_request_is_blinded_single_pass_and_mcp_output_remains_canonical()
         providers.append(value)
         return value
 
-    async with Client(
-        create_validation_server(
-            difficulty_provider_factory=factory,
-            code_execution_tool=ForbiddenExecutor(),
-        )
-    ) as client:
-        response = await client.call_tool(
-            "assess_code_difficulty",
-            {
-                "question": question().model_dump(mode="json"),
-                "requested_difficulty": "hard",
-            },
-        )
-    value = response.structured_content
-    assert value["status"] == "assessed" and value["difficulty_match"] == "too_easy"
-    assert value["judge"]["assessment"] == assessment()
-    assert value["usage"]["model_call_count"] == len(providers) == 1
+    value = await assess_code_question_difficulty(
+        question(), requested_difficulty="hard", provider_factory=factory
+    )
+
+    assert value.status == "assessed" and value.difficulty_match == "too_easy"
+    assert value.judge.assessment.model_dump(mode="json") == assessment()
+    assert value.usage.model_call_count == len(providers) == 1
 
     request = providers[0].requests[0]
     assert request == build_difficulty_request(

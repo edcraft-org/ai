@@ -8,8 +8,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fastmcp import Client
-from fastmcp.exceptions import ToolError
 from judge_helpers import assessment
 from pydantic import ValidationError
 
@@ -32,7 +30,6 @@ from edcraft_validator.llm.llm_errors import (
 )
 from edcraft_validator.llm.openai_compatible_provider import OpenAICompatibleProvider
 from edcraft_validator.llm.usage import TokenUsage
-from edcraft_validator.mcp.server import create_validation_server
 
 
 def question():
@@ -95,45 +92,33 @@ async def assess(provider=None, item=None, **kwargs):
     )
 
 
-async def test_mcp_assessment_does_not_execute_or_report_correctness():
+async def test_assessment_does_not_execute_or_report_correctness():
     provider = Provider()
-    server = create_validation_server(
-        difficulty_provider_factory=lambda: provider,
-        code_execution_tool=ForbiddenExecutor(),
-    )
+    report = await assess(provider, requested_difficulty="hard")
 
-    original = question().model_dump(mode="json")
-    async with Client(server) as client:
-        response = await client.call_tool(
-            "assess_code_difficulty",
-            {"question": original, "requested_difficulty": "hard"},
-        )
-
-    report = response.structured_content
-    assert not response.is_error
-    assert report["status"] == "assessed" and report["advisory"] is True
-    assert "passed" not in {report["status"], report["difficulty_match"]}
-    assert "technical" not in report
-    assert "execution_timeout_seconds" not in report
-    assert report["difficulty_match"] == "too_easy"
-    assert report["question_sha256"] == question().sha256
-    assert report["requested_difficulty"] == "hard"
-    judge = report["judge"]
-    assert judge["timeout_seconds"] == 310
-    assert judge["assessment"]["estimated_difficulty"] == "easy"
-    assert judge["provider"] == "fake" and judge["model"] == "judge-test"
-    assert judge["provider_settings"] == {"sampling": "scripted", "max_retries": 0}
-    assert judge["usage"]["input_tokens"] == 123
-    assert judge["usage"]["output_tokens"] == 45
-    assert judge["model_calls"][0]["operation"] == "judging"
-    assert 0 < judge["duration_ms"] <= report["duration_ms"]
-    assert report["rubric_version"] == "python-tracing-v0.2"
-    assert report["assessment_conditions_version"] == "manual-tracing-v0.1"
+    assert report.status == "assessed" and report.advisory is True
+    assert "passed" not in {report.status, report.difficulty_match}
+    assert "technical" not in report.model_dump()
+    assert "execution_timeout_seconds" not in report.model_dump()
+    assert report.difficulty_match == "too_easy"
+    assert report.question_sha256 == question().sha256
+    assert report.requested_difficulty == "hard"
+    judge = report.judge
+    assert judge is not None and judge.assessment is not None
+    assert judge.timeout_seconds == 310
+    assert judge.assessment.estimated_difficulty == "easy"
+    assert judge.provider == "fake" and judge.model == "judge-test"
+    assert judge.provider_settings == {"sampling": "scripted", "max_retries": 0}
+    assert judge.usage.input_tokens == 123
+    assert judge.usage.output_tokens == 45
+    assert judge.model_calls[0].operation == "judging"
+    assert 0 < judge.duration_ms <= report.duration_ms
+    assert report.rubric_version == "python-tracing-v0.2"
+    assert report.assessment_conditions_version == "manual-tracing-v0.1"
     assert (
-        report["rubric_sha256"]
+        report.rubric_sha256
         == hashlib.sha256(Path("docs/difficulty-rubric.md").read_bytes()).hexdigest()
     )
-    assert original == question().model_dump(mode="json")
 
 
 async def test_requested_level_never_reaches_judge_and_full_question_does():
@@ -188,19 +173,13 @@ async def test_each_answer_target_is_forwarded_without_execution(target):
         {name: raw[name] for name in CodeDifficultyQuestion.model_fields}
     )
 
-    async with Client(
-        create_validation_server(
-            difficulty_provider_factory=Provider,
-            code_execution_tool=ForbiddenExecutor(),
-        )
-    ) as client:
-        result = await client.call_tool(
-            "assess_code_difficulty", {"question": item.model_dump(mode="json")}
-        )
+    provider = Provider()
+    report = await assess(provider, item=item)
 
-    report = result.structured_content
-    assert report["status"] == "assessed"
-    assert "technical" not in report
+    assert report.status == "assessed"
+    assert "technical" not in report.model_dump()
+    payload = json.loads(provider.requests[0].messages[1]["content"])
+    assert payload["question"]["answer_target"] == target
 
 
 async def test_three_options_are_assessed_without_synthesising_a_fourth():
@@ -302,16 +281,9 @@ async def test_question_correctness_is_not_a_prerequisite(item_update):
     provider = Provider()
     raw = question().model_dump(mode="json") | item_update
 
-    async with Client(
-        create_validation_server(
-            difficulty_provider_factory=lambda: provider,
-            code_execution_tool=ForbiddenExecutor(),
-        )
-    ) as client:
-        result = await client.call_tool("assess_code_difficulty", {"question": raw})
-    report = result.structured_content
-    assert report["status"] == "assessed"
-    assert "technical" not in report
+    report = await assess(provider, item=CodeDifficultyQuestion.model_validate(raw))
+    assert report.status == "assessed"
+    assert "technical" not in report.model_dump()
 
     payload = json.loads(provider.requests[0].messages[1]["content"])
     assert payload == {"question": raw}
@@ -443,57 +415,6 @@ async def test_deadline_returns_snapshot_and_discards_late_result():
         release.set()
         assert await asyncio.to_thread(finished.wait, 2)
     assert report.model_dump_json() == snapshot
-
-
-async def test_unconfigured_provider_is_explicit_without_breaking_server(monkeypatch):
-    monkeypatch.delenv("EDCRAFT_DIFFICULTY_PROVIDER", raising=False)
-    monkeypatch.delenv("SOCLAAS_API_KEY", raising=False)
-
-    async with Client(
-        create_validation_server(code_execution_tool=ForbiddenExecutor())
-    ) as client:
-        report = await client.call_tool(
-            "assess_code_difficulty", {"question": question().model_dump(mode="json")}
-        )
-
-    data = report.structured_content
-    assert data["error_code"] == "JUDGE_CONFIGURATION_ERROR"
-    assert "technical" not in data
-    assert data["judge"]["usage"]["model_call_count"] == 0
-
-
-@pytest.mark.parametrize(
-    "change",
-    [
-        "duplicate_id",
-        "missing_option_id",
-        "nonfinite",
-        "unknown_field",
-        "empty_options",
-    ],
-)
-async def test_invalid_mcp_input_shapes_fail_before_model_calls(change):
-    value = question().model_dump(mode="json")
-    if change == "duplicate_id":
-        value["options"][0]["id"] = "B"
-    elif change == "missing_option_id":
-        value["options"].pop()
-        value["correct_option"] = "D"
-    elif change == "nonfinite":
-        value["options"][0]["value"] = float("inf")
-    elif change == "empty_options":
-        value["options"] = []
-    else:
-        value["requested_difficulty"] = "hard"
-
-    provider = Provider()
-
-    async with Client(
-        create_validation_server(difficulty_provider_factory=lambda: provider)
-    ) as client:
-        with pytest.raises(ToolError):
-            await client.call_tool("assess_code_difficulty", {"question": value})
-    assert provider.requests == []
 
 
 def test_output_contract_is_compatible_with_strict_structured_generation():

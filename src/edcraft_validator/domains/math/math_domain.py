@@ -50,7 +50,6 @@ from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     StructuredGenerationRequest,
 )
-from edcraft_validator.mcp.math_correctness_tools import register_math_correctness_tools
 from edcraft_validator.mcp.math_tools import register_math_tools
 from edcraft_validator.mcp.tool_dependencies import ToolDependencies
 from edcraft_validator.validation.check_contracts import ToolEvidence
@@ -78,7 +77,6 @@ class MathDomain:
             fidelity_provider_factory=dependencies.fidelity_provider_factory,
             fidelity_timeout_seconds=dependencies.fidelity_timeout_seconds,
         )
-        register_math_correctness_tools(server)
 
     def review_view(
         self, artifact: ValidatedTemplateArtifact

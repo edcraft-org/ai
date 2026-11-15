@@ -1,17 +1,15 @@
 # Deterministic mathematics correctness
 
-The `math_check_correctness` MCP tool and Python `check_math_correctness` function
-check one structured mathematical answer. They use SymPy, closed expression
-trees and resource-limited disposable workers. They make no model calls and do
-not require a reusable authored check.
+The Python `check_math_correctness` function checks one structured mathematical
+answer. It uses SymPy, closed expression trees and resource-limited disposable
+workers. It makes no model calls and does not require a reusable authored check.
 
 This is an additive interface. Historical math validation and private recipe
-records retain their existing versions and behaviour. The new concrete tool is
-marked `quality:math`, like the independent concrete code checks; it is not
-silently inserted into the legacy template-planner catalogue. Both MCP tools use
-only `quality:math`, not `domain:math`, so template authoring, relevance and
-difficulty keep their existing wiring. Relevance and difficulty remain separate
-from mathematical correctness.
+records retain their existing versions and behaviour. The checker is used
+directly by Python callers and through the math domain's authoring tools. The
+separate quality MCP tools were removed, so correctness and qualification no
+longer appear as their own catalogue entries. Relevance and difficulty remain
+separate from mathematical correctness.
 
 ## One result, specialised mathematics
 
@@ -63,9 +61,9 @@ non-real subexpression on the declared domain, such as `sqrt(-1)**2`, is
 `unsupported`, not `incorrect`. There is no real value to compare, so the checker
 declines to make a correctness claim rather than calling the candidate wrong.
 `unknown` does not mean incorrect. A timeout is a bounded execution
-outcome, not a mathematical conclusion. Only `correct` maps to passing shared
-`ToolEvidence`; `incorrect` maps to failed, while unresolved outcomes map to
-error with their precise outcome retained in `details`.
+outcome, not a mathematical conclusion. Callers that need shared `ToolEvidence`
+map only `correct` to a pass and `incorrect` to a failure, while unresolved
+outcomes remain errors with their precise outcome retained in `details`.
 
 ## Concrete example
 
@@ -94,7 +92,7 @@ result = check_math_correctness({
 assert result.outcome == "correct"
 ```
 
-For the MCP tool, send the same object in the `request` argument. Expressions,
+The function accepts the same object directly. Expressions,
 ordered tuples, finite sets/unions of intervals, matrices, and LU decompositions
 have distinct answer kinds. An empty `set` with no items/intervals denotes the
 empty solution set; an interval with absent endpoints denotes unbounded ends.
@@ -134,10 +132,10 @@ layer and are intentionally not implemented: `normalized_answer`,
 
 ## Property-based template qualification
 
-`math_qualify_correctness_template` and Python `qualify_math_template` sample a
-parameterised correctness request. Parameters can be bounded integer ranges or
-explicit exact numeric values. A `param` node is substituted structurally in
-both the problem and candidate; free text and arbitrary code are never executed.
+Python `qualify_math_template` samples a parameterised correctness request.
+Parameters can be bounded integer ranges or explicit exact numeric values. A
+`param` node is substituted structurally in both the problem and candidate, so
+free text and arbitrary code are never executed.
 
 ```python
 from edcraft_validator.domains.math.math_correctness_sampling import qualify_math_template

@@ -24,10 +24,11 @@ metadata. CLI/server/worker boundaries construct dependencies and settings.
 | Check catalogue decoding and dispatch transport | `mcp/catalogue.py`, `mcp/client.py` |
 | Default dependency construction | `bootstrap.py`, `mcp/server.py`, `cli.py` |
 
-The deterministic mathematics tools are additive `quality:math` interfaces, not
-legacy `domain:math` template checks. They do not rewire template authoring,
-authored recipes, relevance or difficulty routing. Historical math validation
-records keep their existing versions and behaviour.
+The deterministic mathematics engine is available to Python callers and through
+the math domain's authoring tools. The separate quality tools were removed, so
+they no longer appear in the catalogue. The engine does not rewire authored
+recipes, relevance or difficulty routing. Historical math validation records
+keep their existing versions and behaviour.
 
 Package initializers must not construct servers. Shared evidence can be imported
 without FastMCP or application services. `mcp/evidence.py` retains compatibility
