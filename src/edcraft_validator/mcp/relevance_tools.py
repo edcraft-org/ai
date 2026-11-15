@@ -1,4 +1,4 @@
-"""Expose shared relevance and the code-template authoring adapter."""
+"""Expose the shared relevance checks."""
 
 from typing import Annotated
 
@@ -7,9 +7,6 @@ from pydantic import Field
 
 from edcraft_validator.application.relevance import assess_relevance
 from edcraft_validator.application.template_relevance import assess_template_relevance
-from edcraft_validator.domains.code.code_relevance import assess_code_template_relevance
-from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
-from edcraft_validator.domains.code.relevance import TEMPLATE_RELEVANCE_TOOL
 from edcraft_validator.llm.decision import DecisionProviderFactory
 from edcraft_validator.relevance_contracts import RelevanceInput, RelevanceReport
 from edcraft_validator.validation.check_contracts import ToolEvidence
@@ -92,48 +89,6 @@ def register_relevance_tools(
             subject_sha256=subject_sha256,
             author_request=author_request,
             question_text=question_text,
-            decision_provider_factory=decision_provider_factory,
-            relevance_timeout_seconds=relevance_timeout_seconds,
-        )
-
-    @server.tool(
-        name=TEMPLATE_RELEVANCE_TOOL,
-        version=TEMPLATE_RELEVANCE_TOOL_VERSION,
-        tags={
-            "domain:code",
-            "quality:code",
-            "stage:after-validation",
-            "policy:advisory",
-        },
-        annotations={
-            "readOnlyHint": True,
-            "destructiveHint": False,
-            "idempotentHint": False,
-            "openWorldHint": True,
-        },
-        description=(
-            "Check whether the reusable Python MCQ template tests the original "
-            "author request. The application supplies both the exact checked "
-            "candidate and the unchanged author request; use no model-owned "
-            "arguments. Select this check for authoring. Uses the "
-            "configured judge model with reasoning disabled and the configured "
-            "relevance threshold. An irrelevant decision is advisory evidence: it "
-            "never requests revision or blocks a technically checked artifact. "
-            "Errors never pass and are reported as unavailable advisory evidence. "
-            "Assesses the code, question "
-            "pattern, answer target and finite parameter domain; does not execute "
-            "code or consume correctness/difficulty reports. Reuses the text "
-            "relevance classifier; template accuracy is not established by the "
-            "concrete-question pilot. May incur model cost."
-        ),
-    )
-    async def template_relevance(
-        candidate: CodeTemplateCandidate,
-        author_request: Annotated[str, Field(min_length=1, max_length=4000)],
-    ) -> ToolEvidence:
-        return await assess_code_template_relevance(
-            candidate,
-            author_request,
             decision_provider_factory=decision_provider_factory,
             relevance_timeout_seconds=relevance_timeout_seconds,
         )

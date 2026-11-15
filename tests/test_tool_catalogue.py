@@ -51,20 +51,28 @@ def capability_definition(name, capability):
 
 
 def test_code_domain_resolves_real_tagged_mcp_definitions():
+    from edcraft_validator.domains.code.code_domain import CodeDomain
+
     with FastMcpToolClient() as client:
-        tools = resolve_domain_tools("code", client)
+        tools = resolve_domain_tools(
+            "code", client, capabilities=CodeDomain.capabilities
+        )
 
     assert [tool["name"] for tool in tools] == [
+        "assess_template_relevance",
         "code_assess_template_difficulty",
-        "code_assess_template_relevance",
         "code_require_features",
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",
     ]
     assert all(tool["description"] for tool in tools)
-    assert all("candidate" in tool["inputSchema"]["properties"] for tool in tools)
+    domain_tools = [tool for tool in tools if tool["name"].startswith("code_")]
+    assert all(
+        "candidate" in tool["inputSchema"]["properties"] for tool in domain_tools
+    )
     assert all("status" in tool["outputSchema"]["properties"] for tool in tools)
     assert all(tool["_meta"]["fastmcp"]["version"] for tool in tools)
+    assert CodeDomain.capabilities == frozenset({"template-relevance"})
 
 
 def test_domain_tags_filter_tools_and_allow_shared_tools():

@@ -64,7 +64,7 @@ required distractor count. Select tools that obtain
 execution-derived answers and checked distractors necessary for a reusable template.
 Also select the available template difficulty check to assess the requested level
 for the typical instance across the declared parameter distribution.
-Also select code_assess_template_relevance to compare the template with the original
+Also select assess_template_relevance to compare the template with the original
 author request. The application supplies that unchanged request and the checked
 template. An irrelevant result is advisory evidence for educator review; it does
 not request revision or block a technically checked template.

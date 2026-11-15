@@ -157,10 +157,11 @@ async def test_server_freezes_one_model_and_threshold_for_all_assessments(monkey
             },
         )
         template_relevance = await client.call_tool(
-            "code_assess_template_relevance",
+            "assess_template_relevance",
             {
-                "candidate": candidate().model_dump(mode="json"),
-                "author_request": "objective",
+                "author_request": "template objective",
+                "question_text": "template question",
+                "subject_sha256": "a" * 64,
             },
         )
     assert difficulty.structured_content["status"] == "passed"

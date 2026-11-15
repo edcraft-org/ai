@@ -9,7 +9,7 @@ from edcraft_validator.mcp.evidence import ToolEvidence
 
 # The workflow reads this set from the catalogue's policy:advisory tag.
 CODE_ADVISORY_CHECKS = frozenset(
-    {"code_assess_template_difficulty", "code_assess_template_relevance"}
+    {"code_assess_template_difficulty", "assess_template_relevance"}
 )
 
 

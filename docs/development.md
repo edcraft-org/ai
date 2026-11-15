@@ -93,13 +93,15 @@ Relevance providers supply `score(request_text, question_text)` and may expose
 `last_usage`, `generation_settings`, `served_model` and `close`. Accounting applies
 to every injected provider; missing token metadata remains unknown.
 
-`code_assess_template_relevance` adapts the shared text classifier to `ToolEvidence`;
-it does not introduce a separate workflow. Template identity belongs to `candidate_builder.py`, independently of either judge.
-The domain binds the original author prompt and the exact reusable candidate, including the checked distractor subset.
-The classifier receives the actual code, question pattern, answer target and finite
-parameters in readable text, excluding topic labels, requested difficulty,
-answer and distractor recipes, and misconception explanations. Difficulty and relevance do not consume each other's
-results. Their saved evidence binds the exact reusable template hash; relevance
+The code domain uses the shared relevance capability, so `assess_template_relevance`
+judges its templates with the same classifier, threshold and policy as every other
+domain. Template identity belongs to `candidate_builder.py`, independently of either
+judge. The domain binds the original author prompt, the checked template hash and the
+rendered learner text, including the checked distractor subset. The classifier receives
+the actual code, question pattern, answer target and finite parameters in readable
+text, excluding topic labels, requested difficulty, answer and distractor recipes, and
+misconception explanations. Difficulty and relevance do not consume each other's
+results. Their saved evidence binds the exact reusable template hash, and relevance
 also retains the request/text input hash, score, threshold and model usage.
 Stale or malformed advisory evidence is marked unavailable instead of being accepted
 as a judgment or blocking technical saving. Only selected checks run; the authoring

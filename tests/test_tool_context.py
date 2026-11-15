@@ -14,7 +14,7 @@ def test_planning_schema_pairs_each_tool_with_its_own_closed_arguments():
         (
             "code_require_features",
             "code_verify_template_structure",
-            "code_assess_template_relevance",
+            "assess_template_relevance",
         ),
         CODE_CHECK_ARGUMENT_MODELS,
     )
@@ -30,7 +30,7 @@ def test_planning_schema_pairs_each_tool_with_its_own_closed_arguments():
         {"name": "code_verify_template_structure", "arguments": {"required": ["loop"]}},
         {"name": "invented", "arguments": {}},
         {
-            "name": "code_assess_template_relevance",
+            "name": "assess_template_relevance",
             "arguments": {"author_request": "changed"},
         },
         {

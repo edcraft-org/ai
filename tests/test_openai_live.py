@@ -16,6 +16,6 @@ def test_real_openai_template_authoring() -> None:
 
     provider = create_model_provider(TemplateProviderSelection(provider="openai"))
     result = check_live_workflow(provider)
-    assert {"code_assess_template_difficulty", "code_assess_template_relevance"} <= set(
+    assert {"code_assess_template_difficulty", "assess_template_relevance"} <= set(
         result.fixed_plan
     )

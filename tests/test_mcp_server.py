@@ -68,7 +68,6 @@ async def test_catalogue_exposes_authoritative_names_descriptions_and_schemas():
         "math_qualify_correctness_template",
         "assess_relevance",
         "assess_template_relevance",
-        "code_assess_template_relevance",
     ]
     for tool in tools[:3]:
         assert tool.description
@@ -453,6 +452,7 @@ async def test_invalid_arguments_and_unknown_tools_are_protocol_errors():
 def test_server_refuses_to_start_when_a_registered_domain_has_no_tools() -> None:
     class StubDomain(CodeDomain):
         name = "stub"
+        capabilities = frozenset()
 
     try:
         domain_registry.register_domain("stub", StubDomain)

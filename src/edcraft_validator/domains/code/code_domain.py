@@ -22,7 +22,7 @@ from edcraft_validator.domains.code.prompt_builder import (
 )
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
 from edcraft_validator.domains.code.question_generator import generate_code_question
-from edcraft_validator.domains.code.relevance import TEMPLATE_RELEVANCE_TOOL
+from edcraft_validator.domains.code.relevance import template_relevance_text
 from edcraft_validator.domains.domain_support import (
     ReviewTemplateView,
     build_review_view,
@@ -35,6 +35,10 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 from edcraft_validator.validation.check_contracts import ToolEvidence
+from edcraft_validator.validation.check_names import (
+    TEMPLATE_RELEVANCE_CAPABILITY,
+    TEMPLATE_RELEVANCE_CHECK,
+)
 
 SEMANTIC_CHECK = "code_validate_answers_and_distractors"
 
@@ -48,7 +52,7 @@ class CodeDomain:
     validated_model = ValidatedCodeTemplate
     question_model = CodeQuestionInstance
     template_language = "python"
-    capabilities: frozenset[str] = frozenset()
+    capabilities = frozenset({TEMPLATE_RELEVANCE_CAPABILITY})
 
     def review_view(
         self, artifact: ValidatedTemplateArtifact
@@ -71,15 +75,14 @@ class CodeDomain:
 
     def tool_bindings(self, request, candidate, tool_name):
         """Application-owned values never come from model tool arguments."""
-        bindings = {
-            "candidate": require_type(candidate, CodeTemplateCandidate).model_dump(
-                mode="json"
-            )
-        }
-        if tool_name == TEMPLATE_RELEVANCE_TOOL:
-            bindings["author_request"] = require_type(
-                request, CodeTemplateRequest
-            ).prompt
+        typed_candidate = require_type(candidate, CodeTemplateCandidate)
+        if tool_name == TEMPLATE_RELEVANCE_CHECK:
+            return {
+                "author_request": require_type(request, CodeTemplateRequest).prompt,
+                "question_text": template_relevance_text(typed_candidate),
+                "subject_sha256": template_sha256(typed_candidate),
+            }
+        bindings = {"candidate": typed_candidate.model_dump(mode="json")}
         if tool_name == SEMANTIC_CHECK:
             bindings["required_distractors"] = require_type(
                 request, CodeTemplateRequest
