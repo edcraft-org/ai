@@ -1,5 +1,7 @@
 """Deterministic question-expansion tests for the math domain."""
 
+from fractions import Fraction
+
 import pytest
 from math_helpers import (
     checked_summary,
@@ -10,9 +12,11 @@ from math_helpers import (
     ir_param,
     ir_pow,
     ir_sym,
+    linear_ir_template,
     quadratic_ir_template,
 )
 
+from edcraft_validator.domains.math.ir.instantiate import fraction_text
 from edcraft_validator.domains.math.ir.schema import (
     AnswerRecipe,
     Distractor,
@@ -246,6 +250,57 @@ def test_generator_emits_a_wrong_answer_recipe_without_re_grading():
     )
 
     shifted = int(instance.parameters["p"]) + 1000
-    assert instance.answer == f"{{{shifted}}}"
+    # A one-element set renders as its bare element, alongside scalar distractors.
+    assert instance.answer == str(shifted)
     assert instance.choices[instance.correct_index] == instance.answer
     assert instance.parameters["q"] not in instance.answer
+
+
+def test_single_root_solve_renders_choices_without_braces() -> None:
+    artifact = validated(linear_ir_template())
+
+    instance = generate_math_question(artifact, 0)
+
+    assert all("{" not in choice and "}" not in choice for choice in instance.choices)
+    a = Fraction(instance.parameters["a"])
+    b = Fraction(instance.parameters["b"])
+    c = Fraction(instance.parameters["c"])
+    assert instance.answer == fraction_text((c - b) / a)
+    assert instance.choices[instance.correct_index] == instance.answer
+
+
+def test_multi_root_solve_renders_scalar_distractors_as_sets() -> None:
+    artifact = validated(quadratic_ir_template())
+
+    instance = generate_math_question(artifact, 0)
+
+    assert all(
+        choice.startswith("{") and choice.endswith("}") for choice in instance.choices
+    )
+    assert instance.choices[instance.correct_index] == instance.answer
+    assert set(instance.answer.strip("{}").split(", ")) == set(
+        instance.parameters.values()
+    )
+    for index, choice in enumerate(instance.choices):
+        if index != instance.correct_index:
+            assert "," not in choice
+
+
+def test_expand_goal_renders_choices_exactly_as_before() -> None:
+    expanded = AnswerRecipe(
+        kind="expression",
+        items=[
+            ir_add(
+                ir_pow(ir_sym("x"), ir_num(2)),
+                ir_add(
+                    ir_mul(ir_add(ir_param("k"), ir_num(2)), ir_sym("x")),
+                    ir_mul(ir_param("k"), ir_num(2)),
+                ),
+            )
+        ],
+    )
+
+    instance = generate_math_question(unchecked_artifact(_expand_template(expanded)), 1)
+
+    assert instance.answer == "x^2 + 3*x + 2"
+    assert set(instance.choices) == {"x^2 + 3*x + 2", "x^2 + 2"}

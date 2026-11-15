@@ -120,7 +120,7 @@ def test_linear_ir_template_is_graded_by_the_engine_and_form() -> None:
 
     assert instance.topic == "school.linear"
     assert " = " in instance.equation
-    assert instance.answer.startswith("{") and instance.answer.endswith("}")
+    assert not instance.answer.startswith("{")
     assert instance.choices[instance.correct_index] == instance.answer
 
 
