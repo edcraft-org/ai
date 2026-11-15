@@ -158,6 +158,16 @@ safely to their own queue/event loop. Observer failures are logged without chang
 the authoring verdict. The existing HTTP backend still needs a handler, persistence
 adapter and generated frontend client for these contracts; no endpoint is wired yet.
 
+`AuthoringProgress` carries the `phase`, `attempt`, `max_attempts`, `checks_total`,
+`checks_done`, `current_check` and `phase_started_at` fields. The phase is one of
+generating, checking, assessing, correcting or finalizing, where assessing covers
+the advisory difficulty and relevance checks that run after validation.
+`checks_total` and `checks_done` count the checks in the current checking or
+assessing phase, and `current_check` names the check that is running. They stay
+empty in other phases. `max_attempts` includes the initial proposal, and
+`phase_started_at` records when the current phase began so adapters can show
+elapsed time.
+
 ## Extending and verifying
 
 Add domain behavior through `DomainModule` and register its factory. Implement

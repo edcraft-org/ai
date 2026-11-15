@@ -283,6 +283,160 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
     assert instance == ExampleInstance(value=24, seed=5)
 
 
+def test_progress_reports_checks_attempts_and_phase_starts() -> None:
+    server = FastMCP("Progress")
+
+    @server.tool(description="A blocking check", version="1", tags={"domain:example"})
+    def blocking_check(value: int) -> ToolEvidence:
+        status = "passed" if value > 0 else "failed"
+        findings = (
+            []
+            if status == "passed"
+            else [{"code": "NEGATIVE", "message": "The value is not positive."}]
+        )
+        return ToolEvidence(
+            tool="blocking_check", version="1", status=status, findings=findings
+        )
+
+    @server.tool(
+        description="A deferred advisory check",
+        version="1",
+        tags={"domain:example", "stage:after-validation", "policy:advisory"},
+    )
+    def deferred_assessment(value: int) -> ToolEvidence:
+        return ToolEvidence(tool="deferred_assessment", version="1", status="passed")
+
+    class ProgressDomain:
+        name = "example"
+        capabilities = frozenset()
+        request_model = ExampleRequest
+        validated_model = ExampleValidated
+
+        def generation_request(self, request):
+            return StructuredGenerationRequest(
+                messages=[{"role": "user", "content": request.topic}],
+                response_model=PlannedGenerationResponse[ExampleProposal],
+                prompt_version="example-v1",
+            )
+
+        def build_candidate(self, request, proposal):
+            return ExampleTemplate(value=proposal.value)
+
+        def required_checks(self, candidate):
+            return frozenset()
+
+        def distractor_count(self, candidate):
+            return 0
+
+        def tool_bindings(self, request, candidate, tool_name):
+            return {"value": candidate.value}
+
+        def checked_tool_bindings(self, request, candidate, tool_name, evidence):
+            return {"value": candidate.value}
+
+        def finalize_checked_template(self, candidate, evidence, *, advisory_checks):
+            return ExampleValidated(value=candidate.value)
+
+    class ProgressProvider(RequestPendingTools):
+        provider = "stub"
+        model = "stub-model"
+
+        def generate(self, request):
+            if not issubclass(request.response_model, PlannedGenerationResponse):
+                return request.response_model(value=4)
+            return PlannedGenerationResponse(
+                proposal=ExampleProposal(value=-1),
+                checks=[
+                    RecommendedCheck(name="blocking_check", arguments={}),
+                    RecommendedCheck(name="deferred_assessment", arguments={}),
+                ],
+            )
+
+    progress = []
+    result = TemplateApplication(tool_client=FastMcpToolClient(server)).author_template(
+        ExampleRequest(topic="a positive value"),
+        domain=ProgressDomain(),
+        provider=ProgressProvider(),
+        on_progress=progress.append,
+    )
+
+    assert result.status == "checked"
+    assert [(event.phase, event.attempt) for event in progress] == [
+        ("generating", 1),
+        ("checking", 1),
+        ("checking", 1),
+        ("assessing", 1),
+        ("assessing", 1),
+        ("correcting", 2),
+        ("checking", 2),
+        ("checking", 2),
+        ("assessing", 2),
+        ("assessing", 2),
+        ("finalizing", 2),
+    ]
+    assert [event.checks_total for event in progress] == [
+        None,
+        1,
+        1,
+        1,
+        1,
+        None,
+        1,
+        1,
+        1,
+        1,
+        None,
+    ]
+    assert [event.checks_done for event in progress] == [
+        None,
+        0,
+        1,
+        0,
+        1,
+        None,
+        0,
+        1,
+        0,
+        1,
+        None,
+    ]
+    assert [event.current_check for event in progress] == [
+        None,
+        "blocking_check",
+        None,
+        "deferred_assessment",
+        None,
+        None,
+        "blocking_check",
+        None,
+        "deferred_assessment",
+        None,
+        None,
+    ]
+    assert all(event.max_attempts == 4 for event in progress)
+    assert all(event.phase_started_at is not None for event in progress)
+
+    runs = []
+    for event in progress:
+        if runs and runs[-1][0] == event.phase:
+            assert event.phase_started_at == runs[-1][1]
+        else:
+            runs.append((event.phase, event.phase_started_at))
+    assert [phase for phase, _ in runs] == [
+        "generating",
+        "checking",
+        "assessing",
+        "correcting",
+        "checking",
+        "assessing",
+        "finalizing",
+    ]
+    starts = [start for _, start in runs]
+    assert all(
+        earlier <= later for earlier, later in zip(starts, starts[1:], strict=False)
+    )
+
+
 def test_non_deferred_advisory_failure_does_not_skip_deferred_assessment() -> None:
     from types import SimpleNamespace
 

@@ -73,13 +73,24 @@ async def test_async_handler_runs_real_mcp_workflow_on_worker_thread():
         all(thread != event_loop_thread for thread in author.thread_ids)
         and author.closed
     )
-    assert [(p.phase, p.attempt) for p in progress] == [
-        ("generating", 1),
-        ("checking", 1),
-        ("correcting", 2),
-        ("checking", 2),
-        ("finalizing", 2),
+    assert [
+        (p.phase, p.attempt, p.checks_total, p.checks_done, p.current_check)
+        for p in progress
+    ] == [
+        ("generating", 1, None, None, None),
+        ("checking", 1, 2, 0, "code_validate_answers_and_distractors"),
+        ("checking", 1, 2, 1, None),
+        ("checking", 1, 2, 1, "code_verify_template_structure"),
+        ("checking", 1, 2, 2, None),
+        ("correcting", 2, None, None, None),
+        ("checking", 2, 2, 0, "code_validate_answers_and_distractors"),
+        ("checking", 2, 2, 1, None),
+        ("checking", 2, 2, 1, "code_verify_template_structure"),
+        ("checking", 2, 2, 2, None),
+        ("finalizing", 2, None, None, None),
     ]
+    assert all(p.max_attempts == 4 for p in progress)
+    assert all(p.phase_started_at is not None for p in progress)
     assert (
         AuthoringJobResponse.model_validate_json(record.response.model_dump_json())
         == record.response

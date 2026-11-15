@@ -31,8 +31,13 @@ class AuthoringError(BaseModel):
 class AuthoringProgress(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    phase: Literal["generating", "checking", "correcting", "finalizing"]
+    phase: Literal["generating", "checking", "assessing", "correcting", "finalizing"]
     attempt: int = Field(ge=0)
+    max_attempts: int | None = None
+    checks_total: int | None = None
+    checks_done: int | None = None
+    current_check: str | None = None
+    phase_started_at: datetime | None = None
 
 
 class DifficultyOutcome(BaseModel):
