@@ -7,15 +7,15 @@ import threading
 from types import SimpleNamespace as NS
 
 import pytest
-from judge_helpers import TemplateJudge, candidate
+from judge_helpers import TemplateJudge, candidate, difficulty_arguments
 
-from edcraft_validator.domains.code.difficulty import load_code_difficulty_rubric
-from edcraft_validator.domains.code.difficulty_assessment import (
+from edcraft_validator.application.template_difficulty import (
     assess_template_difficulty,
-)
-from edcraft_validator.domains.code.template_difficulty import (
     build_template_decision_request,
+    build_template_difficulty_request,
 )
+from edcraft_validator.domains.code.difficulty import load_code_difficulty_rubric
+from edcraft_validator.domains.code.template_difficulty import blinded_template_payload
 from edcraft_validator.llm.decision import ConfiguredDecisionProvider, measure_relevance
 from edcraft_validator.llm.forced_decision import ClassDecision, decision_from_response
 from edcraft_validator.llm.llm_errors import GenerationResponseError
@@ -61,7 +61,7 @@ async def test_confidence_070_accepts_decision_and_mismatch_is_advisory(
 ):
     judge = Judge(classification(label, 0.7))
     result = await assess_template_difficulty(
-        candidate(), provider_factory=lambda: judge
+        **difficulty_arguments(), provider_factory=lambda: judge
     )
     assert result.status == status and result.details["decision"] == decision
     assert len(judge.decisions) == 1 and judge.requests == []
@@ -89,7 +89,9 @@ async def test_low_confidence_routes_to_same_model_and_keeps_reasoning_policy(
         judges.append(judge)
         return judge
 
-    result = await assess_template_difficulty(candidate(), provider_factory=factory)
+    result = await assess_template_difficulty(
+        **difficulty_arguments(), provider_factory=factory
+    )
     assert result.status == status and result.details["assessment_path"] == "reasoning"
     assert len(judges) == 2 and {j.model for j in judges} == {"same-model"}
     assert len(judges[0].decisions) == 1 and not judges[0].requests
@@ -103,7 +105,7 @@ async def test_low_confidence_routes_to_same_model_and_keeps_reasoning_policy(
 async def test_failed_decision_falls_back_once_and_failed_reasoning_cannot_pass():
     judge = Judge(ValueError("PRIVATE"), failure=GenerationResponseError("PRIVATE"))
     result = await assess_template_difficulty(
-        candidate(), provider_factory=lambda: judge
+        **difficulty_arguments(), provider_factory=lambda: judge
     )
     assert result.status == "error"
     assert len(judge.decisions) == len(judge.requests) == 1
@@ -145,7 +147,11 @@ def test_advisory_decision_mismatch_saves_checked_artifact_and_reuse_stays_local
 
 def test_template_classifier_blinds_target_identity_and_preserves_domain():
     original = candidate()
-    request = build_template_decision_request(original, load_code_difficulty_rubric())
+    rubric = load_code_difficulty_rubric()
+    request = build_template_decision_request(
+        rubric=rubric,
+        question_payload=blinded_template_payload(original),
+    )
     payload = json.loads(request.messages[1]["content"])["template"]
     assert payload == original.model_dump(
         mode="json", exclude={"template_id", "topic", "difficulty"}
@@ -153,10 +159,16 @@ def test_template_classifier_blinds_target_identity_and_preserves_domain():
     assert "TYPICAL instance" in request.messages[0]["content"]
     assert "Return only the supplied JSON" not in request.messages[0]["content"]
     assert request == build_template_decision_request(
-        original.model_copy(
-            update={"difficulty": "hard", "topic": "private", "template_id": "private"}
+        rubric=rubric,
+        question_payload=blinded_template_payload(
+            original.model_copy(
+                update={
+                    "difficulty": "hard",
+                    "topic": "private",
+                    "template_id": "private",
+                }
+            )
         ),
-        load_code_difficulty_rubric(),
     )
 
 
@@ -209,12 +221,10 @@ def test_reasoning_call_overrides_author_settings_without_changing_them(monkeypa
 
     from judge_helpers import TemplateJudge
 
-    from edcraft_validator.domains.code.template_difficulty import (
-        build_template_difficulty_request,
-    )
-
     request = build_template_difficulty_request(
-        candidate(), load_code_difficulty_rubric()
+        rubric=load_code_difficulty_rubric(),
+        question_payload=blinded_template_payload(candidate()),
+        distractor_count=len(candidate().distractors),
     )
     content = TemplateJudge().generate(request).model_dump_json()
     arguments = []
@@ -306,7 +316,9 @@ async def test_expired_budget_starts_no_reasoning_and_ignores_late_results():
     judge = Slow()
     try:
         result = await assess_template_difficulty(
-            candidate(), provider_factory=lambda: judge, judge_timeout_seconds=0.05
+            **difficulty_arguments(),
+            provider_factory=lambda: judge,
+            judge_timeout_seconds=0.05,
         )
         assert started.is_set() and result.status == "error"
         assert judge.requests == [] and result.details["usage"]["model_call_count"] == 1

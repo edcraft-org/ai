@@ -2,7 +2,12 @@
 
 import pytest
 from authoring_helpers import RequestPendingTools
-from math_helpers import factor_ir_template, ir_proposal, quadratic_ir_template
+from math_helpers import (
+    MathTemplateJudge,
+    factor_ir_template,
+    ir_proposal,
+    quadratic_ir_template,
+)
 
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.domains.math.math_domain import MathDomain
@@ -28,7 +33,7 @@ def test_math_authoring_and_question_generation_round_trip() -> None:
                     "checks": [
                         {"name": "math_verify_item_spec", "arguments": {}},
                         {"name": "math_validate_options", "arguments": {}},
-                        {"name": "math_assess_template_difficulty", "arguments": {}},
+                        {"name": "assess_template_difficulty", "arguments": {}},
                         {
                             "name": "math_verify_text_fidelity",
                             "arguments": {},
@@ -41,7 +46,10 @@ def test_math_authoring_and_question_generation_round_trip() -> None:
                 }
             )
 
-    server = create_validation_server(decision_provider_factory=Decisions)
+    server = create_validation_server(
+        decision_provider_factory=Decisions,
+        difficulty_provider_factory=MathTemplateJudge,
+    )
     application = TemplateApplication(tool_client=FastMcpToolClient(server))
     request = MathTemplateRequest(
         prompt="Author a quadratic equation question with integer roots.",
@@ -66,8 +74,8 @@ def test_math_authoring_and_question_generation_round_trip() -> None:
     assert view.limits["checking_mode"] == "property_based"
 
     assert offered == [
+        "assess_template_difficulty",
         "assess_template_relevance",
-        "math_assess_template_difficulty",
         "math_validate_options",
         "math_verify_answer_form",
         "math_verify_item_spec",
@@ -81,7 +89,7 @@ def test_math_authoring_and_question_generation_round_trip() -> None:
     assert validated.validation.examples_checked == 4
     assert {item.check for item in validated.validation.evidence} == {
         "assess_template_relevance",
-        "math_assess_template_difficulty",
+        "assess_template_difficulty",
         "math_validate_options",
         "math_verify_item_spec",
         "math_verify_text_fidelity",
@@ -107,15 +115,18 @@ def test_math_tools_are_tagged_and_listed_for_the_domain() -> None:
     }
 
     assert set(math_tools) == {
-        "math_assess_template_difficulty",
         "math_validate_options",
         "math_verify_answer_form",
         "math_verify_item_spec",
         "math_verify_text_fidelity",
     }
-    difficulty_tags = math_tools["math_assess_template_difficulty"]["_meta"]["fastmcp"][
-        "tags"
-    ]
+
+    difficulty = next(
+        tool for tool in tools if tool["name"] == "assess_template_difficulty"
+    )
+    difficulty_tags = difficulty["_meta"]["fastmcp"]["tags"]
+    assert "capability:difficulty" in difficulty_tags
+    assert "domain:math" not in difficulty_tags
     assert "policy:advisory" in difficulty_tags
     assert "stage:after-validation" in difficulty_tags
 
@@ -148,7 +159,10 @@ def test_math_fidelity_tool_skips_parse_back_for_symbolic_templates() -> None:
                 }
             )
 
-    server = create_validation_server(decision_provider_factory=Decisions)
+    server = create_validation_server(
+        decision_provider_factory=Decisions,
+        difficulty_provider_factory=MathTemplateJudge,
+    )
     application = TemplateApplication(tool_client=FastMcpToolClient(server))
     result = application.author_template(
         MathTemplateRequest(
@@ -190,7 +204,10 @@ def _author(template, selected, *, num_distractors=3):
                 }
             )
 
-    server = create_validation_server(decision_provider_factory=Decisions)
+    server = create_validation_server(
+        decision_provider_factory=Decisions,
+        difficulty_provider_factory=MathTemplateJudge,
+    )
     application = TemplateApplication(tool_client=FastMcpToolClient(server))
     return application.author_template(
         MathTemplateRequest(
@@ -204,11 +221,11 @@ def _author(template, selected, *, num_distractors=3):
 
 
 def test_application_adds_the_required_checks_the_model_omits() -> None:
-    result = _author(quadratic_ir_template(), ["math_assess_template_difficulty"])
+    result = _author(quadratic_ir_template(), ["assess_template_difficulty"])
 
     assert result.status == "checked", result.reason
     assert result.fixed_plan == [
-        "math_assess_template_difficulty",
+        "assess_template_difficulty",
         "math_validate_options",
         "math_verify_item_spec",
     ]

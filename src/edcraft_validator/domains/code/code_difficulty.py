@@ -7,16 +7,16 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from edcraft_validator.application.template_difficulty import (
+    DifficultyMatch,
+    compare_difficulty,
+)
 from edcraft_validator.domains.code.code_types import Difficulty
 from edcraft_validator.domains.code.difficulty import (
     CodeDifficultyQuestion,
     DifficultyAssessment,
     build_difficulty_request,
     load_code_difficulty_rubric,
-)
-from edcraft_validator.domains.code.difficulty_matching import (
-    DifficultyMatch,
-    compare_difficulty,
 )
 from edcraft_validator.domains.code.difficulty_request import KeyedDifficultyAssessment
 from edcraft_validator.llm.judging import (

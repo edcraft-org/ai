@@ -100,9 +100,9 @@ CHECK PLAN
   It also runs math_verify_text_fidelity for prose text and
   math_verify_answer_form for factor and expand goals, whether or not you
   select them.
-- Select math_assess_template_difficulty and assess_template_relevance. They are
+- Select assess_template_difficulty and assess_template_relevance. They are
   advisory evidence for educator review and never block a technically checked
-  template.
+  template. The difficulty rubric is provisional and uncalibrated.
 - For other goals, select math_verify_answer_form only when the request asks for
   the answer in a particular shape.
 """

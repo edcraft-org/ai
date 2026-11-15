@@ -1,25 +1,28 @@
 """Template-level judging and real MCP orchestration with scripted model calls."""
 
 import json
+from pathlib import Path
 
 import pytest
 from code_validation_helpers import CODE_ADVISORY_CHECKS
 from fastmcp import Client
-from judge_helpers import TemplateJudge, candidate, proposal
+from judge_helpers import TemplateJudge, candidate, difficulty_arguments, proposal
 from pydantic import ValidationError
 from test_authoring_loop import SEMANTIC, STRUCTURE, Executor, Provider
 from test_difficulty_tool import ForbiddenExecutor
 
+from edcraft_validator.application.template_difficulty import (
+    assess_template_difficulty,
+    build_template_decision_request,
+    build_template_difficulty_request,
+    template_assessment_model,
+)
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.domains.code.candidate_builder import template_sha256
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
 from edcraft_validator.domains.code.difficulty import load_code_difficulty_rubric
-from edcraft_validator.domains.code.template_difficulty import (
-    TEMPLATE_DIFFICULTY_TOOL,
-    build_template_difficulty_request,
-    template_assessment_model,
-)
+from edcraft_validator.domains.code.template_difficulty import blinded_template_payload
 from edcraft_validator.llm.llm_errors import (
     GenerationResponseError,
     GenerationTimeoutError,
@@ -28,6 +31,7 @@ from edcraft_validator.llm.llm_errors import (
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.validation.check_contracts import ToolFinding
+from edcraft_validator.validation.check_names import TEMPLATE_DIFFICULTY_CHECK
 
 
 async def test_template_tool_gets_full_domain_without_correctness_execution():
@@ -39,7 +43,7 @@ async def test_template_tool_gets_full_domain_without_correctness_execution():
     original = candidate()
     async with Client(server) as client:
         result = await client.call_tool(
-            TEMPLATE_DIFFICULTY_TOOL, {"candidate": original.model_dump(mode="json")}
+            TEMPLATE_DIFFICULTY_CHECK, difficulty_arguments(original)
         )
     evidence = result.structured_content
     assert evidence["status"] == "passed"
@@ -57,15 +61,55 @@ async def test_template_tool_gets_full_domain_without_correctness_execution():
     assert "independently and uniformly" in judge.requests[0].messages[0]["content"]
     other = original.model_copy(update={"difficulty": "hard", "template_id": "hard"})
     assert (
-        build_template_difficulty_request(other, load_code_difficulty_rubric()).messages
+        build_template_difficulty_request(
+            rubric=load_code_difficulty_rubric(),
+            question_payload=blinded_template_payload(other),
+            distractor_count=len(other.distractors),
+        ).messages
         == judge.requests[0].messages
     )
     assert judge.requests[0].reasoning_effort == "medium"
 
 
+def serialise_request(request):
+    return {
+        "messages": request.messages,
+        "prompt_version": request.prompt_version,
+        "schema_name": request.schema_name,
+        "json_schema": request.response_model.model_json_schema(),
+    }
+
+
+def test_code_requests_match_the_frozen_golden_requests():
+    rubric = load_code_difficulty_rubric()
+    original = candidate()
+    payload = blinded_template_payload(original)
+    generated = {
+        "decision": serialise_request(
+            build_template_decision_request(
+                rubric=rubric,
+                question_payload=payload,
+            )
+        ),
+        "reasoning": serialise_request(
+            build_template_difficulty_request(
+                rubric=rubric,
+                question_payload=payload,
+                distractor_count=len(original.distractors),
+            )
+        ),
+    }
+    golden_path = (
+        Path(__file__).parent / "fixtures/code-template-difficulty-request.json"
+    )
+
+    assert generated == json.loads(golden_path.read_text())
+
+
 @pytest.mark.parametrize("count", range(1, 13))
 def test_each_distractor_recipe_has_a_required_closed_evidence_key(count):
-    schema = template_assessment_model(count).model_json_schema()
+    rubric = load_code_difficulty_rubric()
+    schema = template_assessment_model(rubric, count).model_json_schema()
     evidence = schema["$defs"][f"EvidenceFor{count}DistractorRecipes"]
     assert evidence["required"] == [f"D{i}" for i in range(1, count + 1)]
     for node in [schema, *schema["$defs"].values()]:
@@ -73,7 +117,7 @@ def test_each_distractor_recipe_has_a_required_closed_evidence_key(count):
             assert node["additionalProperties"] is False
             assert set(node["required"]) == set(node["properties"])
     with pytest.raises(ValidationError):
-        template_assessment_model(count).model_validate({})
+        template_assessment_model(rubric, count).model_validate({})
 
 
 def run(
@@ -94,7 +138,7 @@ def run(
 
     author = Provider(
         proposals=proposals,
-        plan=plan or (SEMANTIC, STRUCTURE, TEMPLATE_DIFFICULTY_TOOL),
+        plan=plan or (SEMANTIC, STRUCTURE, TEMPLATE_DIFFICULTY_CHECK),
     )
     server = create_validation_server(
         difficulty_provider_factory=factory, code_execution_tool=Executor()
@@ -108,6 +152,28 @@ def run(
     return result, author, judges
 
 
+async def test_unknown_rubric_id_is_unavailable_without_a_model_call():
+    class Forbidden:
+        def generation_settings(self):
+            return {}
+
+        def decide(self, messages, labels):
+            raise AssertionError("an unknown rubric must not call a model")
+
+    evidence = await assess_template_difficulty(
+        rubric_id="missing-rubric",
+        question_payload="{}",
+        distractor_count=3,
+        requested_difficulty="easy",
+        subject_sha256="a" * 64,
+        provider_factory=Forbidden,
+    )
+
+    assert evidence.status == "error"
+    assert evidence.findings[0].code == "RUBRIC_UNAVAILABLE"
+    assert evidence.details["advisory"] is True
+
+
 def test_direct_template_tool_mismatch_is_advisory_and_reuse_stays_local():
     result, author, judges = run(["hard"])
 
@@ -115,7 +181,7 @@ def test_direct_template_tool_mismatch_is_advisory_and_reuse_stays_local():
     assert len(judges) == 1 and len(judges[0].requests) == 1
     assert len(author.generations) == 1
     assert result.attempts[0].candidate["difficulty"] == "easy"
-    assert result.fixed_plan == [SEMANTIC, STRUCTURE, TEMPLATE_DIFFICULTY_TOOL]
+    assert result.fixed_plan == [SEMANTIC, STRUCTURE, TEMPLATE_DIFFICULTY_CHECK]
 
     final_check = result.attempts[0].executions[-1]
     assert final_check.evidence.status == "failed"
@@ -128,18 +194,18 @@ def test_direct_template_tool_mismatch_is_advisory_and_reuse_stays_local():
     saved = next(
         item
         for item in result.artifact.validation.evidence
-        if item.check == TEMPLATE_DIFFICULTY_TOOL
+        if item.check == TEMPLATE_DIFFICULTY_CHECK
     )
     assert saved.status == "failed"
     assert saved.details["advisory"] is True
     assert saved.details["requested_difficulty"] == "easy"
     assert saved.details["estimated_difficulty"] == "hard"
     assert saved.details["subject_sha256"] == template_sha256(result.artifact.template)
-    assert final_check.application_arguments["candidate"] == (
-        result.artifact.template.model_dump(mode="json")
+    assert final_check.application_arguments["question_payload"] == (
+        blinded_template_payload(result.artifact.template)
     )
+    assert final_check.application_arguments["distractor_count"] == 3
     assert len(result.attempts[0].candidate["distractors"]) == 5
-    assert len(final_check.application_arguments["candidate"]["distractors"]) == 3
     assert final_check.requested_arguments == {}
 
     instance = TemplateApplication().generate_question(
@@ -172,9 +238,9 @@ def test_correctness_failure_defers_difficulty_without_spending_a_judge_call():
 
     assert result.status == "needs_review" and len(result.attempts) == 4
     assert len(author.generations) == 4 and judges == []
-    assert all(a.pending == [TEMPLATE_DIFFICULTY_TOOL] for a in result.attempts)
+    assert all(a.pending == [TEMPLATE_DIFFICULTY_CHECK] for a in result.attempts)
     assert all(
-        a.executions[-1].tool == TEMPLATE_DIFFICULTY_TOOL
+        a.executions[-1].tool == TEMPLATE_DIFFICULTY_CHECK
         and a.executions[-1].skip_reason == "Prerequisite checks did not pass"
         and a.executions[-1].evidence is None
         for a in result.attempts
@@ -203,7 +269,7 @@ def test_saved_artifact_marks_bad_difficulty_identity_unavailable(change, reason
     saved = next(
         item
         for item in artifact.validation.evidence
-        if item.check == TEMPLATE_DIFFICULTY_TOOL
+        if item.check == TEMPLATE_DIFFICULTY_CHECK
     )
     assert saved.status == "incomplete"
     assert saved.details["unavailable"] is True
@@ -233,22 +299,22 @@ def test_forged_technical_advisory_details_still_block(tool):
 
 
 def test_rubric_unavailable_is_typed_and_not_stale(monkeypatch):
-    from edcraft_validator.application.authoring_api import summarize_authoring
-    from edcraft_validator.domains.code import (
-        difficulty_assessment as difficulty_module,
+    from edcraft_validator.application import (
+        template_difficulty as difficulty_module,
     )
+    from edcraft_validator.application.authoring_api import summarize_authoring
 
-    def unavailable():
+    def unavailable(rubric_id):
         raise OSError("missing rubric")
 
-    monkeypatch.setattr(difficulty_module, "load_code_difficulty_rubric", unavailable)
+    monkeypatch.setattr(difficulty_module, "difficulty_rubric", unavailable)
     result, author, _ = run([])
 
     assert result.status == "checked" and len(author.generations) == 1
     saved = next(
         item
         for item in result.artifact.validation.evidence
-        if item.check == TEMPLATE_DIFFICULTY_TOOL
+        if item.check == TEMPLATE_DIFFICULTY_CHECK
     )
     assert saved.status == "incomplete"
     assert saved.details["advisory"] is True
@@ -315,13 +381,13 @@ def test_mcp_client_allows_the_glm_judge_deadline_plus_overhead(monkeypatch):
     monkeypatch.setattr(client_module, "Client", Client)
 
     with FastMcpToolClient(server=object()) as client:
-        assert client.call_tool(TEMPLATE_DIFFICULTY_TOOL, {}) == {"status": "passed"}
+        assert client.call_tool(TEMPLATE_DIFFICULTY_CHECK, {}) == {"status": "passed"}
 
     assert timeouts == [330, 330]
 
 
 def test_application_stages_difficulty_even_if_model_lists_it_first():
-    plan = (TEMPLATE_DIFFICULTY_TOOL, SEMANTIC, STRUCTURE)
+    plan = (TEMPLATE_DIFFICULTY_CHECK, SEMANTIC, STRUCTURE)
     result, author, judges = run(["easy"], plan=plan)
 
     assert result.status == "checked"
@@ -329,7 +395,7 @@ def test_application_stages_difficulty_even_if_model_lists_it_first():
     assert [entry.tool for entry in result.attempts[0].executions] == [
         SEMANTIC,
         STRUCTURE,
-        TEMPLATE_DIFFICULTY_TOOL,
+        TEMPLATE_DIFFICULTY_CHECK,
     ]
     assert len(judges) == 1 and len(judges[0].requests) == 1
     assert len(author.generations) == result.usage.model_call_count == 1

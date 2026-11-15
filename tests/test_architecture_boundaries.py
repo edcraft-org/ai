@@ -7,7 +7,7 @@ import threading
 
 import pytest
 from fastmcp import Client
-from judge_helpers import TemplateJudge, candidate
+from judge_helpers import TemplateJudge, candidate, difficulty_arguments
 from pydantic import ValidationError
 
 from edcraft_validator.llm.decision import measure_relevance
@@ -145,8 +145,8 @@ async def test_server_freezes_one_model_and_threshold_for_all_assessments(monkey
 
     async with Client(server) as client:
         difficulty = await client.call_tool(
-            "code_assess_template_difficulty",
-            {"candidate": candidate().model_dump(mode="json")},
+            "assess_template_difficulty",
+            difficulty_arguments(candidate()),
         )
         relevance = await client.call_tool(
             "assess_relevance",
@@ -177,21 +177,30 @@ async def test_server_freezes_one_model_and_threshold_for_all_assessments(monkey
     assert seen == ["original", "original", "original", "original"]
 
 
-def test_classifier_prompt_is_independent_of_reasoning_wording(monkeypatch):
-    from edcraft_validator.domains.code import template_difficulty
+def test_classifier_prompt_is_independent_of_reasoning_wording():
+    from dataclasses import replace
+
+    from edcraft_validator.application.template_difficulty import (
+        build_template_decision_request,
+        build_template_difficulty_request,
+    )
     from edcraft_validator.domains.code.difficulty import load_code_difficulty_rubric
+    from edcraft_validator.domains.code.template_difficulty import (
+        blinded_template_payload,
+    )
 
     item, rubric = candidate(), load_code_difficulty_rubric()
-    before = template_difficulty.build_template_decision_request(item, rubric)
-    monkeypatch.setattr(
-        template_difficulty, "REASONING_PROCEDURE", "Different reasoning instructions."
-    )
-    after = template_difficulty.build_template_decision_request(item, rubric)
+    payload = blinded_template_payload(item)
+    before = build_template_decision_request(rubric=rubric, question_payload=payload)
+    changed = replace(rubric, reasoning_procedure="Different reasoning instructions.")
+    after = build_template_decision_request(rubric=changed, question_payload=payload)
 
     assert before == after
     assert (
         "Different reasoning instructions."
-        in template_difficulty.build_template_difficulty_request(item, rubric).messages[
-            0
-        ]["content"]
+        in build_template_difficulty_request(
+            rubric=changed,
+            question_payload=payload,
+            distractor_count=len(item.distractors),
+        ).messages[0]["content"]
     )

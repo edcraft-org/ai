@@ -16,13 +16,13 @@ from edcraft_validator.domains.code.code_schemas import (
     ValidatedCodeTemplate,
 )
 from edcraft_validator.domains.code.relevance import template_relevance_text
-from edcraft_validator.domains.code.template_difficulty import (
-    TEMPLATE_DIFFICULTY_TOOL,
-)
 from edcraft_validator.llm.usage import TokenUsage
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.server import create_validation_server
-from edcraft_validator.validation.check_names import TEMPLATE_RELEVANCE_CHECK
+from edcraft_validator.validation.check_names import (
+    TEMPLATE_DIFFICULTY_CHECK,
+    TEMPLATE_RELEVANCE_CHECK,
+)
 
 
 class RelevanceJudge:
@@ -86,7 +86,7 @@ def run(
         or (
             SEMANTIC,
             STRUCTURE,
-            TEMPLATE_DIFFICULTY_TOOL,
+            TEMPLATE_DIFFICULTY_CHECK,
             TEMPLATE_RELEVANCE_CHECK,
         ),
     )
@@ -301,7 +301,7 @@ def test_relevance_model_error_is_unavailable_without_author_revision():
         relevance_failure=RuntimeError("PRIVATE MODEL ERROR"),
         plan=(
             TEMPLATE_RELEVANCE_CHECK,
-            TEMPLATE_DIFFICULTY_TOOL,
+            TEMPLATE_DIFFICULTY_CHECK,
             SEMANTIC,
             STRUCTURE,
         ),
@@ -336,8 +336,8 @@ def test_correctness_failure_skips_both_assessments_without_judge_calls():
     assert len(result.attempts) == len(author.generations) == 4
     assert difficulty_judges == relevance_judges == []
     for attempt in result.attempts:
-        assert attempt.pending == [TEMPLATE_DIFFICULTY_TOOL, TEMPLATE_RELEVANCE_CHECK]
-        for name in (TEMPLATE_DIFFICULTY_TOOL, TEMPLATE_RELEVANCE_CHECK):
+        assert attempt.pending == [TEMPLATE_DIFFICULTY_CHECK, TEMPLATE_RELEVANCE_CHECK]
+        for name in (TEMPLATE_DIFFICULTY_CHECK, TEMPLATE_RELEVANCE_CHECK):
             execution = next(item for item in attempt.executions if item.tool == name)
             assert execution.skip_reason == "Prerequisite checks did not pass"
             assert execution.evidence is None
@@ -346,8 +346,8 @@ def test_correctness_failure_skips_both_assessments_without_judge_calls():
 @pytest.mark.parametrize(
     "plan",
     [
-        (TEMPLATE_RELEVANCE_CHECK, TEMPLATE_DIFFICULTY_TOOL, SEMANTIC, STRUCTURE),
-        (TEMPLATE_DIFFICULTY_TOOL, TEMPLATE_RELEVANCE_CHECK, SEMANTIC, STRUCTURE),
+        (TEMPLATE_RELEVANCE_CHECK, TEMPLATE_DIFFICULTY_CHECK, SEMANTIC, STRUCTURE),
+        (TEMPLATE_DIFFICULTY_CHECK, TEMPLATE_RELEVANCE_CHECK, SEMANTIC, STRUCTURE),
     ],
 )
 def test_assessments_run_independently_in_either_order(plan):
@@ -360,18 +360,16 @@ def test_assessments_run_independently_in_either_order(plan):
     executions = {
         item.tool: item
         for item in result.attempts[0].executions
-        if item.tool in {TEMPLATE_RELEVANCE_CHECK, TEMPLATE_DIFFICULTY_TOOL}
+        if item.tool in {TEMPLATE_RELEVANCE_CHECK, TEMPLATE_DIFFICULTY_CHECK}
     }
 
-    assert set(executions) == {TEMPLATE_RELEVANCE_CHECK, TEMPLATE_DIFFICULTY_TOOL}
+    assert set(executions) == {TEMPLATE_RELEVANCE_CHECK, TEMPLATE_DIFFICULTY_CHECK}
     assert all(item.evidence is not None for item in executions.values())
     assert all(item.evidence.status == "failed" for item in executions.values())
     assert all(item.advisory for item in executions.values())
-    difficulty = executions[TEMPLATE_DIFFICULTY_TOOL]
+    difficulty = executions[TEMPLATE_DIFFICULTY_CHECK]
     relevance = executions[TEMPLATE_RELEVANCE_CHECK]
-    checked = CodeTemplateCandidate.model_validate(
-        difficulty.application_arguments["candidate"]
-    )
+    checked = result.artifact.template
     assert relevance.application_arguments["question_text"] == template_relevance_text(
         checked
     )

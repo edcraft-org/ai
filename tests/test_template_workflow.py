@@ -152,8 +152,8 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring.base_prompt_version == provider_calls[0].prompt_version
     assert validated.authoring.domain == "code"
     assert provider_calls[0].tool_catalogue.names == (
+        "assess_template_difficulty",
         "assess_template_relevance",
-        "code_assess_template_difficulty",
         "code_require_features",
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",

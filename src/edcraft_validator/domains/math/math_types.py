@@ -38,7 +38,6 @@ MATH_DIFFICULTIES: tuple[Difficulty, ...] = DIFFICULTIES
 # deterministic variants (boundary cases plus generated examples) are graded.
 MAX_IR_VARIANTS = 100
 
-MATH_DIFFICULTY_TOOL = "math_assess_template_difficulty"
 MATH_ITEM_SPEC_TOOL = "math_verify_item_spec"
 MATH_OPTIONS_TOOL = "math_validate_options"
 MATH_FORM_TOOL = "math_verify_answer_form"

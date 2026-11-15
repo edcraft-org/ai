@@ -150,7 +150,8 @@ run validation again in the application process.
 
 Advisory checks never gate approval:
 
-5. `math_assess_template_difficulty` — deterministic provisional heuristic.
+5. `assess_template_difficulty` — the shared provisional difficulty cascade, using
+   the `math-ir-v0.1` rubric.
 6. `assess_template_relevance` — the shared semantic relevance classifier.
 
 Advisory `failed` or `unavailable` outcomes stay visible in review evidence and

@@ -7,6 +7,9 @@ finalises the checked template, and expands it into a seeded question.
 from fastmcp import FastMCP
 from pydantic import BaseModel
 
+from edcraft_validator.application.difficulty_rubrics import (
+    register_difficulty_rubric,
+)
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.domains.code.candidate_builder import (
     build_code_candidate,
@@ -22,12 +25,19 @@ from edcraft_validator.domains.code.code_schemas import (
     ValidatedCodeTemplate,
 )
 from edcraft_validator.domains.code.code_types import MIN_DISTRACTORS
+from edcraft_validator.domains.code.difficulty import (
+    CODE_DIFFICULTY_RUBRIC_ID,
+    load_code_difficulty_rubric,
+)
 from edcraft_validator.domains.code.prompt_builder import (
     build_code_generation_request,
 )
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
 from edcraft_validator.domains.code.question_generator import generate_code_question
 from edcraft_validator.domains.code.relevance import template_relevance_text
+from edcraft_validator.domains.code.template_difficulty import (
+    blinded_template_payload,
+)
 from edcraft_validator.domains.domain_support import (
     ReviewTemplateView,
     build_review_view,
@@ -40,10 +50,11 @@ from edcraft_validator.llm.llm_contracts import (
     StructuredGenerationRequest,
 )
 from edcraft_validator.mcp.code_tools import register_code_validation_tools
-from edcraft_validator.mcp.difficulty_tools import register_difficulty_tools
 from edcraft_validator.mcp.tool_dependencies import ToolDependencies
 from edcraft_validator.validation.check_contracts import ToolEvidence
 from edcraft_validator.validation.check_names import (
+    TEMPLATE_DIFFICULTY_CAPABILITY,
+    TEMPLATE_DIFFICULTY_CHECK,
     TEMPLATE_RELEVANCE_CAPABILITY,
     TEMPLATE_RELEVANCE_CHECK,
 )
@@ -62,7 +73,9 @@ class CodeDomain:
     validated_model = ValidatedCodeTemplate
     question_model = CodeQuestionInstance
     template_language = "python"
-    capabilities = frozenset({TEMPLATE_RELEVANCE_CAPABILITY})
+    capabilities = frozenset(
+        {TEMPLATE_DIFFICULTY_CAPABILITY, TEMPLATE_RELEVANCE_CAPABILITY}
+    )
 
     def register_tools(self, server: FastMCP, dependencies: ToolDependencies) -> None:
         """Register the code domain's authoritative and advisory tools."""
@@ -71,12 +84,6 @@ class CodeDomain:
             execution_tool=dependencies.execution_tool,
             timeout_seconds=dependencies.code_execution_timeout_seconds,
             property_settings=dependencies.property_settings,
-        )
-        register_difficulty_tools(
-            server,
-            provider_factory=dependencies.difficulty_provider_factory,
-            judge_timeout_seconds=dependencies.difficulty_judge_timeout_seconds,
-            settings=dependencies.judge_settings,
         )
 
     def review_view(
@@ -105,6 +112,15 @@ class CodeDomain:
             return {
                 "author_request": require_type(request, CodeTemplateRequest).prompt,
                 "question_text": template_relevance_text(typed_candidate),
+                "subject_sha256": template_sha256(typed_candidate),
+            }
+
+        if tool_name == TEMPLATE_DIFFICULTY_CHECK:
+            return {
+                "rubric_id": CODE_DIFFICULTY_RUBRIC_ID,
+                "question_payload": blinded_template_payload(typed_candidate),
+                "distractor_count": len(typed_candidate.distractors),
+                "requested_difficulty": typed_candidate.difficulty,
                 "subject_sha256": template_sha256(typed_candidate),
             }
 
@@ -203,3 +219,7 @@ def _validation_summary(
     return TemplateValidationSummary.model_validate(
         {**property_details(semantic.details), "evidence": saved_evidence}
     )
+
+
+# Register once at import so direct domain tests and the shared tool agree.
+register_difficulty_rubric(load_code_difficulty_rubric())

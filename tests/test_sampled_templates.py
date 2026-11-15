@@ -8,6 +8,10 @@ from pydantic import ValidationError
 from test_code_templates import TrustedBatchExecutor
 from test_template_difficulty import TemplateJudge, run
 
+from edcraft_validator.application.template_difficulty import (
+    build_template_difficulty_request,
+    template_assessment_model,
+)
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
     DistractorRecipe,
@@ -16,10 +20,7 @@ from edcraft_validator.domains.code.code_schemas import (
 )
 from edcraft_validator.domains.code.difficulty import load_code_difficulty_rubric
 from edcraft_validator.domains.code.proposal_response import CodeProposalResponse
-from edcraft_validator.domains.code.template_difficulty import (
-    build_template_difficulty_request,
-    template_assessment_model,
-)
+from edcraft_validator.domains.code.template_difficulty import blinded_template_payload
 
 
 def candidate():
@@ -121,7 +122,11 @@ def test_execution_errors_are_not_hidden_by_collision_filtering():
 
 def test_judge_receives_declared_sampled_domain_and_recipe():
     value = validate_code(candidate(), execution_tool=TrustedBatchExecutor()).template
-    request = build_template_difficulty_request(value, load_code_difficulty_rubric())
+    request = build_template_difficulty_request(
+        rubric=load_code_difficulty_rubric(),
+        question_payload=blinded_template_payload(value),
+        distractor_count=len(value.distractors),
+    )
     payload = json.loads(request.messages[1]["content"])["template"]
     assert payload["parameters"] == [p.model_dump() for p in value.parameters]
     assert payload["answer_expression"] == "a + b"
@@ -156,8 +161,12 @@ def test_high_confidence_mismatch_is_advisory_without_author_revision():
 @pytest.mark.parametrize("confidence", [-0.1, 1.1, float("nan")])
 def test_confidence_is_bounded_and_finite(confidence):
     request = build_template_difficulty_request(
-        candidate(), load_code_difficulty_rubric()
+        rubric=load_code_difficulty_rubric(),
+        question_payload=blinded_template_payload(candidate()),
+        distractor_count=len(candidate().distractors),
     )
     value = TemplateJudge().generate(request).model_dump()
     with pytest.raises(ValidationError):
-        template_assessment_model(3).model_validate(value | {"confidence": confidence})
+        template_assessment_model(load_code_difficulty_rubric(), 3).model_validate(
+            value | {"confidence": confidence}
+        )

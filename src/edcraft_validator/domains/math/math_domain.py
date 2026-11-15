@@ -9,6 +9,9 @@ from typing import Any
 from fastmcp import FastMCP
 from pydantic import BaseModel
 
+from edcraft_validator.application.difficulty_rubrics import (
+    register_difficulty_rubric,
+)
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.domains.domain_support import (
     ReviewTemplateView,
@@ -20,6 +23,11 @@ from edcraft_validator.domains.domain_support import (
 from edcraft_validator.domains.math.candidate_builder import (
     build_math_candidate,
     template_sha256,
+)
+from edcraft_validator.domains.math.difficulty import (
+    MATH_DIFFICULTY_RUBRIC_ID,
+    blinded_math_template_payload,
+    load_math_difficulty_rubric,
 )
 from edcraft_validator.domains.math.ir.instantiate import representative_item
 from edcraft_validator.domains.math.ir.schema import MathTemplateSpec
@@ -53,6 +61,8 @@ from edcraft_validator.mcp.math_tools import register_math_tools
 from edcraft_validator.mcp.tool_dependencies import ToolDependencies
 from edcraft_validator.validation.check_contracts import ToolEvidence
 from edcraft_validator.validation.check_names import (
+    TEMPLATE_DIFFICULTY_CAPABILITY,
+    TEMPLATE_DIFFICULTY_CHECK,
     TEMPLATE_RELEVANCE_CAPABILITY,
     TEMPLATE_RELEVANCE_CHECK,
 )
@@ -68,7 +78,9 @@ class MathDomain:
     validated_model = ValidatedMathTemplate
     question_model = MathQuestionInstance
     template_language = None
-    capabilities = frozenset({TEMPLATE_RELEVANCE_CAPABILITY})
+    capabilities = frozenset(
+        {TEMPLATE_DIFFICULTY_CAPABILITY, TEMPLATE_RELEVANCE_CAPABILITY}
+    )
 
     def register_tools(self, server: FastMCP, dependencies: ToolDependencies) -> None:
         """Register the math domain's authoritative and advisory tools."""
@@ -109,6 +121,14 @@ class MathDomain:
             return {
                 "author_request": require_type(request, MathTemplateRequest).prompt,
                 "question_text": template_relevance_text(typed_candidate),
+                "subject_sha256": template_sha256(typed_candidate),
+            }
+        if tool_name == TEMPLATE_DIFFICULTY_CHECK:
+            return {
+                "rubric_id": MATH_DIFFICULTY_RUBRIC_ID,
+                "question_payload": blinded_math_template_payload(typed_candidate),
+                "distractor_count": len(template.body.distractors),
+                "requested_difficulty": typed_candidate.difficulty,
                 "subject_sha256": template_sha256(typed_candidate),
             }
         if tool_name in {MATH_ITEM_SPEC_TOOL, MATH_OPTIONS_TOOL, MATH_FORM_TOOL}:
@@ -217,3 +237,7 @@ def _checked_property_details(item_spec: ToolEvidence) -> dict[str, Any]:
     if checked["examples_checked"] < 1:
         raise ValueError("IR validation checked no parameter combinations")
     return checked
+
+
+# Register once at import so direct domain tests and the shared tool agree.
+register_difficulty_rubric(load_math_difficulty_rubric())

@@ -59,8 +59,8 @@ def test_code_domain_resolves_real_tagged_mcp_definitions():
         )
 
     assert [tool["name"] for tool in tools] == [
+        "assess_template_difficulty",
         "assess_template_relevance",
-        "code_assess_template_difficulty",
         "code_require_features",
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",
@@ -72,7 +72,7 @@ def test_code_domain_resolves_real_tagged_mcp_definitions():
     )
     assert all("status" in tool["outputSchema"]["properties"] for tool in tools)
     assert all(tool["_meta"]["fastmcp"]["version"] for tool in tools)
-    assert CodeDomain.capabilities == frozenset({"template-relevance"})
+    assert CodeDomain.capabilities == frozenset({"difficulty", "template-relevance"})
 
 
 def test_domain_tags_filter_tools_and_allow_shared_tools():
@@ -136,8 +136,9 @@ def test_real_math_capabilities_offer_the_shared_relevance_tool():
 
     names = [tool["name"] for tool in tools]
     assert "assess_template_relevance" in names
+    assert "assess_template_difficulty" in names
     assert "math_assess_template_relevance" not in names
-    assert MathDomain.capabilities == frozenset({"template-relevance"})
+    assert MathDomain.capabilities == frozenset({"difficulty", "template-relevance"})
 
 
 @pytest.mark.parametrize(

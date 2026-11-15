@@ -11,22 +11,19 @@ from functools import partial
 from typing import Annotated, Any, Literal
 
 from fastmcp import FastMCP
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from edcraft_validator.application.fidelity.contracts import FidelityReport
 from edcraft_validator.application.fidelity.engine import verify_text_fidelity
-from edcraft_validator.domains.math.difficulty import assess_template_difficulty
 from edcraft_validator.domains.math.fidelity import math_fidelity_plugin
 from edcraft_validator.domains.math.ir.schema import MathItemSpec, MathTemplateSpec
 from edcraft_validator.domains.math.math_schemas import MathTemplateCandidate
 from edcraft_validator.domains.math.math_types import (
-    MATH_DIFFICULTY_TOOL,
     MATH_FIDELITY_TOOL,
     MATH_FORM_TOOL,
     MATH_IR_TOOL_VERSION,
     MATH_ITEM_SPEC_TOOL,
     MATH_OPTIONS_TOOL,
-    MATH_TOOL_VERSION,
     MAX_IR_VARIANTS,
 )
 from edcraft_validator.domains.math.validation.isolation import (
@@ -44,16 +41,6 @@ from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFindi
 from edcraft_validator.validation.property_checks import PropertyCheckSettings
 
 _MAX_EXPORTED_ITEMS = 128
-
-CandidateArgument = Annotated[
-    MathTemplateCandidate,
-    Field(
-        description=(
-            "Complete math template candidate to check. The tool treats it as "
-            "untrusted input and does not modify the supplied object."
-        )
-    ),
-]
 
 
 class MathSpecRequest(BaseModel):
@@ -117,23 +104,6 @@ class MathOptionsRequest(BaseModel):
         return self
 
 
-class MathToolFailure(ValueError):
-    """A validation failure with an actionable finding code."""
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        code: str = "TEMPLATE_INVALID",
-        field: str | None = None,
-        context: dict[str, Any] | None = None,
-    ) -> None:
-        super().__init__(message)
-        self.code = code
-        self.field = field
-        self.context = context or {}
-
-
 def register_math_tools(
     server: FastMCP,
     *,
@@ -148,33 +118,6 @@ def register_math_tools(
     if selected_provider is None:
         settings = load_judge_settings()
         selected_provider = partial(configured_judge_provider, settings)
-
-    @server.tool(
-        name=MATH_DIFFICULTY_TOOL,
-        version=MATH_TOOL_VERSION,
-        tags={
-            "domain:math",
-            "stage:after-validation",
-            "policy:advisory",
-        },
-        annotations={
-            "readOnlyHint": True,
-            "destructiveHint": False,
-            "idempotentHint": True,
-            "openWorldHint": False,
-        },
-        description=(
-            "Provide a provisional heuristic difficulty assessment for a checked "
-            "math template. Uses parameter-count, magnitude, sign variety, "
-            "parameter-domain size, and distractor count. The estimate is advisory "
-            "and uncalibrated; a mismatch never blocks a technically checked "
-            "template or requests author revision. No model call is made."
-        ),
-    )
-    async def math_assess_template_difficulty(
-        candidate: CandidateArgument,
-    ) -> ToolEvidence:
-        return assess_template_difficulty(_revalidate(candidate))
 
     @server.tool(
         name=MATH_ITEM_SPEC_TOOL,
@@ -655,16 +598,6 @@ def _harness_details(
         "options": options[:_MAX_EXPORTED_ITEMS],
         "options_truncated": len(options) > _MAX_EXPORTED_ITEMS,
     }
-
-
-def _revalidate(candidate: MathTemplateCandidate) -> MathTemplateCandidate:
-    try:
-        return MathTemplateCandidate.model_validate(candidate.model_dump())
-    except ValidationError as exc:
-        raise MathToolFailure(
-            f"Candidate does not match the math template schema: {exc}",
-            code="TEMPLATE_INVALID",
-        ) from exc
 
 
 def _elapsed_ms(started: float) -> float:

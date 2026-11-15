@@ -24,6 +24,7 @@ from edcraft_validator.llm.judging import (
     DEFAULT_JUDGE_TIMEOUT_SECONDS,
     JudgeProviderFactory,
 )
+from edcraft_validator.mcp.difficulty_tools import register_difficulty_tools
 from edcraft_validator.mcp.relevance_tools import register_relevance_tools
 from edcraft_validator.mcp.tool_dependencies import ToolDependencies
 from edcraft_validator.tools.python_execution import (
@@ -84,6 +85,13 @@ def create_validation_server(
         decision_provider_factory=decision_provider_factory
         or partial(ConfiguredDecisionProvider, selected),
         relevance_timeout_seconds=relevance_timeout_seconds,
+    )
+
+    register_difficulty_tools(
+        server,
+        provider_factory=dependencies.difficulty_provider_factory,
+        judge_timeout_seconds=dependencies.difficulty_judge_timeout_seconds,
+        settings=dependencies.judge_settings,
     )
 
     return server

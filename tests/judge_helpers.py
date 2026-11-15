@@ -2,11 +2,14 @@
 
 import json
 
+from edcraft_validator.domains.code.candidate_builder import template_sha256
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateProposal,
     CodeTemplateRequest,
 )
+from edcraft_validator.domains.code.difficulty import CODE_DIFFICULTY_RUBRIC_ID
+from edcraft_validator.domains.code.template_difficulty import blinded_template_payload
 from edcraft_validator.llm.usage import TokenUsage
 
 
@@ -78,6 +81,18 @@ def candidate():
         CodeTemplateRequest(prompt="Create an addition question", difficulty="easy"),
         proposal(),
     )
+
+
+def difficulty_arguments(template=None):
+    """The application-owned arguments the shared difficulty tool receives."""
+    selected = template or candidate()
+    return {
+        "rubric_id": CODE_DIFFICULTY_RUBRIC_ID,
+        "question_payload": blinded_template_payload(selected),
+        "distractor_count": len(selected.distractors),
+        "requested_difficulty": selected.difficulty,
+        "subject_sha256": template_sha256(selected),
+    }
 
 
 class TemplateJudge:

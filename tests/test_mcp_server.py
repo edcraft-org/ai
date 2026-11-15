@@ -63,14 +63,13 @@ async def test_catalogue_exposes_authoritative_names_descriptions_and_schemas():
         "code_verify_template_structure",
         "code_validate_answers_and_distractors",
         "code_require_features",
-        "code_assess_template_difficulty",
-        "math_assess_template_difficulty",
         "math_verify_item_spec",
         "math_validate_options",
         "math_verify_answer_form",
         "math_verify_text_fidelity",
         "assess_relevance",
         "assess_template_relevance",
+        "assess_template_difficulty",
     ]
 
     for tool in tools[:3]:
@@ -87,12 +86,12 @@ async def test_catalogue_exposes_authoritative_names_descriptions_and_schemas():
         assert "assurance" not in tool.output_schema["properties"]
         assert tool.output_schema["properties"]["version"]["minLength"] == 1
 
-    advisory = next(
-        tool for tool in tools if tool.name == "code_assess_template_difficulty"
-    )
-    assert {"domain:code", "policy:advisory", "stage:after-validation"} <= set(
-        advisory.model_dump(by_alias=True)["_meta"]["fastmcp"]["tags"]
-    )
+    advisory = next(tool for tool in tools if tool.name == "assess_template_difficulty")
+    assert {
+        "capability:difficulty",
+        "policy:advisory",
+        "stage:after-validation",
+    } <= set(advisory.model_dump(by_alias=True)["_meta"]["fastmcp"]["tags"])
     assert advisory.annotations.open_world_hint is True
     assert advisory.annotations.idempotent_hint is False
     assert advisory.output_schema["properties"]["status"]["enum"] == [

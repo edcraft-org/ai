@@ -435,14 +435,14 @@ def test_output_contract_is_compatible_with_strict_structured_generation():
 
 
 def test_packaged_rubric_resource_matches_source(monkeypatch, tmp_path):
-    from edcraft_validator.domains.code import difficulty
+    from edcraft_validator.application import difficulty_rubrics
 
     resource = tmp_path / "difficulty-rubric.md"
     resource.write_bytes(Path("docs/difficulty-rubric.md").read_bytes())
-    monkeypatch.setattr(difficulty, "files", lambda package: tmp_path)
+    monkeypatch.setattr(difficulty_rubrics, "files", lambda package: tmp_path)
 
     assert (
-        difficulty.load_code_difficulty_rubric().sha256
+        load_code_difficulty_rubric().sha256
         == hashlib.sha256(resource.read_bytes()).hexdigest()
     )
 

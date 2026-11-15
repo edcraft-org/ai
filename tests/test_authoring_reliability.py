@@ -16,7 +16,6 @@ from edcraft_validator.domains.code.difficulty import load_code_difficulty_rubri
 from edcraft_validator.domains.code.proposal_response import (
     CodeProposalResponse,
 )
-from edcraft_validator.domains.code.template_difficulty import TEMPLATE_DIFFICULTY_TOOL
 from edcraft_validator.domains.code.template_revision import (
     author_difficulty_guidance,
 )
@@ -28,6 +27,7 @@ from edcraft_validator.llm.llm_errors import (
 )
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.server import create_validation_server
+from edcraft_validator.validation.check_names import TEMPLATE_DIFFICULTY_CHECK
 
 
 def test_wire_lines_preserve_indentation_and_canonical_python_round_trip():
@@ -125,7 +125,7 @@ def test_full_wire_revision_replaces_candidate_and_rechecks_every_field(
 
     author = WireAuthor()
     if with_difficulty:
-        author.plan += (TEMPLATE_DIFFICULTY_TOOL,)
+        author.plan += (TEMPLATE_DIFFICULTY_CHECK,)
 
     judge = TemplateJudge()
     # Use the real isolated executor to check the changed program and parameters.
@@ -164,7 +164,7 @@ def test_full_wire_revision_replaces_candidate_and_rechecks_every_field(
         skipped = first.executions[-1]
         assert skipped.skip_reason == "Prerequisite checks did not pass"
         assert skipped.evidence is None
-        assert first.pending == [TEMPLATE_DIFFICULTY_TOOL]
+        assert first.pending == [TEMPLATE_DIFFICULTY_CHECK]
         assert feedback["check_results"][-1]["skip_reason"] == skipped.skip_reason
         assert second.executions[-1].passed
 

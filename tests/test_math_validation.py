@@ -2,7 +2,6 @@
 
 import pytest
 from math_helpers import (
-    derivative_ir_template,
     ir_add,
     ir_candidate,
     ir_div,
@@ -14,8 +13,13 @@ from math_helpers import (
     quadratic_ir_template,
 )
 
+from edcraft_validator.application.difficulty_rubrics import difficulty_rubric
 from edcraft_validator.domains.math.candidate_builder import template_sha256
-from edcraft_validator.domains.math.difficulty import assess_template_difficulty
+from edcraft_validator.domains.math.difficulty import (
+    MATH_DIFFICULTY_RUBRIC_ID,
+    MathDifficultyDimensions,
+    load_math_difficulty_rubric,
+)
 from edcraft_validator.domains.math.ir.schema import (
     Distractor,
     Given,
@@ -28,7 +32,6 @@ from edcraft_validator.domains.math.ir.schema import (
 from edcraft_validator.domains.math.math_domain import MathDomain
 from edcraft_validator.domains.math.math_schemas import MathTemplateRequest
 from edcraft_validator.domains.math.math_types import (
-    MATH_DIFFICULTY_TOOL,
     MATH_FIDELITY_TOOL,
     MATH_FORM_TOOL,
     MATH_ITEM_SPEC_TOOL,
@@ -37,7 +40,10 @@ from edcraft_validator.domains.math.math_types import (
 )
 from edcraft_validator.domains.math.relevance import template_relevance_text
 from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
-from edcraft_validator.validation.check_names import TEMPLATE_RELEVANCE_CHECK
+from edcraft_validator.validation.check_names import (
+    TEMPLATE_DIFFICULTY_CHECK,
+    TEMPLATE_RELEVANCE_CHECK,
+)
 
 
 def small_fraction_template():
@@ -98,25 +104,28 @@ def passing_evidence(tool: str) -> ToolEvidence:
     )
 
 
-ADVISORY = frozenset({MATH_DIFFICULTY_TOOL, TEMPLATE_RELEVANCE_CHECK})
+ADVISORY = frozenset({TEMPLATE_DIFFICULTY_CHECK, TEMPLATE_RELEVANCE_CHECK})
 
 
-def test_difficulty_bands_follow_the_documented_heuristic() -> None:
-    easy = ir_candidate(small_fraction_template(), difficulty="easy")
-    medium = ir_candidate(quadratic_ir_template(), difficulty="medium")
-    hard = ir_candidate(derivative_ir_template(), difficulty="hard")
+def test_maths_rubric_is_registered_with_four_provisional_dimensions() -> None:
+    rubric = load_math_difficulty_rubric()
 
-    easy_outcome = assess_template_difficulty(easy)
-    medium_outcome = assess_template_difficulty(medium)
-    hard_outcome = assess_template_difficulty(hard)
-
-    assert easy_outcome.details["estimated_difficulty"] == "easy"
-    assert medium_outcome.details["estimated_difficulty"] == "medium"
-    assert hard_outcome.details["estimated_difficulty"] == "hard"
-    for outcome in (easy_outcome, medium_outcome, hard_outcome):
-        assert outcome.details["difficulty_outcome"]["assessment_path"] == "decision"
-        assert outcome.details["difficulty_outcome"]["confidence"] is None
-        assert outcome.details["difficulty_outcome"]["confidence_source"] is None
+    assert rubric.rubric_id == MATH_DIFFICULTY_RUBRIC_ID
+    assert rubric.version == "math-ir-v0.1"
+    assert rubric.assessment_conditions_version == "paper-no-cas-v0.1"
+    assert tuple(MathDifficultyDimensions.model_fields) == (
+        "procedure_length",
+        "operation_type",
+        "conceptual_demand",
+        "answer_discrimination",
+    )
+    assert difficulty_rubric(MATH_DIFFICULTY_RUBRIC_ID) == rubric
+    for label in MathDifficultyDimensions.model_fields:
+        assert f"| {label.replace('_', ' ').capitalize()} |" in rubric.reference
+    assert "Number demand" not in rubric.reference
+    assert "Representation" not in rubric.reference
+    assert "provisional" in rubric.text.lower()
+    assert "uncalibrated" in rubric.text.lower()
 
 
 def test_relevance_projection_is_learner_facing_only() -> None:
@@ -248,7 +257,7 @@ def test_required_checks_follow_the_candidate() -> None:
 
 def test_finalize_keeps_advisory_failures() -> None:
     candidate = ir_candidate(quadratic_ir_template())
-    failed_advisory = passing_evidence(MATH_DIFFICULTY_TOOL).model_copy(
+    failed_advisory = passing_evidence(TEMPLATE_DIFFICULTY_CHECK).model_copy(
         update={
             "status": "failed",
             "findings": [
@@ -277,7 +286,7 @@ def test_finalize_keeps_advisory_failures() -> None:
     saved = next(
         item
         for item in artifact.validation.evidence
-        if item.check == MATH_DIFFICULTY_TOOL
+        if item.check == TEMPLATE_DIFFICULTY_CHECK
     )
     assert saved.status == "failed"
     assert saved.details["advisory"] is True

@@ -17,8 +17,8 @@ metadata. CLI/server/worker boundaries construct dependencies and settings.
 | Deterministic math correctness and sampled qualification | `domains/math/math_correctness.py`, `domains/math/math_correctness_sampling.py`, `domains/math/engine/` |
 | Typed public summaries and worker adapter | `application/authoring_api.py` |
 | Code proposal, binding and finalization | `domains/code/code_domain.py`, schemas and candidate builder |
-| Blinded difficulty prompts and rubric components | `domains/code/template_difficulty.py`, `difficulty_request.py` |
-| Difficulty routing, verdict policy and evidence | `domains/code/difficulty_assessment.py` |
+| Blinded difficulty payloads and rubric records | `domains/code/difficulty.py`, `domains/math/difficulty.py` |
+| Shared difficulty routing, verdict policy and evidence | `application/template_difficulty.py`, `application/difficulty_rubrics.py` |
 | Shared relevance and code-domain question review | `application/relevance.py`, `domains/code/code_relevance.py`, `domains/code/relevance.py` |
 | Model adapters and measured judge execution | `llm/` |
 | Check catalogue decoding and dispatch transport | `mcp/catalogue.py`, `mcp/client.py` |
@@ -101,7 +101,15 @@ The code domain uses the shared relevance capability, so `assess_template_releva
 judges its templates with the same classifier, threshold and policy as every other
 domain. The code domain's relevance evidence is recorded under
 `assess_template_relevance`. The former `code_assess_template_relevance` tool and its
-`domain:code` tags were removed so both domains use the shared capability. Template
+`domain:code` tags were removed so both domains use the shared capability.
+
+The shared difficulty capability works the same way. Each domain registers one
+rubric record at import and binds its rubric identifier, blinded payload, distractor
+count, requested level and checked subject hash to `assess_template_difficulty`.
+The tool is registered once, uses the same decision-then-reasoning cascade and
+returns the same advisory evidence shape. The maths rubric `math-ir-v0.1` is
+provisional and uncalibrated. The former domain-specific difficulty tools and the
+maths heuristic were removed. Template
 identity belongs to `candidate_builder.py`, independently of either
 judge. The domain binds the original author prompt, the checked template hash and the
 rendered learner text, including the checked distractor subset. The classifier receives

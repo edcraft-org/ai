@@ -2,7 +2,12 @@
 
 import threading
 
-from judge_helpers import AdditionExecutor, TemplateAuthor, TemplateJudge, candidate
+from judge_helpers import (
+    AdditionExecutor,
+    TemplateAuthor,
+    TemplateJudge,
+    difficulty_arguments,
+)
 
 from edcraft_validator.application.authoring_api import (
     AuthoringJobCommand,
@@ -17,10 +22,10 @@ from edcraft_validator.application.authoring_contracts import (
     DifficultyOutcome,
     GenerationAttempt,
 )
-from edcraft_validator.application.template_workflow import TemplateApplication
-from edcraft_validator.domains.code.difficulty_assessment import (
+from edcraft_validator.application.template_difficulty import (
     assess_template_difficulty,
 )
+from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.validation.check_contracts import ToolEvidence
@@ -288,7 +293,7 @@ def test_unrelated_tool_outcome_is_not_a_difficulty_or_error():
 
 async def test_difficulty_evidence_summary_uses_the_producer_key():
     evidence = await assess_template_difficulty(
-        candidate(), provider_factory=TemplateJudge
+        **difficulty_arguments(), provider_factory=TemplateJudge
     )
 
     summary = summarize_authoring(report_with_evidence(evidence, status="checked"))

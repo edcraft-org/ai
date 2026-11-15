@@ -35,6 +35,7 @@ step-tracer = { git = "https://github.com/edcraft-org/step-tracer.git", rev = "a
 
 [tool.hatch.build.targets.wheel.force-include]
 "docs/difficulty-rubric.md" = "edcraft_validator/domains/code/difficulty-rubric.md"
+"docs/math-difficulty-rubric.md" = "edcraft_validator/domains/math/math-difficulty-rubric.md"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

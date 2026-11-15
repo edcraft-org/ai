@@ -6,21 +6,19 @@ from functools import lru_cache
 
 from pydantic import create_model, model_validator
 
+from edcraft_validator.application.difficulty_rubrics import DifficultyRubric
+from edcraft_validator.application.template_difficulty import OptionExplanation
 from edcraft_validator.domains.code.difficulty import (
     DIFFICULTY_PROMPT_VERSION,
     CodeDifficultyQuestion,
-    CodeDifficultyRubric,
     DifficultyAssessment,
     Record,
-    Text,
+    template_rubric_reference,
+)
+from edcraft_validator.domains.code.difficulty import (
+    worked_anchors as _worked_anchors,
 )
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
-
-
-class OptionExplanation(Record):
-    reasoning: Text
-    hypothesised_error: str | None
-    shortcut_or_cue: str | None
 
 
 class ThreeOptionEvidence(Record):
@@ -71,56 +69,16 @@ def keyed_assessment_model(option_count: int) -> type[KeyedDifficultyAssessment]
     )
 
 
-def worked_anchors(rubric: CodeDifficultyRubric) -> tuple[str, str, str]:
+def worked_anchors(rubric: DifficultyRubric) -> tuple[str, str, str]:
     """Keep the three existing core worked anchors verbatim; add no examples."""
-    text = rubric.text
-
-    easy = (
-        text.split("### Easy arithmetic\n", 1)[1]
-        .split("### Medium conditional accumulation", 1)[0]
-        .strip()
-    )
-    medium = (
-        text.split("### Medium conditional accumulation\n", 1)[1]
-        .split("Changing the target changes the MCQ:", 1)[0]
-        .strip()
-    )
-    hard = (
-        text.split("### Hard nested accumulation\n", 1)[1]
-        .split("For count targets,", 1)[0]
-        .strip()
-    )
-    return easy, medium, hard
+    return _worked_anchors(rubric)
 
 
-def rubric_reference(rubric: CodeDifficultyRubric) -> str:
-    dimensions = (
-        rubric.text.split("| Dimension | Low | Moderate | High |", 1)[1]
-        .split("### Execution and changing state", 1)[0]
-        .strip()
-    )
-    levels = (
-        rubric.text.split("| Level | Anchor description |", 1)[1]
-        .split("Choose the closest worked anchor", 1)[0]
-        .strip()
-    )
-
-    anchors = worked_anchors(rubric)
-
-    return (
-        "Dimensions (unchanged):\n| Dimension | Low | Moderate | High |\n"
-        + dimensions
-        + "\n\nLevels (unchanged):\n| Level | Anchor description |\n"
-        + levels
-        + "\n\nExisting worked anchors, training material only:\n\n"
-        + "\n\n".join(
-            f"### {level}\n{anchor}"
-            for level, anchor in zip(("easy", "medium", "hard"), anchors, strict=True)
-        )
-    )
+def rubric_reference(rubric: DifficultyRubric) -> str:
+    return template_rubric_reference(rubric.text)
 
 
-def runtime_instructions(rubric: CodeDifficultyRubric) -> str:
+def runtime_instructions(rubric: DifficultyRubric) -> str:
     return (
         "Assess the complete concrete Python tracing MCQ independently. Your only "
         "task is difficulty assessment. Do not execute code, verify correctness "
@@ -154,7 +112,7 @@ def runtime_instructions(rubric: CodeDifficultyRubric) -> str:
 
 def build_judge_request(
     question: CodeDifficultyQuestion,
-    rubric: CodeDifficultyRubric,
+    rubric: DifficultyRubric,
 ) -> StructuredGenerationRequest:
     return StructuredGenerationRequest(
         messages=[

@@ -579,3 +579,27 @@ def ir_candidate(template, *, difficulty="easy"):
         num_distractors=3,
     )
     return build_math_candidate(request, ir_proposal(template))
+
+
+class MathTemplateJudge:
+    """Decision-capable fake judge, so the shared cascade stays model-free."""
+
+    provider, model = "scripted", "math-template-judge"
+
+    def generation_settings(self):
+        return {"sampling": "scripted", "max_retries": 0}
+
+    def decide(self, messages, labels):
+        from edcraft_validator.llm.forced_decision import ClassDecision
+        from edcraft_validator.llm.usage import TokenUsage
+
+        self.last_usage = TokenUsage(input_tokens=10, output_tokens=1)
+        return ClassDecision(
+            label="easy",
+            confidence=1.0,
+            distribution={"easy": 1.0, "medium": 0.0, "hard": 0.0},
+            served_model="served",
+        )
+
+    def generate(self, request):
+        raise AssertionError("a confident decision must not request reasoning")
