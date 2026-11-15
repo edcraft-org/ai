@@ -446,3 +446,55 @@ def test_question_segments_keep_the_authored_operand_order() -> None:
         if segment.kind == "math"
     ]
     assert maths == [instance.equation.removeprefix("What is ").removesuffix("?")]
+
+
+def test_prompt_shows_the_evaluated_expression_except_for_evaluate_goals() -> None:
+    """A factor prompt must not reveal how the template built its coefficients."""
+    from math_helpers import arithmetic_ir_template, factor_ir_template
+
+    from edcraft_validator.domains.math.ir.instantiate import (
+        render_item_segments,
+        render_item_text,
+        sample_parameter_combinations,
+    )
+    from edcraft_validator.domains.math.ir.schema import Expr
+
+    template = factor_ir_template()
+    # Author the expression from its roots, as models do: x^2 + (0 - (2 + 5))x + 2*5.
+    roots_form = Expr.model_validate(
+        {
+            "op": "add",
+            "args": [
+                {"op": "pow", "args": [{"sym": "x"}, {"num": "2"}]},
+                {
+                    "op": "mul",
+                    "args": [
+                        {
+                            "op": "sub",
+                            "args": [
+                                {"num": "0"},
+                                {"op": "add", "args": [{"num": "2"}, {"num": "5"}]},
+                            ],
+                        },
+                        {"sym": "x"},
+                    ],
+                },
+                {"op": "mul", "args": [{"num": "2"}, {"num": "5"}]},
+            ],
+        }
+    )
+    body = template.body.model_copy(
+        update={"goal": template.body.goal.model_copy(update={"expr": roots_form})}
+    )
+    values = sample_parameter_combinations(template, limit=1, seed=0).combinations[0]
+
+    prompt = render_item_text(body, values)
+    latex = "".join(value for _, value in render_item_segments(body, values))
+
+    assert "x^2 - 7*x + 10" in prompt
+    assert "2 + 5" not in prompt and "0 -" not in prompt
+    assert "7 x" in latex and "2 + 5" not in latex
+
+    arithmetic = arithmetic_ir_template()
+    point = sample_parameter_combinations(arithmetic, limit=1, seed=0).combinations[0]
+    assert render_item_text(arithmetic.body, point) == "What is 12 + 14?"
