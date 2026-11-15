@@ -1,7 +1,7 @@
 """Math-domain validation and advisory tools for the authoring flow.
 
 The tools treat a model proposal as an untrusted candidate and run exact,
-fidelity and advisory checks through MCP before the author finalises it.
+fidelity and advisory checks through MCP before the application finalises it.
 """
 
 from __future__ import annotations

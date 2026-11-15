@@ -58,7 +58,6 @@ from edcraft_validator.validation.check_names import (
     TEMPLATE_RELEVANCE_CAPABILITY,
     TEMPLATE_RELEVANCE_CHECK,
 )
-from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
 
 class MathDomain:
@@ -166,11 +165,12 @@ class MathDomain:
 
         item_spec = _item_spec_evidence(evidence)
         combinations_checked = _checked_combinations(item_spec)
-        saved_evidence = _saved_evidence(
-            evidence,
-            template_sha256(template),
-            advisory_checks,
-        )
+        saved_evidence = [
+            save_checked_evidence(
+                item, template_sha256(template), advisory_checks=advisory_checks
+            )
+            for item in evidence
+        ]
 
         summary = MathValidationSummary(
             checking_mode=MATH_CHECKING_MODE,
@@ -221,14 +221,3 @@ def _checked_combinations(item_spec: ToolEvidence) -> int:
     if combinations_checked < 1:
         raise ValueError("IR validation checked no parameter combinations")
     return combinations_checked
-
-
-def _saved_evidence(
-    evidence: list[ToolEvidence],
-    expected_sha256: str,
-    advisory_checks: frozenset[str],
-) -> list[ValidationEvidence]:
-    return [
-        save_checked_evidence(item, expected_sha256, advisory_checks=advisory_checks)
-        for item in evidence
-    ]

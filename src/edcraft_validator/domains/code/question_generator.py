@@ -1,7 +1,7 @@
 """Deterministically expand a finalised code template into a question.
 
 Generation evaluates and renders the approved recipes without model calls or
-per-instance execution, resampling unusable options within a limited bound.
+per-instance execution, retrying unusable options a fixed number of times.
 """
 
 from __future__ import annotations
@@ -69,7 +69,7 @@ def _first_usable_draft(
 ) -> tuple[dict[str, ParameterValue], Any, list[Any], str]:
     """Resample parameter values until the recipe checks accept a draft."""
     # Only recipe and rendering checks run here. A failed variant is resampled
-    # within a fixed bound, and no invented option is substituted.
+    # a fixed number of times, and no invented option is substituted.
     for attempt in range(32):
         inputs = _seeded_inputs(template, seed, attempt)
         try:

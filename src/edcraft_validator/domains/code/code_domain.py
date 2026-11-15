@@ -144,11 +144,12 @@ class CodeDomain:
 
         semantic = next(item for item in evidence if item.tool == SEMANTIC_CHECK)
         reusable = _reusable_checked_template(template, semantic)
-        saved_evidence = _saved_evidence(
-            evidence,
-            template_sha256(reusable),
-            advisory_checks,
-        )
+        saved_evidence = [
+            save_checked_evidence(
+                item, template_sha256(reusable), advisory_checks=advisory_checks
+            )
+            for item in evidence
+        ]
 
         return ValidatedCodeTemplate(
             template=reusable,
@@ -197,17 +198,6 @@ def _reusable_checked_template(
         deep=True,
     )
     return CodeTemplateCandidate.model_validate(reusable.model_dump())
-
-
-def _saved_evidence(
-    evidence: list[ToolEvidence],
-    expected_sha256: str,
-    advisory_checks: frozenset[str],
-) -> list[ValidationEvidence]:
-    return [
-        save_checked_evidence(item, expected_sha256, advisory_checks=advisory_checks)
-        for item in evidence
-    ]
 
 
 def _validation_summary(

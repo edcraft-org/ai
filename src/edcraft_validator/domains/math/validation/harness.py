@@ -1,8 +1,12 @@
 """Declarative validation harness for math IR items and templates.
 
-The harness grades authored recipes and distractors through the engine and the
-form registry, over a limited sample of the declared domain, before the
-candidate is finalised.
+The harness grades authored recipes before the candidate is finalised. It has two
+independent aspects, each requested separately. ``correctness`` asks the engine
+to grade the key correct and every distractor incorrect, with no two options
+sharing a value. ``form`` asks the form registry whether the key has the shape
+its goal demands, and form-sensitive goals apply the same rule to distractors.
+Neither aspect implies the other. Validation samples the declared parameter
+domain within a limited budget.
 """
 
 from __future__ import annotations

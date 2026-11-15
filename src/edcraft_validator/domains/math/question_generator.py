@@ -2,7 +2,8 @@
 
 Generation evaluates the approved recipes and renders them without model, MCP
 or external calls. It rejects unusable option combinations such as repeated
-choices. Correctness and form were checked during authoring.
+choices. Correctness, and form where the goal
+requires it, were checked during authoring.
 """
 
 from __future__ import annotations
