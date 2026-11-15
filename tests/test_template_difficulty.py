@@ -224,8 +224,10 @@ def test_forged_technical_advisory_details_still_block(tool):
 
 
 def test_rubric_unavailable_is_typed_and_not_stale(monkeypatch):
-    from edcraft_validator.application import template_difficulty as difficulty_module
     from edcraft_validator.application.authoring_api import summarize_authoring
+    from edcraft_validator.domains.code import (
+        difficulty_assessment as difficulty_module,
+    )
 
     def unavailable():
         raise OSError("missing rubric")

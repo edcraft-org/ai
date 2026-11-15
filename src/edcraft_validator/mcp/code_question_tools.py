@@ -2,7 +2,7 @@
 
 from fastmcp import FastMCP
 
-from edcraft_validator.application.code_checks import (
+from edcraft_validator.domains.code.code_checks import (
     check_code_question_correctness,
     check_code_question_requirements,
 )

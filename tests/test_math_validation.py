@@ -15,6 +15,7 @@ from math_helpers import (
 )
 
 from edcraft_validator.domains.math.candidate_builder import template_sha256
+from edcraft_validator.domains.math.difficulty import assess_template_difficulty
 from edcraft_validator.domains.math.ir.schema import (
     Distractor,
     Given,
@@ -35,7 +36,6 @@ from edcraft_validator.domains.math.math_types import (
     MATH_TOOL_VERSION,
 )
 from edcraft_validator.domains.math.relevance import template_relevance_text
-from edcraft_validator.mcp.math_tools import assess_template_difficulty
 from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
 from edcraft_validator.validation.check_names import TEMPLATE_RELEVANCE_CHECK
 

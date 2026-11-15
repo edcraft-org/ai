@@ -70,7 +70,7 @@ error with their precise outcome retained in `details`.
 ## Concrete example
 
 ```python
-from edcraft_validator.application.math_correctness import check_math_correctness
+from edcraft_validator.domains.math.math_correctness import check_math_correctness
 
 result = check_math_correctness({
     "problem": {
@@ -140,7 +140,7 @@ explicit exact numeric values. A `param` node is substituted structurally in
 both the problem and candidate; free text and arbitrary code are never executed.
 
 ```python
-from edcraft_validator.application.math_correctness_sampling import qualify_math_template
+from edcraft_validator.domains.math.math_correctness_sampling import qualify_math_template
 from edcraft_validator.domains.math.engine.sampling import SamplingSettings
 
 # template contains {"request": ..., "parameters": [

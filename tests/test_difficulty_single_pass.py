@@ -5,7 +5,7 @@ import json
 import pytest
 from test_difficulty_tool import Provider, assessment, question
 
-from edcraft_validator.application.code_difficulty import (
+from edcraft_validator.domains.code.code_difficulty import (
     CodeDifficultyReport,
     assess_code_question_difficulty,
 )

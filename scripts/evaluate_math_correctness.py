@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import json
 
-from edcraft_validator.application.math_correctness import check_math_correctness
-from edcraft_validator.application.math_correctness_sampling import (
+from edcraft_validator.domains.math.engine.sampling import SamplingSettings
+from edcraft_validator.domains.math.math_correctness import check_math_correctness
+from edcraft_validator.domains.math.math_correctness_sampling import (
     qualify_math_template,
 )
-from edcraft_validator.domains.math.engine.sampling import SamplingSettings
 
 
 def number(value: object) -> dict:

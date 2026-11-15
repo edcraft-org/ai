@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from edcraft_validator.application import code_difficulty
+from edcraft_validator.domains.code import code_difficulty
 from scripts import evaluate_code_relevance as evaluation
 from tests.test_code_relevance import Decisions
 

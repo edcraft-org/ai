@@ -5,9 +5,9 @@ from typing import Annotated
 from fastmcp import FastMCP
 from pydantic import Field
 
-from edcraft_validator.application.code_relevance import assess_code_template_relevance
 from edcraft_validator.application.relevance import assess_relevance
 from edcraft_validator.application.template_relevance import assess_template_relevance
+from edcraft_validator.domains.code.code_relevance import assess_code_template_relevance
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.relevance import TEMPLATE_RELEVANCE_TOOL
 from edcraft_validator.llm.decision import DecisionProviderFactory

@@ -14,12 +14,12 @@ metadata. CLI/server/worker boundaries construct dependencies and settings.
 | Application-facing tool interface | `application/ports.py` |
 | Authoring orchestration and attempt records | `application/template_workflow.py`, `authoring_contracts.py` |
 | Code authoring evaluation and report aggregation | `application/code_evaluation.py` |
-| Deterministic math correctness and sampled qualification | `application/math_correctness.py`, `application/math_correctness_sampling.py`, `domains/math/engine/` |
+| Deterministic math correctness and sampled qualification | `domains/math/math_correctness.py`, `domains/math/math_correctness_sampling.py`, `domains/math/engine/` |
 | Typed public summaries and worker adapter | `application/authoring_api.py` |
 | Code proposal, binding and finalization | `domains/code/code_domain.py`, schemas and candidate builder |
 | Blinded difficulty prompts and rubric components | `domains/code/template_difficulty.py`, `difficulty_request.py` |
-| Difficulty routing, verdict policy and evidence | `application/template_difficulty.py` |
-| Shared relevance and code-template advisory adapter | `application/relevance.py`, `application/code_relevance.py`, `domains/code/relevance.py` |
+| Difficulty routing, verdict policy and evidence | `domains/code/difficulty_assessment.py` |
+| Shared relevance and code-template advisory adapter | `application/relevance.py`, `domains/code/code_relevance.py`, `domains/code/relevance.py` |
 | Model adapters and measured judge execution | `llm/` |
 | Check catalogue decoding and dispatch transport | `mcp/catalogue.py`, `mcp/client.py` |
 | Default dependency construction | `bootstrap.py`, `mcp/server.py`, `cli.py` |

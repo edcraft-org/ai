@@ -5,14 +5,16 @@ from typing import Annotated
 from fastmcp import FastMCP
 from pydantic import Field
 
-from edcraft_validator.application.code_difficulty import (
+from edcraft_validator.domains.code.code_difficulty import (
     CodeDifficultyReport,
     assess_code_question_difficulty,
 )
-from edcraft_validator.application.template_difficulty import assess_template_difficulty
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.code_types import Difficulty
 from edcraft_validator.domains.code.difficulty import CodeDifficultyQuestion
+from edcraft_validator.domains.code.difficulty_assessment import (
+    assess_template_difficulty,
+)
 from edcraft_validator.llm.judge_configuration import JudgeSettings
 from edcraft_validator.llm.judging import JudgeProviderFactory
 from edcraft_validator.validation.check_contracts import ToolEvidence

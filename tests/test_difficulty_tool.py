@@ -13,7 +13,7 @@ from fastmcp.exceptions import ToolError
 from judge_helpers import assessment
 from pydantic import ValidationError
 
-from edcraft_validator.application.code_difficulty import (
+from edcraft_validator.domains.code.code_difficulty import (
     assess_code_question_difficulty,
 )
 from edcraft_validator.domains.code.difficulty import (
@@ -236,7 +236,7 @@ async def test_missing_usage_is_unknown_and_concurrent_calls_are_isolated():
 
 
 async def test_missing_rubric_prevents_model_call(monkeypatch):
-    from edcraft_validator.application import code_difficulty
+    from edcraft_validator.domains.code import code_difficulty
 
     def unavailable():
         raise FileNotFoundError("private path")

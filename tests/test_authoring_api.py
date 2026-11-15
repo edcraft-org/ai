@@ -17,8 +17,10 @@ from edcraft_validator.application.authoring_contracts import (
     DifficultyOutcome,
     GenerationAttempt,
 )
-from edcraft_validator.application.template_difficulty import assess_template_difficulty
 from edcraft_validator.application.template_workflow import TemplateApplication
+from edcraft_validator.domains.code.difficulty_assessment import (
+    assess_template_difficulty,
+)
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.validation.check_contracts import ToolEvidence

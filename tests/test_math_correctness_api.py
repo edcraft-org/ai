@@ -3,8 +3,8 @@
 import pytest
 from fastmcp import Client
 
-from edcraft_validator.application.math_correctness import check_math_correctness
 from edcraft_validator.domains.math.engine.contracts import CorrectnessRequest
+from edcraft_validator.domains.math.math_correctness import check_math_correctness
 from edcraft_validator.mcp.server import create_validation_server
 
 

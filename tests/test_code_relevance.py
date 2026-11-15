@@ -7,7 +7,7 @@ from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from pydantic import ValidationError
 
-from edcraft_validator.application.code_relevance import (
+from edcraft_validator.domains.code.code_relevance import (
     CodeRelevanceReview,
     review_code_question_relevance,
 )

@@ -21,13 +21,13 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from edcraft_validator.application.math_correctness import check_math_correctness
 from edcraft_validator.domains.math.engine.contracts import (
     CorrectnessRequest,
     CorrectnessResult,
 )
 from edcraft_validator.domains.math.engine.dispatch import check_in_process
 from edcraft_validator.domains.math.engine.validation import validate_request
+from edcraft_validator.domains.math.math_correctness import check_math_correctness
 from tests._math_mutations import (
     BREAKING,
     PRESERVING,

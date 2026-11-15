@@ -11,11 +11,11 @@ import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
-from edcraft_validator.application.code_checks import (
+from edcraft_validator.application.relevance import assess_relevance
+from edcraft_validator.domains.code.code_checks import (
     check_code_question_correctness,
     check_code_question_requirements,
 )
-from edcraft_validator.application.relevance import assess_relevance
 from edcraft_validator.domains.code.relevance import (
     CodeQuestionRequest,
     relevance_input,

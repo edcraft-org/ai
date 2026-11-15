@@ -8,15 +8,15 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from edcraft_validator.application.math_correctness import (
-    WORKER_MODULE,
-    CorrectnessTimeout,
-    CorrectnessWorkerError,
-)
 from edcraft_validator.domains.math.engine.contracts import EngineUnsupported
 from edcraft_validator.domains.math.engine.sampling import (
     CorrectnessTemplate,
     SamplingSettings,
+)
+from edcraft_validator.domains.math.math_correctness import (
+    WORKER_MODULE,
+    CorrectnessTimeout,
+    CorrectnessWorkerError,
 )
 from edcraft_validator.tools.isolated_process import run_json_worker
 

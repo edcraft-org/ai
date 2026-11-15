@@ -15,7 +15,7 @@ from typing import TextIO
 
 from dotenv import load_dotenv
 
-from edcraft_validator.application.code_relevance import (
+from edcraft_validator.domains.code.code_relevance import (
     review_code_question_relevance,
 )
 from edcraft_validator.domains.code.difficulty import CodeDifficultyQuestion

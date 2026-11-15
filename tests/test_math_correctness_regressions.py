@@ -1,6 +1,6 @@
 """Adversarial cases independent of the handler implementation."""
 
-from edcraft_validator.application.math_correctness import check_math_correctness
+from edcraft_validator.domains.math.math_correctness import check_math_correctness
 
 
 def n(value):

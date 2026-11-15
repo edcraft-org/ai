@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from edcraft_validator.application.math_correctness import check_math_correctness
 from edcraft_validator.domains.math.engine.dispatch import LU_CONVENTION
+from edcraft_validator.domains.math.math_correctness import check_math_correctness
 
 # A three-cycle permutation: P != P^T, unlike the two-element swap used in the
 # existing matrix tests, so a transposed convention cannot pass by accident.

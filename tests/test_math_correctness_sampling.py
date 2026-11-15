@@ -1,12 +1,12 @@
 """Property-based template qualification without recipe authoring or enumeration."""
 
-from edcraft_validator.application.math_correctness_sampling import (
-    qualify_math_template,
-)
 from edcraft_validator.domains.math.engine.sampling import (
     CorrectnessTemplate,
     SamplingSettings,
     qualify_in_process,
+)
+from edcraft_validator.domains.math.math_correctness_sampling import (
+    qualify_math_template,
 )
 
 

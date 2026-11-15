@@ -2,17 +2,17 @@
 
 from fastmcp import FastMCP
 
-from edcraft_validator.application.math_correctness import (
-    check_math_correctness,
-    correctness_evidence,
-)
-from edcraft_validator.application.math_correctness_sampling import (
-    qualify_math_template,
-)
 from edcraft_validator.domains.math.engine.contracts import CorrectnessRequest
 from edcraft_validator.domains.math.engine.sampling import (
     CorrectnessTemplate,
     SamplingSettings,
+)
+from edcraft_validator.domains.math.math_correctness import (
+    check_math_correctness,
+    correctness_evidence,
+)
+from edcraft_validator.domains.math.math_correctness_sampling import (
+    qualify_math_template,
 )
 from edcraft_validator.validation.check_contracts import (
     ToolEvidence,

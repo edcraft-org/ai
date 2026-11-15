@@ -9,8 +9,10 @@ from types import SimpleNamespace as NS
 import pytest
 from judge_helpers import TemplateJudge, candidate
 
-from edcraft_validator.application.template_difficulty import assess_template_difficulty
 from edcraft_validator.domains.code.difficulty import load_code_difficulty_rubric
+from edcraft_validator.domains.code.difficulty_assessment import (
+    assess_template_difficulty,
+)
 from edcraft_validator.domains.code.template_difficulty import (
     build_template_decision_request,
 )

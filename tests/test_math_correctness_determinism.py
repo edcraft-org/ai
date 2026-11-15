@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from edcraft_validator.application.math_correctness import check_math_correctness
+from edcraft_validator.domains.math.math_correctness import check_math_correctness
 
 
 def _num(value: int | str) -> dict[str, str]:

@@ -7,13 +7,13 @@ from typing import Literal
 
 from pydantic import Field
 
-from edcraft_validator.application.code_checks import (
-    check_code_question_correctness,
-    check_code_question_requirements,
-)
 from edcraft_validator.application.relevance import assess_relevance
 from edcraft_validator.application.template_relevance import build_relevance_evidence
 from edcraft_validator.domains.code.candidate_builder import template_sha256
+from edcraft_validator.domains.code.code_checks import (
+    check_code_question_correctness,
+    check_code_question_requirements,
+)
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.difficulty import CodeDifficultyQuestion, Record
 from edcraft_validator.domains.code.question_checks import (

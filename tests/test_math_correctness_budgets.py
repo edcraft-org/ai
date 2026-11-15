@@ -7,7 +7,7 @@ import time
 import pytest
 import sympy
 
-from edcraft_validator.application import math_correctness
+from edcraft_validator.domains.math import math_correctness
 from edcraft_validator.domains.math.engine.contracts import (
     CorrectnessRequest,
     EngineUnsupported,
