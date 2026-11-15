@@ -18,6 +18,7 @@ import pytest
 from fastmcp import FastMCP
 from math_helpers import ir_candidate, quadratic_ir_template
 
+from edcraft_validator.application.difficulty_rubrics import difficulty_rubric
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
     CodeTemplateRequest,
@@ -35,6 +36,12 @@ from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.mcp.tool_dependencies import ToolDependencies
 from edcraft_validator.tools.python_execution import ExecutionResult
 from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
+from edcraft_validator.validation.check_names import (
+    TEMPLATE_DIFFICULTY_CAPABILITY,
+    TEMPLATE_DIFFICULTY_CHECK,
+    TEMPLATE_RELEVANCE_CAPABILITY,
+    TEMPLATE_RELEVANCE_CHECK,
+)
 from edcraft_validator.validation.property_summary import PropertyCheckSummary
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples/templates"
@@ -316,3 +323,22 @@ def test_distractor_count_matches_the_candidate_distractors(domain_name) -> None
 
     assert expected >= 1
     assert create_domain(domain_name).distractor_count(candidate) == expected
+
+
+@pytest.mark.parametrize("domain_name", available_domains())
+def test_domain_uses_the_shared_advisory_capabilities(domain_name) -> None:
+    """Difficulty and relevance are shared checks, so a domain only supplies data."""
+    case = DOMAIN_CASES[domain_name]
+    domain = create_domain(domain_name)
+    request, candidate = case.request(), case.candidate()
+
+    assert {
+        TEMPLATE_DIFFICULTY_CAPABILITY,
+        TEMPLATE_RELEVANCE_CAPABILITY,
+    } <= domain.capabilities
+
+    for name in (TEMPLATE_DIFFICULTY_CHECK, TEMPLATE_RELEVANCE_CHECK):
+        json.dumps(domain.tool_bindings(request, candidate, name))
+
+    difficulty = domain.tool_bindings(request, candidate, TEMPLATE_DIFFICULTY_CHECK)
+    assert difficulty_rubric(difficulty["rubric_id"]) is not None

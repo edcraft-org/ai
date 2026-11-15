@@ -175,6 +175,34 @@ Shared checks that several domains can reuse are registered once with a
 capability tools. A registry coverage test checks that every selectable domain has
 discoverable tools. Evaluation orchestration belongs to the application layer.
 
+### Adding a domain: checklist
+
+A new domain follows the same standards as the code and maths domains. It is done
+when `tests/test_domain_conformance.py` passes for it.
+
+1. **Contract.** Implement every `DomainModule` method in `domains/domain_contract.py`
+   and register the factory with `register_domain`. Reuse `TemplateRequest`,
+   `build_template_id` and `seeded_index` from `domains/domain_support.py`.
+2. **Tools.** Implement `register_tools` to add the domain's blocking checks, tagged
+   `domain:<name>`. Name them `<domain>_verify_<thing>` for blocking checks and
+   `<domain>_assess_<thing>` for advisory ones.
+3. **Required checks.** Return from `required_checks(candidate)` the checks that must
+   pass for this candidate. The application adds any the model leaves out.
+4. **Property checking.** Check the template over its parameter domain with
+   `validation/property_checks.py` (Hypothesis, seeded, boundary examples first,
+   limited by examples, calls and time). Copy its `details()` into the evidence.
+5. **Summary.** Make the checked summary extend `PropertyCheckSummary` from
+   `validation/property_summary.py`, adding only domain-specific fields.
+6. **Shared advisory checks.** Declare the `difficulty` and `template-relevance`
+   capabilities. Register a `DifficultyRubric` and return bindings for
+   `assess_template_difficulty` and `assess_template_relevance` from `tool_bindings`.
+7. **Distractors.** Return the number of distractors from `distractor_count`. The
+   application rejects a candidate with fewer than the requested number.
+8. **Generation.** Expand an approved template from a seed by evaluating its recipes
+   and rejecting unusable option combinations. Do not call a model or MCP tool.
+9. **Verify.** Run `tests/test_domain_conformance.py`, which is parametrised over
+   every registered domain, then the full suite.
+
 OpenAI-compatible endpoints reuse the `openai` adapter with `OPENAI_BASE_URL` and
 `OPENAI_MODEL`. `OPENAI_RESPONSE_FORMAT`, `OPENAI_GENERATION_MAX_TOKENS`
 and `OPENAI_REASONING_EFFORT` configure existing transport
