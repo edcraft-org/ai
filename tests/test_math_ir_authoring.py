@@ -6,6 +6,7 @@ import pytest
 from authoring_helpers import RequestPendingTools
 from math_helpers import (
     arithmetic_ir_template,
+    checked_summary,
     derivative_ir_template,
     determinant_ir_template,
     ir_candidate,
@@ -38,7 +39,6 @@ from edcraft_validator.domains.math.math_schemas import (
     MathQuestionInstance,
     MathTemplateContent,
     MathTemplateRequest,
-    MathValidationSummary,
     ValidatedMathTemplate,
 )
 from edcraft_validator.domains.math.math_types import (
@@ -77,12 +77,9 @@ def _validated(template: MathTemplateSpec) -> ValidatedMathTemplate:
     return ValidatedMathTemplate(
         artifact_id="artifact-ir",
         template=ir_candidate(template),
-        validation=MathValidationSummary(
-            combinations_checked=report.variants_checked,
-            max_combinations=report.variants_total,
-            evidence=[
-                ValidationEvidence(check="math_verify_item_spec", status="passed")
-            ],
+        validation=checked_summary(
+            report,
+            [ValidationEvidence(check="math_verify_item_spec", status="passed")],
         ),
     )
 
@@ -108,7 +105,7 @@ def test_linear_ir_template_is_graded_by_the_engine_and_form() -> None:
     report = validate_template(template)
 
     assert report.report.status == "passed", report.report.findings
-    assert report.variants_checked == report.variants_total == 12
+    assert report.examples_checked == report.declared_domain_size == 12
     engine = [
         check for check in report.report.checks if check.check == "engine_correctness"
     ]
@@ -377,7 +374,7 @@ def test_ir_tools_accept_the_finite_template() -> None:
     options = validate_options(MathOptionsRequest(template=template))
 
     assert spec.status == "passed"
-    assert spec.details["variants_checked"] == 4
+    assert spec.details["examples_checked"] == 4
     assert options.status == "passed"
 
 
@@ -444,8 +441,8 @@ def test_ir_authoring_samples_a_domain_larger_than_the_budget() -> None:
     )
 
     assert validated.validation.checking_mode == "property_based"
-    assert 80 <= validated.validation.combinations_checked <= 100
-    assert validated.validation.max_combinations == 400
+    assert 80 <= validated.validation.examples_checked <= 100
+    assert validated.validation.declared_domain_size == 400
 
     first = application.generate_question(validated, domain=MathDomain(), seed=1)
     second = application.generate_question(validated, domain=MathDomain(), seed=2)
@@ -490,7 +487,7 @@ def test_ir_authoring_round_trip_through_the_application() -> None:
     assert checks["math_verify_item_spec"] == "passed"
     assert checks["math_validate_options"] == "passed"
     assert checks["math_verify_text_fidelity"] == "passed"
-    assert validated.validation.combinations_checked == 4
+    assert validated.validation.examples_checked == 4
 
     instance = application.generate_question(validated, domain=MathDomain(), seed=1)
     assert isinstance(instance, MathQuestionInstance)

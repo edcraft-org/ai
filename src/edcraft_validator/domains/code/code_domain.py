@@ -47,6 +47,7 @@ from edcraft_validator.validation.check_names import (
     TEMPLATE_RELEVANCE_CAPABILITY,
     TEMPLATE_RELEVANCE_CHECK,
 )
+from edcraft_validator.validation.property_summary import property_details
 from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
 SEMANTIC_CHECK = "code_validate_answers_and_distractors"
@@ -200,19 +201,5 @@ def _validation_summary(
 ) -> TemplateValidationSummary:
     """Copy the execution coverage onto the saved template."""
     return TemplateValidationSummary.model_validate(
-        {
-            **{
-                key: semantic.details[key]
-                for key in (
-                    "checking_mode",
-                    "examples_checked",
-                    "execution_calls",
-                    "max_examples",
-                    "max_execution_calls",
-                    "timeout_seconds",
-                    "seed",
-                )
-            },
-            "evidence": saved_evidence,
-        }
+        {**property_details(semantic.details), "evidence": saved_evidence}
     )

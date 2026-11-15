@@ -115,8 +115,8 @@ def test_engine_and_form_checks_reach_tool_details(
             "report": {
                 "report": {"status": "passed", "findings": [], "checks": checks}
             },
-            "variants_checked": 1,
-            "variants_total": 1,
+            "examples_checked": 1,
+            "declared_domain_size": 1,
         },
     )
 

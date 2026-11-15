@@ -18,6 +18,7 @@ from edcraft_validator.domains.code.code_types import (
     ProgrammingTopic,
 )
 from edcraft_validator.domains.domain_support import TemplateRequest
+from edcraft_validator.validation.property_summary import PropertyCheckSummary
 from edcraft_validator.validation.validation_contracts import (
     ValidationEvidence,
     ValidationFailure,
@@ -213,40 +214,10 @@ class CodeTemplateCandidate(BaseModel):
         return self
 
 
-class TemplateValidationSummary(BaseModel):
+class TemplateValidationSummary(PropertyCheckSummary):
     """Sampled evidence, without a complete-domain answer table."""
 
-    model_config = ConfigDict(extra="forbid", strict=True)
-
     validator_version: Literal["mcp-code-template-v2"] = "mcp-code-template-v2"
-    checking_mode: Literal["property_based"]
-    examples_checked: int = Field(ge=1)
-    execution_calls: int = Field(ge=1)
-    max_examples: int = Field(ge=1)
-    max_execution_calls: int = Field(ge=1)
-    timeout_seconds: float = Field(gt=0, allow_inf_nan=False)
-    seed: int
-    evidence: list[ValidationEvidence] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def require_successful_unique_evidence(self) -> TemplateValidationSummary:
-        checks = [item.check for item in self.evidence]
-        if len(checks) != len(set(checks)):
-            raise ValueError("validation evidence checks must be unique")
-
-        if any(
-            item.status != "passed" and item.details.get("advisory") is not True
-            for item in self.evidence
-        ):
-            raise ValueError("checked templates require passing validation evidence")
-
-        if (
-            not self.examples_checked
-            <= self.execution_calls
-            <= self.max_execution_calls
-        ):
-            raise ValueError("sample and execution counts exceed the checking budget")
-        return self
 
 
 class ValidatedCodeTemplate(ValidatedTemplateArtifact):

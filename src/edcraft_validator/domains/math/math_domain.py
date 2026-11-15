@@ -33,7 +33,6 @@ from edcraft_validator.domains.math.math_schemas import (
 )
 from edcraft_validator.domains.math.math_types import (
     FORM_SENSITIVE_GOALS,
-    MATH_CHECKING_MODE,
     MATH_FIDELITY_TOOL,
     MATH_FORM_TOOL,
     MATH_ITEM_SPEC_TOOL,
@@ -57,6 +56,7 @@ from edcraft_validator.validation.check_names import (
     TEMPLATE_RELEVANCE_CAPABILITY,
     TEMPLATE_RELEVANCE_CHECK,
 )
+from edcraft_validator.validation.property_summary import property_details
 
 
 class MathDomain:
@@ -162,7 +162,7 @@ class MathDomain:
         _require_distractor_count(template_spec)
 
         item_spec = _item_spec_evidence(evidence)
-        combinations_checked = _checked_combinations(item_spec)
+        checked = _checked_property_details(item_spec)
         saved_evidence = [
             save_checked_evidence(
                 item, template_sha256(template), advisory_checks=advisory_checks
@@ -171,10 +171,8 @@ class MathDomain:
         ]
 
         summary = MathValidationSummary(
-            checking_mode=MATH_CHECKING_MODE,
-            combinations_checked=combinations_checked,
-            max_combinations=item_spec.details.get("variants_total", 0),
-            seed=item_spec.details.get("seed", 0),
+            **checked,
+            declared_domain_size=item_spec.details.get("declared_domain_size", 0),
             evidence=saved_evidence,
         )
 
@@ -213,9 +211,9 @@ def _item_spec_evidence(evidence: list[ToolEvidence]) -> ToolEvidence:
     return next(item for item in evidence if item.tool == MATH_ITEM_SPEC_TOOL)
 
 
-def _checked_combinations(item_spec: ToolEvidence) -> int:
+def _checked_property_details(item_spec: ToolEvidence) -> dict[str, Any]:
     """Refuse a pass that sampled no parameter combinations."""
-    combinations_checked = item_spec.details.get("variants_checked", 0)
-    if combinations_checked < 1:
+    checked = property_details(item_spec.details)
+    if checked["examples_checked"] < 1:
         raise ValueError("IR validation checked no parameter combinations")
-    return combinations_checked
+    return checked

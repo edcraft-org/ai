@@ -23,6 +23,20 @@ from edcraft_validator.llm.llm_contracts import PlannedGenerationResponse
 from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
 
+def coverage(**overrides) -> dict:
+    """The shared sampled coverage fields a checked math summary needs."""
+    return {
+        "examples_checked": 4,
+        "execution_calls": 4,
+        "max_examples": 4,
+        "max_execution_calls": 16,
+        "timeout_seconds": 15.0,
+        "seed": 0,
+        "whole_domain": True,
+        "declared_domain_size": 4,
+    } | overrides
+
+
 def test_request_round_trips_and_rejects_extra_fields() -> None:
     request = MathTemplateRequest(
         prompt="Make an easy quadratic equation question",
@@ -110,8 +124,7 @@ def test_content_rejects_extra_fields() -> None:
 def test_validation_summary_rejects_failed_technical_evidence() -> None:
     with pytest.raises(ValidationError, match="passing validation evidence"):
         MathValidationSummary(
-            combinations_checked=4,
-            max_combinations=4,
+            **coverage(),
             evidence=[
                 ValidationEvidence(check="math_verify_item_spec", status="failed")
             ],
@@ -120,8 +133,7 @@ def test_validation_summary_rejects_failed_technical_evidence() -> None:
 
 def test_validation_summary_migrates_legacy_relevance_on_read() -> None:
     summary = MathValidationSummary(
-        combinations_checked=4,
-        max_combinations=4,
+        **coverage(),
         evidence=[
             ValidationEvidence(check="math_verify_item_spec", status="passed"),
             ValidationEvidence(check="math_validate_options", status="passed"),
@@ -139,8 +151,7 @@ def test_validation_summary_migrates_legacy_relevance_on_read() -> None:
 
 def test_validation_summary_drops_stale_legacy_relevance_duplicate() -> None:
     summary = MathValidationSummary(
-        combinations_checked=4,
-        max_combinations=4,
+        **coverage(),
         evidence=[
             ValidationEvidence(check="math_verify_item_spec", status="passed"),
             ValidationEvidence(
@@ -168,8 +179,7 @@ def test_validated_artifact_round_trips() -> None:
         artifact_id="abc123",
         template=candidate,
         validation=MathValidationSummary(
-            combinations_checked=4,
-            max_combinations=4,
+            **coverage(),
             evidence=[
                 ValidationEvidence(check="math_verify_item_spec", status="passed"),
                 ValidationEvidence(check="math_validate_options", status="passed"),

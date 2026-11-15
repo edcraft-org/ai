@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from math_helpers import arithmetic_ir_template, ir_candidate, quadratic_ir_template
+from math_helpers import (
+    arithmetic_ir_template,
+    checked_summary,
+    ir_candidate,
+    quadratic_ir_template,
+)
 
 from edcraft_validator.domains.math.ir.instantiate import (
     declared_domain_size,
@@ -24,7 +29,6 @@ from edcraft_validator.domains.math.ir.schema import (
     TextSpec,
 )
 from edcraft_validator.domains.math.math_schemas import (
-    MathValidationSummary,
     ValidatedMathTemplate,
 )
 from edcraft_validator.domains.math.question_generator import generate_math_question
@@ -99,8 +103,8 @@ def test_validation_samples_a_large_domain_and_records_coverage() -> None:
     assert report.report.status == "passed", report.report.findings
     assert report.checking_mode == "property_based"
     assert report.seed == 5
-    assert 1 <= report.variants_checked <= 12
-    assert report.variants_total == 10_000
+    assert 1 <= report.examples_checked <= 12
+    assert report.declared_domain_size == 10_000
 
 
 def test_large_domain_sampling_is_deterministic_per_seed() -> None:
@@ -119,7 +123,7 @@ def test_a_large_domain_checks_no_more_than_the_variant_budget() -> None:
 
     for max_variants in (1, 4, 12, 20):
         report = validate_template(template, max_variants=max_variants, seed=3)
-        assert 1 <= report.variants_checked <= max_variants
+        assert 1 <= report.examples_checked <= max_variants
 
 
 def test_representative_item_renders_from_a_large_domain() -> None:
@@ -180,13 +184,9 @@ def test_generation_draws_variants_beyond_the_validated_sample() -> None:
     artifact = ValidatedMathTemplate(
         artifact_id="artifact-large",
         template=ir_candidate(template),
-        validation=MathValidationSummary(
-            combinations_checked=report.variants_checked,
-            max_combinations=report.variants_total,
-            seed=report.seed,
-            evidence=[
-                ValidationEvidence(check="math_verify_item_spec", status="passed")
-            ],
+        validation=checked_summary(
+            report,
+            [ValidationEvidence(check="math_verify_item_spec", status="passed")],
         ),
     )
 
@@ -195,4 +195,4 @@ def test_generation_draws_variants_beyond_the_validated_sample() -> None:
         instance = generate_math_question(artifact, seed)
         seen.add((str(instance.parameters["a"]), str(instance.parameters["b"])))
 
-    assert len(seen) > report.variants_checked
+    assert len(seen) > report.examples_checked

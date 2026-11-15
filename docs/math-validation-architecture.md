@@ -67,7 +67,7 @@ knows the topic.
                                         │
                     L1 formal gate (deterministic, CAS)
                     solve · unique? · answer · distractors ·
-                    domain · units · checked variants
+                    domain · units · checked examples
                                         │
                     L2 NL-fidelity gate (independent)
                     constrained render OR blind parse-back ·
@@ -345,7 +345,8 @@ Template validation uses the same property checker as the code domain
 enumerates a small domain completely. A larger domain is checked within a
 limited budget, 100 examples by default. The first failing combination is
 shrunk and reported as `variant <parameters>:`. Exhausting the budget is a
-failure, never a partial pass.
+failure, never a partial pass. The checked summary carries the shared
+`PropertyCheckSummary` coverage fields plus the template's declared domain size.
 
 ## 9. MCQ-specific validation
 

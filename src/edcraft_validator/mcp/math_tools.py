@@ -41,6 +41,7 @@ from edcraft_validator.llm.judge_configuration import (
 )
 from edcraft_validator.llm.judging import JudgeProviderFactory
 from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
+from edcraft_validator.validation.property_checks import PropertyCheckSettings
 
 _MAX_EXPORTED_ITEMS = 128
 
@@ -636,9 +637,19 @@ def _harness_details(
         "routes_to_review": ir_status != "passed",
         "answer": report.get("answer", ""),
         "findings": findings,
-        "variants_checked": harness.get("variants_checked", 0),
-        "variants_total": harness.get("variants_total", 0),
+        "checking_mode": harness.get("checking_mode", "property_based"),
+        "examples_checked": harness.get("examples_checked", 0),
+        "execution_calls": harness.get("execution_calls", 0),
+        "max_examples": harness.get("max_examples", PropertyCheckSettings.max_examples),
+        "max_execution_calls": harness.get(
+            "max_execution_calls", PropertyCheckSettings.max_execution_calls
+        ),
+        "timeout_seconds": harness.get(
+            "timeout_seconds", PropertyCheckSettings.timeout_seconds
+        ),
         "seed": harness.get("seed", 0),
+        "whole_domain": harness.get("whole_domain", False),
+        "declared_domain_size": harness.get("declared_domain_size", 0),
         "checks": checks[:_MAX_EXPORTED_ITEMS],
         "checks_truncated": len(checks) > _MAX_EXPORTED_ITEMS,
         "options": options[:_MAX_EXPORTED_ITEMS],

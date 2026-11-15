@@ -49,6 +49,7 @@ from edcraft_validator.validation.property_checks import (
     PropertyCheckRun,
     PropertyCheckSettings,
 )
+from edcraft_validator.validation.property_summary import property_details
 from edcraft_validator.validation.validation_contracts import ValidationFailure
 
 MAX_VARIANTS = MAX_IR_VARIANTS
@@ -68,9 +69,14 @@ class HarnessReport(BaseModel):
 
     report: ValidationReport
     checking_mode: Literal["property_based"] = "property_based"
-    variants_checked: int = 0
-    variants_total: int = 0
+    examples_checked: int = 0
+    execution_calls: int = 0
+    max_examples: int = PropertyCheckSettings.max_examples
+    max_execution_calls: int = PropertyCheckSettings.max_execution_calls
+    timeout_seconds: float = PropertyCheckSettings.timeout_seconds
     seed: int = 0
+    whole_domain: bool = False
+    declared_domain_size: int = 0
 
     @property
     def passed(self) -> bool:
@@ -134,13 +140,13 @@ def _item_report(
 def _failed_harness_report(
     message: str,
     *,
-    variants_total: int = 0,
+    declared_domain_size: int = 0,
     seed: int = 0,
 ) -> HarnessReport:
     """Return a failed report for an input that cannot be checked."""
     return HarnessReport(
         report=ValidationReport(status="failed", findings=[message]),
-        variants_total=variants_total,
+        declared_domain_size=declared_domain_size,
         seed=seed,
     )
 
@@ -387,7 +393,7 @@ def validate_template(
     if not _has_valid_combination(parameters):
         return _failed_harness_report(
             "template has no parameter combinations",
-            variants_total=declared_size,
+            declared_domain_size=declared_size,
             seed=seed,
         )
 
@@ -439,12 +445,7 @@ def validate_template(
             cover_small_domain=True,
         )
     except ValidationFailure as exc:
-        return _property_failure_report(
-            exc,
-            variants_checked=int(exc.context.get("examples_checked", 0)),
-            variants_total=declared_size,
-            seed=seed,
-        )
+        return _property_failure_report(exc, declared_domain_size=declared_size)
 
     details = run.details()
     return HarnessReport(
@@ -455,9 +456,8 @@ def validate_template(
             options=[item for report in reports for item in report.report.options],
             findings=_variant_findings(reports),
         ),
-        variants_checked=details["examples_checked"],
-        variants_total=declared_size,
-        seed=seed,
+        **details,
+        declared_domain_size=declared_size,
     )
 
 
@@ -532,20 +532,18 @@ def _variant_text(combination: dict[str, Any]) -> str:
 def _property_failure_report(
     failure: ValidationFailure,
     *,
-    variants_checked: int,
-    variants_total: int,
-    seed: int,
+    declared_domain_size: int,
 ) -> HarnessReport:
     """Turn a property-check failure into a failed harness report."""
+    checked = property_details(failure.context)
     if failure.code == "PROPERTY_CHECK_BUDGET_EXCEEDED":
         return HarnessReport(
             report=ValidationReport(
                 status="failed",
                 findings=[f"{failure} ({failure.code})"],
             ),
-            variants_checked=variants_checked,
-            variants_total=variants_total,
-            seed=seed,
+            **checked,
+            declared_domain_size=declared_domain_size,
         )
     if failure.code != _VARIANT_FAILED:
         raise failure
@@ -560,9 +558,8 @@ def _property_failure_report(
             options=failing.report.options,
             findings=[f"{prefix} {finding}" for finding in failing.report.findings],
         ),
-        variants_checked=variants_checked,
-        variants_total=variants_total,
-        seed=seed,
+        **checked,
+        declared_domain_size=declared_domain_size,
     )
 
 

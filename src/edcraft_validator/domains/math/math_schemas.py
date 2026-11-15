@@ -17,6 +17,7 @@ from edcraft_validator.domains.math.math_types import (
     Difficulty,
 )
 from edcraft_validator.validation.check_names import TEMPLATE_RELEVANCE_CHECK
+from edcraft_validator.validation.property_summary import PropertyCheckSummary
 from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
 # Retired linear-equation authoring fields. A proposal that still carries any
@@ -76,17 +77,12 @@ class MathTemplateCandidate(MathTemplateContent):
     question_type: Literal["mcq"] = "mcq"
 
 
-class MathValidationSummary(BaseModel):
+class MathValidationSummary(PropertyCheckSummary):
     """Sampled-domain evidence without per-question answer tables."""
-
-    model_config = ConfigDict(extra="forbid", strict=True)
 
     validator_version: Literal["mcp-math-template-v1"] = MATH_VALIDATOR_VERSION
     checking_mode: Literal["property_based"] = MATH_CHECKING_MODE
-    # Samples graded by the harness and the template's declared domain size.
-    combinations_checked: int = Field(ge=1)
-    max_combinations: int = Field(ge=1)
-    seed: int = 0
+    declared_domain_size: int = Field(ge=1)
     evidence: list[ValidationEvidence] = Field(min_length=1)
 
     @field_validator("evidence", mode="before")
@@ -120,22 +116,6 @@ class MathValidationSummary(BaseModel):
             migrated.append(data)
 
         return migrated
-
-    @model_validator(mode="after")
-    def require_successful_unique_evidence(self) -> MathValidationSummary:
-        checks = [item.check for item in self.evidence]
-        if len(checks) != len(set(checks)):
-            raise ValueError("validation evidence checks must be unique")
-
-        if any(
-            item.status != "passed" and item.details.get("advisory") is not True
-            for item in self.evidence
-        ):
-            raise ValueError("checked templates require passing validation evidence")
-        if self.combinations_checked > self.max_combinations:
-            raise ValueError("checked combinations exceed the declared domain")
-
-        return self
 
 
 class ValidatedMathTemplate(ValidatedTemplateArtifact):

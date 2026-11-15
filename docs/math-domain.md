@@ -177,8 +177,9 @@ If a combination fails, the template is rejected. The property checker shrinks
 the first failing combination and reports it in a `variant <parameters>:`
 finding. Exhausting the execution-call or wall-clock budget is also a failure
 (`PROPERTY_CHECK_BUDGET_EXCEEDED`), never a partial pass. The summary records
-`checking_mode="property_based"`, the number of variants checked, the declared
-domain size and the seed. Generation samples the same declared domain
+the shared property-check coverage (`checking_mode`, `examples_checked`,
+`execution_calls`, the checking budgets, `whole_domain` and `seed`) plus the
+template's declared domain size. Generation samples the same declared domain
 independently, so a generated question may use a variant that validation did
 not check. Each emitted variant is rendered from the approved recipes.
 

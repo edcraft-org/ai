@@ -2,6 +2,7 @@
 
 import pytest
 from math_helpers import (
+    checked_summary,
     ir_add,
     ir_candidate,
     ir_mul,
@@ -34,10 +35,9 @@ def validated(template, artifact_id: str = "artifact-1") -> ValidatedMathTemplat
     return ValidatedMathTemplate(
         artifact_id=artifact_id,
         template=ir_candidate(template),
-        validation=MathValidationSummary(
-            combinations_checked=report.variants_checked,
-            max_combinations=report.variants_total,
-            evidence=[
+        validation=checked_summary(
+            report,
+            [
                 ValidationEvidence(
                     check="math_verify_item_spec",
                     status="passed",
@@ -57,8 +57,14 @@ def unchecked_artifact(template) -> ValidatedMathTemplate:
         artifact_id="artifact-1",
         template=ir_candidate(template),
         validation=MathValidationSummary(
-            combinations_checked=4,
-            max_combinations=4,
+            examples_checked=4,
+            execution_calls=4,
+            max_examples=4,
+            max_execution_calls=16,
+            timeout_seconds=15.0,
+            seed=0,
+            whole_domain=True,
+            declared_domain_size=4,
             evidence=[
                 ValidationEvidence(check="math_verify_item_spec", status="passed")
             ],

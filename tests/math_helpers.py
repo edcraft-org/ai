@@ -1,7 +1,17 @@
 """Shared valid math-domain fixtures for unit and workflow tests."""
 
 from edcraft_validator.domains.math.candidate_builder import build_math_candidate
-from edcraft_validator.domains.math.math_schemas import MathTemplateRequest
+from edcraft_validator.domains.math.math_schemas import (
+    MathTemplateRequest,
+    MathValidationSummary,
+)
+
+
+def checked_summary(report, evidence):
+    """Build a saved math summary from a harness report's sampled coverage."""
+    payload = report.model_dump(exclude={"report"}) | {"evidence": evidence}
+    return MathValidationSummary.model_validate(payload)
+
 
 # --- Generic IR template fixtures -------------------------------------------
 #

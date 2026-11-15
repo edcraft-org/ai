@@ -269,7 +269,7 @@ def test_recipe_is_graded_for_every_variant() -> None:
     report = validate_template(template)
 
     assert report.report.status == "passed", report.report.findings
-    assert report.variants_checked == 3
+    assert report.examples_checked == 3
 
 
 @pytest.mark.parametrize("values", [["1", "2"], ["2", "3"]])

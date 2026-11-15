@@ -24,6 +24,9 @@ metadata. CLI/server/worker boundaries construct dependencies and settings.
 | Check catalogue decoding and dispatch transport | `mcp/catalogue.py`, `mcp/client.py` |
 | Default dependency construction | `bootstrap.py`, `mcp/server.py`, `cli.py` |
 
+Every domain's checked summary extends `PropertyCheckSummary`, so evidence reads
+the same across domains.
+
 The deterministic mathematics engine is available to Python callers and through
 the math domain's authoring tools. The separate quality tools were removed, so
 they no longer appear in the catalogue. The engine does not rewire authored
