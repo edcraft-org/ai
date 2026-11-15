@@ -7,6 +7,8 @@ import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
+from edcraft_validator.domains import domain_registry
+from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.code_types import MAX_DISTRACTORS, MIN_DISTRACTORS
 from edcraft_validator.mcp import code_tools
@@ -446,3 +448,15 @@ async def test_invalid_arguments_and_unknown_tools_are_protocol_errors():
             )
         with pytest.raises(ToolError, match="Unknown tool"):
             await client.call_tool("code_tool_that_is_not_available", {})
+
+
+def test_server_refuses_to_start_when_a_registered_domain_has_no_tools() -> None:
+    class StubDomain(CodeDomain):
+        name = "stub"
+
+    try:
+        domain_registry.register_domain("stub", StubDomain)
+        with pytest.raises(RuntimeError, match="stub"):
+            create_validation_server()
+    finally:
+        domain_registry.unregister_domain("stub")

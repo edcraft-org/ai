@@ -150,11 +150,13 @@ services. Python features are explicitly bounded; preserve worker isolation,
 resource budgets, schema checks and rejection of unsupported code.
 
 Register each domain's checking tools in `mcp/server.py` with `domain:<name>`
-tags. Shared checks that several domains can reuse are registered once with a
-`capability:<name>` tag; a domain opts in by declaring `capabilities` on its
-`DomainModule`, and `resolve_domain_tools` offers both its domain tools and those
-capability tools. A registry coverage test checks that every selectable domain has
-discoverable tools. Evaluation orchestration belongs to the application layer.
+tags. The server refuses to start if a registered domain has no tool
+registration in `mcp/server.py`. Shared checks that several domains can reuse are
+registered once with a `capability:<name>` tag; a domain opts in by declaring
+`capabilities` on its `DomainModule`, and `resolve_domain_tools` offers both its
+domain tools and those capability tools. A registry coverage test checks that
+every selectable domain has discoverable tools. Evaluation orchestration belongs
+to the application layer.
 
 OpenAI-compatible endpoints reuse the `openai` adapter with `OPENAI_BASE_URL` and
 `OPENAI_MODEL`. `OPENAI_RESPONSE_FORMAT`, `OPENAI_GENERATION_MAX_TOKENS`
