@@ -1,9 +1,8 @@
-"""Deterministically expand approved math templates into questions.
+"""Deterministically expand approved math templates into seeded questions.
 
-Generation evaluates the approved recipes and renders them. It rejects unusable
-option combinations, such as choices that are not distinct, but it does not
-re-grade the answer or the distractors. Correctness and form were checked at
-authoring time by the engine and the form registry.
+Generation evaluates the approved recipes and renders them without model, MCP
+or external calls. It rejects unusable option combinations such as repeated
+choices. Correctness and form were checked during authoring.
 """
 
 from __future__ import annotations

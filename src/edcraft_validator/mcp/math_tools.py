@@ -1,4 +1,8 @@
-"""Exact item and option checks plus advisory math assessments."""
+"""Math-domain validation and advisory tools for the authoring flow.
+
+The tools treat a model proposal as an untrusted candidate and run exact,
+fidelity and advisory checks through MCP before the author finalises it.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +13,7 @@ from typing import Annotated, Any, Literal
 from fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from edcraft_validator.application.fidelity.contracts import FidelityReport
 from edcraft_validator.application.fidelity.engine import verify_text_fidelity
 from edcraft_validator.domains.math.difficulty import assess_template_difficulty
 from edcraft_validator.domains.math.fidelity import math_fidelity_plugin
@@ -338,34 +343,50 @@ async def verify_text_fidelity_tool(
             timeout_seconds=timeout_seconds,
         )
     except Exception as exc:  # noqa: BLE001 - the tool boundary reports failures
-        return ToolEvidence(
-            tool=MATH_FIDELITY_TOOL,
-            version=MATH_IR_TOOL_VERSION,
-            status="error",
-            findings=[
-                ToolFinding(
-                    code="FIDELITY_EXECUTION_ERROR",
-                    message=f"fidelity check failed with {type(exc).__name__}",
-                )
-            ],
-            duration_ms=_elapsed_ms(started),
-        )
+        return _fidelity_error(exc, started)
 
+    status, findings = _fidelity_outcome(report)
+    return _fidelity_evidence(report, status, findings, started)
+
+
+def _fidelity_error(exc: Exception, started: float) -> ToolEvidence:
+    """Report an execution failure without leaking its message."""
+    return ToolEvidence(
+        tool=MATH_FIDELITY_TOOL,
+        version=MATH_IR_TOOL_VERSION,
+        status="error",
+        findings=[
+            ToolFinding(
+                code="FIDELITY_EXECUTION_ERROR",
+                message=f"fidelity check failed with {type(exc).__name__}",
+            )
+        ],
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _fidelity_outcome(
+    report: FidelityReport,
+) -> tuple[Literal["passed", "failed"], list[ToolFinding]]:
+    """Map a fidelity verdict onto the tool's status and findings."""
     if report.status == "passed":
-        status: Literal["passed", "failed"] = "passed"
-        findings = []
-    else:
-        status = "failed"
-        code = (
-            "FIDELITY_INCONCLUSIVE"
-            if report.status == "inconclusive"
-            else "FIDELITY_MISMATCH"
-        )
-        findings = [
-            ToolFinding(code=code, message=reason)
-            for reason in (report.verdict.reasons or ["fidelity check did not pass"])
-        ]
+        return "passed", []
 
+    code = (
+        "FIDELITY_INCONCLUSIVE"
+        if report.status == "inconclusive"
+        else "FIDELITY_MISMATCH"
+    )
+    reasons = report.verdict.reasons or ["fidelity check did not pass"]
+    return "failed", [ToolFinding(code=code, message=reason) for reason in reasons]
+
+
+def _fidelity_evidence(
+    report: FidelityReport,
+    status: Literal["passed", "failed"],
+    findings: list[ToolFinding],
+    started: float,
+) -> ToolEvidence:
     return ToolEvidence(
         tool=MATH_FIDELITY_TOOL,
         version=MATH_IR_TOOL_VERSION,
@@ -480,47 +501,45 @@ def _run_isolated(
     try:
         response = run_isolated(payload, timeout_seconds=timeout_seconds)
     except ValidationTimeout:
-        return ToolEvidence(
-            tool=name,
-            version=MATH_IR_TOOL_VERSION,
-            status="error",
-            findings=[
-                ToolFinding(
-                    code="VALIDATION_TIMEOUT",
-                    message=f"validation exceeded {timeout_seconds:g}s",
-                )
-            ],
-            duration_ms=_elapsed_ms(started),
+        return _validation_error(
+            name,
+            "VALIDATION_TIMEOUT",
+            f"validation exceeded {timeout_seconds:g}s",
+            started,
         )
     except ValidationWorkerError as exc:
-        return ToolEvidence(
-            tool=name,
-            version=MATH_IR_TOOL_VERSION,
-            status="error",
-            findings=[
-                ToolFinding(
-                    code="VALIDATION_WORKER_ERROR",
-                    message=str(exc),
-                )
-            ],
-            duration_ms=_elapsed_ms(started),
+        return _validation_error(
+            name,
+            "VALIDATION_WORKER_ERROR",
+            str(exc),
+            started,
         )
 
     report = response.get("report")
     if not isinstance(report, dict):
-        return ToolEvidence(
-            tool=name,
-            version=MATH_IR_TOOL_VERSION,
-            status="error",
-            findings=[
-                ToolFinding(
-                    code="VALIDATION_RESPONSE_MALFORMED",
-                    message="validation worker did not return a report",
-                )
-            ],
-            duration_ms=_elapsed_ms(started),
+        return _validation_error(
+            name,
+            "VALIDATION_RESPONSE_MALFORMED",
+            "validation worker did not return a report",
+            started,
         )
     return _harness_evidence(name, report, started)
+
+
+def _validation_error(
+    name: str,
+    code: str,
+    message: str,
+    started: float,
+) -> ToolEvidence:
+    """Build an error result for a failed isolated run."""
+    return ToolEvidence(
+        tool=name,
+        version=MATH_IR_TOOL_VERSION,
+        status="error",
+        findings=[ToolFinding(code=code, message=message)],
+        duration_ms=_elapsed_ms(started),
+    )
 
 
 def _harness_evidence(
@@ -530,19 +549,39 @@ def _harness_evidence(
 ) -> ToolEvidence:
     report = harness.get("report")
     if not isinstance(report, dict):
-        return ToolEvidence(
-            tool=name,
-            version=MATH_IR_TOOL_VERSION,
-            status="error",
-            findings=[
-                ToolFinding(
-                    code="VALIDATION_RESPONSE_MALFORMED",
-                    message="validation report is missing",
-                )
-            ],
-            duration_ms=_elapsed_ms(started),
+        return _validation_error(
+            name,
+            "VALIDATION_RESPONSE_MALFORMED",
+            "validation report is missing",
+            started,
         )
 
+    ir_status, findings = _harness_status(name, report)
+    if ir_status == "passed":
+        status: Literal["passed", "failed"] = "passed"
+    else:
+        status = "failed"
+        if not findings:
+            findings = ["validation did not pass"]
+
+    codes = _finding_codes(name)
+    tool_findings = [
+        ToolFinding(code=codes.get(ir_status, "IR_VALIDATION_FAILED"), message=message)
+        for message in findings[:20]
+    ]
+
+    return ToolEvidence(
+        tool=name,
+        version=MATH_IR_TOOL_VERSION,
+        status=status,
+        findings=tool_findings,
+        details=_harness_details(harness, report, ir_status, findings),
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _harness_status(name: str, report: dict[str, Any]) -> tuple[str, list[str]]:
+    """Normalise the worker's status and collect every finding."""
     raw_status = report.get("status")
     findings = [str(item) for item in report.get("findings", []) if item]
     if raw_status not in {"passed", "failed", "inconclusive"}:
@@ -554,67 +593,58 @@ def _harness_evidence(
     else:
         ir_status = str(raw_status)
 
-    options = report.get("options", [])
-    checks = report.get("checks", [])
     if name == MATH_OPTIONS_TOOL:
-        failed_options = [
-            option
-            for option in options
-            if option.get("result", {}).get("status") != "passed"
-        ]
+        failed_options = _failed_option_findings(report.get("options", []))
         if failed_options:
             ir_status = "failed"
-            findings = [
-                *findings,
-                *[
-                    f"option {option.get('index')}: "
-                    f"{option.get('result', {}).get('reason', '')}"
-                    for option in failed_options
-                ],
-            ]
+            findings = [*findings, *failed_options]
 
-    if ir_status == "passed":
-        status: Literal["passed", "failed"] = "passed"
-    else:
-        status = "failed"
-        if not findings:
-            findings = ["validation did not pass"]
+    return ir_status, findings
 
-    codes = {
-        "failed": "IR_VALIDATION_FAILED",
-        "inconclusive": "IR_VALIDATION_INCONCLUSIVE",
-    }
+
+def _failed_option_findings(options: list[dict[str, Any]]) -> list[str]:
+    return [
+        f"option {option.get('index')}: {option.get('result', {}).get('reason', '')}"
+        for option in options
+        if option.get("result", {}).get("status") != "passed"
+    ]
+
+
+def _finding_codes(name: str) -> dict[str, str]:
+    """Choose the finding codes that suit the tool."""
     if name == MATH_OPTIONS_TOOL:
-        codes = {
+        return {
             "failed": "OPTION_CHECK_FAILED",
             "inconclusive": "OPTION_CHECK_INCONCLUSIVE",
         }
+    return {
+        "failed": "IR_VALIDATION_FAILED",
+        "inconclusive": "IR_VALIDATION_INCONCLUSIVE",
+    }
 
-    tool_findings = [
-        ToolFinding(code=codes.get(ir_status, "IR_VALIDATION_FAILED"), message=message)
-        for message in findings[:20]
-    ]
 
-    return ToolEvidence(
-        tool=name,
-        version=MATH_IR_TOOL_VERSION,
-        status=status,
-        findings=tool_findings,
-        details={
-            "ir_status": ir_status,
-            "routes_to_review": ir_status != "passed",
-            "answer": report.get("answer", ""),
-            "findings": findings,
-            "variants_checked": harness.get("variants_checked", 0),
-            "variants_total": harness.get("variants_total", 0),
-            "seed": harness.get("seed", 0),
-            "checks": checks[:_MAX_EXPORTED_ITEMS],
-            "checks_truncated": len(checks) > _MAX_EXPORTED_ITEMS,
-            "options": options[:_MAX_EXPORTED_ITEMS],
-            "options_truncated": len(options) > _MAX_EXPORTED_ITEMS,
-        },
-        duration_ms=_elapsed_ms(started),
-    )
+def _harness_details(
+    harness: dict[str, Any],
+    report: dict[str, Any],
+    ir_status: str,
+    findings: list[str],
+) -> dict[str, Any]:
+    """Export the sampled coverage and any truncated lists."""
+    checks = report.get("checks", [])
+    options = report.get("options", [])
+    return {
+        "ir_status": ir_status,
+        "routes_to_review": ir_status != "passed",
+        "answer": report.get("answer", ""),
+        "findings": findings,
+        "variants_checked": harness.get("variants_checked", 0),
+        "variants_total": harness.get("variants_total", 0),
+        "seed": harness.get("seed", 0),
+        "checks": checks[:_MAX_EXPORTED_ITEMS],
+        "checks_truncated": len(checks) > _MAX_EXPORTED_ITEMS,
+        "options": options[:_MAX_EXPORTED_ITEMS],
+        "options_truncated": len(options) > _MAX_EXPORTED_ITEMS,
+    }
 
 
 def _revalidate(candidate: MathTemplateCandidate) -> MathTemplateCandidate:

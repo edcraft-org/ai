@@ -1,4 +1,8 @@
-"""Code-domain implementation of the generic domain contract."""
+"""Code-domain implementation of the generic domain contract.
+
+The domain builds a candidate from a model proposal, binds its MCP checks,
+finalises the checked template, and expands it into a seeded question.
+"""
 
 from fastmcp import FastMCP
 from pydantic import BaseModel
@@ -44,6 +48,7 @@ from edcraft_validator.validation.check_names import (
     TEMPLATE_RELEVANCE_CAPABILITY,
     TEMPLATE_RELEVANCE_CHECK,
 )
+from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
 SEMANTIC_CHECK = "code_validate_answers_and_distractors"
 
@@ -138,51 +143,16 @@ class CodeDomain:
         )
 
         semantic = next(item for item in evidence if item.tool == SEMANTIC_CHECK)
-        selected = [
-            DistractorRecipe.model_validate(item)
-            for item in semantic.details["selected_distractors"]
-        ]
-        if len(selected) < MIN_DISTRACTORS or any(
-            recipe not in template.distractors for recipe in selected
-        ):
-            raise ValueError("Selected distractors are not checked proposal recipes")
-
-        reusable = template.model_copy(
-            update={
-                "distractors": selected,
-            },
-            deep=True,
-        )
-        reusable = CodeTemplateCandidate.model_validate(reusable.model_dump())
-        expected_sha256 = template_sha256(reusable)
-        saved_evidence = [
-            save_checked_evidence(
-                item, expected_sha256, advisory_checks=advisory_checks
-            )
-            for item in evidence
-        ]
-
-        summary = TemplateValidationSummary.model_validate(
-            {
-                **{
-                    key: semantic.details[key]
-                    for key in (
-                        "checking_mode",
-                        "examples_checked",
-                        "execution_calls",
-                        "max_examples",
-                        "max_execution_calls",
-                        "timeout_seconds",
-                        "seed",
-                    )
-                },
-                "evidence": saved_evidence,
-            }
+        reusable = _reusable_checked_template(template, semantic)
+        saved_evidence = _saved_evidence(
+            evidence,
+            template_sha256(reusable),
+            advisory_checks,
         )
 
         return ValidatedCodeTemplate(
             template=reusable,
-            validation=summary,
+            validation=_validation_summary(semantic, saved_evidence),
         )
 
     def checked_tool_bindings(self, request, candidate, tool_name, evidence):
@@ -204,3 +174,61 @@ class CodeDomain:
         return generate_code_question(
             require_type(validated, ValidatedCodeTemplate), seed
         )
+
+
+def _reusable_checked_template(
+    template: CodeTemplateCandidate,
+    semantic: ToolEvidence,
+) -> CodeTemplateCandidate:
+    """Keep only the distractors the semantic check actually accepted."""
+    selected = [
+        DistractorRecipe.model_validate(item)
+        for item in semantic.details["selected_distractors"]
+    ]
+    if len(selected) < MIN_DISTRACTORS or any(
+        recipe not in template.distractors for recipe in selected
+    ):
+        raise ValueError("Selected distractors are not checked proposal recipes")
+
+    reusable = template.model_copy(
+        update={
+            "distractors": selected,
+        },
+        deep=True,
+    )
+    return CodeTemplateCandidate.model_validate(reusable.model_dump())
+
+
+def _saved_evidence(
+    evidence: list[ToolEvidence],
+    expected_sha256: str,
+    advisory_checks: frozenset[str],
+) -> list[ValidationEvidence]:
+    return [
+        save_checked_evidence(item, expected_sha256, advisory_checks=advisory_checks)
+        for item in evidence
+    ]
+
+
+def _validation_summary(
+    semantic: ToolEvidence,
+    saved_evidence: list[ValidationEvidence],
+) -> TemplateValidationSummary:
+    """Copy the execution coverage onto the saved template."""
+    return TemplateValidationSummary.model_validate(
+        {
+            **{
+                key: semantic.details[key]
+                for key in (
+                    "checking_mode",
+                    "examples_checked",
+                    "execution_calls",
+                    "max_examples",
+                    "max_execution_calls",
+                    "timeout_seconds",
+                    "seed",
+                )
+            },
+            "evidence": saved_evidence,
+        }
+    )

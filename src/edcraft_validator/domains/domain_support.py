@@ -1,4 +1,8 @@
-"""Helpers shared by domain modules without coupling them to each other."""
+"""Helpers shared by the domain modules.
+
+The helpers derive identities and seeded choices, package checked evidence, and
+project finalised artifacts for review, so no domain depends on another.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +20,10 @@ from edcraft_validator.domain_types import (
     Difficulty,
 )
 from edcraft_validator.validation.check_contracts import ToolEvidence
-from edcraft_validator.validation.validation_contracts import ValidationEvidence
+from edcraft_validator.validation.validation_contracts import (
+    EvidenceStatus,
+    ValidationEvidence,
+)
 
 MAX_PROMPT_LENGTH = 4000
 
@@ -146,32 +153,7 @@ def save_checked_evidence(
         )
 
     details: dict[str, Any] = {"tool_version": item.version, **item.details}
-    recorded_sha256 = item.details.get("subject_sha256")
-    if recorded_sha256 is None:
-        # Evidence written before the key was standardised.
-        recorded_sha256 = item.details.get("template_sha256")
-    if recorded_sha256 is None:
-        details.update(
-            unavailable=True,
-            unavailable_reason="Assessment evidence is missing its subject identity",
-        )
-        status = "incomplete"
-    elif recorded_sha256 != expected_sha256:
-        details.update(
-            unavailable=True,
-            unavailable_reason="Assessment evidence belongs to a different subject",
-        )
-        status = "incomplete"
-    elif item.status == "failed":
-        status = "failed"
-    elif item.status == "error":
-        details.update(
-            unavailable=True,
-            unavailable_reason="Advisory assessment did not return a verdict",
-        )
-        status = "incomplete"
-    else:
-        status = "passed"
+    status = _advisory_status(item, expected_sha256, details)
 
     # Saved artifacts identify advisory rows by this flag, so it is set here
     # from application policy and never taken from the tool's own details.
@@ -183,3 +165,42 @@ def save_checked_evidence(
         issues=[finding.model_dump() for finding in item.findings],
         details=details,
     )
+
+
+def _advisory_status(
+    item: ToolEvidence,
+    expected_sha256: str,
+    details: dict[str, Any],
+) -> EvidenceStatus:
+    """Decide the saved verdict for one advisory assessment."""
+    recorded_sha256 = _recorded_sha256(item)
+    if recorded_sha256 is None:
+        details.update(
+            unavailable=True,
+            unavailable_reason="Assessment evidence is missing its subject identity",
+        )
+        return "incomplete"
+    if recorded_sha256 != expected_sha256:
+        details.update(
+            unavailable=True,
+            unavailable_reason="Assessment evidence belongs to a different subject",
+        )
+        return "incomplete"
+    if item.status == "failed":
+        return "failed"
+    if item.status == "error":
+        details.update(
+            unavailable=True,
+            unavailable_reason="Advisory assessment did not return a verdict",
+        )
+        return "incomplete"
+    return "passed"
+
+
+def _recorded_sha256(item: ToolEvidence) -> str | None:
+    """Read the subject identity, including the older key name."""
+    recorded_sha256 = item.details.get("subject_sha256")
+    if recorded_sha256 is None:
+        # Evidence written before the key was standardised.
+        recorded_sha256 = item.details.get("template_sha256")
+    return recorded_sha256

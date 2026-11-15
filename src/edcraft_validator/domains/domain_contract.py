@@ -1,4 +1,9 @@
-"""Contract implemented by every EdCraft question domain."""
+"""Contract implemented by every EdCraft question domain.
+
+A domain supplies the request and candidate models, the authoring prompt,
+candidate construction, tool bindings, MCP tool registration and artifact
+finalisation. It also expands a checked template into seeded questions.
+"""
 
 from __future__ import annotations
 

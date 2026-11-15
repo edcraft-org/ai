@@ -1,4 +1,8 @@
-"""Math-domain implementation of the generic domain contract."""
+"""Math-domain implementation of the generic domain contract.
+
+The domain builds a candidate from a model proposal, binds its MCP checks,
+finalises the checked template, and expands it into a seeded question.
+"""
 
 from typing import Any
 
@@ -18,6 +22,7 @@ from edcraft_validator.domains.math.candidate_builder import (
     template_sha256,
 )
 from edcraft_validator.domains.math.ir.instantiate import representative_item
+from edcraft_validator.domains.math.ir.schema import MathTemplateSpec
 from edcraft_validator.domains.math.math_schemas import (
     MathQuestionInstance,
     MathTemplateCandidate,
@@ -53,6 +58,7 @@ from edcraft_validator.validation.check_names import (
     TEMPLATE_RELEVANCE_CAPABILITY,
     TEMPLATE_RELEVANCE_CHECK,
 )
+from edcraft_validator.validation.validation_contracts import ValidationEvidence
 
 
 class MathDomain:
@@ -156,26 +162,15 @@ class MathDomain:
             required=self.required_checks(template),
             advisory_checks=advisory_checks,
         )
-        distractor_count = len(template_spec.body.distractors)
-        if distractor_count < MIN_DISTRACTORS:
-            raise ValueError("Generic templates require at least one distractor")
-        if distractor_count > MAX_DISTRACTORS:
-            raise ValueError(
-                f"Generic templates allow at most {MAX_DISTRACTORS} distractors"
-            )
+        _require_distractor_count(template_spec)
 
-        item_spec = next(item for item in evidence if item.tool == MATH_ITEM_SPEC_TOOL)
-        combinations_checked = item_spec.details.get("variants_checked", 0)
-        if combinations_checked < 1:
-            raise ValueError("IR validation checked no parameter combinations")
-
-        expected_sha256 = template_sha256(template)
-        saved_evidence = [
-            save_checked_evidence(
-                item, expected_sha256, advisory_checks=advisory_checks
-            )
-            for item in evidence
-        ]
+        item_spec = _item_spec_evidence(evidence)
+        combinations_checked = _checked_combinations(item_spec)
+        saved_evidence = _saved_evidence(
+            evidence,
+            template_sha256(template),
+            advisory_checks,
+        )
 
         summary = MathValidationSummary(
             checking_mode=MATH_CHECKING_MODE,
@@ -203,3 +198,37 @@ class MathDomain:
         return generate_math_question(
             require_type(validated, ValidatedMathTemplate), seed
         )
+
+
+def _require_distractor_count(template: MathTemplateSpec) -> None:
+    """Keep the option count within the range the artifact format allows."""
+    count = len(template.body.distractors)
+    if count < MIN_DISTRACTORS:
+        raise ValueError("Generic templates require at least one distractor")
+    if count > MAX_DISTRACTORS:
+        raise ValueError(
+            f"Generic templates allow at most {MAX_DISTRACTORS} distractors"
+        )
+
+
+def _item_spec_evidence(evidence: list[ToolEvidence]) -> ToolEvidence:
+    return next(item for item in evidence if item.tool == MATH_ITEM_SPEC_TOOL)
+
+
+def _checked_combinations(item_spec: ToolEvidence) -> int:
+    """Refuse a pass that sampled no parameter combinations."""
+    combinations_checked = item_spec.details.get("variants_checked", 0)
+    if combinations_checked < 1:
+        raise ValueError("IR validation checked no parameter combinations")
+    return combinations_checked
+
+
+def _saved_evidence(
+    evidence: list[ToolEvidence],
+    expected_sha256: str,
+    advisory_checks: frozenset[str],
+) -> list[ValidationEvidence]:
+    return [
+        save_checked_evidence(item, expected_sha256, advisory_checks=advisory_checks)
+        for item in evidence
+    ]

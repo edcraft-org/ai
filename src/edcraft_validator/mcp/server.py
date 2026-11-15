@@ -1,4 +1,9 @@
-"""FastMCP server exposing technical checks and separate advisory assessments."""
+"""FastMCP server exposing technical checks and separate advisory assessments.
+
+It wires the configured execution, judge and relevance dependencies, then lets
+each registered domain add its own tools. The authoring application connects to
+this server to run its frozen check plan.
+"""
 
 import math
 from functools import partial

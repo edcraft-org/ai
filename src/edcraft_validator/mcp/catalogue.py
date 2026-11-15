@@ -1,4 +1,8 @@
-"""Discover domain-tagged tools from one MCP catalogue listing."""
+"""Discover domain-tagged tools from one MCP catalogue listing.
+
+The authoring application resolves the tools offered to the selected domain and
+decodes their check metadata into definitions used when executing the plan.
+"""
 
 import copy
 from typing import Any, Protocol

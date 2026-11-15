@@ -1,4 +1,8 @@
-"""Registry of available question domains."""
+"""Registry of available question domains and their factories.
+
+The MCP server and the authoring application look domains up here by name, so
+out-of-tree domains can be added without changing shared orchestration.
+"""
 
 import re
 from collections.abc import Callable

@@ -1,4 +1,9 @@
-"""Build code template candidates from model-authored proposals."""
+"""Build code template candidates from model-authored proposals.
+
+The candidate holds the canonical, reusable code template with a content-derived
+identifier. Assessments stay outside it, so the same proposal always yields the
+same candidate.
+"""
 
 from __future__ import annotations
 

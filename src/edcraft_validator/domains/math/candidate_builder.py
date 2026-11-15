@@ -1,4 +1,9 @@
-"""Build math template candidates from model-authored proposals."""
+"""Build math template candidates from model-authored proposals.
+
+The candidate keeps the generic item, trims distractors beyond the requested
+number and derives a content identifier. Every saved distractor then appears in
+each generated question.
+"""
 
 from __future__ import annotations
 
