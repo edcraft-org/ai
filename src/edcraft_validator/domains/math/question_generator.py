@@ -19,12 +19,15 @@ from edcraft_validator.domains.math.ir.instantiate import (
     display_sympy_value,
     fraction_text,
     render_goal_display,
+    render_goal_display_latex,
+    render_item_segments,
     render_item_text,
     sample_parameter_combinations,
 )
 from edcraft_validator.domains.math.ir.schema import MathTemplateSpec
 from edcraft_validator.domains.math.math_schemas import (
     MathQuestionInstance,
+    QuestionSegment,
     ValidatedMathTemplate,
 )
 from edcraft_validator.domains.math.math_types import MAX_IR_VARIANTS
@@ -115,6 +118,12 @@ def _build_ir_instance(
     )
     choices.insert(correct_index, answer)
 
+    answer_latex, distractor_choices_latex = _render_choices_latex(
+        compiled, distractor_values
+    )
+    choices_latex = list(distractor_choices_latex)
+    choices_latex.insert(correct_index, answer_latex)
+
     return MathQuestionInstance(
         template_id=validated.template.template_id,
         artifact_id=validated.artifact_id,
@@ -126,6 +135,13 @@ def _build_ir_instance(
         correct_index=correct_index,
         answer=answer,
         topic=template.topic,
+        equation_latex=render_goal_display_latex(body, values),
+        choices_latex=choices_latex,
+        answer_latex=answer_latex,
+        question_segments=[
+            QuestionSegment(kind=kind, value=value)
+            for kind, value in render_item_segments(body, values)
+        ],
     )
 
 
@@ -166,3 +182,31 @@ def _render_set_choice(value: object) -> str:
     if isinstance(value, sympy.FiniteSet):
         return display_sympy_value(value).strip()
     return display_sympy_value(sympy.FiniteSet(value)).strip()
+
+
+def _render_choices_latex(
+    key: object, distractors: list[object]
+) -> tuple[str, list[str]]:
+    """Typeset the key and distractors with the same set rule as plain choices."""
+    values = [key, *distractors]
+    if all(_is_bare_choice(value) for value in values):
+        rendered = [_render_bare_choice_latex(value) for value in values]
+    elif isinstance(key, sympy.FiniteSet):
+        rendered = [_render_set_choice_latex(value) for value in values]
+    else:
+        rendered = [sympy.latex(value) for value in values]
+    return rendered[0], rendered[1:]
+
+
+def _render_bare_choice_latex(value: object) -> str:
+    """Typeset a scalar directly, or a one-element set as its element."""
+    if isinstance(value, sympy.FiniteSet):
+        return sympy.latex(next(iter(value.args)))
+    return sympy.latex(value)
+
+
+def _render_set_choice_latex(value: object) -> str:
+    """Typeset a set directly, or wrap a scalar as a one-element set."""
+    if isinstance(value, sympy.FiniteSet):
+        return sympy.latex(value)
+    return sympy.latex(sympy.FiniteSet(value))

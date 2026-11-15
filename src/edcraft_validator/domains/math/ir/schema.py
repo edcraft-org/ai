@@ -8,7 +8,7 @@ model may only emit the fields and operators declared here. The compiler in
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -260,7 +260,11 @@ class Distractor(Record):
 class TextSpec(Record):
     mode: TextMode = "symbolic"
     template: str = Field(min_length=1)
-    anchors: dict[str, tuple[int, int]] = Field(default_factory=dict)
+    # JSON has no tuples. A wrapping model's before-validator re-validates in
+    # Python mode, where strict tuples reject the list JSON produces.
+    anchors: dict[str, Annotated[tuple[int, int], Field(strict=False)]] = Field(
+        default_factory=dict
+    )
 
 
 class MathItemSpec(Record):

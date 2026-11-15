@@ -94,12 +94,21 @@ class ValidatedMathTemplate(ValidatedTemplateArtifact):
     validation: MathValidationSummary
 
 
+class QuestionSegment(BaseModel):
+    """One piece of a question prompt: prose or LaTeX."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    kind: Literal["text", "math"]
+    value: str = Field(min_length=1)
+
+
 class MathQuestionInstance(BaseModel):
     """A reproducible question expanded from a validated template.
 
     Generic IR templates carry their declared parameter values as exact
     strings and set ``topic``; ``equation`` is the rendered mathematical
-    object.
+    object. The optional LaTeX fields carry the same maths typeset for KaTeX.
     """
 
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -115,6 +124,10 @@ class MathQuestionInstance(BaseModel):
     answer: str = Field(min_length=1)
     topic: str | None = None
     requires_manual_review: Literal[True] = True
+    equation_latex: str | None = None
+    choices_latex: list[str] | None = None
+    answer_latex: str | None = None
+    question_segments: list[QuestionSegment] | None = None
 
     @model_validator(mode="after")
     def validate_choices(self) -> MathQuestionInstance:

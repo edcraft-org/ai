@@ -12,6 +12,8 @@ import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from datetime import UTC, datetime
+from typing import Literal
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as JsonSchemaError
@@ -60,6 +62,14 @@ REVISION_POLICY = "full-candidate-v1"
 # application: it compares the candidate with the request and calls no tool.
 DISTRACTOR_COUNT_CHECK = "application_distractor_count"
 DISTRACTOR_COUNT_VERSION = "1.0.0"
+# Mirrors the phase literal declared on AuthoringProgress.
+ProgressPhase = Literal[
+    "generating",
+    "checking",
+    "assessing",
+    "correcting",
+    "finalizing",
+]
 
 
 def _has_technical_check_error(attempt) -> bool:
@@ -94,6 +104,8 @@ class _AuthoringJob:
     max_attempts: int
     stage: str = "configuration"
     observer: Callable[[AuthoringProgress], None] | None = None
+    current_phase: str | None = None
+    phase_started_at: datetime | None = None
 
     def generate(self, operation, *args, phase="generating", **kwargs):
         self.stage = "generation"
@@ -106,12 +118,31 @@ class _AuthoringJob:
             elapsed_ms = (time.perf_counter() - started) * 1000
             self.result.generation_duration_ms += elapsed_ms
 
-    def notify(self, phase):
+    def notify(
+        self,
+        phase: ProgressPhase,
+        *,
+        checks_total: int | None = None,
+        checks_done: int | None = None,
+        current_check: str | None = None,
+    ) -> None:
         if self.observer is None:
             return
 
+        if phase != self.current_phase:
+            self.current_phase = phase
+            self.phase_started_at = datetime.now(UTC)
+
         attempt = len(self.result.attempts) + (phase in {"generating", "correcting"})
-        progress = AuthoringProgress(phase=phase, attempt=attempt)
+        progress = AuthoringProgress(
+            phase=phase,
+            attempt=attempt,
+            max_attempts=self.max_attempts,
+            checks_total=checks_total,
+            checks_done=checks_done,
+            current_check=current_check,
+            phase_started_at=self.phase_started_at,
+        )
         try:
             self.observer(progress)
         except Exception:
@@ -262,7 +293,14 @@ class TemplateApplication:
             attempt = self._build_attempt(number, candidate, names)
             job.result.attempts.append(attempt)
             job.stage = "checking"
-            job.notify("checking")
+            job.notify(
+                "checking",
+                checks_total=sum(
+                    1 for name in names if not definitions[name].after_validation
+                ),
+                checks_done=0,
+                current_check=DISTRACTOR_COUNT_CHECK,
+            )
             self._check_distractor_count(attempt, job, candidate)
             self._run_checks(
                 attempt,
@@ -273,6 +311,7 @@ class TemplateApplication:
                 domain=job.domain,
                 request=job.request,
                 candidate=candidate,
+                job=job,
             )
 
             if not self._should_revise(attempt, number, job.max_attempts):
@@ -713,12 +752,26 @@ class TemplateApplication:
         domain,
         request,
         candidate,
+        job: _AuthoringJob | None = None,
     ):
         # Accept existing research callers that pass raw catalogue definitions.
         definitions = check_definitions(definitions.values())
         deferred = {name for name in plan if definitions[name].after_validation}
+        totals = {
+            "checking": sum(1 for name in plan if name not in deferred),
+            "assessing": sum(1 for name in plan if name in deferred),
+        }
+        done = {"checking": 0, "assessing": 0}
 
         for name in TemplateApplication._ordered_checks(plan, deferred):
+            phase: ProgressPhase = "assessing" if name in deferred else "checking"
+            if job is not None:
+                job.notify(
+                    phase,
+                    checks_total=totals[phase],
+                    checks_done=done[phase],
+                    current_check=name,
+                )
             execution = TemplateApplication._start_check(
                 attempt, name, definitions, planned_arguments
             )
@@ -726,18 +779,21 @@ class TemplateApplication:
                 attempt, deferred
             ):
                 execution.skip_reason = "Prerequisite checks did not pass"
-                continue
-            attempt.pending.remove(name)
-            TemplateApplication._execute_check(
-                execution,
-                definitions[name],
-                client,
-                domain,
-                request,
-                candidate,
-                attempt,
-                name in deferred,
-            )
+            else:
+                attempt.pending.remove(name)
+                TemplateApplication._execute_check(
+                    execution,
+                    definitions[name],
+                    client,
+                    domain,
+                    request,
+                    candidate,
+                    attempt,
+                    name in deferred,
+                )
+            done[phase] += 1
+            if job is not None:
+                job.notify(phase, checks_total=totals[phase], checks_done=done[phase])
 
         TemplateApplication._record_check_outcome(attempt)
 

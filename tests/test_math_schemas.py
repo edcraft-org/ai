@@ -229,3 +229,20 @@ def test_generation_request_schema_is_json_serializable() -> None:
     assert "MathTemplateContent" in encoded
     assert "item" in encoded
     assert "parameters" in encoded
+
+
+def test_proposal_accepts_anchor_spans_sent_as_json_arrays() -> None:
+    """Worded templates send anchor spans as JSON arrays through the proposal model."""
+    import json
+
+    from math_helpers import quadratic_ir_template
+
+    from edcraft_validator.domains.math.math_schemas import MathTemplateContent
+
+    spec = json.loads(quadratic_ir_template().model_dump_json())
+    spec["body"]["text"]["anchors"] = {"p": [0, 1]}
+
+    content = MathTemplateContent.model_validate_json(json.dumps({"item": spec}))
+
+    assert content.item is not None
+    assert content.item.body.text.anchors == {"p": (0, 1)}

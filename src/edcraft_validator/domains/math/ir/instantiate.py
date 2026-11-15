@@ -13,6 +13,7 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import product
+from string import Formatter
 
 import sympy
 from sympy.matrices.matrixbase import MatrixBase
@@ -39,6 +40,12 @@ def fraction_text(value: Fraction | int) -> str:
     if fraction.denominator == 1:
         return str(fraction.numerator)
     return f"{fraction.numerator}/{fraction.denominator}"
+
+
+def _latex_number(value: Fraction | int) -> str:
+    """Typeset an exact value, keeping fractions as stacked fractions."""
+    fraction = value if isinstance(value, Fraction) else Fraction(value)
+    return sympy.latex(sympy.Rational(fraction.numerator, fraction.denominator))
 
 
 def render_expr(value: sympy.Expr) -> str:
@@ -73,7 +80,7 @@ def render_authored_expr(
     therefore stays visible instead of collapsing to ``26`` before the learner
     sees it.
     """
-    # Compilation bounds the tree and rejects unknown symbols or parameters.
+    # Compilation limits the tree and rejects unknown symbols or parameters.
     compile_expr(expr, symbols, params)
     return _render_authored(expr, symbols, params or {})
 
@@ -172,6 +179,129 @@ def _render_operator(
     return f"{base}^{exponent}"
 
 
+def render_authored_expr_latex(
+    expr: Expr,
+    symbols: Mapping[str, sympy.Symbol],
+    params: Mapping[str, Fraction] | None = None,
+) -> str:
+    """Typeset an authored expression tree without folding it to a value.
+
+    The tree is walked like ``render_authored_expr`` so the LaTeX keeps the
+    authored order and structure instead of collapsing ``12 + 14`` to ``26``.
+    Only leaves go through SymPy.
+    """
+    # Compilation limits the tree and rejects unknown symbols or parameters.
+    compile_expr(expr, symbols, params)
+    return _render_authored_latex(expr, symbols, params or {})
+
+
+def _render_authored_latex(
+    expr: Expr,
+    symbols: Mapping[str, sympy.Symbol],
+    params: Mapping[str, Fraction],
+) -> str:
+    if expr.num is not None:
+        return _latex_number(parse_exact(expr.num))
+    if expr.sym is not None:
+        if expr.sym not in symbols:
+            raise MathCompileError(f"unknown symbol {expr.sym!r}")
+        return sympy.latex(symbols[expr.sym])
+    if expr.param is not None:
+        try:
+            return _latex_number(params[expr.param])
+        except KeyError as exc:
+            raise MathCompileError(f"unbound parameter {expr.param!r}") from exc
+    if expr.op is None:
+        raise MathCompileError("expression node has no kind")
+    if expr.op in _PRECEDENCE:
+        return _render_operator_latex(expr.op, expr.args, symbols, params)
+    if expr.op in _FUNCTION_OPS:
+        arity = {1, 2} if expr.op == "log" else {1}
+        if len(expr.args) not in arity:
+            raise MathCompileError(f"operator {expr.op!r} has the wrong arity")
+        arguments = [
+            _render_authored_latex(child, symbols, params) for child in expr.args
+        ]
+        return _render_function_latex(expr.op, arguments)
+    raise MathCompileError(f"unsupported operator {expr.op!r}")
+
+
+def _render_operator_latex(
+    op: str,
+    args: list[Expr],
+    symbols: Mapping[str, sympy.Symbol],
+    params: Mapping[str, Fraction],
+) -> str:
+    if op in {"add", "mul"}:
+        if not args:
+            raise MathCompileError(f"operator {op!r} requires arguments")
+    elif len(args) != 2:
+        raise MathCompileError(f"operator {op!r} requires two arguments")
+    rendered = [_render_authored_latex(child, symbols, params) for child in args]
+    if op == "add":
+        terms: list[str] = []
+        for index, (child, text) in enumerate(zip(args, rendered, strict=True)):
+            if child.op == "sub":
+                text = rf"\left({text}\right)"
+            if index == 0:
+                terms.append(text)
+            elif text.startswith("-"):
+                terms.append(f" - {text[1:].lstrip()}")
+            else:
+                terms.append(f" + {text}")
+        return "".join(terms)
+    if op == "sub":
+        left, right = rendered
+        if args[0].op == "sub":
+            left = rf"\left({left}\right)"
+        if args[1].op in {"add", "sub"}:
+            right = rf"\left({right}\right)"
+        elif right.startswith("-"):
+            return f"{left} + {right[1:].lstrip()}"
+        return f"{left} - {right}"
+    if op == "mul":
+        parts: list[str] = []
+        for index, (child, text) in enumerate(zip(args, rendered, strict=True)):
+            if child.op in {"add", "sub", "div"}:
+                text = rf"\left({text}\right)"
+            if index and text.startswith("-"):
+                text = rf"\left({text}\right)"
+            parts.append(text)
+        return r" \cdot ".join(parts)
+    if op == "div":
+        left, right = rendered
+        return rf"\frac{{{left}}}{{{right}}}"
+    base, exponent = rendered
+    if args[0].op in {"add", "sub", "mul", "div", "pow"} or base.startswith("-"):
+        base = rf"\left({base}\right)"
+    simple_exponent = (
+        args[1].op is None
+        and not exponent.startswith("-")
+        and "/" not in exponent
+        and "^" not in exponent
+    )
+    if not simple_exponent:
+        exponent = rf"\left({exponent}\right)"
+    return f"{base}^{{{exponent}}}"
+
+
+def _render_function_latex(op: str, arguments: list[str]) -> str:
+    """Typeset one function call, mirroring the plain operator names."""
+    first = arguments[0]
+    if op == "sqrt":
+        return rf"\sqrt{{{first}}}"
+    if op == "abs":
+        return rf"\left|{first}\right|"
+    if op == "exp":
+        return f"e^{{{first}}}"
+    if op == "log":
+        if len(arguments) == 2:
+            return rf"\log_{{{arguments[1]}}}\left({first}\right)"
+        return rf"\log\left({first}\right)"
+    name = rf"\operatorname{{{op}}}" if op in {"asin", "acos", "atan"} else rf"\{op}"
+    return rf"{name}\left({first}\right)"
+
+
 def render_relation(
     relation: Relation,
     symbols: Mapping[str, sympy.Symbol],
@@ -242,6 +372,50 @@ def render_relations(
     ]
 
 
+def render_relation_latex(
+    relation: Relation,
+    symbols: Mapping[str, sympy.Symbol],
+    params: Mapping[str, Fraction] | None = None,
+) -> str:
+    """Typeset a relation from SymPy objects without evaluating its truth."""
+    operators = {
+        "eq": sympy.Eq,
+        "ne": sympy.Ne,
+        "lt": sympy.Lt,
+        "le": sympy.Le,
+        "gt": sympy.Gt,
+        "ge": sympy.Ge,
+    }
+    lhs = compile_expr(relation.lhs, symbols, params)
+    rhs = compile_expr(relation.rhs, symbols, params)
+    return sympy.latex(operators[relation.kind](lhs, rhs, evaluate=False))
+
+
+def render_relations_latex(
+    item: MathItemSpec,
+    params: Mapping[str, Fraction] | None = None,
+) -> list[str]:
+    """Typeset the symbol-bearing relations a learner would see."""
+    symbols = build_symbols(item.symbols)
+    return [
+        render_relation_latex(given.relation, symbols, params)
+        for given in item.givens
+        if given.kind == "relation"
+        and given.relation is not None
+        and _relation_has_symbol(given.relation)
+    ]
+
+
+def render_matrix_latex(
+    rows: list[list[Expr]],
+    symbols: Mapping[str, sympy.Symbol],
+    params: Mapping[str, Fraction] | None = None,
+) -> str:
+    """Typeset a matrix from the compiled SymPy cells."""
+    compiled = [[compile_expr(cell, symbols, params) for cell in row] for row in rows]
+    return sympy.latex(sympy.Matrix(compiled))
+
+
 def render_goal_display(
     item: MathItemSpec,
     params: Mapping[str, Fraction] | None = None,
@@ -263,6 +437,101 @@ def render_goal_display(
     if item.goal.matrix:
         return render_matrix(item.goal.matrix, symbols, params)
     return render_item_text(item, params)
+
+
+def render_goal_display_latex(
+    item: MathItemSpec,
+    params: Mapping[str, Fraction] | None = None,
+) -> str | None:
+    """Typeset the mathematical object the learner is asked about.
+
+    Prose is never returned as LaTeX. A question whose prompt already carries
+    the mathematics has no separate object to typeset and returns ``None``, so
+    the frontend shows the plain equation instead.
+    """
+    relations = render_relations_latex(item, params)
+    if relations:
+        return r",\ ".join(relations)
+    symbols = build_symbols(item.symbols)
+    if item.goal.kind == "evaluate":
+        # An evaluate goal often encodes the arithmetic itself, so the authored
+        # text is the problem and the solved value is not a display.
+        return None
+    if item.goal.expr is not None:
+        rendered = sympy.latex(compile_expr(item.goal.expr, symbols, params))
+        if item.goal.kind in {"derivative", "integral"} and item.goal.symbol:
+            return f"f({item.goal.symbol}) = {rendered}"
+        return rendered
+    if item.goal.matrix:
+        return render_matrix_latex(item.goal.matrix, symbols, params)
+    return None
+
+
+def _text_values_latex(
+    item: MathItemSpec,
+    params: Mapping[str, Fraction] | None = None,
+) -> dict[str, str]:
+    """Build the LaTeX substitution values for a text template."""
+    fields = template_fields(item.text.template)
+    values: dict[str, str] = {
+        name: _latex_number(value) for name, value in (params or {}).items()
+    }
+
+    symbols = build_symbols(item.symbols)
+    relations = render_relations_latex(item, params)
+    if fields & {"expr"}:
+        if item.goal.expr is None:
+            raise ValueError("text template uses {{expr}} but the goal has none")
+        values["expr"] = render_authored_expr_latex(item.goal.expr, symbols, params)
+    if fields & {"equation", "equations"}:
+        if not relations:
+            raise ValueError("text template uses an equation but the item has none")
+        values["equation"] = relations[0]
+        values["equations"] = r",\ ".join(relations)
+    if "matrix" in fields:
+        if not item.goal.matrix:
+            raise ValueError("text template uses {{matrix}} but the goal has none")
+        values["matrix"] = render_matrix_latex(item.goal.matrix, symbols, params)
+
+    return values
+
+
+def render_item_segments(
+    item: MathItemSpec,
+    params: Mapping[str, Fraction] | None = None,
+) -> list[tuple[str, str]]:
+    """Split a filled prompt into prose and LaTeX pieces.
+
+    Each placeholder becomes a ``math`` segment holding its typeset value and
+    the surrounding words stay as ``text`` segments. A template with no
+    placeholders yields one text segment.
+    """
+    source = item.text.template
+    fields = template_fields(source)
+    values = _text_values_latex(item, params)
+    missing = fields - set(values)
+    if missing:
+        raise ValueError(
+            "text template uses unknown placeholders: " + ", ".join(sorted(missing))
+        )
+
+    segments: list[tuple[str, str]] = []
+    for literal, field_name, _, _ in Formatter().parse(source):
+        if literal:
+            segments.append(("text", literal))
+        if field_name is not None:
+            segments.append(("math", values[field_name]))
+    if not segments:
+        raise ValueError("rendered text must not be blank")
+    return segments
+
+
+def render_item_text_latex(
+    item: MathItemSpec,
+    params: Mapping[str, Fraction] | None = None,
+) -> str:
+    """Fill a template's text, typesetting the placeholders as LaTeX."""
+    return "".join(value for _, value in render_item_segments(item, params))
 
 
 def render_item_text(
@@ -610,12 +879,19 @@ __all__ = [
     "iter_parameter_combinations",
     "parameter_combinations",
     "render_authored_expr",
+    "render_authored_expr_latex",
     "render_expr",
     "render_goal_display",
+    "render_goal_display_latex",
+    "render_item_segments",
     "render_item_text",
+    "render_item_text_latex",
     "render_matrix",
+    "render_matrix_latex",
     "render_relation",
+    "render_relation_latex",
     "render_relations",
+    "render_relations_latex",
     "representative_item",
     "sample_parameter_combinations",
     "substitute_expr",
