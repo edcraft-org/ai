@@ -4,7 +4,9 @@ from fractions import Fraction
 
 import pytest
 from math_helpers import (
+    arithmetic_ir_template,
     checked_summary,
+    factor_ir_template,
     ir_add,
     ir_candidate,
     ir_mul,
@@ -304,3 +306,118 @@ def test_expand_goal_renders_choices_exactly_as_before() -> None:
 
     assert instance.answer == "x^2 + 3*x + 2"
     assert set(instance.choices) == {"x^2 + 3*x + 2", "x^2 + 2"}
+
+
+def test_generated_instance_carries_latex_fields() -> None:
+    artifact = validated(quadratic_ir_template())
+
+    instance = generate_math_question(artifact, 0)
+
+    assert instance.equation_latex == "x^{2} + 5 x - 14 = 0"
+    assert instance.choices_latex is not None
+    assert len(instance.choices_latex) == len(instance.choices)
+    assert instance.answer_latex is not None
+    assert instance.choices_latex[instance.correct_index] == instance.answer_latex
+    assert instance.question_segments is not None
+    assert instance.question_segments
+    text = "".join(
+        segment.value
+        for segment in instance.question_segments
+        if segment.kind == "text"
+    )
+    assert "Solve" in text
+    assert any(segment.kind == "math" for segment in instance.question_segments)
+
+
+def test_linear_solution_fraction_is_typeset_as_a_fraction() -> None:
+    template = linear_ir_template()
+    parameters = [
+        template.parameters[0].model_copy(update={"values": ["2"]}),
+        template.parameters[1].model_copy(update={"values": ["1"]}),
+        template.parameters[2].model_copy(update={"values": ["10"]}),
+    ]
+    template = template.model_copy(update={"parameters": parameters})
+
+    instance = generate_math_question(validated(template), 0)
+
+    assert instance.answer == "9/2"
+    assert instance.answer_latex == r"\frac{9}{2}"
+
+
+def test_factor_latex_keeps_product_parentheses() -> None:
+    artifact = validated(factor_ir_template())
+
+    instance = generate_math_question(artifact, 0)
+
+    assert instance.answer_latex is not None
+    assert r"\left(" in instance.answer_latex
+    assert instance.choices_latex is not None
+    assert all(r"\left(" in choice for choice in instance.choices_latex)
+
+
+def test_solve_choices_latex_follow_the_plain_set_rule() -> None:
+    quadratic = generate_math_question(validated(quadratic_ir_template()), 0)
+    linear = generate_math_question(validated(linear_ir_template()), 0)
+
+    assert quadratic.choices_latex is not None
+    assert len(quadratic.choices_latex) == len(quadratic.choices)
+    assert all(
+        choice.startswith(r"\left\{") and choice.endswith(r"\right\}")
+        for choice in quadratic.choices_latex
+    )
+    assert linear.choices_latex is not None
+    assert len(linear.choices_latex) == len(linear.choices)
+    assert all(r"\left\{" not in choice for choice in linear.choices_latex)
+    assert linear.answer_latex == linear.choices_latex[linear.correct_index]
+
+
+def test_question_segments_rebuild_the_prompt() -> None:
+    artifact = validated(linear_ir_template())
+
+    instance = generate_math_question(artifact, 0)
+
+    segments = instance.question_segments
+    assert segments is not None
+    maths = [segment.value for segment in segments if segment.kind == "math"]
+    assert maths == [instance.equation_latex]
+    assert instance.question == ("Solve " + instance.equation + " for x.")
+    assert [segment.kind for segment in segments] == ["text", "math", "text"]
+    assert segments[0].value == "Solve "
+    assert segments[2].value == " for x."
+
+
+def test_template_without_placeholders_yields_one_text_segment() -> None:
+    expanded = AnswerRecipe(
+        kind="expression",
+        items=[
+            ir_add(
+                ir_pow(ir_sym("x"), ir_num(2)),
+                ir_add(
+                    ir_mul(ir_add(ir_param("k"), ir_num(2)), ir_sym("x")),
+                    ir_mul(ir_param("k"), ir_num(2)),
+                ),
+            )
+        ],
+    )
+
+    instance = generate_math_question(unchecked_artifact(_expand_template(expanded)), 0)
+
+    assert instance.question_segments is not None
+    assert len(instance.question_segments) == 1
+    segment = instance.question_segments[0]
+    assert segment.kind == "text"
+    assert segment.value == "Expand the product."
+
+
+def test_question_segments_keep_the_authored_operand_order() -> None:
+    artifact = validated(arithmetic_ir_template())
+
+    instance = generate_math_question(artifact, 0)
+
+    assert instance.question_segments is not None
+    maths = [
+        segment.value
+        for segment in instance.question_segments
+        if segment.kind == "math"
+    ]
+    assert maths == [instance.equation.removeprefix("What is ").removesuffix("?")]

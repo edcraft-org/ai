@@ -189,7 +189,9 @@ not check. Each emitted variant is rendered from the approved recipes.
 ## Generation
 
 `generate_math_question(validated, seed)` is deterministic and performs no model,
-MCP, or network call. It samples the declared domain for the requested seed, so
+MCP, or network call. Each generated question also carries LaTeX for the
+equation, choices, answer and prompt segments, so the frontend can typeset it
+with KaTeX. It samples the declared domain for the requested seed, so
 questions may use variants that validation did not check. For the selected
 combination it compiles the answer recipe and every distractor recipe, renders
 them, and rejects unusable option combinations:
