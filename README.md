@@ -17,13 +17,13 @@ cp .env.example .env
 Configure authoring credentials for OpenAI, SocLaas or Ollama in `.env`. Select the
 authoring provider with `--provider`; `--model` overrides its configured default.
 SocLaas uses `SOCLAAS_API_KEY` and `SOCLAAS_BASE_URL`; its structured output defaults
-to strict JSON schema. Ollama must be running locally; thinking defaults to off.
+to JSON mode with local schema validation. Ollama must be running locally; thinking defaults to off.
 See [.env.example](.env.example) for transport settings and output budgets.
 
 For your own OpenAI-compatible endpoint, select `--provider openai` and configure
 `OPENAI_BASE_URL`, `OPENAI_API_KEY` and `OPENAI_MODEL`. Set
-`OPENAI_RESPONSE_FORMAT=json_object` if it lacks strict JSON schema support;
-responses still undergo local schema validation. Token budgets and reasoning
+`OPENAI_RESPONSE_FORMAT=json_schema` only if it supports strict JSON schema;
+responses undergo local schema validation either way. Token budgets and reasoning
 effort are optional settings in `.env.example`, subject to endpoint support.
 
 Difficulty decisions, reasoning fallback and relevance share one judge model,
@@ -93,9 +93,8 @@ checks and may reject a seed if usable options cannot be produced.
 
 ## Integration and development
 
-The library/CLI authoring flow is not yet connected to the product's HTTP routes
-or authoring/approval screens. The typed worker boundary and progress events are
-ready for that integration; see [development](docs/development.md).
+The general authoring flow's typed worker boundary
+and progress events remain described in [development](docs/development.md).
 
 ```bash
 uv run ruff check .
@@ -107,6 +106,8 @@ uv run pytest
 Default tests use scripted providers. Live tests are opt-in; run the OpenAI
 workflow smoke before a PR. See [evaluation](docs/evaluation.md) for commands.
 
+- [Mathematics domain](docs/math-domain.md): supported linear-equation templates, exact checks and unsupported cases.
+- [Mathematics correctness engine](docs/math-correctness-engine.md): additive deterministic checking for concrete answers, sampled template qualification and scope limits.
 - [Development](docs/development.md): responsibilities, contracts and extension points.
 - [Evaluation](docs/evaluation.md): reproducible runs and interpretation limits.
 - [Production rubric](docs/difficulty-rubric.md): runtime v0.2 assessment resource.

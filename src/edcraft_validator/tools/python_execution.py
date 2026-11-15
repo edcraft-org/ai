@@ -1,11 +1,29 @@
 """Local adapter for executing a batch with the Python tracing tool."""
 
-import json
-import os
-import subprocess
-import sys
 from dataclasses import dataclass, replace
 from typing import Any, Protocol
+
+from edcraft_validator.tools.isolated_process import (
+    DEFAULT_MEMORY_LIMIT_BYTES,
+    CodedWorkerError,
+    MemoryLimitUnavailable,
+    cpu_limit_for_timeout,
+    run_json_worker,
+)
+
+WORKER_MODULE = "edcraft_validator.tools.python_worker"
+
+
+class PythonToolTimeout(TimeoutError):
+    """The Python execution worker exceeded its wall-clock deadline."""
+
+
+class PythonToolWorkerError(CodedWorkerError):
+    """The Python execution worker failed before returning a usable result."""
+
+
+class PythonToolMemoryError(RuntimeError):
+    """The Python execution worker exceeded its memory limit."""
 
 
 @dataclass
@@ -43,6 +61,7 @@ class LocalPythonTool:
     ) -> list[ExecutionResult]:
         if not inputs:
             return []
+
         response = self._invoke(
             {
                 "code": code,
@@ -54,6 +73,7 @@ class LocalPythonTool:
         )
         if isinstance(response, ExecutionResult):
             return [replace(response) for _ in inputs]
+
         results = response.get("results")
         if response.get("ok") is not True or not isinstance(results, list):
             failure = _to_result(response)
@@ -65,6 +85,7 @@ class LocalPythonTool:
                 error_message="Python tool returned the wrong result count",
             )
             return [replace(failure) for _ in inputs]
+
         return [_to_result(result) for result in results]
 
     @staticmethod
@@ -72,52 +93,71 @@ class LocalPythonTool:
         payload: dict[str, Any], *, host_timeout: float
     ) -> dict[str, Any] | ExecutionResult:
         try:
-            process = subprocess.run(
-                [sys.executable, "-m", "edcraft_validator.tools.python_worker"],
-                input=json.dumps(payload, allow_nan=False),
-                capture_output=True,
-                text=True,
-                timeout=host_timeout,
-                check=False,
-                env={
-                    "PATH": os.environ.get("PATH", ""),
-                    "PYTHONIOENCODING": "utf-8",
-                },
+            response = run_json_worker(
+                payload,
+                module=WORKER_MODULE,
+                timeout_seconds=host_timeout,
+                timeout_error=PythonToolTimeout,
+                worker_error=PythonToolWorkerError,
+                memory_error=PythonToolMemoryError,
+                description="Python tool",
+                worker_description="Python tool worker",
+                cpu_seconds=cpu_limit_for_timeout(host_timeout),
+                memory_bytes=DEFAULT_MEMORY_LIMIT_BYTES,
             )
-        except subprocess.TimeoutExpired:
+        except TimeoutError:
             return ExecutionResult(
                 ok=False,
                 error_code="EXECUTION_TIMEOUT",
                 error_message="Python tool exceeded its execution timeout",
             )
+        except RuntimeError as exc:
+            return _worker_failure(exc)
 
-        if process.returncode < 0:
+        return response
+
+
+def _worker_failure(exc: RuntimeError) -> ExecutionResult:
+    """Map a runner failure onto the historical execution error codes.
+
+    The error message can contain up to ``MAX_STDERR_CHARS`` of the untrusted
+    program's stderr, so classification uses only the exception type and the
+    runner's ``failure_kind`` marker.
+    """
+    if isinstance(exc, PythonToolMemoryError):
+        return ExecutionResult(
+            ok=False,
+            error_code="RESOURCE_LIMIT_EXCEEDED",
+            error_message="Python tool was stopped by an operating-system limit",
+        )
+    if isinstance(exc, MemoryLimitUnavailable):
+        # The runner builds this as a subclass of the caller's worker error. It
+        # is a policy gap rather than a limit violation, so it stays a failure.
+        return _tool_failure(exc)
+
+    if isinstance(exc, CodedWorkerError):
+        if exc.failure_kind == "signal":
             return ExecutionResult(
                 ok=False,
                 error_code="RESOURCE_LIMIT_EXCEEDED",
                 error_message="Python tool was stopped by an operating-system limit",
             )
-        if process.returncode != 0:
-            return ExecutionResult(
-                ok=False,
-                error_code="TOOL_FAILURE",
-                error_message=process.stderr.strip() or "Python tool failed",
-            )
-        try:
-            response = json.loads(process.stdout)
-        except json.JSONDecodeError:
+        if exc.failure_kind == "invalid_output":
             return ExecutionResult(
                 ok=False,
                 error_code="INVALID_TOOL_OUTPUT",
                 error_message="Python tool returned invalid JSON",
             )
-        if not isinstance(response, dict):
-            return ExecutionResult(
-                ok=False,
-                error_code="INVALID_TOOL_OUTPUT",
-                error_message="Python tool returned a non-object result",
-            )
-        return response
+
+    return _tool_failure(exc)
+
+
+def _tool_failure(exc: RuntimeError) -> ExecutionResult:
+    return ExecutionResult(
+        ok=False,
+        error_code="TOOL_FAILURE",
+        error_message=str(exc) or "Python tool failed",
+    )
 
 
 def _to_result(result: dict[str, Any]) -> ExecutionResult:

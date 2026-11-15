@@ -415,6 +415,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "step-tracer" },
+    { name = "sympy" },
 ]
 
 [package.optional-dependencies]
@@ -440,6 +441,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.11,<3" },
     { name = "python-dotenv", specifier = ">=1.1,<2" },
     { name = "step-tracer", git = "https://github.com/edcraft-org/step-tracer.git?rev=ab7e22ef18b776a9cbd5260bef4b4eeacc17db11" },
+    { name = "sympy", specifier = ">=1.13,<2" },
     { name = "torch", marker = "extra == 'relevance'", specifier = ">=2.6,<3" },
     { name = "transformers", marker = "extra == 'relevance'", specifier = ">=5.0,<6" },
 ]

@@ -164,11 +164,13 @@ def execute_batch_request(request: dict[str, Any]) -> dict[str, Any]:
     cases = request["cases"]
     if not isinstance(cases, list) or not cases:
         raise ValueError("cases must be a non-empty list")
+
     common = {
         "code": request["code"],
         "entry_function": request["entry_function"],
         "timeout_seconds": request.get("timeout_seconds"),
     }
+
     return {
         "ok": True,
         "results": [
@@ -192,6 +194,7 @@ def main() -> None:
             "error_code": "INVALID_REQUEST",
             "error_message": f"{type(exc).__name__}: {exc}",
         }
+
     sys.stdout.write(json.dumps(response, allow_nan=False))
 
 

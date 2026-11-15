@@ -25,7 +25,9 @@ async def check_code_question_correctness(
 ) -> TechnicalCheck:
     if not math.isfinite(execution_timeout_seconds) or execution_timeout_seconds <= 0:
         raise ValueError("execution timeout must be finite and positive")
+
     question = CodeDifficultyQuestion.model_validate(question.model_dump())
+
     try:
         async with asyncio.timeout(execution_timeout_seconds + 2):
             return await asyncio.to_thread(

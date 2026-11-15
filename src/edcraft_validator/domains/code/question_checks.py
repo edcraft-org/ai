@@ -43,6 +43,7 @@ def check_requirements(
         return RequirementCheck(
             **identity, status="unknown", findings=["FEATURES_UNAVAILABLE"]
         )
+
     findings = [
         f"MISSING_FEATURE:{feature}"
         for feature in sorted(set(request.required_features) - set(observed))
@@ -51,6 +52,7 @@ def check_requirements(
         findings.append("ANSWER_TARGET_MISMATCH")
     if request.num_distractors and len(question.options) - 1 != request.num_distractors:
         findings.append("DISTRACTOR_COUNT_MISMATCH")
+
     return RequirementCheck(
         **identity,
         status="missing" if findings else "satisfied",
@@ -66,10 +68,12 @@ def check_concrete_correctness(
 ) -> TechnicalCheck:
     """Derive the answer and check distinct wrong options without a model call."""
     identity = {"question_sha256": question.sha256}
+
     if not analyze_python_subset(question.code, question.entry_function).is_valid:
         return TechnicalCheck(
             **identity, status="failed", findings=["UNSUPPORTED_CODE"]
         )
+
     executions = execution_tool.execute_batch(
         question.code,
         question.entry_function,
@@ -92,6 +96,7 @@ def check_concrete_correctness(
         answer = execution.trace_summary[question.answer_target]
     else:
         return TechnicalCheck(**identity, findings=["ANSWER_TARGET_UNAVAILABLE"])
+
     try:
         json.dumps(answer, allow_nan=False)
     except (TypeError, ValueError):
@@ -99,6 +104,7 @@ def check_concrete_correctness(
     designated = next(
         o.value for o in question.options if o.id == question.correct_option
     )
+
     findings = []
     if not equivalent(designated, answer):
         findings.append("CANONICAL_ANSWER_MISMATCH")

@@ -16,7 +16,6 @@ from edcraft_validator.domains.code.difficulty import load_code_difficulty_rubri
 from edcraft_validator.domains.code.proposal_response import (
     CodeProposalResponse,
 )
-from edcraft_validator.domains.code.template_difficulty import TEMPLATE_DIFFICULTY_TOOL
 from edcraft_validator.domains.code.template_revision import (
     author_difficulty_guidance,
 )
@@ -28,16 +27,19 @@ from edcraft_validator.llm.llm_errors import (
 )
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.server import create_validation_server
+from edcraft_validator.validation.check_names import TEMPLATE_DIFFICULTY_CHECK
 
 
 def test_wire_lines_preserve_indentation_and_canonical_python_round_trip():
     value = proposal().model_dump() | {
         "code": ["def add(a, b):", "    total = a + b", "    return total", ""]
     }
+
     result = CodeProposalResponse.model_validate(value)
     ast.parse(result.code)
     assert result.code == "\n".join(value["code"])
     assert json.loads(result.model_dump_json())["code"] == value["code"]
+
     candidate = CodeDomain().build_candidate(
         CodeTemplateRequest(prompt="Add", difficulty="easy"), result
     )
@@ -63,6 +65,7 @@ def test_author_uses_original_level_definitions_without_more_examples():
     levels = rubric.text.split("| Level | Anchor description |", 1)[1].split(
         "Choose the closest worked anchor", 1
     )[0]
+
     for row in levels.splitlines():
         if row.startswith(("| `easy` |", "| `medium` |", "| `hard` |")):
             assert row in guidance
@@ -122,13 +125,15 @@ def test_full_wire_revision_replaces_candidate_and_rechecks_every_field(
 
     author = WireAuthor()
     if with_difficulty:
-        author.plan += (TEMPLATE_DIFFICULTY_TOOL,)
+        author.plan += (TEMPLATE_DIFFICULTY_CHECK,)
+
     judge = TemplateJudge()
     # Use the real isolated executor to check the changed program and parameters.
     client = FastMcpToolClient(
         create_validation_server(difficulty_provider_factory=lambda: judge)
     )
     result, _ = run(author, client)
+
     assert result.status == "checked", result.reason
     assert len(result.attempts) == 2
     first, second = result.attempts
@@ -159,7 +164,7 @@ def test_full_wire_revision_replaces_candidate_and_rechecks_every_field(
         skipped = first.executions[-1]
         assert skipped.skip_reason == "Prerequisite checks did not pass"
         assert skipped.evidence is None
-        assert first.pending == [TEMPLATE_DIFFICULTY_TOOL]
+        assert first.pending == [TEMPLATE_DIFFICULTY_CHECK]
         assert feedback["check_results"][-1]["skip_reason"] == skipped.skip_reason
         assert second.executions[-1].passed
 
@@ -197,6 +202,7 @@ def test_application_revalidates_constructed_revisions_before_new_checks(kind):
         update={"answer_expression": "a - b"}
     )
     result, client = run(InvalidRevision([initial]))
+
     assert result.status == "error"
     assert result.failure.code == "schema_validation"
     assert "Invalid complete revision" in result.reason
@@ -209,6 +215,29 @@ def test_application_revalidates_constructed_revisions_before_new_checks(kind):
     assert result.request["num_distractors"] == 3
     assert result.artifact is None
     assert result.attempts[0].candidate["answer_expression"] == "a - b"
+
+
+def test_code_schema_failure_is_not_repaired():
+    class FailsOnce(Provider):
+        def __init__(self):
+            super().__init__([proposal()])
+            self.calls = 0
+
+        def generate(self, request):
+            self.calls += 1
+            if self.calls == 1:
+                raise GenerationSchemaError(
+                    "solve goals use either symbol or symbols, not both"
+                )
+            return super().generate(request)
+
+    provider = FailsOnce()
+
+    result, _ = run(provider)
+
+    assert result.status == "error"
+    assert result.failure.code == "schema_validation"
+    assert provider.calls == 1
 
 
 @pytest.mark.parametrize(
@@ -259,6 +288,7 @@ def test_recovered_author_call_is_counted_without_using_a_template_revision():
             return super().generate(request)
 
     result, _ = run(Intermittent())
+
     assert result.status == "checked" and len(result.attempts) == 1
     assert [call.operation for call in result.model_calls[:2]] == ["generation"] * 2
     assert result.model_calls[0].error == "transport"
@@ -287,6 +317,7 @@ def test_distractor_failure_exposes_counterexamples_without_extra_execution():
     executor = Executor()
     result, _ = run(Provider([repeated]), RecordingClient(executor))
     output = result.attempts[0].executions[0].evidence
+
     diagnostics = output.details["distractor_diagnostics"]
     assert {row["recipe_id"] for row in diagnostics} == {"D1", "D2", "D3"}
     assert all(row["kind"] == "DISTRACTOR_EQUALS_ANSWER" for row in diagnostics)

@@ -58,23 +58,15 @@ def relevance_input(
     )
 
 
-TEMPLATE_RELEVANCE_TOOL = "code_assess_template_relevance"
-
-
-def template_relevance_input(
-    candidate: CodeTemplateCandidate, author_request: str
-) -> RelevanceInput:
-    """Compare the actual learner task with the request, without answer or hints."""
-    return RelevanceInput(
-        author_request=author_request,
-        question_text=(
-            "Python multiple-choice question template\n\n"
-            f"Python code:\n{candidate.code}\n\n"
-            f"Question: {candidate.question_template}\n"
-            f"Answer target: {candidate.answer_target}\n"
-            f"Parameter values: "
-            f"{json.dumps({p.name: p.values for p in candidate.parameters})}\n"
-            "Each generated question substitutes one allowed value "
-            "for every placeholder.\n"
-        ),
+def template_relevance_text(candidate: CodeTemplateCandidate) -> str:
+    """Render the reusable task without answers, hints or distractor recipes."""
+    return (
+        "Python multiple-choice question template\n\n"
+        f"Python code:\n{candidate.code}\n\n"
+        f"Question: {candidate.question_template}\n"
+        f"Answer target: {candidate.answer_target}\n"
+        f"Parameter values: "
+        f"{json.dumps({p.name: p.values for p in candidate.parameters})}\n"
+        "Each generated question substitutes one allowed value "
+        "for every placeholder.\n"
     )

@@ -50,6 +50,7 @@ def _validate_distractor_value(
     index: int,
 ) -> None:
     _validate_distractor_type(inputs, answer, distractor, index)
+
     if equivalent(distractor, answer):
         raise TemplateValidationError(
             f"distractor {index} equals the answer for inputs {inputs}",

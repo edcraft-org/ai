@@ -19,12 +19,14 @@ def extract_code_features(code: str, entry_function: str) -> frozenset[CodeFeatu
     all_functions = {
         node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)
     }
+
     reachable_names = _reachable_function_names(all_functions, entry_function)
     functions = [
         function for name, function in all_functions.items() if name in reachable_names
     ]
     helper_names = reachable_names - {entry_function}
     nodes = [node for function in functions for node in _function_nodes(function)]
+
     features: set[CodeFeature] = set()
 
     if helper_names:
@@ -135,6 +137,7 @@ def _has_sequential_nodes(
             and _nearest_function(node, parents) == function.name
             and not _has_ancestor(node, kind, parents)
         ]
+
         if len(top_level) >= 2:
             return True
     return False

@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from code_validation_helpers import CODE_ADVISORY_CHECKS
 from fastmcp import Client
 from judge_helpers import TemplateJudge, candidate, proposal
 from test_authoring_loop import REQUEST, SEMANTIC, STRUCTURE, Executor, Provider
@@ -14,16 +15,14 @@ from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateCandidate,
     ValidatedCodeTemplate,
 )
-from edcraft_validator.domains.code.relevance import (
-    TEMPLATE_RELEVANCE_TOOL,
-    template_relevance_input,
-)
-from edcraft_validator.domains.code.template_difficulty import (
-    TEMPLATE_DIFFICULTY_TOOL,
-)
+from edcraft_validator.domains.code.relevance import template_relevance_text
 from edcraft_validator.llm.usage import TokenUsage
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.server import create_validation_server
+from edcraft_validator.validation.check_names import (
+    TEMPLATE_DIFFICULTY_CHECK,
+    TEMPLATE_RELEVANCE_CHECK,
+)
 
 
 class RelevanceJudge:
@@ -87,8 +86,8 @@ def run(
         or (
             SEMANTIC,
             STRUCTURE,
-            TEMPLATE_DIFFICULTY_TOOL,
-            TEMPLATE_RELEVANCE_TOOL,
+            TEMPLATE_DIFFICULTY_CHECK,
+            TEMPLATE_RELEVANCE_CHECK,
         ),
     )
     server = create_validation_server(
@@ -121,16 +120,17 @@ async def test_direct_mcp_maps_relevance_status_and_saves_evidence(
     )
     async with Client(server) as client:
         result = await client.call_tool(
-            TEMPLATE_RELEVANCE_TOOL,
+            TEMPLATE_RELEVANCE_CHECK,
             {
-                "candidate": original.model_dump(mode="json"),
                 "author_request": REQUEST.prompt,
+                "question_text": template_relevance_text(original),
+                "subject_sha256": template_sha256(original),
             },
         )
     evidence = result.structured_content
     assert evidence["status"] == status
-    assert evidence["tool"] == TEMPLATE_RELEVANCE_TOOL
-    assert evidence["details"]["template_sha256"] == template_sha256(original)
+    assert evidence["tool"] == TEMPLATE_RELEVANCE_CHECK
+    assert evidence["details"]["subject_sha256"] == template_sha256(original)
     assert (
         evidence["details"]["relevance"]["decision"]["request_text"] == REQUEST.prompt
     )
@@ -162,17 +162,18 @@ def test_template_projection_keeps_learner_task_and_omits_answer_and_reasons():
         deep=True,
     )
     changed.distractors[0].reason_template = "Different misconception reason."
-    first = template_relevance_input(original, REQUEST.prompt)
-    second = template_relevance_input(changed, REQUEST.prompt)
-    assert first.sha256 == second.sha256
-    assert original.code in first.question_text
-    assert original.question_template in first.question_text
-    assert f"Answer target: {original.answer_target}\n" in first.question_text
+    first = template_relevance_text(original)
+    second = template_relevance_text(changed)
+
+    assert first == second
+    assert original.code in first
+    assert original.question_template in first
+    assert f"Answer target: {original.answer_target}\n" in first
     assert (
         "Parameter values: "
         + json.dumps({p.name: p.values for p in original.parameters})
         + "\n"
-    ) in first.question_text
+    ) in first
     for excluded in (
         "different",
         "loops",
@@ -181,10 +182,15 @@ def test_template_projection_keeps_learner_task_and_omits_answer_and_reasons():
         "Repeats answer.",
         "Different misconception reason.",
     ):
-        assert excluded not in first.question_text
-    assert first.author_request == REQUEST.prompt
+        assert excluded not in first
+    assert CodeDomain().tool_bindings(REQUEST, original, TEMPLATE_RELEVANCE_CHECK) == {
+        "author_request": REQUEST.prompt,
+        "question_text": first,
+        "subject_sha256": template_sha256(original),
+    }
+
     changed.code += "\n# changed learner task"
-    assert template_relevance_input(changed, REQUEST.prompt).sha256 != first.sha256
+    assert template_relevance_text(changed) != first
 
 
 def test_advisory_relevance_mismatch_is_saved_and_replays_without_models(
@@ -201,22 +207,28 @@ def test_advisory_relevance_mismatch_is_saved_and_replays_without_models(
     execution = next(
         item
         for item in result.attempts[0].executions
-        if item.tool == TEMPLATE_RELEVANCE_TOOL
+        if item.tool == TEMPLATE_RELEVANCE_CHECK
     )
     assert execution.evidence.status == "failed"
     assert execution.evidence.findings[0].code == "RELEVANCE_MISMATCH"
     assert execution.requested_arguments == {}
     assert execution.application_arguments["author_request"] == REQUEST.prompt
+    assert execution.application_arguments["subject_sha256"] == template_sha256(
+        result.artifact.template
+    )
+    assert execution.application_arguments["question_text"] == template_relevance_text(
+        result.artifact.template
+    )
 
     saved = next(
         item
         for item in result.artifact.validation.evidence
-        if item.check == TEMPLATE_RELEVANCE_TOOL
+        if item.check == TEMPLATE_RELEVANCE_CHECK
     )
     details = saved.details
     assert saved.status == "failed"
     assert details["advisory"] is True
-    assert details["template_sha256"] == template_sha256(result.artifact.template)
+    assert details["subject_sha256"] == template_sha256(result.artifact.template)
     assert details["score"] == details["relevance"]["decision"]["score"] == 0.1
     assert details["threshold"] == details["relevance"]["decision"]["threshold"] == 0.94
     assert details["provider"] == "scripted"
@@ -226,16 +238,18 @@ def test_advisory_relevance_mismatch_is_saved_and_replays_without_models(
     stale = [
         item.evidence.model_copy(deep=True) for item in result.attempts[0].executions
     ]
-    next(item for item in stale if item.tool == TEMPLATE_RELEVANCE_TOOL).details[
-        "template_sha256"
+    next(item for item in stale if item.tool == TEMPLATE_RELEVANCE_CHECK).details[
+        "subject_sha256"
     ] = "stale"
     stale_artifact = CodeDomain().finalize_checked_template(
-        CodeTemplateCandidate.model_validate(result.attempts[0].candidate), stale
+        CodeTemplateCandidate.model_validate(result.attempts[0].candidate),
+        stale,
+        advisory_checks=CODE_ADVISORY_CHECKS,
     )
     stale_saved = next(
         item
         for item in stale_artifact.validation.evidence
-        if item.check == TEMPLATE_RELEVANCE_TOOL
+        if item.check == TEMPLATE_RELEVANCE_CHECK
     )
     assert stale_saved.status == "incomplete"
     assert stale_saved.details["unavailable"] is True
@@ -246,11 +260,11 @@ def test_advisory_relevance_mismatch_is_saved_and_replays_without_models(
     loaded_saved = next(
         item
         for item in loaded.validation.evidence
-        if item.check == TEMPLATE_RELEVANCE_TOOL
+        if item.check == TEMPLATE_RELEVANCE_CHECK
     )
     assert loaded_saved.status == "failed"
     assert loaded_saved.details["advisory"] is True
-    assert loaded_saved.details["template_sha256"] == template_sha256(loaded.template)
+    assert loaded_saved.details["subject_sha256"] == template_sha256(loaded.template)
 
     def unexpected_call(*args, **kwargs):
         pytest.fail("Model-free replay must not call a model, MCP or executor")
@@ -286,8 +300,8 @@ def test_relevance_model_error_is_unavailable_without_author_revision():
         estimates=["easy"],
         relevance_failure=RuntimeError("PRIVATE MODEL ERROR"),
         plan=(
-            TEMPLATE_RELEVANCE_TOOL,
-            TEMPLATE_DIFFICULTY_TOOL,
+            TEMPLATE_RELEVANCE_CHECK,
+            TEMPLATE_DIFFICULTY_CHECK,
             SEMANTIC,
             STRUCTURE,
         ),
@@ -295,19 +309,21 @@ def test_relevance_model_error_is_unavailable_without_author_revision():
     assert result.status == "checked" and result.artifact is not None
     assert len(result.attempts) == len(author.generations) == 1
     assert len(relevance_judges) == 1 and len(difficulty_judges) == 1
+
     execution = next(
         item
         for item in result.attempts[0].executions
-        if item.tool == TEMPLATE_RELEVANCE_TOOL
+        if item.tool == TEMPLATE_RELEVANCE_CHECK
     )
     assert execution.evidence.status == "error"
     assert execution.evidence.findings[0].code == "RELEVANCE_FAILED"
     assert execution.evidence.details["retryable"] is False
     assert execution.evidence.details["relevance_outcome"]["unavailable"] is True
+
     saved = next(
         item
         for item in result.artifact.validation.evidence
-        if item.check == TEMPLATE_RELEVANCE_TOOL
+        if item.check == TEMPLATE_RELEVANCE_CHECK
     )
     assert saved.status == "incomplete" and saved.details["unavailable"] is True
     assert "PRIVATE MODEL ERROR" not in result.model_dump_json()
@@ -320,8 +336,8 @@ def test_correctness_failure_skips_both_assessments_without_judge_calls():
     assert len(result.attempts) == len(author.generations) == 4
     assert difficulty_judges == relevance_judges == []
     for attempt in result.attempts:
-        assert attempt.pending == [TEMPLATE_DIFFICULTY_TOOL, TEMPLATE_RELEVANCE_TOOL]
-        for name in (TEMPLATE_DIFFICULTY_TOOL, TEMPLATE_RELEVANCE_TOOL):
+        assert attempt.pending == [TEMPLATE_DIFFICULTY_CHECK, TEMPLATE_RELEVANCE_CHECK]
+        for name in (TEMPLATE_DIFFICULTY_CHECK, TEMPLATE_RELEVANCE_CHECK):
             execution = next(item for item in attempt.executions if item.tool == name)
             assert execution.skip_reason == "Prerequisite checks did not pass"
             assert execution.evidence is None
@@ -330,30 +346,35 @@ def test_correctness_failure_skips_both_assessments_without_judge_calls():
 @pytest.mark.parametrize(
     "plan",
     [
-        (TEMPLATE_RELEVANCE_TOOL, TEMPLATE_DIFFICULTY_TOOL, SEMANTIC, STRUCTURE),
-        (TEMPLATE_DIFFICULTY_TOOL, TEMPLATE_RELEVANCE_TOOL, SEMANTIC, STRUCTURE),
+        (TEMPLATE_RELEVANCE_CHECK, TEMPLATE_DIFFICULTY_CHECK, SEMANTIC, STRUCTURE),
+        (TEMPLATE_DIFFICULTY_CHECK, TEMPLATE_RELEVANCE_CHECK, SEMANTIC, STRUCTURE),
     ],
 )
 def test_assessments_run_independently_in_either_order(plan):
     result, _, difficulty_judges, relevance_judges = run(
         scores=[0.1], estimates=["hard"], plan=plan
     )
+
     assert result.status == "checked" and len(result.attempts) == 1
     assert len(relevance_judges) == len(difficulty_judges) == 1
     executions = {
         item.tool: item
         for item in result.attempts[0].executions
-        if item.tool in {TEMPLATE_RELEVANCE_TOOL, TEMPLATE_DIFFICULTY_TOOL}
+        if item.tool in {TEMPLATE_RELEVANCE_CHECK, TEMPLATE_DIFFICULTY_CHECK}
     }
-    assert set(executions) == {TEMPLATE_RELEVANCE_TOOL, TEMPLATE_DIFFICULTY_TOOL}
+
+    assert set(executions) == {TEMPLATE_RELEVANCE_CHECK, TEMPLATE_DIFFICULTY_CHECK}
     assert all(item.evidence is not None for item in executions.values())
     assert all(item.evidence.status == "failed" for item in executions.values())
     assert all(item.advisory for item in executions.values())
-    candidates = [
-        item.application_arguments["candidate"] for item in executions.values()
-    ]
-    assert candidates[0] == candidates[1]
-    checked = CodeTemplateCandidate.model_validate(candidates[0])
+    difficulty = executions[TEMPLATE_DIFFICULTY_CHECK]
+    relevance = executions[TEMPLATE_RELEVANCE_CHECK]
+    checked = result.artifact.template
+    assert relevance.application_arguments["question_text"] == template_relevance_text(
+        checked
+    )
     assert {
-        item.evidence.details["template_sha256"] for item in executions.values()
+        relevance.application_arguments["subject_sha256"],
+        relevance.evidence.details["subject_sha256"],
+        difficulty.evidence.details["subject_sha256"],
     } == {template_sha256(checked)}

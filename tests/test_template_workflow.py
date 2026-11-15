@@ -87,6 +87,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
             ],
         }
     )
+
     provider_calls = []
     execution_calls: list[str] = []
 
@@ -151,8 +152,8 @@ def test_template_application_authors_once_then_generates_locally() -> None:
     assert validated.authoring.base_prompt_version == provider_calls[0].prompt_version
     assert validated.authoring.domain == "code"
     assert provider_calls[0].tool_catalogue.names == (
-        "code_assess_template_difficulty",
-        "code_assess_template_relevance",
+        "assess_template_difficulty",
+        "assess_template_relevance",
         "code_require_features",
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",
@@ -171,6 +172,14 @@ def test_template_application_authors_once_then_generates_locally() -> None:
         "Adds one.",
         "Subtracts one.",
     ]
+
+    view = domain.review_view(validated)
+    assert view is not None
+    assert view.template_id == validated.template.template_id
+    assert view.candidate["code"] == validated.template.code
+    assert view.language == "python"
+    assert view.limits is not None
+    assert view.limits["checking_mode"] == "property_based"
 
 
 def test_application_can_run_a_non_code_domain_without_provider_changes() -> None:
@@ -198,6 +207,7 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
 
     class ExampleDomain:
         name = "example"
+        capabilities = frozenset()
 
         request_model = ExampleRequest
         validated_model = ExampleValidated
@@ -215,10 +225,16 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
             events.append("build")
             return ExampleTemplate(value=proposal.value)
 
+        def required_checks(self, candidate):
+            return frozenset()
+
+        def distractor_count(self, candidate):
+            return 0
+
         def tool_bindings(self, request, candidate, tool_name):
             return {"value": candidate.value}
 
-        def finalize_checked_template(self, candidate, evidence):
+        def finalize_checked_template(self, candidate, evidence, *, advisory_checks):
             events.append("finalize")
             assert evidence[0].details == {"input": 12, "value": 24}
             return ExampleValidated(value=evidence[0].details["value"])
@@ -251,6 +267,7 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
         domain=domain,
         provider=ExampleProvider(),
     )
+
     instance = application.generate_question(validated, domain=domain, seed=5)
 
     assert events == [
@@ -315,6 +332,7 @@ def test_non_deferred_advisory_failure_does_not_skip_deferred_assessment() -> No
         tool_bindings=lambda request, candidate, tool_name: {},
         checked_tool_bindings=lambda request, candidate, tool_name, evidence: {},
     )
+
     candidate = ExampleTemplate(value=12)
     attempt = TemplateApplication._build_attempt(1, candidate, plan)
     TemplateApplication._run_checks(
@@ -350,6 +368,7 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
 ) -> None:
     class FailingDomain:
         name = "example"
+        capabilities = frozenset()
 
         def generation_request(self, request):
             from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
@@ -363,6 +382,12 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
         def build_candidate(self, request, proposal):
             pytest.fail("Generation failures must stop before candidate construction")
 
+        def required_checks(self, candidate):
+            return frozenset()
+
+        def distractor_count(self, candidate):
+            return 0
+
         def tool_bindings(self, request, candidate, tool_name):
             pytest.fail("Generation failures must stop before validation")
 
@@ -374,6 +399,7 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
             raise generation_error
 
     captured_catalogues = []
+
     with pytest.raises(AuthoringFailure, match=str(generation_error)) as failure:
         TemplateApplication(
             tool_catalogue=ExampleCatalogue()
@@ -384,6 +410,7 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
             on_catalogue_resolved=captured_catalogues.append,
         )
     assert len(captured_catalogues) == 1
+
     result = failure.value.result
     assert result.failure.stage == "generation"
     assert result.failure.code == generation_error.category
@@ -394,9 +421,35 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
     assert captured_catalogues[0].names == ("double_value", "positive_value")
 
 
+def test_domain_without_capabilities_fails_before_generation() -> None:
+    class Domain:
+        name = "example"
+
+        def generation_request(self, request):
+            pytest.fail("capabilities must be validated before prompt construction")
+
+    class Provider:
+        provider = "stub"
+        model = "stub-model"
+
+        def generate(self, request):
+            pytest.fail("capabilities must be validated before model generation")
+
+    with pytest.raises(AuthoringFailure, match="must declare capabilities") as failure:
+        TemplateApplication(
+            tool_catalogue=ExampleCatalogue()
+        ).create_validated_template(
+            ExampleRequest(topic="fractions"),
+            domain=Domain(),
+            provider=Provider(),
+        )
+    assert failure.value.result.failure.stage == "configuration"
+
+
 def test_unknown_recommended_check_stops_before_candidate_validation() -> None:
     class Domain:
         name = "example"
+        capabilities = frozenset()
 
         def generation_request(self, request):
             from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
@@ -411,6 +464,12 @@ def test_unknown_recommended_check_stops_before_candidate_validation() -> None:
             pytest.fail(
                 "Unknown recommended checks must stop before candidate building"
             )
+
+        def required_checks(self, candidate):
+            return frozenset()
+
+        def distractor_count(self, candidate):
+            return 0
 
         def tool_bindings(self, request, candidate, tool_name):
             pytest.fail("Unknown recommended checks must stop before validation")
@@ -459,6 +518,7 @@ def test_non_code_domain_can_plan_typed_arguments_without_shared_tool_names():
 
     class Domain:
         name = "example"
+        capabilities = frozenset()
 
         def generation_request(self, request):
             return StructuredGenerationRequest(
@@ -471,10 +531,16 @@ def test_non_code_domain_can_plan_typed_arguments_without_shared_tool_names():
         def build_candidate(self, request, proposal):
             return ExampleTemplate(value=proposal.value)
 
+        def required_checks(self, candidate):
+            return frozenset()
+
+        def distractor_count(self, candidate):
+            return 0
+
         def tool_bindings(self, request, candidate, name):
             return {"value": candidate.value}
 
-        def finalize_checked_template(self, candidate, evidence):
+        def finalize_checked_template(self, candidate, evidence, *, advisory_checks):
             return ExampleValidated(value=candidate.value)
 
     class Provider:
@@ -525,6 +591,7 @@ def test_non_code_full_revision_enforces_domain_constraints_before_checking(
 
     class Domain:
         name = "example"
+        capabilities = frozenset()
 
         def generation_request(self, request):
             return StructuredGenerationRequest(
@@ -538,10 +605,16 @@ def test_non_code_full_revision_enforces_domain_constraints_before_checking(
                 raise ValueError("Candidate exceeds the original request maximum")
             return ExampleTemplate(value=proposal.value)
 
+        def required_checks(self, candidate):
+            return frozenset()
+
+        def distractor_count(self, candidate):
+            return 0
+
         def tool_bindings(self, request, candidate, name):
             return {"value": candidate.value}
 
-        def finalize_checked_template(self, candidate, evidence):
+        def finalize_checked_template(self, candidate, evidence, *, advisory_checks):
             assert evidence[0].details["value"] == candidate.value
             return ExampleValidated(value=candidate.value)
 
@@ -567,6 +640,7 @@ def test_non_code_full_revision_enforces_domain_constraints_before_checking(
             )
 
     author = Author()
+
     result = TemplateApplication(tool_client=FastMcpToolClient(server)).author_template(
         Request(topic="A positive value no greater than ten", maximum=10),
         domain=Domain(),
@@ -598,6 +672,12 @@ def test_run_checks_accepts_legacy_raw_catalogue_definitions() -> None:
     }
 
     class Domain:
+        def required_checks(self, candidate):
+            return frozenset()
+
+        def distractor_count(self, candidate):
+            return 0
+
         def tool_bindings(self, request, candidate, name):
             return {}
 
@@ -632,6 +712,7 @@ def test_authoring_rejects_a_domain_that_returns_no_shared_artifact():
 
     class Domain:
         name = "example"
+        capabilities = frozenset()
         request_model = Request
 
         def generation_request(self, request):
@@ -644,10 +725,16 @@ def test_authoring_rejects_a_domain_that_returns_no_shared_artifact():
         def build_candidate(self, request, proposal):
             return Candidate(value=proposal.value)
 
+        def required_checks(self, candidate):
+            return frozenset()
+
+        def distractor_count(self, candidate):
+            return 0
+
         def tool_bindings(self, request, candidate, tool_name):
             return {"value": candidate.value}
 
-        def finalize_checked_template(self, candidate, evidence):
+        def finalize_checked_template(self, candidate, evidence, *, advisory_checks):
             return candidate
 
     class Provider(RequestPendingTools):

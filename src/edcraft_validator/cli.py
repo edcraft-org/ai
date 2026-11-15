@@ -97,12 +97,14 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument(
         "--output", type=Path, default=Path(".artifacts/template-evaluation.jsonl")
     )
+
     return parser
 
 
 def main() -> int:
     args = build_parser().parse_args()
     load_dotenv()
+
     try:
         handlers = {
             "author": _handle_author,
@@ -127,6 +129,7 @@ def _handle_author(args: argparse.Namespace) -> int:
         }.items()
         if value is not None
     }
+
     if args.request_json is not None:
         if request_fields:
             flags = ", ".join(f"--{name.replace('_', '-')}" for name in request_fields)
@@ -138,6 +141,7 @@ def _handle_author(args: argparse.Namespace) -> int:
         )
     else:
         request = domain.request_model.model_validate(request_fields)
+
     provider = create_model_provider(
         TemplateProviderSelection(provider=args.provider, model=args.model)
     )
@@ -147,6 +151,7 @@ def _handle_author(args: argparse.Namespace) -> int:
         )
     finally:
         close_provider(provider)
+
     _write_authoring_result(result, args)
     return 0 if result.status == "checked" else 2
 
@@ -157,6 +162,7 @@ def _handle_generate(args: argparse.Namespace) -> int:
     result = TemplateApplication().generate_question(
         validated, domain=domain, seed=args.seed
     )
+
     _write_json(result.model_dump(mode="json"), args.output)
     return 0
 
@@ -165,6 +171,7 @@ def _handle_evaluate(args: argparse.Namespace) -> int:
     topics = CODE_TOPICS if args.topic == "all" else (args.topic,)
     difficulties = CODE_DIFFICULTIES if args.difficulty == "all" else (args.difficulty,)
     args.output.parent.mkdir(parents=True, exist_ok=True)
+
     with args.output.open("w") as output:
 
         def record_attempt(attempt: Any) -> None:
@@ -186,6 +193,7 @@ def _handle_evaluate(args: argparse.Namespace) -> int:
             num_distractors=args.num_distractors,
             on_attempt=record_attempt,
         )
+
     print(report.summary.model_dump_json(indent=2))
     return 0 if report.summary.failed == 0 else 1
 
@@ -195,6 +203,7 @@ def _write_json(value: dict[str, Any], output: Path | None) -> None:
     if output is None:
         print(rendered)
         return
+
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(rendered + "\n")
 
@@ -205,6 +214,7 @@ def _check_output_paths(args: argparse.Namespace) -> None:
         for path in (args.output, args.template_output, args.tool_schemas)
         if path is not None
     ]
+
     if len(paths) != len(set(paths)):
         raise ValueError("Report, template and tool-schema output paths must differ")
 
@@ -221,6 +231,7 @@ def _catalogue_options(args: argparse.Namespace) -> dict[str, Any]:
 
 def _write_authoring_result(result, args: argparse.Namespace) -> None:
     _write_json(result.model_dump(mode="json"), args.output)
+
     if args.template_output is not None:
         if result.artifact is not None:
             _write_json(result.artifact.model_dump(mode="json"), args.template_output)

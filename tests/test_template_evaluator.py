@@ -100,8 +100,8 @@ def test_evaluation_records_outputs_failures_and_grouped_metrics(tmp_path) -> No
         == "code_validate_answers_and_distractors"
     )
     assert [tool["name"] for tool in report.attempts[1].tool_catalogue] == [
-        "code_assess_template_difficulty",
-        "code_assess_template_relevance",
+        "assess_template_difficulty",
+        "assess_template_relevance",
         "code_require_features",
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",
@@ -176,6 +176,7 @@ def test_evaluation_notifies_before_starting_the_next_attempt() -> None:
         repetitions=2,
         on_attempt=record,
     )
+
     assert observed == report.attempts
     assert events == ["generate", "completed:1", "generate", "completed:2"]
 
@@ -220,8 +221,8 @@ def test_evaluation_retains_catalogue_when_model_generation_fails() -> None:
     attempt = report.attempts[0]
     assert attempt.failure_stage == "generation"
     assert [tool["name"] for tool in attempt.tool_catalogue] == [
-        "code_assess_template_difficulty",
-        "code_assess_template_relevance",
+        "assess_template_difficulty",
+        "assess_template_relevance",
         "code_require_features",
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",
@@ -254,6 +255,7 @@ def test_successful_evaluation_keeps_failed_attempt_evidence_in_the_report():
         difficulties=("easy",),
         repetitions=1,
     )
+
     attempt = report.attempts[0]
     assert attempt.status == "validated"
     history = attempt.authoring_result.attempts
@@ -295,6 +297,7 @@ def test_evaluation_attributes_failure_to_the_final_attempt():
         difficulties=("easy",),
         repetitions=1,
     )
+
     attempt = report.attempts[0]
     assert attempt.failure_stage == "validation"
     assert attempt.failure_code == "DISTRACTOR_SELECTION_FAILED"
@@ -338,6 +341,7 @@ def test_evaluation_distinguishes_revision_transport_errors_from_check_failures(
         difficulties=("easy",),
         repetitions=1,
     )
+
     attempt = report.attempts[0]
     assert attempt.failure_stage == "generation"
     assert attempt.failure_code == "transport"

@@ -62,8 +62,25 @@ complete proposal and rechecks it under the frozen check plan. Current correctne
 checks use bounded Hypothesis samples, not exhaustive domain enumeration. Earlier
 native-tool/acknowledgement, patch-only or exhaustive-checking experiments describe
 their recorded revisions. Preserve those records rather than pooling them with the
-current workflow. SocLaas structured output defaults to `json_schema`;
-`json_object` is an explicit weaker wire option with local schema validation.
+current workflow. Structured output defaults to `json_object` with local schema
+validation; `json_schema` remains an explicit opt-in for endpoints that support
+strict structured outputs.
+
+## Mathematics correctness
+
+```bash
+uv run python scripts/evaluate_math_correctness.py > .artifacts/math-correctness.json
+```
+
+The script runs fixed concrete examples across the public worker boundary and one
+sampled qualification campaign, then prints a JSON record to stdout. There is no
+measurement flag, and the command succeeds even when an example's observed outcome
+differs from its expectation; inspect `matched_examples` and each example's
+`matches` field instead. The examples are regression fixtures, not an accuracy
+benchmark. `qualification` reports seeded property-based observations over sampled
+parameter assignments, not an exhaustive Cartesian enumeration; a passing campaign
+supports only the observed samples. Keep request/result records for regression
+comparison, and separate correctness evidence from relevance or difficulty claims.
 
 ## Difficulty and relevance
 

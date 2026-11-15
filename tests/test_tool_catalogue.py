@@ -44,21 +44,35 @@ def definition(name, domains=("code",)):
     }
 
 
+def capability_definition(name, capability):
+    definition_ = definition(name, domains=())
+    definition_["_meta"]["fastmcp"]["tags"] = [f"capability:{capability}"]
+    return definition_
+
+
 def test_code_domain_resolves_real_tagged_mcp_definitions():
+    from edcraft_validator.domains.code.code_domain import CodeDomain
+
     with FastMcpToolClient() as client:
-        tools = resolve_domain_tools("code", client)
+        tools = resolve_domain_tools(
+            "code", client, capabilities=CodeDomain.capabilities
+        )
 
     assert [tool["name"] for tool in tools] == [
-        "code_assess_template_difficulty",
-        "code_assess_template_relevance",
+        "assess_template_difficulty",
+        "assess_template_relevance",
         "code_require_features",
         "code_validate_answers_and_distractors",
         "code_verify_template_structure",
     ]
     assert all(tool["description"] for tool in tools)
-    assert all("candidate" in tool["inputSchema"]["properties"] for tool in tools)
+    domain_tools = [tool for tool in tools if tool["name"].startswith("code_")]
+    assert all(
+        "candidate" in tool["inputSchema"]["properties"] for tool in domain_tools
+    )
     assert all("status" in tool["outputSchema"]["properties"] for tool in tools)
     assert all(tool["_meta"]["fastmcp"]["version"] for tool in tools)
+    assert CodeDomain.capabilities == frozenset({"difficulty", "template-relevance"})
 
 
 def test_domain_tags_filter_tools_and_allow_shared_tools():
@@ -92,6 +106,41 @@ def test_new_tagged_tool_is_discovered_without_a_domain_tool_list():
     ]
 
 
+def test_capability_tags_are_visible_only_when_the_domain_opts_in():
+    catalogue = RecordingCatalogue(
+        [
+            definition("domain_check"),
+            capability_definition("shared_check", "template-relevance"),
+            capability_definition("other_shared", "other-capability"),
+        ]
+    )
+
+    assert [tool["name"] for tool in resolve_domain_tools("code", catalogue)] == [
+        "domain_check"
+    ]
+    assert [
+        tool["name"]
+        for tool in resolve_domain_tools(
+            "code", catalogue, capabilities={"template-relevance"}
+        )
+    ] == ["domain_check", "shared_check"]
+
+
+def test_real_math_capabilities_offer_the_shared_relevance_tool():
+    from edcraft_validator.domains.math.math_domain import MathDomain
+
+    with FastMcpToolClient() as client:
+        tools = resolve_domain_tools(
+            "math", client, capabilities=MathDomain.capabilities
+        )
+
+    names = [tool["name"] for tool in tools]
+    assert "assess_template_relevance" in names
+    assert "assess_template_difficulty" in names
+    assert "math_assess_template_relevance" not in names
+    assert MathDomain.capabilities == frozenset({"difficulty", "template-relevance"})
+
+
 @pytest.mark.parametrize(
     ("listed", "message"),
     [
@@ -106,6 +155,7 @@ def test_bad_catalogue_stops_before_generation(listed, message):
 
     class Domain:
         name = "code"
+        capabilities = frozenset()
 
         def generation_request(self, request):
             pytest.fail("invalid catalogues must stop before prompt construction")

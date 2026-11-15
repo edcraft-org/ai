@@ -31,6 +31,7 @@ def eligible_case_indices(candidates, answers):
         if any(equivalent(a, b) for a, b in itertools.combinations(values, 2)):
             continue
         result.append(index)
+
     return result
 
 
@@ -41,6 +42,7 @@ def check_proposed_distractor_selection(
     count = context.num_distractors
     if count is None:
         raise ValueError("a required distractor count must be provided")
+
     try:
         context.template, context.candidates, context.eligible_indices = (
             _select_distractors(
@@ -66,6 +68,7 @@ def _failure_diagnostics(context: CodeValidationContext) -> list[dict[str, Any]]
     """One counterexample per bad recipe or colliding pair, without re-execution."""
     rows = []
     valid = []
+
     for candidate in context.candidates:
         recipe_id = f"D{candidate.index + 1}"
         if candidate.expression is None:
@@ -100,6 +103,7 @@ def _failure_diagnostics(context: CodeValidationContext) -> list[dict[str, Any]]
             values.append(value)
         else:
             valid.append((recipe_id, values))
+
     for (first_id, first), (second_id, second) in itertools.combinations(valid, 2):
         for inputs, left, right in zip(
             context.inputs_cases, first, second, strict=True
@@ -115,6 +119,7 @@ def _failure_diagnostics(context: CodeValidationContext) -> list[dict[str, Any]]
                     }
                 )
                 break
+
     return rows
 
 
@@ -128,6 +133,7 @@ def check_distractors(context: CodeValidationContext) -> None:
         candidate.values = [
             candidate.expression.evaluate(inputs) for inputs in context.inputs_cases
         ]
+
     for case_index in context.eligible_indices:
         inputs = context.inputs_cases[case_index]
         expected_answer = context.canonical_answers[case_index]

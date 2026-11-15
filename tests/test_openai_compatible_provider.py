@@ -3,7 +3,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from edcraft_validator.domains.code.code_schemas import CodeTemplateRequest
 from edcraft_validator.domains.code.prompt_builder import build_code_generation_request
@@ -18,6 +18,8 @@ from edcraft_validator.llm.llm_errors import (
 from edcraft_validator.llm.openai_compatible_provider import (
     OpenAICompatibleProvider,
     OpenAIGenerationError,
+    OpenAIProvider,
+    SocLaasProvider,
     _api_key,
     _base_url,
     _max_retries,
@@ -35,6 +37,28 @@ def generation_request(
             CodeTemplateRequest(prompt=prompt, difficulty=difficulty)
         ),
         offered_tool_names=("code_execution", "code_structure"),
+    )
+
+
+class DefaultedProposal(BaseModel):
+    """A schema with a defaulted field, which strict outputs cannot express.
+
+    Pydantic keeps ``note`` out of ``required`` because it has a default, so an
+    endpoint that enforces the strict contract refuses the schema before
+    inference.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    answer: str
+    note: str = ""
+
+
+def defaulted_request() -> StructuredGenerationRequest[DefaultedProposal]:
+    return StructuredGenerationRequest(
+        messages=[{"role": "user", "content": "Give an answer"}],
+        response_model=DefaultedProposal,
+        prompt_version="defaulted-v1",
     )
 
 
@@ -102,6 +126,7 @@ def test_close_only_closes_owned_sdk_clients(monkeypatch, injected):
     )
     provider = OpenAICompatibleProvider("openai", client if injected else None)
     provider.close()
+
     assert closed == ([] if injected else [True])
 
 
@@ -113,11 +138,11 @@ def test_catalogue_names_are_wire_schema_choices_and_checked_locally(provider_na
     request = replace(
         generation_request(), offered_tool_names=("code_execution", "code_structure")
     )
+
     result = provider.generate(request)
     assert type(result) is request.response_model
-    schema = client.chat.completions.arguments["response_format"]["json_schema"][
-        "schema"
-    ]
+    instruction = client.chat.completions.arguments["messages"][-1]["content"]
+    schema = json.loads(instruction.split("\n", 1)[1])
     assert (
         schema["$defs"]["CatalogueCheck_code_execution"]["properties"]["name"]["const"]
         == "code_execution"
@@ -134,7 +159,7 @@ def test_catalogue_names_are_wire_schema_choices_and_checked_locally(provider_na
 
 
 @pytest.mark.parametrize("provider_name", ["openai", "soclaas"])
-def test_generates_template_using_strict_structured_outputs(
+def test_generates_template_with_json_mode_by_default(
     monkeypatch, provider_name
 ) -> None:
     monkeypatch.delenv(f"{provider_name.upper()}_RESPONSE_FORMAT", raising=False)
@@ -151,13 +176,12 @@ def test_generates_template_using_strict_structured_outputs(
     assert client.chat.completions.arguments.get("max_tokens") == (
         32768 if provider_name == "soclaas" else None
     )
-    response_format = client.chat.completions.arguments["response_format"]
-    assert response_format["type"] == "json_schema"
-    assert response_format["json_schema"]["name"] == (
-        "template_proposal_and_check_plan"
-    )
-    assert response_format["json_schema"]["strict"] is True
-    schema = response_format["json_schema"]["schema"]
+    arguments = client.chat.completions.arguments
+    response_format = arguments["response_format"]
+    assert response_format == {"type": "json_object"}
+    instruction = arguments["messages"][-1]["content"]
+    assert "line breaks and indentation" in instruction
+    schema = json.loads(instruction.split("\n", 1)[1])
     assert set(schema["required"]) == set(schema["properties"])
     assert set(schema["properties"]) == {"proposal", "checks"}
     proposal_schema = schema["$defs"]["CodeProposalResponse"]
@@ -172,14 +196,14 @@ def test_generates_template_using_strict_structured_outputs(
     arguments_schema = schema["$defs"]["RecommendedCheckArguments"]
     assert arguments_schema["additionalProperties"] is False
     assert arguments_schema["properties"] == {}
-    messages = client.chat.completions.arguments["messages"]
+    messages = arguments["messages"]
     assert "property-based" in messages[0]["content"]
     assert "Create an arithmetic question" in messages[1]["content"]
     assert "at least 3 distractor candidates" in messages[1]["content"]
     assert "Use native JSON values" in messages[1]["content"]
     settings = provider.generation_settings()
-    assert settings["response_format"] == response_format["type"]
-    assert settings["strict"] == response_format["json_schema"]["strict"]
+    assert settings["response_format"] == "json_object"
+    assert settings["strict"] is False
     assert settings["sampling"] == "provider_defaults"
     assert "temperature" not in client.chat.completions.arguments
     assert "tools" not in client.chat.completions.arguments
@@ -233,8 +257,57 @@ def test_provider_accepts_a_schema_from_another_domain() -> None:
     result = provider.generate(request)
 
     assert result == ExampleProposal(equation="x + 1")
-    schema = client.chat.completions.arguments["response_format"]["json_schema"]
-    assert "equation" in schema["schema"]["properties"]
+    # A bare BaseModel omits additionalProperties, so strict mode cannot express
+    # it and the request travels as JSON mode with the schema in the prompt.
+    arguments = client.chat.completions.arguments
+    assert arguments["response_format"] == {"type": "json_object"}
+    assert '"equation"' in arguments["messages"][-1]["content"]
+
+
+def test_openai_uses_json_mode_for_a_non_strict_schema(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_RESPONSE_FORMAT", raising=False)
+    client = client_with_content("{}")
+    provider = OpenAIProvider(client=client, model="gpt-5-mini")
+
+    with pytest.raises(GenerationSchemaError):
+        provider.generate(defaulted_request())
+
+    arguments = client.chat.completions.arguments
+    assert arguments["response_format"] == {"type": "json_object"}
+    instruction = arguments["messages"][-1]["content"]
+    assert "line breaks and indentation" in instruction
+    assert '"note"' in instruction
+    settings = provider.generation_settings()
+    assert settings["response_format"] == "json_object"
+    assert settings["strict"] is False
+
+
+def test_soclaas_defaults_to_json_mode_for_the_same_request(monkeypatch) -> None:
+    monkeypatch.delenv("SOCLAAS_RESPONSE_FORMAT", raising=False)
+    client = client_with_content("{}")
+    provider = SocLaasProvider(client=client, model="x-test-2")
+
+    with pytest.raises(GenerationSchemaError):
+        provider.generate(defaulted_request())
+
+    response_format = client.chat.completions.arguments["response_format"]
+    assert response_format == {"type": "json_object"}
+    assert provider.generation_settings()["strict"] is False
+
+
+def test_response_format_can_opt_into_strict_json_schema(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_RESPONSE_FORMAT", "json_schema")
+    client = client_with(code_response())
+    provider = OpenAIProvider(client=client, model="gpt-5-mini")
+
+    provider.generate(generation_request())
+
+    response_format = client.chat.completions.arguments["response_format"]
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["strict"] is True
+    assert provider.generation_settings()["strict"] is True
 
 
 def test_reports_empty_template_response() -> None:
@@ -393,6 +466,7 @@ def test_generation_timeout_is_normalized():
     client = SimpleNamespace(
         chat=SimpleNamespace(completions=SimpleNamespace(create=create))
     )
+
     with pytest.raises(GenerationTimeoutError):
         OpenAICompatibleProvider("openai", client, model="test").generate(
             generation_request()
@@ -412,6 +486,7 @@ def test_reasoning_setting_applies_to_generation(
     client = client_with(code_response())
     provider = OpenAICompatibleProvider(provider_name, client, model="test")
     provider.generate(generation_request())
+
     arguments = client.chat.completions.arguments
     settings = provider.generation_settings()
     reasoning = (configured_reasoning or "").strip() or "default"
@@ -542,6 +617,7 @@ def test_truncated_generation_retains_usage_before_json_parsing(provider_name):
         )
     )
     provider = OpenAICompatibleProvider(provider_name, client, model="test")
+
     with pytest.raises(GenerationResponseError, match="generation exhausted"):
         provider.generate(generation_request())
     assert provider.last_usage.input_tokens == 20
@@ -559,17 +635,18 @@ def test_provider_validates_feature_arguments_in_initial_structured_plan(provide
     request = replace(
         generation_request(), offered_tool_names=("code_require_features",)
     )
+
     result = provider.generate(request)
     assert result.checks[0].arguments == {"required": ["loop"]}
-    schema = client.chat.completions.arguments["response_format"]["json_schema"][
-        "schema"
-    ]
+    instruction = client.chat.completions.arguments["messages"][-1]["content"]
+    schema = json.loads(instruction.split("\n", 1)[1])
     assert (
         schema["$defs"]["RequiredFeaturesArguments"]["properties"]["required"][
             "minItems"
         ]
         == 1
     )
+
     response["checks"][0]["arguments"] = {"required": []}
     client.chat.completions.content = json.dumps(response)
     with pytest.raises(GenerationSchemaError):

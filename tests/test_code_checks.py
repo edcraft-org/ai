@@ -48,6 +48,7 @@ def test_execution_failure_retains_domain_error(failure_code):
 
     with pytest.raises(ValidationFailure) as caught:
         ExecutionCheck(Executor()).run(CodeValidationContext(candidate()))
+
     assert caught.value.code == failure_code
     assert caught.value.field == "code"
     assert caught.value.inputs
@@ -63,6 +64,7 @@ def test_execution_check_uses_injected_tool_and_timeout():
 
     context = CodeValidationContext(candidate())
     ExecutionCheck(Executor(), timeout_seconds=0.25).run(context)
+
     assert calls == [
         (
             context.template.code,
@@ -83,7 +85,9 @@ def test_canonical_answer_extraction_never_promotes_or_repairs_proposals():
     context.executions = [
         ExecutionResult(ok=True, answer=6) for _ in context.inputs_cases
     ]
+
     check_canonical_answers(context)
+
     assert context.canonical_answers == [6] * len(context.inputs_cases)
     assert context.template == original
     assert context.candidates == []
@@ -93,6 +97,7 @@ def test_finalization_preserves_checked_content_and_deterministic_questions():
     domain = CodeDomain()
     original = candidate()
     actual = validate_code(original, execution_tool=ArithmeticExecutor())
+
     assert actual.template == original
     assert actual.validation.checking_mode == "property_based"
     reloaded = ValidatedCodeTemplate.model_validate_json(actual.model_dump_json())
@@ -110,13 +115,19 @@ def test_finalization_rejects_unsuccessful_evidence(status):
         status=status,
         findings=[{"code": "TEST_FAILURE", "message": "failed"}],
     )
+
     with pytest.raises(ValueError, match="All selected checks must pass"):
-        CodeDomain().finalize_checked_template(candidate(), [evidence])
+        CodeDomain().finalize_checked_template(
+            candidate(), [evidence], advisory_checks=frozenset()
+        )
 
 
 def test_finalization_requires_canonical_answers():
     evidence = ToolEvidence(
         tool="code_verify_template_structure", version="1", status="passed"
     )
-    with pytest.raises(ValueError, match="Missing execution-derived canonical answers"):
-        CodeDomain().finalize_checked_template(candidate(), [evidence])
+
+    with pytest.raises(ValueError, match="Missing passing required checks"):
+        CodeDomain().finalize_checked_template(
+            candidate(), [evidence], advisory_checks=frozenset()
+        )

@@ -34,6 +34,7 @@ class OpenAICompatibleProvider:
     ) -> None:
         if provider not in {"openai", "soclaas"}:
             raise ValueError(f"Unsupported provider: {provider}")
+
         self.provider = provider
         self._owns_client = client is None
         if client is None:
@@ -50,6 +51,7 @@ class OpenAICompatibleProvider:
         self.client = client
         self.model = model or _model(provider)
         self.last_usage = TokenUsage()
+
         soclaas = provider == "soclaas"
         self._response_format = _response_format(provider)
         self._generation_max_tokens = _positive_int_setting(
@@ -63,19 +65,23 @@ class OpenAICompatibleProvider:
         timeout = getattr(self.client, "timeout", None)
         if timeout is not None and not isinstance(timeout, int | float):
             timeout = str(timeout)
+
+        response_format = self._response_format
         settings = {
             "sampling": "provider_defaults",
-            "response_format": self._response_format,
-            "strict": self._response_format == "json_schema",
+            "response_format": response_format,
+            "strict": response_format == "json_schema",
             "timeout_seconds": timeout,
             "max_retries": getattr(self.client, "max_retries", None),
         }
+
         if self._generation_max_tokens is not None:
             settings["generation_max_tokens"] = self._generation_max_tokens
         if self._reasoning_effort is not None:
             settings["reasoning_effort"] = self._reasoning_effort
         elif self.provider == "soclaas":
             settings["reasoning_effort"] = "provider_default"
+
         return settings
 
     def close(self) -> None:
@@ -87,6 +93,7 @@ class OpenAICompatibleProvider:
     ) -> ProposalT:
         """Generate any domain proposal described by the supplied request."""
         self.last_usage = TokenUsage()
+
         try:
             wire_model = (
                 constrained_check_plan(
@@ -97,10 +104,12 @@ class OpenAICompatibleProvider:
                 if request.offered_tool_names
                 else request.response_model
             )
+
             schema = wire_model.model_json_schema()
             messages = generation_messages(request)
-            response_format = {"type": self._response_format}
-            if self._response_format == "json_schema":
+            wire_format = self._response_format
+            response_format = {"type": wire_format}
+            if wire_format == "json_schema":
                 response_format["json_schema"] = {
                     "name": request.schema_name,
                     "strict": True,
@@ -120,6 +129,7 @@ class OpenAICompatibleProvider:
                         ),
                     }
                 )
+
             kwargs = {
                 "model": self.model,
                 "messages": copy.deepcopy(messages),
@@ -130,17 +140,20 @@ class OpenAICompatibleProvider:
                 kwargs["reasoning_effort"] = effort
             if self._generation_max_tokens is not None:
                 kwargs["max_tokens"] = self._generation_max_tokens
+
             response = self.client.chat.completions.create(**kwargs)
             self._record_usage(response)
             if getattr(response.choices[0], "finish_reason", None) == "length":
                 raise GenerationResponseError(
                     f"{self.provider} generation exhausted its output budget"
                 )
+
             content = response.choices[0].message.content
             if not content:
                 raise GenerationResponseError(
                     f"{self.provider} returned an empty response"
                 )
+
             result = wire_model.model_validate_json(content)
             if wire_model is not request.response_model:
                 result = request.response_model.model_validate_json(
@@ -180,6 +193,7 @@ class OpenAICompatibleProvider:
         )
 
         self.last_usage = TokenUsage()
+
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -265,6 +279,7 @@ def _positive_int_setting(
     raw = os.getenv(variable)
     if raw is None:
         return default
+
     try:
         value = int(raw.strip())
     except ValueError as exc:
@@ -276,7 +291,7 @@ def _positive_int_setting(
 
 def _response_format(provider: str) -> str:
     variable = _variable(provider, "RESPONSE_FORMAT")
-    value = os.getenv(variable, "json_schema").strip()
+    value = os.getenv(variable, "json_object").strip()
     if value not in {"json_object", "json_schema"}:
         raise OpenAIGenerationError(f"{variable} must be json_object or json_schema")
     return value

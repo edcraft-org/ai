@@ -42,6 +42,7 @@ def test_checking_operations_produce_reusable_values_without_mutating_candidate(
 
 def test_checking_rejects_wrong_answers_without_repair(candidate):
     candidate.answer_expression = "a + b + c"
+
     with pytest.raises(ValidationFailure) as caught:
         validate_answers_and_distractors(
             candidate, 3, execution_tool=LocalPythonTool(), timeout_seconds=2
@@ -55,6 +56,7 @@ def test_checking_rejects_wrong_answers_without_repair(candidate):
 def test_answer_expression_syntax_feedback_names_the_field_and_source(candidate):
     source = "{a} + {b}"
     candidate.answer_expression = source
+
     with pytest.raises(ValidationFailure) as caught:
         validate_answers_and_distractors(
             candidate, 3, execution_tool=LocalPythonTool(), timeout_seconds=2
@@ -68,6 +70,7 @@ def test_answer_expression_syntax_feedback_names_the_field_and_source(candidate)
 def test_invalid_distractor_expression_is_rejected_as_a_candidate(candidate):
     source = "{a} + {b}"
     candidate.distractors[0].expression = source
+
     with pytest.raises(ValidationFailure) as caught:
         validate_answers_and_distractors(
             candidate, 3, execution_tool=LocalPythonTool(), timeout_seconds=2

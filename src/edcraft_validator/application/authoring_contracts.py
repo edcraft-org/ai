@@ -91,9 +91,11 @@ class CheckExecution(BaseModel):
             )
             if self.evidence.status == "passed" and not self.evidence.findings:
                 evidence.pop("details")
+
         feedback = {"tool": self.tool, "error": self.error, "evidence": evidence}
         if self.skip_reason:
             feedback["skip_reason"] = self.skip_reason
+
         return feedback
 
     @property

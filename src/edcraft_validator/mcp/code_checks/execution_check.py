@@ -23,12 +23,14 @@ class ExecutionCheck:
             context.inputs_cases,
             timeout_seconds=self.timeout_seconds,
         )
+
         if len(executions) != len(context.inputs_cases):
             raise TemplateValidationError(
                 "executor returned the wrong number of batch results",
                 code="EXECUTOR_PROTOCOL_ERROR",
                 field="code",
             )
+
         for inputs, execution in zip(context.inputs_cases, executions, strict=True):
             if execution.ok:
                 continue
@@ -39,4 +41,5 @@ class ExecutionCheck:
                 field="code",
                 inputs=inputs,
             )
+
         context.executions = executions

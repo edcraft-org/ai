@@ -34,12 +34,14 @@ def check_proposed_answers(context: CodeValidationContext) -> None:
     """Evaluate the proposed answer on the supplied examples."""
     if context.proposed_answer is None:
         return
+
     answers = []
     for inputs in context.inputs_cases:
         answer = context.proposed_answer.evaluate(inputs)
         require_json_value(answer, "answer")
         validate_supported_answer(inputs, answer)
         answers.append(answer)
+
     _require_consistent_answer_shapes(context.inputs_cases, answers)
     context.proposed_answers = answers
 
@@ -52,6 +54,7 @@ def check_canonical_answers(context: CodeValidationContext) -> None:
         require_json_value(actual_answer, "executor answer")
         validate_supported_answer(inputs, actual_answer)
         answers.append(copy.deepcopy(actual_answer))
+
     _require_consistent_answer_shapes(context.inputs_cases, answers)
     context.canonical_answers = answers
 
@@ -61,6 +64,7 @@ def _require_consistent_answer_shapes(
 ) -> None:
     if not answers:
         return
+
     expected = answers[0]
     for inputs, answer in zip(inputs_cases[1:], answers[1:], strict=True):
         if not same_value_shape(answer, expected):
@@ -91,6 +95,7 @@ def _parse_expressions(
             candidates.append(DistractorCandidate(index=index, rejection=str(exc)))
         else:
             candidates.append(DistractorCandidate(index=index, expression=expression))
+
     return answer, candidates
 
 

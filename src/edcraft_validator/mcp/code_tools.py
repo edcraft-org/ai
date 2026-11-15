@@ -31,11 +31,7 @@ from edcraft_validator.mcp.code_checks.distractor_checks import (
     check_proposed_distractor_selection,
 )
 from edcraft_validator.mcp.code_checks.execution_check import ExecutionCheck
-from edcraft_validator.mcp.code_checks.property_checks import (
-    PropertyCheckRun,
-    PropertyCheckSettings,
-    boundary_examples,
-)
+from edcraft_validator.mcp.code_checks.property_checks import boundary_examples
 from edcraft_validator.mcp.code_checks.structure_checks import (
     check_rendering,
     check_structure,
@@ -46,6 +42,10 @@ from edcraft_validator.mcp.code_checks.validation_context import (
 )
 from edcraft_validator.tools.python_execution import PythonExecutionTool
 from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFinding
+from edcraft_validator.validation.property_checks import (
+    PropertyCheckRun,
+    PropertyCheckSettings,
+)
 from edcraft_validator.validation.validation_contracts import ValidationFailure
 from edcraft_validator.value_comparison import equivalent, same_value_shape
 
@@ -225,6 +225,7 @@ async def _run_tool(
     the worker's process limits; deployment supplies the outer job resource limit.
     """
     started = time.perf_counter()
+
     try:
         async with asyncio.timeout(timeout_seconds):
             details = await asyncio.to_thread(operation)
@@ -258,6 +259,7 @@ async def _run_tool(
             code="TOOL_EXECUTION_ERROR",
             message=f"Validation tool failed with {type(exc).__name__}",
         )
+
     return ToolEvidence(
         tool=name,
         version=CODE_TOOL_VERSION,
@@ -290,8 +292,10 @@ def _elapsed_ms(started: float) -> float:
 def verify_template_structure(candidate: CodeTemplateCandidate) -> dict[str, Any]:
     context = CodeValidationContext(candidate)
     context.inputs_cases = boundary_examples(candidate)
+
     check_structure(context)
     check_rendering(context)
+
     return {
         **context.case_details,
         "features": sorted(
@@ -313,6 +317,7 @@ def validate_answers_and_distractors(
     # Revalidate mutable Python caller objects as well as MCP boundary inputs.
     candidate = CodeTemplateCandidate.model_validate(candidate.model_dump())
     context = CodeValidationContext(candidate, num_distractors=required_distractors)
+
     try:
         check_structure(context)
     except TemplateValidationError as exc:
@@ -325,7 +330,9 @@ def validate_answers_and_distractors(
             field=exc.field,
             context={"blocking_code": exc.code},
         ) from exc
+
     check_expressions(context)
+
     config = property_settings or PropertyCheckSettings()
     run = PropertyCheckRun(config)
     baseline_inputs = boundary_examples(candidate)[0]
@@ -376,15 +383,21 @@ def validate_answers_and_distractors(
         check_distractors(single)
         return (inputs, actual, all_candidates)
 
-    rows = run.check(candidate, check_case)
+    rows = run.check(
+        {p.name: p.values for p in candidate.parameters},
+        boundary_examples(candidate),
+        check_case,
+    )
     context.inputs_cases = [row[0] for row in rows]
     context.canonical_answers = [row[1] for row in rows]
     context.eligible_indices = list(range(len(rows)))
+
     for c in context.candidates:
         samples = [row[2][c.index] for row in rows]
         c.rejection = next((s.rejection for s in samples if s.rejection), None)
         if c.rejection is None:
             c.values = [s.values[0] for s in samples]
+
     # One recipe subset must work across all samples, not a new subset per case.
     try:
         check_proposed_distractor_selection(context)
@@ -392,6 +405,7 @@ def validate_answers_and_distractors(
     except ValidationFailure as exc:
         exc.context.update(run.details())
         raise
+
     return {
         **run.details(),
         "selected_distractors": [
@@ -404,6 +418,7 @@ def require_features(
     candidate: CodeTemplateCandidate, required: list[CodeFeature]
 ) -> dict[str, Any]:
     context = CodeValidationContext(candidate)
+
     try:
         check_structure(context)
     except TemplateValidationError as exc:
@@ -414,10 +429,12 @@ def require_features(
             field=exc.field,
             context={"blocking_code": exc.code},
         ) from exc
+
     observed = extract_code_features(
         context.template.code, context.template.entry_function
     )
     missing = sorted(set(required) - observed)
+
     if missing:
         raise ValidationFailure(
             "Required code features are missing: " + ", ".join(missing),
@@ -429,6 +446,7 @@ def require_features(
                 "missing": missing,
             },
         )
+
     return {
         "required": sorted(set(required)),
         "observed": sorted(observed),

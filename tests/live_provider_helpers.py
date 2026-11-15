@@ -11,6 +11,7 @@ from edcraft_validator.domains.code.code_schemas import (
 def check_live_workflow(provider, *, reviewed_inputs=False):
     app = TemplateApplication()
     domain = CodeDomain()
+
     result = app.author_template(
         CodeTemplateRequest(
             prompt=(

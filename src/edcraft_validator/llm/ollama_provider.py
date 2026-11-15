@@ -44,6 +44,7 @@ class OllamaProvider:
         self, request: StructuredGenerationRequest[ProposalT]
     ) -> ProposalT:
         self.last_usage = TokenUsage()
+
         try:
             wire_model = (
                 constrained_check_plan(
@@ -65,6 +66,7 @@ class OllamaProvider:
             )
             if not content:
                 raise GenerationResponseError("Ollama returned an empty response")
+
             result = wire_model.model_validate_json(content)
             return request.response_model.model_validate_json(result.model_dump_json())
         except GenerationError:
@@ -97,6 +99,7 @@ class OllamaProvider:
                 ),
             }
         ]
+
         return self._chat(
             messages, schema=schema, think=True if reasoning_effort else None
         )
@@ -110,17 +113,20 @@ class OllamaProvider:
             "stream": False,
             "options": self._options,
         }
+
         effective_think = self._think if think is None else think
         if effective_think is not None:
             payload["think"] = effective_think
         if schema is not None:
             payload["format"] = schema
+
         request = Request(
             native_url,
             data=json.dumps(payload).encode(),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
+
         try:
             timeout = self._timeout
             with urlopen(request, timeout=timeout) as response:
@@ -128,6 +134,7 @@ class OllamaProvider:
             self.last_usage = TokenUsage.from_counts(
                 body.get("prompt_eval_count"), body.get("eval_count")
             )
+
             if body.get("done_reason") == "length":
                 raise GenerationResponseError(
                     "Ollama exhausted OLLAMA_NUM_PREDICT before completing its "
@@ -171,6 +178,7 @@ def _thinking() -> bool | str | None:
         "medium": "medium",
         "high": "high",
     }
+
     if raw not in values:
         raise GenerationError(
             "OLLAMA_THINK must be false, true, default, low, medium, or high"

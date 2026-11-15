@@ -2,12 +2,40 @@
 
 import json
 
+from edcraft_validator.domains.code.candidate_builder import template_sha256
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import (
     CodeTemplateProposal,
     CodeTemplateRequest,
 )
+from edcraft_validator.domains.code.difficulty import (
+    CODE_DIFFICULTY_RUBRIC_ID,
+    CodeDifficultyQuestion,
+)
+from edcraft_validator.domains.code.template_difficulty import blinded_template_payload
 from edcraft_validator.llm.usage import TokenUsage
+
+
+class ForbiddenExecutor:
+    """Fail any attempt to execute code while assessing a template."""
+
+    def execute_batch(self, *args, **kwargs):
+        raise AssertionError("Difficulty assessment must never execute code")
+
+
+def question() -> CodeDifficultyQuestion:
+    return CodeDifficultyQuestion(
+        code="def f(x):\n    y = x + 2\n    return y * 2\n",
+        entry_function="f",
+        inputs={"x": 3},
+        question="What does f(3) return?",
+        answer_target="return_value",
+        options=[
+            {"id": option_id, "value": value}
+            for option_id, value in zip("ABCD", [6, 7, 10, 12], strict=True)
+        ],
+        correct_option="C",
+    )
 
 
 def proposal(*, code: str = "def add(a, b):\n    return a + b") -> CodeTemplateProposal:
@@ -80,6 +108,18 @@ def candidate():
     )
 
 
+def difficulty_arguments(template=None):
+    """The application-owned arguments the shared difficulty tool receives."""
+    selected = template or candidate()
+    return {
+        "rubric_id": CODE_DIFFICULTY_RUBRIC_ID,
+        "question_payload": blinded_template_payload(selected),
+        "distractor_count": len(selected.distractors),
+        "requested_difficulty": selected.difficulty,
+        "subject_sha256": template_sha256(selected),
+    }
+
+
 class TemplateJudge:
     provider, model = "scripted", "template-judge"
 
@@ -96,6 +136,7 @@ class TemplateJudge:
         self.last_usage = TokenUsage(input_tokens=100, output_tokens=50)
         if self.failure:
             raise self.failure
+
         value = assessment()
         options = value.pop("option_evidence")
         value.update(
@@ -118,6 +159,7 @@ class TemplateJudge:
                 )
             },
         )
+
         return request.response_model.model_validate(value)
 
 
@@ -144,6 +186,7 @@ class TemplateAuthor:
         value = proposal()
         if self.wrong_first and self.calls == 1:
             value = value.model_copy(update={"answer_expression": "a - b"})
+
         if not issubclass(request.response_model, PlannedGenerationResponse):
             return request.response_model.model_validate(value.model_dump())
         return PlannedGenerationResponse(

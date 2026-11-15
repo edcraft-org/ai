@@ -97,6 +97,7 @@ def _public_error(report: AuthoringResult) -> PublicAuthoringError | None:
                 "Review the evidence."
             ),
         }
+
         if report.failure.code == "TEMPLATE_CHECKS_FAILED":
             return PublicAuthoringError(
                 code=report.failure.code,
@@ -117,6 +118,7 @@ def _public_error(report: AuthoringResult) -> PublicAuthoringError | None:
                 "Authoring stopped. Review the check results and try again.",
             ),
         )
+
     if not report.attempts:
         return None
     for execution in report.attempts[-1].executions:
@@ -141,6 +143,7 @@ def summarize_authoring(report: AuthoringResult) -> AuthoringSummary:
     relevance: RelevanceOutcome | None = None
     warnings = [warning.code for warning in report.warnings]
     executions = report.attempts[-1].executions if report.attempts else []
+
     for execution in executions:
         evidence = execution.evidence
         advisory = execution.advisory or bool(
@@ -182,6 +185,7 @@ def summarize_authoring(report: AuthoringResult) -> AuthoringSummary:
                 )
             except ValidationError:
                 warnings.append("ASSESSMENT_REPORT_INVALID")
+
     return AuthoringSummary(
         status=report.status,
         domain=report.domain,
@@ -209,6 +213,7 @@ def run_authoring_job_sync(
     """Run in a worker; preserve the complete report for evidence storage."""
     command = command.model_copy(deep=True)
     provider = None
+
     try:
         domain = domain_factory(command.domain)
         request = domain.request_model.model_validate(command.request)
@@ -233,12 +238,14 @@ def run_authoring_job_sync(
         )
     finally:
         close_provider(provider)
+
     summary = summarize_authoring(report)
     response = AuthoringJobResponse(
         job_id=command.job_id,
         state="failed" if report.status == "error" else "completed",
         result=summary,
     )
+
     return AuthoringJobRecord(response=response, report=report)
 
 

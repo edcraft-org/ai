@@ -5,9 +5,10 @@ import json
 import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
+from judge_helpers import question
 from pydantic import ValidationError
 
-from edcraft_validator.application.code_relevance import (
+from edcraft_validator.domains.code.code_relevance import (
     CodeRelevanceReview,
     review_code_question_relevance,
 )
@@ -22,7 +23,6 @@ from edcraft_validator.domains.code.relevance import (
 )
 from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.tools.python_execution import ExecutionResult
-from tests.test_difficulty_tool import Provider, question
 
 
 class Decisions:
@@ -76,6 +76,7 @@ async def test_full_content_and_independent_evidence_are_explicit():
     decisions = Decisions()
     report = await assess(decisions=decisions)
     data = json.loads(report.model_dump_json())
+
     assert report.status == "assessed" and report.advisory
     assert report.technical.status == "passed"
     assert report.relevance.decision.score == 1
@@ -84,6 +85,7 @@ async def test_full_content_and_independent_evidence_are_explicit():
     assert "difficulty_quality" not in data and "quality_concerns" not in data
     assert "judge" not in data and "relevance" in data
     assert "quality_score" not in data
+
     rendered = json.loads(decisions.texts[1])
     assert rendered == question().model_dump(mode="json", exclude={"correct_option"})
     assert decisions.texts == [
@@ -115,6 +117,7 @@ async def test_positive_decision_does_not_override_failures():
         answer_target="loop_iterations",
         num_distractors=2,
     )
+
     report = await assess(item=item, request=request)
     assert report.status == "assessed"
     assert report.technical.status == "failed"
@@ -147,6 +150,7 @@ def test_keyword_and_unreachable_helper_cannot_satisfy_syntax_requirement():
             prompt="Use nested loops.", required_features=["nested_loop"]
         ),
     )
+
     assert result.status == "missing"
     assert "nested_loop" not in result.observed_features
 
@@ -169,11 +173,14 @@ def test_correctness_and_supported_subset_are_hard_requirements(change, finding)
 def test_distinct_options_and_missing_trace_evidence_never_pass():
     item = question()
     item.options[1].value = item.options[0].value
+
     result = check_concrete_correctness(item, Executor(), 1)
     assert result.status == "failed" and "DUPLICATE_OPTION:B" in result.findings
+
     item.answer_target = "loop_iterations"
     result = check_concrete_correctness(item, Executor(), 1)
     assert result.status == "error" and result.findings == ["ANSWER_TARGET_UNAVAILABLE"]
+
     result = check_concrete_correctness(
         question(),
         Executor(ExecutionResult(ok=False, error_code="EXECUTION_TIMEOUT")),
@@ -188,50 +195,13 @@ def test_distinct_options_and_missing_trace_evidence_never_pass():
 )
 def test_counts_use_trace_summary_instead_of_return_value(target):
     item = question().model_copy(update={"answer_target": target})
+
     result = check_concrete_correctness(
         item,
         Executor(ExecutionResult(ok=True, answer=999, trace_summary={target: 10})),
         1,
     )
     assert result.status == "passed" and result.canonical_answer == 10
-
-
-@pytest.mark.parametrize("difficulty_error", [False, True])
-async def test_mcp_difficulty_success_or_failure_cannot_affect_relevance(
-    difficulty_error,
-):
-    provider = Provider(
-        RuntimeError("PRIVATE REMOTE ERROR") if difficulty_error else None
-    )
-    executor = Executor()
-    server = create_validation_server(
-        difficulty_provider_factory=lambda: provider,
-        decision_provider_factory=Decisions,
-        code_execution_tool=executor,
-    )
-    async with Client(server) as client:
-        difficulty = await client.call_tool(
-            "assess_code_difficulty", {"question": question().model_dump(mode="json")}
-        )
-        relevance = await client.call_tool(
-            "assess_relevance",
-            {
-                "request": relevance_input(
-                    question(), CodeQuestionRequest(prompt="Arithmetic")
-                ).model_dump(mode="json"),
-            },
-        )
-    assert len(provider.requests) == 1
-    assert difficulty.structured_content["status"] == (
-        "error" if difficulty_error else "assessed"
-    )
-    if not difficulty_error:
-        assert difficulty.structured_content["judge"]["assessment"]["quality_concerns"]
-    data = relevance.structured_content
-    assert data["status"] == "assessed" and executor.calls == 0
-    assert data["decision"]["relevant"] is True
-    assert "difficulty_quality" not in data and "judge" not in data
-    assert "PRIVATE REMOTE ERROR" not in json.dumps(data)
 
 
 async def test_configuration_errors_are_explicit_and_do_not_leak_secrets():
@@ -264,6 +234,7 @@ async def test_invalid_deadlines_fail_before_provider_calls(timeout):
     with pytest.raises(ValueError, match="finite and positive"):
         await assess(decisions=decisions, relevance_timeout_seconds=timeout)
     assert decisions.texts is None
+
     with pytest.raises(ValueError, match="finite and positive"):
         create_validation_server(relevance_timeout_seconds=timeout)
 
@@ -278,6 +249,7 @@ async def test_mcp_tool_has_full_evidence_and_is_not_an_authoring_check():
         decision_provider_factory=lambda: decisions,
         code_execution_tool=executor,
     )
+
     async with Client(server) as client:
         tool = next(
             t for t in await client.list_tools() if t.name == "assess_relevance"
@@ -287,6 +259,7 @@ async def test_mcp_tool_has_full_evidence_and_is_not_an_authoring_check():
         ]
         assert set(tool.input_schema["properties"]) == {"request"}
         assert "difficulty_quality" not in tool.output_schema["properties"]
+
         payload = relevance_input(
             question(), CodeQuestionRequest(prompt="Arithmetic")
         ).model_dump(mode="json")
@@ -297,6 +270,7 @@ async def test_mcp_tool_has_full_evidence_and_is_not_an_authoring_check():
         assert executor.calls == 0
         assert "difficulty_quality" not in result.structured_content
         assert "judge" not in result.structured_content
+
         decisions.texts = None
         executions = executor.calls
         with pytest.raises(ToolError):
@@ -308,6 +282,7 @@ async def test_mcp_tool_has_full_evidence_and_is_not_an_authoring_check():
                 },
             )
         assert decisions.texts is None and executor.calls == executions
+
         with pytest.raises(ToolError):
             await client.call_tool(
                 "assess_relevance",
@@ -315,6 +290,7 @@ async def test_mcp_tool_has_full_evidence_and_is_not_an_authoring_check():
                     "request": {**payload, "author_request": " "},
                 },
             )
+
         with pytest.raises(ToolError, match="Unknown tool"):
             await client.call_tool("assess_code_quality", {})
         assert decisions.texts is None and executor.calls == 0

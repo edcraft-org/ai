@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pytest
 
-from edcraft_validator.application import code_difficulty
 from scripts import evaluate_code_relevance as evaluation
 from tests.test_code_relevance import Decisions
 
@@ -20,6 +19,7 @@ def test_plan_keeps_held_out_content_fixed_and_reference_labels_hidden():
     cases = evaluation.evaluation_cases(data, controls)
     held_out = [c for c in cases if c["group"] == "held_out"]
     assert len(held_out) == 12 and len(cases) == 19
+
     originals = {q["question_id"]: q for q in data["questions"]}
     for case in held_out:
         original = originals[case["case_id"]]
@@ -28,6 +28,7 @@ def test_plan_keeps_held_out_content_fixed_and_reference_labels_hidden():
         assert not {"difficulty", "dimensions", "solution", "difficulty_reason"} & set(
             case["question"]
         )
+
     assert {c["case_id"] for c in cases if c["group"] == "control"} == {
         f"quality-control-{name}"
         for name in (
@@ -40,6 +41,7 @@ def test_plan_keeps_held_out_content_fixed_and_reference_labels_hidden():
             "duplicate-distractor",
         )
     }
+
     duplicate = controls | {"cases": controls["cases"] * 2}
     with pytest.raises(ValueError, match="unique"):
         evaluation.evaluation_cases(data, duplicate)
@@ -57,10 +59,6 @@ async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreem
                 raise RuntimeError("PRIVATE REMOTE ERROR")
             return super().score(request_text, question_text)
 
-    def forbidden(*args, **kwargs):
-        pytest.fail("Relevance evaluation must not start another judge call")
-
-    monkeypatch.setattr(code_difficulty, "run_judge", forbidden)
     monkeypatch.setattr(evaluation, "ConfiguredDecisionProvider", PartialDecisions)
     before = evaluation.DATASET.read_bytes()
     output = tmp_path / "review.jsonl"
@@ -70,9 +68,11 @@ async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreem
     assert result["new_judge_calls"] == 0
     assert result["protocol_failure_count"] == 0
     assert result["mandatory_check_failure_count"] == 0
+
     records = [json.loads(line) for line in output.read_text().splitlines()]
     assert len(records) == 19
     assert "PRIVATE REMOTE ERROR" not in output.read_text()
+
     manifest = json.loads(output.with_suffix(".manifest.json").read_text())
     assert len(manifest["cases"]) == 19 and manifest["source_revision"]
     assert manifest["cases"] == evaluation.evaluation_cases(
@@ -81,6 +81,7 @@ async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreem
     assert "judge" not in manifest and manifest["new_judge_calls"] == 0
     assert manifest["protocol"] == "code-relevance-evaluation-v6-configured-decision"
     assert "difficulty_report_sha256" not in manifest
+
     assert result == json.loads(output.with_suffix(".summary.json").read_text())
     assert evaluation.DATASET.read_bytes() == before
     assert result["groups"]["held_out"]["technical"] == {"passed": 12}
@@ -88,12 +89,14 @@ async def test_evaluator_freezes_settings_flushes_failures_and_retains_disagreem
     assert not result["groups"]["control"]["control_disagreements"]
     assert all("difficulty_quality" not in r["report"] for r in records)
     assert all("judge" not in r["report"] for r in records)
+
     wrong = next(r for r in records if r["case_id"] == "quality-control-wrong-answer")
     wrong["report"]["technical"]["status"] = "passed"
     assert (
         evaluation.summary(records, 19)["deterministic_control_disagreement_count"] == 1
     )
     assert evaluation.summary(records, 19)["mandatory_check_failure_count"] == 1
+
     with pytest.raises(FileExistsError):
         await evaluation.evaluate(output)
 
@@ -116,6 +119,7 @@ def test_removed_difficulty_report_cli_option_fails_before_evaluation(
             str(tmp_path / "old-difficulty.jsonl"),
         ],
     )
+
     with pytest.raises(SystemExit) as exc:
         evaluation.main()
     assert exc.value.code == 2
@@ -158,12 +162,14 @@ def test_concurrent_run_cannot_replace_the_winning_manifest(monkeypatch, tmp_pat
 
     monkeypatch.setattr(evaluation, "ConfiguredDecisionProvider", RacingDecisions)
     monkeypatch.setattr(Path, "open", observed_open)
+
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(invoke, "first-run")
         second = pool.submit(invoke, "second-run")
         with pytest.raises(FileExistsError):
             second.result(timeout=20)
         assert first.result(timeout=20)["recorded"] == 19
+
     manifest = json.loads(output.with_suffix(".manifest.json").read_text())
     records = [json.loads(line) for line in output.read_text().splitlines()]
     assert manifest["decision"]["model"] == "first-run"
@@ -182,6 +188,7 @@ async def test_output_collision_preserves_existing_files_and_rolls_back_reservat
     output = tmp_path / "review.jsonl"
     existing = output.with_suffix(occupied_suffix)
     existing.write_bytes(b"prior evaluation evidence\n")
+
     monkeypatch.setattr(evaluation, "ConfiguredDecisionProvider", Decisions)
     with pytest.raises(FileExistsError):
         await evaluation.evaluate(output)

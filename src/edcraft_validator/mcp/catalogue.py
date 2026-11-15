@@ -1,4 +1,8 @@
-"""Discover domain-tagged tools from one MCP catalogue listing."""
+"""Discover domain-tagged tools from one MCP catalogue listing.
+
+The authoring application resolves the tools offered to the selected domain and
+decodes their check metadata into definitions used when executing the plan.
+"""
 
 import copy
 from typing import Any, Protocol
@@ -15,25 +19,38 @@ class ToolCatalogue(Protocol):
 
 
 def resolve_domain_tools(
-    domain_name: str, catalogue: ToolCatalogue
+    domain_name: str,
+    catalogue: ToolCatalogue,
+    *,
+    capabilities: tuple[str, ...] | frozenset[str] = (),
 ) -> tuple[dict[str, Any], ...]:
-    """Return an ordered snapshot of tools tagged for the selected domain."""
-    tag = f"domain:{domain_name}"
+    """Return an ordered snapshot of tools offered to the selected domain.
+
+    A tool is offered when it is tagged ``domain:<name>`` or when it is tagged
+    ``capability:<name>`` for one of the domain's declared capabilities. Shared
+    checks stay registered once while each domain selects them explicitly.
+    """
+    accepted = {f"domain:{domain_name}"}
+    accepted.update(f"capability:{capability}" for capability in capabilities)
     listed = catalogue.list_tools()
     matched = [
         tool
         for tool in listed
-        if tag in tool.get("_meta", {}).get("fastmcp", {}).get("tags", [])
+        if accepted & set(tool.get("_meta", {}).get("fastmcp", {}).get("tags", []))
     ]
+
     if not matched:
         raise ToolCatalogueError(f"no MCP tools tagged for domain: {domain_name}")
+
     names = [tool["name"] for tool in matched]
     duplicate = sorted({name for name in names if names.count(name) > 1})
     if duplicate:
         raise ToolCatalogueError("duplicate MCP tools: " + ", ".join(duplicate))
+
     resolved = tuple(
         copy.deepcopy(tool) for tool in sorted(matched, key=lambda t: t["name"])
     )
+
     for tool in resolved:
         if not tool.get("description") or not isinstance(tool.get("inputSchema"), dict):
             raise ToolCatalogueError(
@@ -43,6 +60,7 @@ def resolve_domain_tools(
             raise ToolCatalogueError(
                 f"MCP tool {tool['name']!r} has an invalid output schema"
             )
+
     return resolved
 
 
@@ -63,4 +81,5 @@ def check_definitions(definitions) -> dict[str, CheckDefinition]:
             after_validation="stage:after-validation" in metadata.get("tags", []),
             advisory="policy:advisory" in metadata.get("tags", []),
         )
+
     return checks

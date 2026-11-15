@@ -1,22 +1,32 @@
 import asyncio
 import threading
+from functools import partial
 from pathlib import Path
 from textwrap import indent
 
 import pytest
-from fastmcp import Client
+from fastmcp import Client, FastMCP
 from fastmcp.exceptions import ToolError
 
+from edcraft_validator.domains import domain_registry
+from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.code_types import MAX_DISTRACTORS, MIN_DISTRACTORS
+from edcraft_validator.domains.domain_registry import available_domains, create_domain
+from edcraft_validator.llm.judge_configuration import (
+    configured_judge_provider,
+    load_judge_settings,
+)
+from edcraft_validator.llm.judging import DEFAULT_JUDGE_TIMEOUT_SECONDS
 from edcraft_validator.mcp import code_tools
-from edcraft_validator.mcp.code_checks.property_checks import (
+from edcraft_validator.mcp.code_tools import CODE_TOOL_VERSION
+from edcraft_validator.mcp.server import create_validation_server
+from edcraft_validator.mcp.tool_dependencies import ToolDependencies
+from edcraft_validator.tools.python_execution import ExecutionResult
+from edcraft_validator.validation.property_checks import (
     PropertyCheckRun,
     PropertyCheckSettings,
 )
-from edcraft_validator.mcp.code_tools import CODE_TOOL_VERSION
-from edcraft_validator.mcp.server import create_validation_server
-from edcraft_validator.tools.python_execution import ExecutionResult
 
 
 def candidate() -> CodeTemplateCandidate:
@@ -53,13 +63,15 @@ async def test_catalogue_exposes_authoritative_names_descriptions_and_schemas():
         "code_verify_template_structure",
         "code_validate_answers_and_distractors",
         "code_require_features",
-        "assess_code_difficulty",
-        "code_assess_template_difficulty",
-        "check_code_question_correctness",
-        "check_code_question_requirements",
+        "math_verify_item_spec",
+        "math_validate_options",
+        "math_verify_answer_form",
+        "math_verify_text_fidelity",
         "assess_relevance",
-        "code_assess_template_relevance",
+        "assess_template_relevance",
+        "assess_template_difficulty",
     ]
+
     for tool in tools[:3]:
         assert tool.description
         assert tool.model_dump(by_alias=True)["_meta"]["fastmcp"]["tags"] == [
@@ -73,17 +85,21 @@ async def test_catalogue_exposes_authoritative_names_descriptions_and_schemas():
         ]
         assert "assurance" not in tool.output_schema["properties"]
         assert tool.output_schema["properties"]["version"]["minLength"] == 1
-    advisory = tools[3]
-    assert advisory.model_dump(by_alias=True)["_meta"]["fastmcp"]["tags"] == [
-        "quality:code"
-    ]
+
+    advisory = next(tool for tool in tools if tool.name == "assess_template_difficulty")
+    assert {
+        "capability:difficulty",
+        "policy:advisory",
+        "stage:after-validation",
+    } <= set(advisory.model_dump(by_alias=True)["_meta"]["fastmcp"]["tags"])
     assert advisory.annotations.open_world_hint is True
     assert advisory.annotations.idempotent_hint is False
     assert advisory.output_schema["properties"]["status"]["enum"] == [
-        "assessed",
-        "unable_to_assess",
+        "passed",
+        "failed",
         "error",
     ]
+
     executable = next(
         tool for tool in tools if tool.name == "code_validate_answers_and_distractors"
     )
@@ -438,3 +454,49 @@ async def test_invalid_arguments_and_unknown_tools_are_protocol_errors():
             )
         with pytest.raises(ToolError, match="Unknown tool"):
             await client.call_tool("code_tool_that_is_not_available", {})
+
+
+@pytest.fixture
+def tool_dependencies() -> ToolDependencies:
+    settings = load_judge_settings()
+    return ToolDependencies(
+        execution_tool=ArithmeticExecutor(),
+        code_execution_timeout_seconds=2.0,
+        property_settings=None,
+        difficulty_provider_factory=partial(configured_judge_provider, settings),
+        difficulty_judge_timeout_seconds=DEFAULT_JUDGE_TIMEOUT_SECONDS,
+        judge_settings=settings,
+        fidelity_provider_factory=partial(configured_judge_provider, settings),
+        fidelity_timeout_seconds=60.0,
+    )
+
+
+@pytest.mark.parametrize("domain_name", available_domains())
+async def test_every_registered_domain_registers_at_least_one_tool(
+    domain_name, tool_dependencies
+) -> None:
+    server = FastMCP(name=f"{domain_name} tools")
+
+    create_domain(domain_name).register_tools(server, tool_dependencies)
+
+    assert await server.list_tools()
+
+
+async def test_registered_domain_tools_appear_in_the_validation_server() -> None:
+    class StubDomain(CodeDomain):
+        name = "stub"
+        capabilities = frozenset()
+
+        def register_tools(self, server: FastMCP, dependencies) -> None:
+            @server.tool(name="stub_check", description="Stub domain check.")
+            def stub_check() -> str:
+                return "passed"
+
+    domain_registry.register_domain("stub", StubDomain)
+    try:
+        async with Client(create_validation_server()) as client:
+            tools = await client.list_tools()
+    finally:
+        domain_registry.unregister_domain("stub")
+
+    assert "stub_check" in [tool.name for tool in tools]

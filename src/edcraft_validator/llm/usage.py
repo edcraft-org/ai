@@ -44,6 +44,7 @@ class ModelUsageSummary(BaseModel):
 def summarize_usage(calls: list[ModelCallRecord]) -> ModelUsageSummary:
     inputs = sum(call.input_tokens or 0 for call in calls)
     outputs = sum(call.output_tokens or 0 for call in calls)
+
     return ModelUsageSummary(
         model_call_count=len(calls),
         unavailable_call_count=sum(
@@ -84,6 +85,7 @@ class MeasuredProvider:
     def _call(self, operation, method, *args):
         started = time.perf_counter()
         error = None
+
         try:
             return method(*args)
         except Exception as exc:
@@ -93,6 +95,7 @@ class MeasuredProvider:
             usage = getattr(self.delegate, "last_usage", None)
             if not isinstance(usage, TokenUsage):
                 usage = TokenUsage()
+
             self.calls.append(
                 ModelCallRecord(
                     operation=operation,
@@ -113,6 +116,7 @@ def close_provider(provider):
     close = getattr(provider, "close", None)
     if not callable(close):
         return
+
     try:
         close()
     except Exception:

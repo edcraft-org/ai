@@ -14,7 +14,7 @@ def test_planning_schema_pairs_each_tool_with_its_own_closed_arguments():
         (
             "code_require_features",
             "code_verify_template_structure",
-            "code_assess_template_relevance",
+            "assess_template_relevance",
         ),
         CODE_CHECK_ARGUMENT_MODELS,
     )
@@ -24,13 +24,14 @@ def test_planning_schema_pairs_each_tool_with_its_own_closed_arguments():
             {"name": "code_verify_template_structure", "arguments": {}},
         ]
     }
+
     assert model.model_validate(valid).checks[0].arguments.required == ["loop"]
     for check in [
         {"name": "code_require_features", "arguments": {}},
         {"name": "code_verify_template_structure", "arguments": {"required": ["loop"]}},
         {"name": "invented", "arguments": {}},
         {
-            "name": "code_assess_template_relevance",
+            "name": "assess_template_relevance",
             "arguments": {"author_request": "changed"},
         },
         {
@@ -40,6 +41,7 @@ def test_planning_schema_pairs_each_tool_with_its_own_closed_arguments():
     ]:
         with pytest.raises(ValidationError):
             model.model_validate({"checks": [check]})
+
     schema = model.model_json_schema()
     assert "candidate" not in str(schema)
     for node in [schema, *schema["$defs"].values()]:
@@ -55,6 +57,7 @@ def test_check_plan_rejects_empty_duplicate_and_unexpected_fields():
     from edcraft_validator.llm.llm_contracts import CheckPlanResponse
 
     check = {"name": "check", "arguments": {}}
+
     for payload in [
         {"checks": []},
         {"checks": [check, check]},

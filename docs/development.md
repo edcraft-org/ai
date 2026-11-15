@@ -14,14 +14,24 @@ metadata. CLI/server/worker boundaries construct dependencies and settings.
 | Application-facing tool interface | `application/ports.py` |
 | Authoring orchestration and attempt records | `application/template_workflow.py`, `authoring_contracts.py` |
 | Code authoring evaluation and report aggregation | `application/code_evaluation.py` |
+| Deterministic math correctness and sampled qualification | `domains/math/math_correctness.py`, `domains/math/math_correctness_sampling.py`, `domains/math/engine/` |
 | Typed public summaries and worker adapter | `application/authoring_api.py` |
 | Code proposal, binding and finalization | `domains/code/code_domain.py`, schemas and candidate builder |
-| Blinded difficulty prompts and rubric components | `domains/code/template_difficulty.py`, `difficulty_request.py` |
-| Difficulty routing, verdict policy and evidence | `application/template_difficulty.py` |
-| Shared relevance and code-template advisory adapter | `application/relevance.py`, `application/code_relevance.py`, `domains/code/relevance.py` |
+| Blinded difficulty payloads and rubric records | `domains/code/difficulty.py`, `domains/math/difficulty.py` |
+| Shared difficulty routing, verdict policy and evidence | `application/template_difficulty.py`, `application/difficulty_rubrics.py` |
+| Shared relevance and code-domain question review | `application/relevance.py`, `domains/code/code_relevance.py`, `domains/code/relevance.py` |
 | Model adapters and measured judge execution | `llm/` |
 | Check catalogue decoding and dispatch transport | `mcp/catalogue.py`, `mcp/client.py` |
 | Default dependency construction | `bootstrap.py`, `mcp/server.py`, `cli.py` |
+
+Every domain's checked summary extends `PropertyCheckSummary`, so evidence reads
+the same across domains.
+
+The deterministic mathematics engine is available to Python callers and through
+the math domain's authoring tools. The separate quality tools were removed, so
+they no longer appear in the catalogue. The engine does not rewire authored
+recipes, relevance or difficulty routing. Historical math validation records
+keep their existing versions and behaviour.
 
 Package initializers must not construct servers. Shared evidence can be imported
 without FastMCP or application services. `mcp/evidence.py` retains compatibility
@@ -29,7 +39,12 @@ exports. Application construction and deterministic expansion do not connect too
 authoring obtains a connection when needed. Inject a tool client for tests.
 
 The authoring coordinator prepares a frozen plan, executes attempts, and either
-revises or finalizes. Check definitions are decoded once before dispatch; the
+revises or finalizes. The model's selection is frozen, and the application adds
+any check that `DomainModule.required_checks(candidate)` names and the model
+left out, so required checks need no model-supplied arguments. The application
+also enforces the requested distractor count through
+`DomainModule.distractor_count`, and passes the advisory check names from the
+catalogue into `finalize_checked_template`. Domains keep no advisory name lists. Check definitions are decoded once before dispatch; the
 attempt loop reads only decoded metadata and does not interpret FastMCP tags.
 `policy:advisory` marks assessments whose failed or error evidence is saved for
 review but never requests revision or blocks technical success. Keep schema
@@ -82,13 +97,26 @@ Relevance providers supply `score(request_text, question_text)` and may expose
 `last_usage`, `generation_settings`, `served_model` and `close`. Accounting applies
 to every injected provider; missing token metadata remains unknown.
 
-`code_assess_template_relevance` adapts the shared text classifier to `ToolEvidence`;
-it does not introduce a separate workflow. Template identity belongs to `candidate_builder.py`, independently of either judge.
-The domain binds the original author prompt and the exact reusable candidate, including the checked distractor subset.
-The classifier receives the actual code, question pattern, answer target and finite
-parameters in readable text, excluding topic labels, requested difficulty,
-answer and distractor recipes, and misconception explanations. Difficulty and relevance do not consume each other's
-results. Their saved evidence binds the exact reusable template hash; relevance
+The code domain uses the shared relevance capability, so `assess_template_relevance`
+judges its templates with the same classifier, threshold and policy as every other
+domain. The code domain's relevance evidence is recorded under
+`assess_template_relevance`. The former `code_assess_template_relevance` tool and its
+`domain:code` tags were removed so both domains use the shared capability.
+
+The shared difficulty capability works the same way. Each domain registers one
+rubric record in `register_tools` and binds its rubric identifier, blinded payload, distractor
+count, requested level and checked subject hash to `assess_template_difficulty`.
+The tool is registered once, uses the same decision-then-reasoning cascade and
+returns the same advisory evidence shape. The maths rubric (`math` identifier,
+document version `math-ir-v0.1`) is provisional and uncalibrated. The former domain-specific difficulty tools and the
+maths heuristic were removed. Template
+identity belongs to `candidate_builder.py`, independently of either
+judge. The domain binds the original author prompt, the checked template hash and the
+rendered learner text, including the checked distractor subset. The classifier receives
+the actual code, question pattern, answer target and finite parameters in readable
+text, excluding topic labels, requested difficulty, answer and distractor recipes, and
+misconception explanations. Difficulty and relevance do not consume each other's
+results. Their saved evidence binds the exact reusable template hash, and relevance
 also retains the request/text input hash, score, threshold and model usage.
 Stale or malformed advisory evidence is marked unavailable instead of being accepted
 as a judgment or blocking technical saving. Only selected checks run; the authoring
@@ -132,21 +160,64 @@ adapter and generated frontend client for these contracts; no endpoint is wired 
 
 ## Extending and verifying
 
-Add domain behavior through `DomainModule` and register its factory. Add model
+Add domain behavior through `DomainModule` and register its factory. Implement
+`DomainModule.register_tools` to register the domain's checking tools with
+`domain:<name>` tags. No edit to `mcp/server.py` is needed, and a test checks that
+every registered domain registers at least one tool. Add model
 communication through the provider registry. Avoid new branches for domain names
 inside shared orchestration. Keep deterministic reuse independent of model/tool
-services. Python features are explicitly bounded; preserve worker isolation,
+services. Python features are explicitly limited. Preserve worker isolation,
 resource budgets, schema checks and rejection of unsupported code.
 
-Register each domain's checking tools explicitly in `mcp/server.py` with
-`domain:<name>` tags. A registry coverage test checks that every selectable domain
-has discoverable tools. Evaluation orchestration belongs to the application layer.
+Shared checks that several domains can reuse are registered once with a
+`capability:<name>` tag. A domain opts in by declaring `capabilities` on its
+`DomainModule`, and `resolve_domain_tools` offers both its domain tools and those
+capability tools. A registry coverage test checks that every selectable domain has
+discoverable tools. Evaluation orchestration belongs to the application layer.
+
+### Adding a domain: checklist
+
+A new domain follows the same standards as the code and maths domains. It is done
+when `tests/test_domain_conformance.py` passes for it.
+
+1. **Contract.** Implement every `DomainModule` method in `domains/domain_contract.py`
+   and register the factory with `register_domain`. Reuse `TemplateRequest`,
+   `build_template_id` and `seeded_index` from `domains/domain_support.py`.
+2. **Tools.** Implement `register_tools` to add the domain's blocking checks, tagged
+   `domain:<name>`, and to register its difficulty rubric. Do not register either
+   at import. Name the checks `<domain>_verify_<thing>` for blocking checks and
+   `<domain>_assess_<thing>` for advisory ones.
+3. **Required checks.** Return from `required_checks(candidate)` the checks that must
+   pass for this candidate. The application adds any the model leaves out.
+4. **Property checking.** Check the template over its parameter domain with
+   `validation/property_checks.py` (Hypothesis, seeded, boundary examples first,
+   limited by examples, calls and time). Copy its `details()` into the evidence.
+5. **Summary.** Make the checked summary extend `PropertyCheckSummary` from
+   `validation/property_summary.py`, adding only domain-specific fields.
+6. **Shared advisory checks.** Declare the `difficulty` and `template-relevance`
+   capabilities. Register a `DifficultyRubric` and return bindings for
+   `assess_template_difficulty` and `assess_template_relevance` from `tool_bindings`.
+7. **Distractors.** Return the number of distractors from `distractor_count`. The
+   application rejects a candidate with fewer than the requested number.
+8. **Generation.** Expand an approved template from a seed by evaluating its recipes
+   and rejecting unusable option combinations. Do not call a model or MCP tool.
+9. **Verify.** Run `tests/test_domain_conformance.py`, which is parametrised over
+   every registered domain, then the full suite.
 
 OpenAI-compatible endpoints reuse the `openai` adapter with `OPENAI_BASE_URL` and
 `OPENAI_MODEL`. `OPENAI_RESPONSE_FORMAT`, `OPENAI_GENERATION_MAX_TOKENS`
 and `OPENAI_REASONING_EFFORT` configure existing transport
 options without adding another provider. These settings do not guarantee support
 for decision logprobs or reasoning controls on that endpoint.
+
+OpenAI validates a `json_schema` response format before inference and rejects any
+schema that strict structured outputs cannot express: every object needs
+`additionalProperties: false` and must list every property in `required`, and
+free-form mappings are not expressible at all. Both adapters therefore default to
+JSON mode (`json_object`): the response schema travels in the prompt and the
+application validates the result locally. Set `OPENAI_RESPONSE_FORMAT` or
+`SOCLAAS_RESPONSE_FORMAT` to `json_schema` only for endpoints that support strict
+structured outputs; an incompatible schema is then the endpoint's error.
 
 SocLaas defaults to a 32,768-token output budget. The shipped configuration also
 sets low generation reasoning; `SOCLAAS_GENERATION_MAX_TOKENS`,

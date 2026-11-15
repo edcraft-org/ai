@@ -2,7 +2,12 @@
 
 import threading
 
-from judge_helpers import AdditionExecutor, TemplateAuthor, TemplateJudge, candidate
+from judge_helpers import (
+    AdditionExecutor,
+    TemplateAuthor,
+    TemplateJudge,
+    difficulty_arguments,
+)
 
 from edcraft_validator.application.authoring_api import (
     AuthoringJobCommand,
@@ -17,7 +22,9 @@ from edcraft_validator.application.authoring_contracts import (
     DifficultyOutcome,
     GenerationAttempt,
 )
-from edcraft_validator.application.template_difficulty import assess_template_difficulty
+from edcraft_validator.application.template_difficulty import (
+    assess_template_difficulty,
+)
 from edcraft_validator.application.template_workflow import TemplateApplication
 from edcraft_validator.mcp.client import FastMcpToolClient
 from edcraft_validator.mcp.server import create_validation_server
@@ -45,12 +52,14 @@ async def test_async_handler_runs_real_mcp_workflow_on_worker_thread():
     progress = []
     event_loop_thread = threading.get_ident()
     job = command()
+
     record = await run_authoring_job(
         job,
         application_factory=application,
         provider_factory=lambda selection: author,
         on_progress=progress.append,
     )
+
     assert record.response.job_id == job.job_id
     assert (
         record.response.state == "completed"
@@ -102,6 +111,7 @@ async def test_completed_job_can_need_review_without_being_approved():
         application_factory=application,
         provider_factory=lambda selection: Wrong(),
     )
+
     assert record.response.state == "completed"
     assert record.response.result.status == "needs_review"
     assert record.response.result.approval == "unreviewed"
@@ -113,6 +123,7 @@ async def test_factory_failure_returns_safe_typed_error():
         raise ValueError("PRIVATE_CREDENTIAL_VALUE")
 
     record = await run_authoring_job(command(), provider_factory=broken)
+
     assert (
         record.response.state == "failed" and record.response.result.status == "error"
     )
@@ -133,7 +144,9 @@ def test_internal_diagnostic_exception_is_not_a_public_error_message():
         failure=AuthoringError(stage="generation", code="transport"),
         reason="PRIVATE_KEY",
     )
+
     summary = summarize_authoring(report)
+
     assert (
         summary.error.code == "GENERATION_ERROR"
         and "PRIVATE" not in summary.model_dump_json()
@@ -175,7 +188,9 @@ def test_malformed_optional_assessment_does_not_break_public_response():
         status="passed",
         details={"difficulty_outcome": {"PRIVATE_VALUE": "invalid"}},
     )
+
     summary = summarize_authoring(report_with_evidence(evidence))
+
     assert summary.difficulty is None and summary.error is None
     assert summary.warnings == ["ASSESSMENT_REPORT_INVALID"]
     assert "PRIVATE" not in summary.model_dump_json()
@@ -189,9 +204,11 @@ def test_advisory_error_is_not_a_public_job_error():
         findings=[{"code": "ADVISORY_JUDGE_UNAVAILABLE", "message": "Unavailable"}],
         details={"advisory": True, "relevance_outcome": {"unavailable": True}},
     )
+
     report = report_with_evidence(evidence, status="checked")
     report.attempts[0].executions[0].advisory = True
     summary = summarize_authoring(report)
+
     assert summary.status == "checked" and summary.error is None
     assert summary.checks[0].advisory is True
     assert summary.relevance.unavailable is True
@@ -225,7 +242,9 @@ def test_advisory_transport_failure_without_evidence_gets_unavailable_warning():
             )
         ],
     )
+
     summary = summarize_authoring(report)
+
     assert summary.error is None
     assert summary.checks[0].status == "error" and summary.checks[0].advisory
     assert summary.warnings == ["ADVISORY_ASSESSMENT_UNAVAILABLE"]
@@ -249,7 +268,9 @@ def test_relevance_summary_exposes_actual_advisory_verdict():
             },
         },
     )
+
     summary = summarize_authoring(report_with_evidence(evidence, status="checked"))
+
     assert summary.error is None
     assert summary.relevance.score == 0.1
     assert summary.relevance.threshold == 0.94
@@ -272,9 +293,11 @@ def test_unrelated_tool_outcome_is_not_a_difficulty_or_error():
 
 async def test_difficulty_evidence_summary_uses_the_producer_key():
     evidence = await assess_template_difficulty(
-        candidate(), provider_factory=TemplateJudge
+        **difficulty_arguments(), provider_factory=TemplateJudge
     )
+
     summary = summarize_authoring(report_with_evidence(evidence, status="checked"))
+
     assert isinstance(summary.difficulty, DifficultyOutcome)
     assert summary.difficulty.estimated_difficulty == "easy"
     assert summary.difficulty.requested_difficulty == "easy"

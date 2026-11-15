@@ -19,6 +19,7 @@ async def test_cutoff_is_inclusive_and_errors_are_not_negative_decisions(
     score, expected
 ):
     report = await assess(decisions=Decisions(score))
+
     assert report.status == "assessed"
     assert report.relevance.decision.relevant is expected
     assert report.relevance.decision.threshold == decision.DEFAULT_RELEVANCE_THRESHOLD
@@ -66,6 +67,7 @@ async def test_timeout_stays_an_error_after_worker_finishes():
         result = await decision.measure_relevance(
             "request", "question", provider_factory=Slow, timeout_seconds=0.1
         )
+
         assert started.is_set()
         assert result.error_code == "RELEVANCE_TIMEOUT" and result.relevant is None
         snapshot = result.model_dump_json()
@@ -85,6 +87,7 @@ def test_model_limit_rejects_without_truncation_or_forward_pass(monkeypatch):
     monkeypatch.setattr(
         decision, "_load_runtime", lambda path: (None, Tokenizer(), None)
     )
+
     with pytest.raises(decision.InputTooLongError):
         decision.QwenDecisionProvider().score("request", "question")
 
@@ -96,6 +99,7 @@ def test_provider_construction_is_lazy_and_uses_local_path(monkeypatch):
         pytest.fail("Constructing the server/provider must not load model weights")
 
     monkeypatch.setattr(decision, "_load_runtime", forbidden)
+
     provider = decision.QwenDecisionProvider()
     assert provider.path == "/local/qwen"
     assert provider.model == "Qwen/Qwen3-Reranker-0.6B"
