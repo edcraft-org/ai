@@ -19,7 +19,7 @@ metadata. CLI/server/worker boundaries construct dependencies and settings.
 | Code proposal, binding and finalization | `domains/code/code_domain.py`, schemas and candidate builder |
 | Blinded difficulty prompts and rubric components | `domains/code/template_difficulty.py`, `difficulty_request.py` |
 | Difficulty routing, verdict policy and evidence | `domains/code/difficulty_assessment.py` |
-| Shared relevance and code-template advisory adapter | `application/relevance.py`, `domains/code/code_relevance.py`, `domains/code/relevance.py` |
+| Shared relevance and code-domain question review | `application/relevance.py`, `domains/code/code_relevance.py`, `domains/code/relevance.py` |
 | Model adapters and measured judge execution | `llm/` |
 | Check catalogue decoding and dispatch transport | `mcp/catalogue.py`, `mcp/client.py` |
 | Default dependency construction | `bootstrap.py`, `mcp/server.py`, `cli.py` |
@@ -95,7 +95,10 @@ to every injected provider; missing token metadata remains unknown.
 
 The code domain uses the shared relevance capability, so `assess_template_relevance`
 judges its templates with the same classifier, threshold and policy as every other
-domain. Template identity belongs to `candidate_builder.py`, independently of either
+domain. The code domain's relevance evidence is recorded under
+`assess_template_relevance`. The former `code_assess_template_relevance` tool and its
+`domain:code` tags were removed so both domains use the shared capability. Template
+identity belongs to `candidate_builder.py`, independently of either
 judge. The domain binds the original author prompt, the checked template hash and the
 rendered learner text, including the checked distractor subset. The classifier receives
 the actual code, question pattern, answer target and finite parameters in readable
@@ -145,20 +148,20 @@ adapter and generated frontend client for these contracts; no endpoint is wired 
 
 ## Extending and verifying
 
-Add domain behavior through `DomainModule` and register its factory. Add model
+Add domain behavior through `DomainModule` and register its factory. Implement
+`DomainModule.register_tools` to register the domain's checking tools with
+`domain:<name>` tags. No edit to `mcp/server.py` is needed, and a test checks that
+every registered domain registers at least one tool. Add model
 communication through the provider registry. Avoid new branches for domain names
 inside shared orchestration. Keep deterministic reuse independent of model/tool
-services. Python features are explicitly bounded; preserve worker isolation,
+services. Python features are explicitly bounded, preserve worker isolation,
 resource budgets, schema checks and rejection of unsupported code.
 
-Register each domain's checking tools in `mcp/server.py` with `domain:<name>`
-tags. The server refuses to start if a registered domain has no tool
-registration in `mcp/server.py`. Shared checks that several domains can reuse are
-registered once with a `capability:<name>` tag; a domain opts in by declaring
-`capabilities` on its `DomainModule`, and `resolve_domain_tools` offers both its
-domain tools and those capability tools. A registry coverage test checks that
-every selectable domain has discoverable tools. Evaluation orchestration belongs
-to the application layer.
+Shared checks that several domains can reuse are registered once with a
+`capability:<name>` tag, a domain opts in by declaring `capabilities` on its
+`DomainModule`, and `resolve_domain_tools` offers both its domain tools and those
+capability tools. A registry coverage test checks that every selectable domain has
+discoverable tools. Evaluation orchestration belongs to the application layer.
 
 OpenAI-compatible endpoints reuse the `openai` adapter with `OPENAI_BASE_URL` and
 `OPENAI_MODEL`. `OPENAI_RESPONSE_FORMAT`, `OPENAI_GENERATION_MAX_TOKENS`

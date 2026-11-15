@@ -1,4 +1,4 @@
-"""Application facade for sampled deterministic correctness qualification."""
+"""Maths domain facade for sampled deterministic correctness qualification."""
 
 from __future__ import annotations
 

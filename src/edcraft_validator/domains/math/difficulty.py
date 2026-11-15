@@ -17,6 +17,7 @@ from edcraft_validator.validation.check_contracts import ToolEvidence, ToolFindi
 
 def assess_template_difficulty(candidate: MathTemplateCandidate) -> ToolEvidence:
     """Return a deterministic provisional difficulty estimate."""
+    candidate = MathTemplateCandidate.model_validate(candidate.model_dump())
     started = time.perf_counter()
     estimate = _estimate_difficulty(candidate)
     matches = estimate == candidate.difficulty

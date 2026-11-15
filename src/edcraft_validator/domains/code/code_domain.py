@@ -1,5 +1,6 @@
 """Code-domain implementation of the generic domain contract."""
 
+from fastmcp import FastMCP
 from pydantic import BaseModel
 
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
@@ -34,6 +35,10 @@ from edcraft_validator.llm.llm_contracts import (
     PlannedGenerationResponse,
     StructuredGenerationRequest,
 )
+from edcraft_validator.mcp.code_question_tools import register_code_question_tools
+from edcraft_validator.mcp.code_tools import register_code_validation_tools
+from edcraft_validator.mcp.difficulty_tools import register_difficulty_tools
+from edcraft_validator.mcp.tool_dependencies import ToolDependencies
 from edcraft_validator.validation.check_contracts import ToolEvidence
 from edcraft_validator.validation.check_names import (
     TEMPLATE_RELEVANCE_CAPABILITY,
@@ -53,6 +58,26 @@ class CodeDomain:
     question_model = CodeQuestionInstance
     template_language = "python"
     capabilities = frozenset({TEMPLATE_RELEVANCE_CAPABILITY})
+
+    def register_tools(self, server: FastMCP, dependencies: ToolDependencies) -> None:
+        """Register the code domain's authoritative and advisory tools."""
+        register_code_validation_tools(
+            server,
+            execution_tool=dependencies.execution_tool,
+            timeout_seconds=dependencies.code_execution_timeout_seconds,
+            property_settings=dependencies.property_settings,
+        )
+        register_difficulty_tools(
+            server,
+            provider_factory=dependencies.difficulty_provider_factory,
+            judge_timeout_seconds=dependencies.difficulty_judge_timeout_seconds,
+            settings=dependencies.judge_settings,
+        )
+        register_code_question_tools(
+            server,
+            execution_tool=dependencies.execution_tool,
+            execution_timeout_seconds=dependencies.code_execution_timeout_seconds,
+        )
 
     def review_view(
         self, artifact: ValidatedTemplateArtifact

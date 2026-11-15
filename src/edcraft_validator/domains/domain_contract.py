@@ -1,13 +1,19 @@
 """Contract implemented by every EdCraft question domain."""
 
-from typing import Any, Protocol
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import BaseModel
 
 from edcraft_validator.artifact_contracts import ValidatedTemplateArtifact
 from edcraft_validator.domains.domain_support import ReviewTemplateView
 from edcraft_validator.llm.llm_contracts import StructuredGenerationRequest
+from edcraft_validator.mcp.tool_dependencies import ToolDependencies
 from edcraft_validator.validation.check_contracts import ToolEvidence
+
+if TYPE_CHECKING:
+    from fastmcp import FastMCP
 
 
 class DomainModule(Protocol):
@@ -22,6 +28,13 @@ class DomainModule(Protocol):
     template_language: str | None
     # Shared checks this domain opts into, selected by ``capability:<name>``.
     capabilities: frozenset[str]
+
+    def register_tools(self, server: FastMCP, dependencies: ToolDependencies) -> None:
+        """Register the domain's MCP tools.
+
+        A test checks that every registered domain registers at least one tool.
+        """
+        ...
 
     def review_view(
         self, artifact: ValidatedTemplateArtifact

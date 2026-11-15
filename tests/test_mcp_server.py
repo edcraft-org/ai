@@ -1,16 +1,23 @@
 import asyncio
 import threading
+from functools import partial
 from pathlib import Path
 from textwrap import indent
 
 import pytest
-from fastmcp import Client
+from fastmcp import Client, FastMCP
 from fastmcp.exceptions import ToolError
 
 from edcraft_validator.domains import domain_registry
 from edcraft_validator.domains.code.code_domain import CodeDomain
 from edcraft_validator.domains.code.code_schemas import CodeTemplateCandidate
 from edcraft_validator.domains.code.code_types import MAX_DISTRACTORS, MIN_DISTRACTORS
+from edcraft_validator.domains.domain_registry import available_domains, create_domain
+from edcraft_validator.llm.judge_configuration import (
+    configured_judge_provider,
+    load_judge_settings,
+)
+from edcraft_validator.llm.judging import DEFAULT_JUDGE_TIMEOUT_SECONDS
 from edcraft_validator.mcp import code_tools
 from edcraft_validator.mcp.code_checks.property_checks import (
     PropertyCheckRun,
@@ -18,6 +25,7 @@ from edcraft_validator.mcp.code_checks.property_checks import (
 )
 from edcraft_validator.mcp.code_tools import CODE_TOOL_VERSION
 from edcraft_validator.mcp.server import create_validation_server
+from edcraft_validator.mcp.tool_dependencies import ToolDependencies
 from edcraft_validator.tools.python_execution import ExecutionResult
 
 
@@ -449,14 +457,47 @@ async def test_invalid_arguments_and_unknown_tools_are_protocol_errors():
             await client.call_tool("code_tool_that_is_not_available", {})
 
 
-def test_server_refuses_to_start_when_a_registered_domain_has_no_tools() -> None:
+@pytest.fixture
+def tool_dependencies() -> ToolDependencies:
+    settings = load_judge_settings()
+    return ToolDependencies(
+        execution_tool=ArithmeticExecutor(),
+        code_execution_timeout_seconds=2.0,
+        property_settings=None,
+        difficulty_provider_factory=partial(configured_judge_provider, settings),
+        difficulty_judge_timeout_seconds=DEFAULT_JUDGE_TIMEOUT_SECONDS,
+        judge_settings=settings,
+        fidelity_provider_factory=partial(configured_judge_provider, settings),
+        fidelity_timeout_seconds=60.0,
+    )
+
+
+@pytest.mark.parametrize("domain_name", available_domains())
+async def test_every_registered_domain_registers_at_least_one_tool(
+    domain_name, tool_dependencies
+) -> None:
+    server = FastMCP(name=f"{domain_name} tools")
+
+    create_domain(domain_name).register_tools(server, tool_dependencies)
+
+    assert await server.list_tools()
+
+
+async def test_registered_domain_tools_appear_in_the_validation_server() -> None:
     class StubDomain(CodeDomain):
         name = "stub"
         capabilities = frozenset()
 
+        def register_tools(self, server: FastMCP, dependencies) -> None:
+            @server.tool(name="stub_check", description="Stub domain check.")
+            def stub_check() -> str:
+                return "passed"
+
+    domain_registry.register_domain("stub", StubDomain)
     try:
-        domain_registry.register_domain("stub", StubDomain)
-        with pytest.raises(RuntimeError, match="stub"):
-            create_validation_server()
+        async with Client(create_validation_server()) as client:
+            tools = await client.list_tools()
     finally:
         domain_registry.unregister_domain("stub")
+
+    assert "stub_check" in [tool.name for tool in tools]
