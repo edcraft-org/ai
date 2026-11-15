@@ -13,6 +13,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from typing import Literal
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as JsonSchemaError
@@ -61,6 +62,14 @@ REVISION_POLICY = "full-candidate-v1"
 # application: it compares the candidate with the request and calls no tool.
 DISTRACTOR_COUNT_CHECK = "application_distractor_count"
 DISTRACTOR_COUNT_VERSION = "1.0.0"
+# Mirrors the phase literal declared on AuthoringProgress.
+ProgressPhase = Literal[
+    "generating",
+    "checking",
+    "assessing",
+    "correcting",
+    "finalizing",
+]
 
 
 def _has_technical_check_error(attempt) -> bool:
@@ -111,12 +120,12 @@ class _AuthoringJob:
 
     def notify(
         self,
-        phase,
+        phase: ProgressPhase,
         *,
         checks_total: int | None = None,
         checks_done: int | None = None,
         current_check: str | None = None,
-    ):
+    ) -> None:
         if self.observer is None:
             return
 
@@ -284,6 +293,14 @@ class TemplateApplication:
             attempt = self._build_attempt(number, candidate, names)
             job.result.attempts.append(attempt)
             job.stage = "checking"
+            job.notify(
+                "checking",
+                checks_total=sum(
+                    1 for name in names if not definitions[name].after_validation
+                ),
+                checks_done=0,
+                current_check=DISTRACTOR_COUNT_CHECK,
+            )
             self._check_distractor_count(attempt, job, candidate)
             self._run_checks(
                 attempt,
@@ -735,7 +752,7 @@ class TemplateApplication:
         domain,
         request,
         candidate,
-        job=None,
+        job: _AuthoringJob | None = None,
     ):
         # Accept existing research callers that pass raw catalogue definitions.
         definitions = check_definitions(definitions.values())
@@ -747,7 +764,7 @@ class TemplateApplication:
         done = {"checking": 0, "assessing": 0}
 
         for name in TemplateApplication._ordered_checks(plan, deferred):
-            phase = "assessing" if name in deferred else "checking"
+            phase: ProgressPhase = "assessing" if name in deferred else "checking"
             if job is not None:
                 job.notify(
                     phase,

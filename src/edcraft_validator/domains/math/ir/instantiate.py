@@ -80,7 +80,7 @@ def render_authored_expr(
     therefore stays visible instead of collapsing to ``26`` before the learner
     sees it.
     """
-    # Compilation bounds the tree and rejects unknown symbols or parameters.
+    # Compilation limits the tree and rejects unknown symbols or parameters.
     compile_expr(expr, symbols, params)
     return _render_authored(expr, symbols, params or {})
 
@@ -190,7 +190,7 @@ def render_authored_expr_latex(
     authored order and structure instead of collapsing ``12 + 14`` to ``26``.
     Only leaves go through SymPy.
     """
-    # Compilation bounds the tree and rejects unknown symbols or parameters.
+    # Compilation limits the tree and rejects unknown symbols or parameters.
     compile_expr(expr, symbols, params)
     return _render_authored_latex(expr, symbols, params or {})
 
@@ -442,8 +442,13 @@ def render_goal_display(
 def render_goal_display_latex(
     item: MathItemSpec,
     params: Mapping[str, Fraction] | None = None,
-) -> str:
-    """Typeset the mathematical object the learner is asked about."""
+) -> str | None:
+    """Typeset the mathematical object the learner is asked about.
+
+    Prose is never returned as LaTeX. A question whose prompt already carries
+    the mathematics has no separate object to typeset and returns ``None``, so
+    the frontend shows the plain equation instead.
+    """
     relations = render_relations_latex(item, params)
     if relations:
         return r",\ ".join(relations)
@@ -451,7 +456,7 @@ def render_goal_display_latex(
     if item.goal.kind == "evaluate":
         # An evaluate goal often encodes the arithmetic itself, so the authored
         # text is the problem and the solved value is not a display.
-        return render_item_text_latex(item, params)
+        return None
     if item.goal.expr is not None:
         rendered = sympy.latex(compile_expr(item.goal.expr, symbols, params))
         if item.goal.kind in {"derivative", "integral"} and item.goal.symbol:
@@ -459,7 +464,7 @@ def render_goal_display_latex(
         return rendered
     if item.goal.matrix:
         return render_matrix_latex(item.goal.matrix, symbols, params)
-    return render_item_text_latex(item, params)
+    return None
 
 
 def _text_values_latex(

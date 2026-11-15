@@ -78,11 +78,13 @@ async def test_async_handler_runs_real_mcp_workflow_on_worker_thread():
         for p in progress
     ] == [
         ("generating", 1, None, None, None),
+        ("checking", 1, 2, 0, "application_distractor_count"),
         ("checking", 1, 2, 0, "code_validate_answers_and_distractors"),
         ("checking", 1, 2, 1, None),
         ("checking", 1, 2, 1, "code_verify_template_structure"),
         ("checking", 1, 2, 2, None),
         ("correcting", 2, None, None, None),
+        ("checking", 2, 2, 0, "application_distractor_count"),
         ("checking", 2, 2, 0, "code_validate_answers_and_distractors"),
         ("checking", 2, 2, 1, None),
         ("checking", 2, 2, 1, "code_verify_template_structure"),

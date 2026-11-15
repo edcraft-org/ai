@@ -18,11 +18,16 @@ from math_helpers import (
     quadratic_ir_template,
 )
 
-from edcraft_validator.domains.math.ir.instantiate import fraction_text
+from edcraft_validator.domains.math.ir.instantiate import (
+    fraction_text,
+    render_goal_display_latex,
+)
 from edcraft_validator.domains.math.ir.schema import (
     AnswerRecipe,
     Distractor,
+    Goal,
     MathTemplateSpec,
+    TextSpec,
 )
 from edcraft_validator.domains.math.math_schemas import (
     MathValidationSummary,
@@ -327,6 +332,26 @@ def test_generated_instance_carries_latex_fields() -> None:
     )
     assert "Solve" in text
     assert any(segment.kind == "math" for segment in instance.question_segments)
+
+
+def test_goal_display_latex_is_none_when_only_prose_is_available() -> None:
+    instance = generate_math_question(validated(arithmetic_ir_template()), 0)
+
+    assert instance.equation_latex is None
+    segments = instance.question_segments
+    assert segments is not None
+    assert [segment.kind for segment in segments] == ["text", "math", "text"]
+    assert "".join(segment.value for segment in segments) == instance.question
+
+    body = arithmetic_ir_template().body
+    unrelated = body.model_copy(
+        update={
+            "goal": Goal(kind="solve", symbol="a"),
+            "text": TextSpec(mode="prose", template="Find the value of a."),
+        }
+    )
+
+    assert render_goal_display_latex(unrelated) is None
 
 
 def test_linear_solution_fraction_is_typeset_as_a_fraction() -> None:
