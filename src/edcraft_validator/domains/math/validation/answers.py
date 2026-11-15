@@ -32,6 +32,7 @@ def compile_answer_recipe(
 ) -> object:
     """Compile a structured answer recipe into the SymPy object graders compare."""
     symbols = build_symbols(symbol_specs)
+
     try:
         return _compile_recipe(recipe, symbols, params or {})
     except MathCompileError as exc:
@@ -92,6 +93,7 @@ def _compile_recipe_interval(
         if interval.upper is None
         else compile_expr(interval.upper, symbols, params)
     )
+
     return sympy.Interval(
         lower,
         upper,

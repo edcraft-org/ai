@@ -63,6 +63,7 @@ class MathProblem(Record):
             )
             if (value := getattr(self, name)) is not None and value != []
         }
+
         if self.operation == "solve":
             permitted = {"solve_for"}
         elif self.operation in {"determinant", "inverse", "lu"}:
@@ -73,6 +74,7 @@ class MathProblem(Record):
             permitted = {"expression", "lower", "upper"}
         else:
             permitted = {"expression"}
+
         if supplied - permitted:
             raise ValueError("problem contains fields for another operation")
         if self.operation != "differentiate" and self.order != 1:
@@ -86,6 +88,7 @@ class MathProblem(Record):
             n not in names for n in self.solve_for
         ):
             raise ValueError("solve_for must contain unique declared symbols")
+
         if self.operation == "solve":
             if not self.relations or not self.solve_for:
                 raise ValueError("solve requires relations and solve_for")
@@ -96,6 +99,7 @@ class MathProblem(Record):
                 raise ValueError("matrix multiplication requires right_matrix")
         elif self.expression is None:
             raise ValueError("expression operation requires expression")
+
         if (
             self.operation in {"differentiate", "antiderivative", "definite-integral"}
             and self.variable is None
@@ -105,6 +109,7 @@ class MathProblem(Record):
             self.lower is None or self.upper is None
         ):
             raise ValueError("definite integral requires lower and upper endpoints")
+
         return self
 
 
@@ -140,6 +145,7 @@ class MathAnswer(Record):
             )
             if (value := getattr(self, name)) is not None and value != []
         }
+
         permitted = {
             "expression": {"expression"},
             "set": {"items", "intervals"},
@@ -147,6 +153,7 @@ class MathAnswer(Record):
             "matrix": {"matrix"},
             "lu": {"permutation", "lower", "upper"},
         }[self.kind]
+
         if fields - permitted:
             raise ValueError("answer contains fields for another answer kind")
         if self.kind == "expression" and self.expression is None:
@@ -157,6 +164,7 @@ class MathAnswer(Record):
             v is None for v in (self.permutation, self.lower, self.upper)
         ):
             raise ValueError("LU answer requires permutation, lower and upper matrices")
+
         return self
 
 

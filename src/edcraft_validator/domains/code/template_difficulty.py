@@ -55,11 +55,13 @@ def template_assessment_model(distractor_count: int):
             f"expected {MIN_DISTRACTORS} to {MAX_DISTRACTOR_CANDIDATES} "
             "distractor recipes"
         )
+
     evidence = create_model(
         f"EvidenceFor{distractor_count}DistractorRecipes",
         __base__=Record,
         **{f"D{i}": (OptionExplanation, ...) for i in range(1, distractor_count + 1)},
     )
+
     return create_model(
         f"TemplateDifficultyFor{distractor_count}Distractors",
         __base__=TemplateDifficultyAssessment,

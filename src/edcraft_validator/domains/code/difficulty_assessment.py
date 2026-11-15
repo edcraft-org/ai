@@ -43,9 +43,11 @@ async def assess_template_difficulty(
 ) -> ToolEvidence:
     if not math.isfinite(judge_timeout_seconds) or judge_timeout_seconds <= 0:
         raise ValueError("judge timeout must be finite and positive")
+
     started = time.perf_counter()
     selected = settings if settings is not None else JudgeSettings()
     candidate = CodeTemplateCandidate.model_validate(candidate.model_dump())
+
     try:
         rubric = load_code_difficulty_rubric()
         decision_request = build_template_decision_request(candidate, rubric)
@@ -114,6 +116,7 @@ async def assess_template_difficulty(
             timeout_seconds=remaining,
         )
     )
+
     outcome = _policy_outcome(judge, candidate.difficulty, "reasoning", selected)
     return _build_evidence(candidate, rubric, selected, screen, judge, outcome, started)
 
@@ -133,6 +136,7 @@ def _policy_outcome(judge, requested, path, settings):
             error_code=judge.error_code,
             reason="Difficulty assessment unavailable; no check retry was made.",
         )
+
     assessment = judge.assessment
     is_decision = isinstance(assessment, ClassDecision)
     estimate = assessment.label if is_decision else assessment.estimated_difficulty
@@ -144,6 +148,7 @@ def _policy_outcome(judge, requested, path, settings):
             error_code="DIFFICULTY_UNABLE_TO_ASSESS",
             reason=assessment.unable_to_assess_reason,
         )
+
     matches = compare_difficulty(estimate, requested) == "matches"
     decisive = is_decision or assessment.confidence >= settings.reasoning_threshold
     decision = "matches" if matches else "advisory_mismatch"
@@ -166,8 +171,10 @@ def _policy_outcome(judge, requested, path, settings):
 def _findings(outcome, requested):
     if outcome.error_code:
         return [ToolFinding(code=outcome.error_code, message=outcome.reason)]
+
     if outcome.decision == "matches":
         return []
+
     return [
         ToolFinding(
             code="DIFFICULTY_MISMATCH"
@@ -186,6 +193,7 @@ def _findings(outcome, requested):
 def _build_evidence(candidate, rubric, settings, screen, reasoning, outcome, started):
     judge = screen if reasoning is None else reasoning
     calls = [*screen.model_calls, *(reasoning.model_calls if reasoning else [])]
+
     details = {
         "advisory": True,
         "retryable": False,
@@ -217,6 +225,7 @@ def _build_evidence(candidate, rubric, settings, screen, reasoning, outcome, sta
             },
         ),
     }
+
     if outcome.estimated_difficulty is not None:
         details["difficulty_match"] = compare_difficulty(
             outcome.estimated_difficulty, candidate.difficulty

@@ -99,6 +99,7 @@ def check_in_process(request: CorrectnessRequest) -> CorrectnessResult:
         result = CorrectnessResult(
             outcome="error", reason=f"symbolic calculation failed: {type(exc).__name__}"
         )
+
     return _with_convention(request.problem.operation, result).model_copy(
         update={
             "duration_ms": (time.perf_counter() - started) * 1000,

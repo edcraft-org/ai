@@ -35,6 +35,7 @@ def test_contract_imports_do_not_start_a_server(statement):
     result = subprocess.run(
         [sys.executable, "-c", code], capture_output=True, text=True
     )
+
     assert result.returncode == 0, result.stderr
 
 
@@ -60,6 +61,7 @@ async def test_external_provider_retains_usage_settings_and_cleanup():
     report = await measure_relevance(
         "objective", "question", provider_factory=lambda: provider
     )
+
     assert report.status == "assessed" and provider.closed
     assert report.usage.model_call_count == 1 and report.usage.input_tokens == 10
     assert report.provider_settings == {"reasoning_effort": "none"}
@@ -71,6 +73,7 @@ async def test_unknown_usage_is_a_recorded_call_not_zero():
     report = await measure_relevance(
         "objective", "question", provider_factory=lambda: provider
     )
+
     assert report.usage.model_call_count == report.usage.unavailable_call_count == 1
     assert report.usage.input_tokens is None and report.usage.output_tokens is None
 
@@ -139,6 +142,7 @@ async def test_server_freezes_one_model_and_threshold_for_all_assessments(monkey
     server = create_validation_server()
     monkeypatch.setenv("EDCRAFT_JUDGE_MODEL", "changed")
     monkeypatch.setenv("EDCRAFT_RELEVANCE_THRESHOLD", "0")
+
     async with Client(server) as client:
         difficulty = await client.call_tool(
             "code_assess_template_difficulty",
@@ -164,6 +168,7 @@ async def test_server_freezes_one_model_and_threshold_for_all_assessments(monkey
                 "subject_sha256": "a" * 64,
             },
         )
+
     assert difficulty.structured_content["status"] == "passed"
     assert relevance.structured_content["decision"]["threshold"] == 0.94
     assert shared_relevance.structured_content["details"]["threshold"] == 0.94
@@ -182,6 +187,7 @@ def test_classifier_prompt_is_independent_of_reasoning_wording(monkeypatch):
         template_difficulty, "REASONING_PROCEDURE", "Different reasoning instructions."
     )
     after = template_difficulty.build_template_decision_request(item, rubric)
+
     assert before == after
     assert (
         "Different reasoning instructions."

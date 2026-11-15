@@ -17,6 +17,7 @@ from edcraft_validator.tools.python_analysis import analyze_python_subset
 def check_structure(context: CodeValidationContext) -> None:
     """Validate code, profile, parameters, and the question template."""
     _validate_structure(context.template, context.names)
+
     if context.num_distractors is not None and not (
         MIN_DISTRACTORS <= context.num_distractors <= MAX_DISTRACTORS
     ):
@@ -43,6 +44,7 @@ def _validate_structure(
             code="UNSUPPORTED_CODE",
             field="code",
         )
+
     arguments = _entry_function_arguments(template.code, template.entry_function)
     if arguments != names:
         raise TemplateValidationError(
@@ -51,6 +53,7 @@ def _validate_structure(
             code="ENTRY_FUNCTION_MISMATCH",
             field="entry_function",
         )
+
     unused = _unused_entry_parameters(template.code, template.entry_function, arguments)
     if unused:
         raise TemplateValidationError(
@@ -59,12 +62,14 @@ def _validate_structure(
             code="UNUSED_PARAMETER",
             field="parameters",
         )
+
     if template.entry_function not in template.question_template:
         raise TemplateValidationError(
             "question_template must name the entry function",
             code="QUESTION_TEMPLATE_INVALID",
             field="question_template",
         )
+
     render_template(
         template.question_template,
         {name: 0 for name in names},
@@ -101,6 +106,7 @@ def _unused_entry_parameters(
         for parent in ast.walk(tree)
         for child in ast.iter_child_nodes(parent)
     }
+
     loaded: set[str] = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Name) or not isinstance(node.ctx, ast.Load):

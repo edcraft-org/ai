@@ -83,6 +83,7 @@ class TemplateEvaluationAttempt(BaseModel):
         if result is None:
             return self
         self.tool_catalogue = result.tool_catalogue
+
         if result.artifact is not None:
             self.validated_template = ValidatedCodeTemplate.model_validate_json(
                 result.artifact.model_dump_json()
@@ -104,6 +105,7 @@ class TemplateEvaluationAttempt(BaseModel):
                 for execution in attempt.executions
                 if (item := execution.evidence) is not None
             ]
+
         return self
 
     @model_serializer(mode="wrap")
@@ -174,6 +176,7 @@ class TemplateEvaluator:
                 code_execution_timeout_seconds=timeout_seconds,
             )
         )
+
         self.domain = CodeDomain()
 
     def evaluate(
@@ -193,6 +196,7 @@ class TemplateEvaluator:
             raise ValueError("at least one topic is required")
         if not difficulties:
             raise ValueError("at least one difficulty is required")
+
         attempts: list[TemplateEvaluationAttempt] = []
         attempt_number = 0
         for topic in topics:
@@ -203,6 +207,7 @@ class TemplateEvaluator:
                     difficulty=difficulty,
                     num_distractors=num_distractors,
                 )
+
                 for _ in range(repetitions):
                     attempt_number += 1
                     attempt = self._evaluate_once(
@@ -214,6 +219,7 @@ class TemplateEvaluator:
                     attempts.append(attempt)
                     if on_attempt is not None:
                         on_attempt(attempt)
+
         return TemplateEvaluationReport(
             attempts=attempts,
             summary=_summarize(attempts),
@@ -296,6 +302,7 @@ class TemplateEvaluator:
         provenance = validated.authoring
         if provenance is None:
             raise RuntimeError("authored template did not include provenance")
+
         return TemplateEvaluationAttempt(
             attempt=attempt_number,
             provider=provenance.provider,
@@ -315,6 +322,7 @@ def _terminal_failure(result: AuthoringResult) -> tuple[FailureStage, str]:
     # specific check finding from the final attempt for comparable metrics.
     if result.failure is not None and result.failure.code != "TEMPLATE_CHECKS_FAILED":
         return result.failure.stage, result.failure.code
+
     if result.attempts:
         for execution in result.attempts[-1].executions:
             if execution.passed:
@@ -331,6 +339,7 @@ def _terminal_failure(result: AuthoringResult) -> tuple[FailureStage, str]:
                     code = blocking
                 return stage, code
             return "checking", "TOOL_CALL_ERROR"
+
     return "validation", result.status
 
 
@@ -372,6 +381,7 @@ def _summarize(
     failures = Counter(
         attempt.failure_code for attempt in attempts if attempt.failure_code is not None
     )
+
     return TemplateEvaluationSummary(
         attempts=len(attempts),
         validated=validated,
@@ -392,6 +402,7 @@ def _summarize_group(
     failures = Counter(
         attempt.failure_code for attempt in attempts if attempt.failure_code is not None
     )
+
     return TemplateEvaluationGroup(
         provider=provider,
         model=model,

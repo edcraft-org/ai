@@ -97,6 +97,7 @@ class MathValidationSummary(BaseModel):
             return value
         migrated: list[object] = []
         seen: set[str] = set()
+
         for item in value:
             if isinstance(item, BaseModel):
                 data = item.model_dump()
@@ -117,6 +118,7 @@ class MathValidationSummary(BaseModel):
                     continue
                 seen.add(check)
             migrated.append(data)
+
         return migrated
 
     @model_validator(mode="after")
@@ -124,6 +126,7 @@ class MathValidationSummary(BaseModel):
         checks = [item.check for item in self.evidence]
         if len(checks) != len(set(checks)):
             raise ValueError("validation evidence checks must be unique")
+
         if any(
             item.status != "passed" and item.details.get("advisory") is not True
             for item in self.evidence
@@ -131,6 +134,7 @@ class MathValidationSummary(BaseModel):
             raise ValueError("checked templates require passing validation evidence")
         if self.combinations_checked > self.max_combinations:
             raise ValueError("checked combinations exceed the declared domain")
+
         return self
 
 
@@ -174,4 +178,5 @@ class MathQuestionInstance(BaseModel):
             raise ValueError("choices must be distinct")
         if self.choices[self.correct_index] != self.answer:
             raise ValueError("answer must equal the choice at correct_index")
+
         return self

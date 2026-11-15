@@ -37,6 +37,7 @@ def test_exact_nonzero_residual_is_not_tolerance_equal():
 def test_form_is_intentionally_not_assessed():
     polynomial = op("sub", op("pow", X, num(2)), num(1))
     assert check(polynomial, polynomial, operation="factor").outcome == "correct"
+
     product = op("mul", op("sub", X, num(1)), op("add", X, num(1)))
     assert check(product, product, operation="expand").outcome == "correct"
 

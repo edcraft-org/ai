@@ -84,6 +84,7 @@ def _load_runtime(path: str):
         if torch.backends.mps.is_available()
         else "cpu"
     )
+
     tokenizer = AutoTokenizer.from_pretrained(
         path, padding_side="left", local_files_only=True
     )
@@ -97,6 +98,7 @@ def _load_runtime(path: str):
         .to(device)
         .eval()
     )
+
     return model, tokenizer, device
 
 
@@ -114,13 +116,16 @@ class QwenDecisionProvider:
         # Serialize initialization and inference, including calls after a timeout.
         with _MODEL_LOCK:
             model, tokenizer, device = _load_runtime(self.path)
+
             ids = tokenizer.encode(
                 relevance_prompt(request_text, question_text), add_special_tokens=False
             )
             if len(ids) > 4096:
                 raise InputTooLongError("Relevance input exceeds 4096 tokens")
+
             tensor = torch.tensor([ids], device=device)
             no, yes = tokenizer.convert_tokens_to_ids(["no", "yes"])
+
             with torch.inference_mode():
                 logits = (
                     model(
@@ -143,6 +148,7 @@ class ConfiguredDecisionProvider:
         self.delegate = configured_judge_provider(self.settings)
         self.provider, self.model = self.delegate.provider, self.delegate.model
         self.threshold = self.settings.relevance_threshold
+
         if not supports_decisions(self.delegate):
             raise ValueError("Provider does not support token-probability decisions")
         self.served_model = None
@@ -171,6 +177,7 @@ class ConfiguredDecisionProvider:
             ],
             ("yes", "no"),
         )
+
         self.served_model = result.served_model
         return result.distribution["yes"]
 
@@ -212,6 +219,7 @@ async def measure_relevance(
 ) -> DecisionReport:
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError("relevance timeout must be finite and positive")
+
     started = time.perf_counter()
     report = DecisionReport(
         request_text=request_text,
@@ -221,6 +229,7 @@ async def measure_relevance(
 
     provider = None
     call_started = None
+
     try:
         provider = provider_factory()
         report.provider, report.model = provider.provider, provider.model
@@ -235,10 +244,12 @@ async def measure_relevance(
             raise ValueError("Invalid relevance threshold")
         report.threshold = threshold
         call_started = time.perf_counter()
+
         async with asyncio.timeout(timeout_seconds):
             score = await asyncio.to_thread(
                 _execute_score, provider, request_text, question_text
             )
+
         if (
             type(score) not in {int, float}
             or not math.isfinite(score)
@@ -261,8 +272,10 @@ async def measure_relevance(
             if call_started is not None
             else "RELEVANCE_CONFIGURATION_ERROR"
         )
+
     if call_started is None:
         close_provider(provider)
+
     if call_started is not None:
         usage = getattr(provider, "last_usage", None)
         if report.error_code == "RELEVANCE_TIMEOUT" or not isinstance(
@@ -283,6 +296,7 @@ async def measure_relevance(
             )
         ]
         report.usage = summarize_usage(report.model_calls)
+
     report.duration_ms = (time.perf_counter() - started) * 1000
     return report
 

@@ -127,6 +127,7 @@ def test_advisory_decision_mismatch_saves_checked_artifact_and_reuse_stays_local
     assert result.status == "checked" and len(result.attempts) == 1
     assert len(author.generations) == len(judges) == 1
     assert all(not judge.requests for judge in judges)
+
     first = result.attempts[0].executions[-1].evidence
     assert first.status == "failed"
     assert first.details["decision"] == "advisory_mismatch"
@@ -134,6 +135,7 @@ def test_advisory_decision_mismatch_saves_checked_artifact_and_reuse_stays_local
     assert saved["estimated_difficulty"] == "hard"
     assert saved["requested_difficulty"] == "easy"
     assert saved["confidence_source"] == "first_token_label_mass"
+
     before = len(judges)
     app = TemplateApplication()
     one = app.generate_question(result.artifact, domain=CodeDomain(), seed=42)

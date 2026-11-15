@@ -46,6 +46,7 @@ def test_generation_request_uses_one_typed_response_contract() -> None:
         in request.messages[1]["content"]
     )
     assert "booleans use JSON booleans" in request.messages[1]["content"]
+
     schema = request.response_model.model_json_schema()
     response_schema = schema["$defs"]["CodeProposalResponse"]
     parameter_items = response_schema["properties"]["parameters"]["items"]

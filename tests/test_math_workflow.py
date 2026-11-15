@@ -54,6 +54,7 @@ def test_math_authoring_and_question_generation_round_trip() -> None:
         domain=MathDomain(),
         provider=StubProvider(),
     )
+
     instance = application.generate_question(validated, domain=MathDomain(), seed=7)
 
     view = MathDomain().review_view(validated)

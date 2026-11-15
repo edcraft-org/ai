@@ -21,6 +21,7 @@ from edcraft_validator.domains.math.engine.dispatch import (
 
 def test_every_operation_literal_has_one_handler():
     declared = set(get_args(Operation))
+
     assert set(OPERATION_HANDLERS) == declared
     assert all(callable(handler) for handler in OPERATION_HANDLERS.values())
 

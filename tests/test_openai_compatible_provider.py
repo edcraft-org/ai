@@ -126,6 +126,7 @@ def test_close_only_closes_owned_sdk_clients(monkeypatch, injected):
     )
     provider = OpenAICompatibleProvider("openai", client if injected else None)
     provider.close()
+
     assert closed == ([] if injected else [True])
 
 
@@ -137,6 +138,7 @@ def test_catalogue_names_are_wire_schema_choices_and_checked_locally(provider_na
     request = replace(
         generation_request(), offered_tool_names=("code_execution", "code_structure")
     )
+
     result = provider.generate(request)
     assert type(result) is request.response_model
     instruction = client.chat.completions.arguments["messages"][-1]["content"]
@@ -464,6 +466,7 @@ def test_generation_timeout_is_normalized():
     client = SimpleNamespace(
         chat=SimpleNamespace(completions=SimpleNamespace(create=create))
     )
+
     with pytest.raises(GenerationTimeoutError):
         OpenAICompatibleProvider("openai", client, model="test").generate(
             generation_request()
@@ -483,6 +486,7 @@ def test_reasoning_setting_applies_to_generation(
     client = client_with(code_response())
     provider = OpenAICompatibleProvider(provider_name, client, model="test")
     provider.generate(generation_request())
+
     arguments = client.chat.completions.arguments
     settings = provider.generation_settings()
     reasoning = (configured_reasoning or "").strip() or "default"
@@ -613,6 +617,7 @@ def test_truncated_generation_retains_usage_before_json_parsing(provider_name):
         )
     )
     provider = OpenAICompatibleProvider(provider_name, client, model="test")
+
     with pytest.raises(GenerationResponseError, match="generation exhausted"):
         provider.generate(generation_request())
     assert provider.last_usage.input_tokens == 20
@@ -630,6 +635,7 @@ def test_provider_validates_feature_arguments_in_initial_structured_plan(provide
     request = replace(
         generation_request(), offered_tool_names=("code_require_features",)
     )
+
     result = provider.generate(request)
     assert result.checks[0].arguments == {"required": ["loop"]}
     instruction = client.chat.completions.arguments["messages"][-1]["content"]
@@ -640,6 +646,7 @@ def test_provider_validates_feature_arguments_in_initial_structured_plan(provide
         ]
         == 1
     )
+
     response["checks"][0]["arguments"] = {"required": []}
     client.chat.completions.content = json.dumps(response)
     with pytest.raises(GenerationSchemaError):

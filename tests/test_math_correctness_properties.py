@@ -43,6 +43,7 @@ def test_broader_polynomial_derivatives_against_coefficient_reference(coefficien
         "expression": polynomial(coefficients),
     }
     correct = polynomial(expected)
+
     assert run(problem, {"expression": correct}) == "correct"
     assert run(problem, {"expression": op("add", correct, num(1))}) == "incorrect"
 
@@ -59,6 +60,7 @@ def test_constructed_polynomial_root_sets_against_factor_reference(roots):
     }
     unique = sorted(set(roots))
     answer = {"kind": "set", "items": [num(root) for root in unique]}
+
     assert run(problem, answer) == "correct"
     assert (
         run(problem, {"kind": "set", "items": [num(root) for root in unique[1:]]})
@@ -88,6 +90,7 @@ def test_quadratic_inequality_endpoints_against_sign_reference(lower, width, clo
         "lower_open": not closed,
         "upper_open": not closed,
     }
+
     assert run(problem, {"kind": "set", "intervals": [bounds]}) == "correct"
     wrong = {**bounds, "upper_open": closed}
     assert run(problem, {"kind": "set", "intervals": [wrong]}) == "incorrect"
@@ -97,6 +100,7 @@ def test_quadratic_inequality_endpoints_against_sign_reference(lower, width, clo
 def matrix_products(draw):
     rows, inner, columns = [draw(st.integers(1, 4)) for _ in range(3)]
     value = st.integers(-10, 10).map(lambda n: Fraction(n, 3))
+
     left = draw(
         st.lists(
             st.lists(value, min_size=inner, max_size=inner),
@@ -111,6 +115,7 @@ def matrix_products(draw):
             max_size=inner,
         )
     )
+
     expected = [
         [
             sum((left[i][k] * right[k][j] for k in range(inner)), Fraction(0))
@@ -134,6 +139,7 @@ def test_rational_matrix_products_against_fraction_reference(data):
         "matrix": wire(left),
         "right_matrix": wire(right),
     }
+
     assert run(problem, {"kind": "matrix", "matrix": wire(expected)}) == "correct"
     expected[0][0] += 1
     assert run(problem, {"kind": "matrix", "matrix": wire(expected)}) == "incorrect"

@@ -29,6 +29,7 @@ def test_qualification_accepts_validates_dict_settings():
         },
         "parameters": [{"name": "a", "minimum": 1, "maximum": 10}],
     }
+
     result = qualify_math_template(template, settings={"max_examples": 2, "seed": 42})
     assert result["status"] == "passed"
     assert result["cases_checked"] == 2
@@ -42,6 +43,7 @@ def test_qualification_accepts_validates_dict_settings():
 def test_inconsistent_linear_system_is_outside_unique_tuple_scope():
     x, y = {"sym": "x"}, {"sym": "y"}
     lhs = {"op": "add", "args": [x, y]}
+
     result = check_math_correctness(
         {
             "problem": {
@@ -97,6 +99,7 @@ def test_fractional_powers_use_one_consistent_real_branch():
     power = operation("pow", x, num("2/3"))
     absolute = operation("pow", operation("abs", x), num("2/3"))
     assert scalar("simplify", power, absolute).outcome == "correct"
+
     cube = operation("pow", x, num("1/3"))
     derivative = operation("div", num(1), operation("mul", num(3), absolute))
     assert scalar("differentiate", cube, derivative, variable="x").outcome == "correct"
@@ -109,6 +112,7 @@ def test_tangent_and_sine_domains_accept_standard_correct_answers():
     assert (
         scalar("differentiate", tangent, derivative, variable="x").outcome == "correct"
     )
+
     sine = operation("sin", x)
     identity = operation(
         "div",
@@ -123,6 +127,7 @@ def test_tangent_antiderivative_covers_every_defined_component():
     primitive = operation(
         "mul", num(-1), operation("log", operation("abs", operation("cos", x)))
     )
+
     assert (
         scalar("antiderivative", operation("tan", x), primitive, variable="x").outcome
         == "correct"
@@ -131,6 +136,7 @@ def test_tangent_antiderivative_covers_every_defined_component():
 
 def test_finite_rational_answer_to_infinite_inequality_has_a_counterexample():
     x = {"sym": "x"}
+
     result = check_math_correctness(
         {
             "problem": {
@@ -163,6 +169,8 @@ def test_solver_uses_the_same_fractional_power_branch_as_scalar_checks():
         },
         "answer": {"kind": "set", "items": [num(1)]},
     }
+
     assert check_math_correctness(request).outcome == "correct"
+
     request["answer"]["items"].append(num(-1))
     assert check_math_correctness(request).outcome == "incorrect"

@@ -85,6 +85,7 @@ def to_correctness_request(
         engine_answer = _answer(item, answer, symbols, params)
     except ValidationError as exc:
         raise AdapterGap(f"no engine representation for this item: {exc}") from exc
+
     return CorrectnessRequest(problem=problem, answer=engine_answer)
 
 
@@ -130,6 +131,7 @@ def _reconciled_symbol_specs(item: MathItemSpec) -> list[SymbolSpec]:
             raise AdapterGap(f"domain given references unknown symbol {given.symbol!r}")
         if _DOMAIN_STRICTNESS[given.domain] >= _DOMAIN_STRICTNESS[spec.domain]:
             specs[given.symbol] = spec.model_copy(update={"domain": given.domain})
+
     return list(specs.values())
 
 
@@ -164,6 +166,7 @@ def _scalar_problem(
     if item.goal.expr is None:  # unreachable: the IR validator requires it
         raise AdapterGap(f"{kind} goals require an expression")
     _checked(item.goal.expr, symbols, params, f"{kind} goal expression")
+
     return MathProblem(
         operation=operation,
         symbols=symbol_specs,
@@ -184,6 +187,7 @@ def _calculus_problem(
     if item.goal.symbol is None:
         raise AdapterGap(f"{kind} goals require the symbol to operate on")
     _checked(item.goal.expr, symbols, params, f"{kind} goal expression")
+
     return MathProblem(
         operation=operation,
         symbols=symbol_specs,
@@ -206,14 +210,17 @@ def _solve_problem(
     ]
     if not relations:
         raise AdapterGap("solve goals require at least one relation given")
+
     targets = list(item.goal.symbols)
     if not targets and item.goal.symbol is not None:
         targets = [item.goal.symbol]
     if not targets:  # unreachable: the IR validator requires a target
         raise AdapterGap("solve goals require a symbol or symbols to solve for")
+
     for index, relation in enumerate(relations):
         _checked(relation.lhs, symbols, params, f"solve relation {index} left side")
         _checked(relation.rhs, symbols, params, f"solve relation {index} right side")
+
     return MathProblem(
         operation="solve",
         symbols=symbol_specs,
@@ -248,6 +255,7 @@ def _determinant_problem(
                 params,
                 f"determinant matrix [{row_index}][{column_index}]",
             )
+
     return MathProblem(
         operation=_MATRIX_GOAL_OPERATIONS[item.goal.kind],
         symbols=[],
@@ -291,6 +299,7 @@ def _recipe_answer(
             kind=recipe.kind,
             items=[_bound(value, params) for value in recipe.items],
         )
+
     if recipe.matrix is None:  # unreachable: the recipe validator requires it
         raise AdapterGap("matrix answers require a matrix value")
     for row_index, row in enumerate(recipe.matrix):

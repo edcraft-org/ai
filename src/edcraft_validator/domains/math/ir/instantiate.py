@@ -191,6 +191,7 @@ def render_relation(
         "gt": ">",
         "ge": "≥",
     }[relation.kind]
+
     lhs = render_expr(compile_expr(relation.lhs, symbols, params))
     rhs = render_expr(compile_expr(relation.rhs, symbols, params))
     return f"{lhs} {operator} {rhs}"
@@ -273,6 +274,7 @@ def render_item_text(
     values: dict[str, str] = {
         name: fraction_text(value) for name, value in (params or {}).items()
     }
+
     symbols = build_symbols(item.symbols)
     relations = render_relations(item, params)
     if fields & {"expr"}:
@@ -288,6 +290,7 @@ def render_item_text(
         if not item.goal.matrix:
             raise ValueError("text template uses {{matrix}} but the goal has none")
         values["matrix"] = render_matrix(item.goal.matrix, symbols, params)
+
     return render_text_template(item.text.template, values)
 
 
@@ -319,6 +322,7 @@ def substitute_item(item: MathItemSpec, params: Mapping[str, Fraction]) -> MathI
                 }
             )
         givens.append(given.model_copy(update={"relation": relation}))
+
     goal = item.goal.model_copy(
         update={
             "expr": (
@@ -341,6 +345,7 @@ def substitute_item(item: MathItemSpec, params: Mapping[str, Fraction]) -> MathI
             ),
         }
     )
+
     distractors = [
         distractor.model_copy(
             update={
@@ -357,6 +362,7 @@ def substitute_item(item: MathItemSpec, params: Mapping[str, Fraction]) -> MathI
         )
         for distractor in item.distractors
     ]
+
     recipe = item.answer_recipe
     if recipe is not None:
         interval = recipe.interval
@@ -389,6 +395,7 @@ def substitute_item(item: MathItemSpec, params: Mapping[str, Fraction]) -> MathI
                 ),
             }
         )
+
     return item.model_copy(
         update={
             "givens": givens,
@@ -488,6 +495,7 @@ def sample_parameter_combinations(
             declared_size=declared_size,
             whole_domain=True,
         )
+
     sizes = [len(parameter.values) for parameter in template.parameters]
     selected: list[dict[str, Fraction]] = []
     seen: set[tuple[int, ...]] = set()
@@ -503,6 +511,7 @@ def sample_parameter_combinations(
 
     for indices in _boundary_indices(sizes):
         add(indices)
+
     attempt = 0
     # Invalid literals are rare; cap the retries so a domain made mostly of
     # unparseable values still terminates.
@@ -515,6 +524,7 @@ def sample_parameter_combinations(
             )
         )
         attempt += 1
+
     return SampledDomain(
         combinations=selected,
         declared_size=declared_size,
@@ -536,6 +546,7 @@ def representative_item(
     materialised.
     """
     sample = sample_parameter_combinations(template, limit=limit, seed=seed)
+
     for params in sample.combinations:
         try:
             return substitute_item(template.body, params)
@@ -577,6 +588,7 @@ def compile_distractor_value(
 ) -> object:
     """Compile one distractor for display or comparison."""
     symbols = build_symbols(item.symbols)
+
     if distractor.value is not None:
         return compile_expr(distractor.value, symbols, params)
     if distractor.components:

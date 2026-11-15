@@ -110,11 +110,13 @@ def run(
 
 def test_direct_template_tool_mismatch_is_advisory_and_reuse_stays_local():
     result, author, judges = run(["hard"])
+
     assert result.status == "checked" and len(result.attempts) == 1
     assert len(judges) == 1 and len(judges[0].requests) == 1
     assert len(author.generations) == 1
     assert result.attempts[0].candidate["difficulty"] == "easy"
     assert result.fixed_plan == [SEMANTIC, STRUCTURE, TEMPLATE_DIFFICULTY_TOOL]
+
     final_check = result.attempts[0].executions[-1]
     assert final_check.evidence.status == "failed"
     assert final_check.evidence.findings[0].code == "DIFFICULTY_MISMATCH"
@@ -122,6 +124,7 @@ def test_direct_template_tool_mismatch_is_advisory_and_reuse_stays_local():
     assert final_check.evidence.details["subject_sha256"] == template_sha256(
         result.artifact.template
     )
+
     saved = next(
         item
         for item in result.artifact.validation.evidence
@@ -138,6 +141,7 @@ def test_direct_template_tool_mismatch_is_advisory_and_reuse_stays_local():
     assert len(result.attempts[0].candidate["distractors"]) == 5
     assert len(final_check.application_arguments["candidate"]["distractors"]) == 3
     assert final_check.requested_arguments == {}
+
     instance = TemplateApplication().generate_question(
         result.artifact, domain=CodeDomain(), seed=42
     )
@@ -151,6 +155,7 @@ def test_direct_template_tool_mismatch_is_advisory_and_reuse_stays_local():
 )
 def test_template_judge_failure_is_unavailable_without_revision_or_check_retry(failure):
     result, author, judges = run(["easy"], failure("private"))
+
     assert result.status == "checked" and result.artifact is not None
     assert len(result.attempts) == len(author.generations) == len(judges) == 1
     output = result.attempts[0].executions[-1].evidence
@@ -164,6 +169,7 @@ def test_template_judge_failure_is_unavailable_without_revision_or_check_retry(f
 def test_correctness_failure_defers_difficulty_without_spending_a_judge_call():
     wrong = proposal().model_copy(update={"answer_expression": "a - b"})
     result, author, judges = run([], proposals=[wrong])
+
     assert result.status == "needs_review" and len(result.attempts) == 4
     assert len(author.generations) == 4 and judges == []
     assert all(a.pending == [TEMPLATE_DIFFICULTY_TOOL] for a in result.attempts)
@@ -184,11 +190,13 @@ def test_correctness_failure_defers_difficulty_without_spending_a_judge_call():
 )
 def test_saved_artifact_marks_bad_difficulty_identity_unavailable(change, reason):
     result, _, _ = run(["easy"])
+
     evidence = [e.evidence for e in result.attempts[0].executions]
     if change == "stale":
         evidence[-1].details["subject_sha256"] = "stale"
     else:
         evidence[-1].details.pop("subject_sha256")
+
     artifact = CodeDomain().finalize_checked_template(
         candidate(), evidence, advisory_checks=CODE_ADVISORY_CHECKS
     )
@@ -205,6 +213,7 @@ def test_saved_artifact_marks_bad_difficulty_identity_unavailable(change, reason
 @pytest.mark.parametrize("tool", [STRUCTURE, "unknown_check"])
 def test_forged_technical_advisory_details_still_block(tool):
     result, _, _ = run(["easy"])
+
     evidence = [
         item.evidence.model_copy(deep=True) for item in result.attempts[0].executions
     ]
@@ -234,6 +243,7 @@ def test_rubric_unavailable_is_typed_and_not_stale(monkeypatch):
 
     monkeypatch.setattr(difficulty_module, "load_code_difficulty_rubric", unavailable)
     result, author, _ = run([])
+
     assert result.status == "checked" and len(author.generations) == 1
     saved = next(
         item
@@ -258,6 +268,7 @@ def test_rubric_unavailable_is_typed_and_not_stale(monkeypatch):
 
 def test_missing_information_is_unavailable_without_author_revision():
     result, author, judges = run([None])
+
     assert result.status == "checked" and len(author.generations) == len(judges) == 1
     assert all(len(j.requests) == 1 for j in judges)
     assert (
@@ -269,6 +280,7 @@ def test_missing_information_is_unavailable_without_author_revision():
 
 def test_unresolved_advisory_mismatch_retains_one_checked_artifact():
     result, author, judges = run(["hard"])
+
     assert result.status == "checked" and result.artifact is not None
     assert len(result.attempts) == len(judges) == len(author.generations) == 1
 
@@ -301,14 +313,17 @@ def test_mcp_client_allows_the_glm_judge_deadline_plus_overhead(monkeypatch):
             return SimpleNamespace(structured_content={"status": "passed"})
 
     monkeypatch.setattr(client_module, "Client", Client)
+
     with FastMcpToolClient(server=object()) as client:
         assert client.call_tool(TEMPLATE_DIFFICULTY_TOOL, {}) == {"status": "passed"}
+
     assert timeouts == [330, 330]
 
 
 def test_application_stages_difficulty_even_if_model_lists_it_first():
     plan = (TEMPLATE_DIFFICULTY_TOOL, SEMANTIC, STRUCTURE)
     result, author, judges = run(["easy"], plan=plan)
+
     assert result.status == "checked"
     assert result.fixed_plan == list(plan)
     assert [entry.tool for entry in result.attempts[0].executions] == [

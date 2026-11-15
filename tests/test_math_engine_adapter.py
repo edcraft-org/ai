@@ -282,6 +282,7 @@ def test_grade_expand_and_factor_goals_via_equivalence() -> None:
         items=[add(power(sym("x"), 2), add(mul(num(2), sym("x")), num(1)))],
     )
     assert grade(expand, expanded).outcome == "correct"
+
     factor = item(Goal(kind="factor", expr=sub(power(sym("x"), 2), num(1))))
     factored = AnswerRecipe(
         kind="expression",

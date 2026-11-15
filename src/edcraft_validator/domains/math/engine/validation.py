@@ -146,6 +146,7 @@ def _split_sign(
             base_key = ("op", "mul", tuple(key_by_id[id(factor)] for factor in factors))
             key_by_id[id(base)] = base_key
             return [(sign, base, base_key)]
+
     if expr.num is not None:
         value = _literal_fraction(expr)
         if value is not None and value < 0:
@@ -191,6 +192,7 @@ def _materialise(
                 stack.append((argument, sign * argument_sign))
             continue
         terms.extend(_split_sign(child, sign, key_by_id[id(child)], key_by_id))
+
     result, result_key = _build_add(terms, key_by_id)
     key_by_id[id(result)] = result_key
     materialised[id(value)] = (result, result_key)
@@ -204,16 +206,19 @@ def _build_add(
     terms = [term for term in terms if not _is_zero_literal(term[1])]
     if not terms:
         return _ZERO, ("num", Fraction(0))
+
     positive: dict[_Key, int] = {}
     negative: dict[_Key, int] = {}
     for sign, _base, key in terms:
         counts = positive if sign > 0 else negative
         counts[key] = counts.get(key, 0) + 1
+
     cancelled = {
         key: min(count, negative.get(key, 0))
         for key, count in positive.items()
         if key in negative
     }
+
     survivors: list[tuple[int, Expr, _Key]] = []
     remaining_positive = dict(cancelled)
     remaining_negative = dict(cancelled)
@@ -233,6 +238,7 @@ def _build_add(
         wrapped_key = _signed_product_key(sign, base, key)
         key_by_id[id(wrapped)] = wrapped_key
         return wrapped, wrapped_key
+
     arguments: list[Expr] = []
     keys: list[_Key] = []
     for sign, base, key in survivors:
@@ -261,6 +267,7 @@ def _normalise_node(
         return _FlatAdd([(child, 1) for child in children]), None
     if op == "sub" and len(children) == 2:
         return _FlatAdd([(children[0], 1), (children[1], -1)]), None
+
     resolved = [_materialise(child, key_by_id, materialised) for child in children]
     children = [child for child, _key in resolved]
     child_keys = [key for _child, key in resolved]
@@ -347,6 +354,7 @@ def _normalise_with_keys(expr: Expr) -> tuple[Expr, dict[int, _Key]]:
         resolved[key] = normalised
         if isinstance(normalised, Expr) and normalised_key is not None:
             key_by_id[id(normalised)] = normalised_key
+
     normalised_root, _root_key = _materialise(
         resolved[id(expr)], key_by_id, materialised
     )
@@ -361,6 +369,7 @@ def _multinomial_terms(exponent: int, base_terms: int) -> int:
         return 1
     if base_terms > MAX_OUTPUT_TERMS:
         return _TERM_OVERFLOW
+
     total = 1
     for step in range(1, base_terms):
         total = total * (exponent + step) // step
@@ -399,6 +408,7 @@ def _node_terms(expr: Expr, child_terms: list[int]) -> int:
         # numerator and denominator carry the same multinomial growth as the
         # positive power, so bound it by the magnitude of the exponent.
         return _multinomial_terms(abs(exponent), base)
+
     # add, sub and unary functions all add their children's term counts.
     total = 0
     for child in child_terms:
@@ -424,6 +434,7 @@ def _estimated_terms_normalised(expr: Expr) -> int:
                     pending.append((child, False))
             continue
         resolved[key] = _node_terms(node, [resolved[id(child)] for child in node.args])
+
     return resolved[id(expr)]
 
 
@@ -498,6 +509,7 @@ def total_degree(expr: Expr) -> int:
         else:
             degree = max(child_degrees, default=0)
         resolved[key] = degree
+
     return resolved[id(expr)]
 
 
@@ -509,6 +521,7 @@ def require_bounded_terms(expr: Expr) -> None:
         raise EngineUnsupported(
             f"expression expansion exceeds the {MAX_OUTPUT_TERMS}-term output budget"
         )
+
     if _has_rational_structure(normalised):
         degree = total_degree(normalised)
         if estimate * (degree + 1) > MAX_OUTPUT_TERMS:
@@ -557,6 +570,7 @@ def validate_request(request: CorrectnessRequest) -> None:
                 power = bounded_number(exponent.num)
                 if abs(power) > 12 or power.denominator > 12:
                     raise EngineUnsupported("power exceeds exponent budget")
+
             children = [visit(child, depth + 1) for child in expr.args]
             bits = sum(child[0] for child in children) + 1
             degree = max(child[1] for child in children)
@@ -582,6 +596,7 @@ def validate_request(request: CorrectnessRequest) -> None:
             raise ValueError(
                 "matrix must be nonempty, rectangular and within dimension limits"
             )
+
         for row in value:
             for cell in row:
                 visit(cell)
@@ -608,6 +623,7 @@ def validate_request(request: CorrectnessRequest) -> None:
         answer.upper,
     ):
         matrix(value)
+
     if problem.operation == "solve":
         candidate_values = list(answer.items)
         if answer.expression is not None:
@@ -636,6 +652,7 @@ def validate_request(request: CorrectnessRequest) -> None:
         raise EngineUnsupported(
             "relational givens are currently supported only for solve"
         )
+
     # Matrices are an exact numeric capability; avoid evaluation erasing symbolic holes.
     if (
         problem.operation in {"matrix-multiply", "determinant", "inverse", "lu"}

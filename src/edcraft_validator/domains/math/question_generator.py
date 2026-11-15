@@ -55,15 +55,18 @@ def _generate_ir_question(
     combinations = sample.combinations
     if not combinations:
         raise ValueError("validated template has an empty parameter domain")
+
     start = seeded_index(
         validated.template.template_id, seed, "parameter-combination", len(combinations)
     )
+
     for offset in range(len(combinations)):
         values = combinations[(start + offset) % len(combinations)]
         try:
             return _build_ir_instance(validated, template, seed, values)
         except (MathCompileError, UnusableVariant):
             continue
+
     raise ValueError("Could not produce a usable question from this template")
 
 
@@ -100,11 +103,13 @@ def _build_ir_instance(
         distractor_choices.append(display)
     if not distractor_choices:
         raise UnusableVariant("the template declares no distractors")
+
     choices = list(distractor_choices)
     correct_index = seeded_index(
         validated.template.template_id, seed, "correct-index", len(choices) + 1
     )
     choices.insert(correct_index, answer)
+
     return MathQuestionInstance(
         template_id=validated.template.template_id,
         artifact_id=validated.artifact_id,

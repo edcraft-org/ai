@@ -71,6 +71,7 @@ def register_math_correctness_tools(server: FastMCP) -> None:
             if outcome == "failed"
             else "error"
         )
+
         return ToolEvidence(
             tool="math_qualify_correctness_template",
             version="1.0.0",

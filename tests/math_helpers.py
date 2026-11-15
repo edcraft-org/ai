@@ -279,6 +279,7 @@ def derivative_ir_template():
         ir_mul(ir_num(3), ir_param("a"), ir_pow(ir_sym("x"), ir_num(2))),
         ir_mul(ir_num(2), ir_param("b"), ir_sym("x")),
     )
+
     body = MathItemSpec(
         topic="university.derivative",
         symbols=[SymbolSpec(name="x", domain="real")],
@@ -525,6 +526,7 @@ def factor_ir_template(*, factored_answer=True):
         return ir_mul(left, right)
 
     answer = product(ir_add(x, p), ir_add(x, q)) if factored_answer else expanded
+
     body = MathItemSpec(
         topic="school.factor",
         symbols=[SymbolSpec(name="x", domain="real")],

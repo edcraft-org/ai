@@ -39,11 +39,13 @@ def test_report_owns_attempt_history_and_artifact_only_keeps_origin_metadata():
     loaded = AuthoringResult.model_validate_json(result.model_dump_json())
     assert loaded.attempts == result.attempts
     assert loaded.model_dump(mode="json") == result.model_dump(mode="json")
+
     loaded_artifact = ValidatedCodeTemplate.model_validate_json(
         loaded.artifact.model_dump_json()
     )
     assert loaded_artifact.template == artifact.template
     assert loaded_artifact.validation == artifact.validation
+
     app = TemplateApplication()
     for seed in (0, 1, 42, -7):
         assert app.generate_question(
@@ -54,6 +56,7 @@ def test_report_owns_attempt_history_and_artifact_only_keeps_origin_metadata():
 def test_saved_report_records_one_candidate_per_attempt_without_schema_copies():
     result, client = run(Provider([wrong_answer(), proposal()]))
     saved = result.model_dump(mode="json")
+
     assert "proposal" not in saved
     assert all(
         set(tool) == {"name", "description", "version"}
@@ -73,6 +76,7 @@ def test_saved_report_records_one_candidate_per_attempt_without_schema_copies():
             assert "candidate" not in execution["application_arguments"]
             assert arguments["candidate"] == attempt["candidate"]
             assert execution["evidence"] is not None
+
     semantic = result.attempts[-1].executions[0].evidence
     assert semantic.details["examples_checked"] > 0
     assert all(
@@ -94,6 +98,7 @@ def test_saved_previews_replay_offline_with_the_same_artifact_and_seeds(monkeypa
     monkeypatch.setattr(FastMcpToolClient, "__enter__", unexpected_call)
     monkeypatch.setattr(FastMcpToolClient, "list_tools", unexpected_call)
     monkeypatch.setattr(FastMcpToolClient, "call_tool", unexpected_call)
+
     previews = [
         application.generate_question(artifact, domain=CodeDomain(), seed=seed)
         for seed in seeds
@@ -130,6 +135,7 @@ def test_finalization_only_packages_checked_content_and_evidence(monkeypatch):
 
     monkeypatch.setattr(Provider, "generate", unexpected_call)
     monkeypatch.setattr(FastMcpToolClient, "call_tool", unexpected_call)
+
     domain = CodeDomain()
     advisory = frozenset(
         execution.tool for execution in attempt.executions if execution.advisory

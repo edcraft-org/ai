@@ -38,6 +38,7 @@ class SampleParameter(Record):
             self.minimum is None or self.maximum is None or self.minimum > self.maximum
         ):
             raise ValueError("parameter requires an ordered integer range")
+
         return self
 
 
@@ -63,8 +64,10 @@ class CorrectnessTemplate(Record):
                     visit(child)
 
         visit(self.request.model_dump(mode="json"))
+
         if references != set(names):
             raise ValueError("every parameter must be declared and used")
+
         return self
 
 
@@ -95,6 +98,7 @@ def qualify_in_process(
 ) -> dict[str, Any]:
     definition = CorrectnessTemplate.model_validate(template)
     selected = SamplingSettings.model_validate(configuration)
+
     strategies = {
         p.name: st.sampled_from(p.values)
         if p.values is not None
@@ -143,6 +147,7 @@ def qualify_in_process(
                 counterexample = detail
             elif result.outcome != "correct" and first_unresolved is None:
                 first_unresolved = detail
+
         if checked[key] == "incorrect":
             # Retain Hypothesis's final shrunk/replayed assignment.
             counterexample = {"parameters": parameters, "outcome": "incorrect"}
@@ -155,11 +160,13 @@ def qualify_in_process(
         pass
     except BudgetExhausted:
         budget_exhausted = True
+
     status: Literal["passed", "failed", "inconclusive"] = "passed"
     if counts["incorrect"]:
         status = "failed"
     elif budget_exhausted or any(counts[name] for name in counts if name != "correct"):
         status = "inconclusive"
+
     return {
         "status": status,
         "checking_mode": "property_based",

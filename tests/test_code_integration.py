@@ -111,6 +111,7 @@ def test_recursive_templates_are_checked_and_replayed(
             "question_type": "mcq",
         }
     )
+
     application = TemplateApplication(max_correction_attempts=0)
     domain = CodeDomain()
 
@@ -123,6 +124,7 @@ def test_recursive_templates_are_checked_and_replayed(
     assert result.status == "checked", result.reason
     assert result.artifact.validation.examples_checked > 0
     saved = ValidatedCodeTemplate.model_validate_json(result.artifact.model_dump_json())
+
     for seed in (0, 42):
         preview = application.generate_question(saved, domain=domain, seed=seed)
         assert preview == application.generate_question(saved, domain=domain, seed=seed)
@@ -178,6 +180,7 @@ def test_template_passes_sampled_checks_and_replays(template_path: Path) -> None
     assert result.status == "checked", result.reason
     validated = result.artifact
     reloaded = ValidatedCodeTemplate.model_validate_json(validated.model_dump_json())
+
     for seed in (0, 1, 42, 999):
         question = application.generate_question(reloaded, domain=domain, seed=seed)
         assert question == generate_code_question(validated, seed)

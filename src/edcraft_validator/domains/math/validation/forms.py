@@ -93,6 +93,7 @@ def _single_expression(
         return None, FormResult(
             non_expression, f"{goal} form applies to expression answers only"
         )
+
     compiled, failure = _compile_answer(item, answer, params)
     if failure is not None:
         return None, failure
@@ -112,6 +113,7 @@ def _declared_poly(
         return None, FormResult(
             "fail", "answer uses undeclared symbols: " + ", ".join(undeclared)
         )
+
     try:
         return sympy.Poly(expr, *declared), None
     except (sympy.PolynomialError, TypeError, ValueError) as exc:
@@ -157,6 +159,7 @@ def _expanded_form(
     _poly, failure = _declared_poly(compiled, item)
     if failure is not None:
         return failure
+
     if sympy.expand(compiled) != compiled:
         return FormResult("fail", "answer is not fully expanded")
     if _has_unexpanded_sum_power(compiled):
@@ -179,6 +182,7 @@ def _factored_form(
         return failure
     if sympy.factor(compiled) != compiled:
         return FormResult("fail", "answer is not factored")
+
     for base in _factor_bases(compiled):
         try:
             base_poly = sympy.Poly(base, *poly.gens)
@@ -224,6 +228,7 @@ def _solution_set_form(
     _compiled, failure = _compile_answer(item, answer, params)
     if failure is not None:
         return failure
+
     targets = item.goal.symbols or (
         [item.goal.symbol] if item.goal.symbol is not None else []
     )
@@ -238,6 +243,7 @@ def _solution_set_form(
             f"a {len(targets)}-unknown solve requires a {expected} answer, "
             f"not a {answer.kind}",
         )
+
     return FormResult("pass")
 
 
@@ -251,6 +257,7 @@ def _determinant_form(
     )
     if failure is not None:
         return failure
+
     if not compiled.is_number:
         return FormResult("fail", "determinant answers must be a numeric scalar")
     if compiled.is_finite is not True:

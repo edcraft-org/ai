@@ -14,17 +14,20 @@ class FastMcpToolClient:
             from edcraft_validator.mcp.server import create_validation_server
 
             server = create_validation_server()
+
         self.server = server
         self.timeout_seconds = timeout_seconds
 
     def __enter__(self):
         self.runner = asyncio.Runner()
         self.client = Client(self.server, timeout=self.timeout_seconds)
+
         try:
             self.runner.run(self.client.__aenter__())
         except Exception:
             self.runner.close()
             raise
+
         return self
 
     def __exit__(self, *args):
@@ -53,6 +56,7 @@ class FastMcpToolClient:
                 timeout=self.timeout_seconds,
             )
         )
+
         if not isinstance(result.structured_content, dict):
             raise ValueError("MCP returned no structured evidence")
         return result.structured_content

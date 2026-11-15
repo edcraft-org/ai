@@ -77,12 +77,14 @@ def expression_equivalence(
     if left == right:
         return True
     difference = left - right
+
     # A sampled nonzero point already disproves equality, so try it before the
     # expensive symbolic simplification. Wrong choices are the common case and
     # should be rejected cheaply.
     names = sorted(difference.free_symbols, key=sympy.default_sort_key)
     if names and _find_counterexample(difference, names) is not None:
         return False
+
     try:
         difference = sympy.simplify(sympy.together(difference))
     except Exception:  # total: an undecidable difference stays undecided
@@ -130,6 +132,7 @@ def _find_counterexample(
     """Sample bounded rational points until one disproves equality."""
     if not symbols:
         return None
+
     rng = random.Random(_COUNTEREXAMPLE_SEED)
     denominator = sympy.denom(sympy.together(expression))
     for _ in range(_COUNTEREXAMPLE_SAMPLES):

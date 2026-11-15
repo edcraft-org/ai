@@ -84,6 +84,7 @@ async def verify_text_fidelity(
         raise TypeError(
             f"{plugin.domain!r} fidelity expects {plugin.artifact_model.__name__}"
         )
+
     request = plugin.reconstruction_request(text)
     request_sha256 = _request_sha256(request)
 
@@ -134,6 +135,7 @@ async def verify_text_fidelity(
         provider_factory=provider_factory,
         timeout_seconds=timeout_seconds,
     )
+
     if run.status != "completed" or run.assessment is None:
         code = run.error_code or "JUDGE_INVALID_RESPONSE"
         verdict = FidelityVerdict(

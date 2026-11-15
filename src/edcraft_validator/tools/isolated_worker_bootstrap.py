@@ -38,6 +38,7 @@ except ImportError:  # pragma: no cover
 def _publish_pid(path: str) -> bool:
     """Publish this process's pid atomically for the parent RSS watchdog."""
     temporary = f"{path}.tmp"
+
     try:
         with open(temporary, "w", encoding="ascii") as handle:
             handle.write(str(os.getpid()))
@@ -51,6 +52,7 @@ def _peak_rss_bytes() -> int | None:
     """Return this process's lifetime peak RSS, normalised to bytes."""
     if resource is None or not hasattr(resource, "RUSAGE_SELF"):
         return None
+
     try:
         usage = resource.getrusage(resource.RUSAGE_SELF)
         return normalise_maxrss(usage.ru_maxrss)
@@ -67,6 +69,7 @@ def _run_module(module: str) -> tuple[bool, int, Any, int | None]:
     """
     buffer = io.StringIO()
     exit_code = 0
+
     with contextlib.redirect_stdout(buffer):
         try:
             runpy.run_module(module, run_name="__main__", alter_sys=True)
@@ -78,7 +81,9 @@ def _run_module(module: str) -> tuple[bool, int, Any, int | None]:
             else:
                 print(exc.code, file=sys.stderr)
                 exit_code = 1
+
     peak_rss = _peak_rss_bytes()
+
     try:
         payload = json.loads(buffer.getvalue())
     except json.JSONDecodeError:
@@ -93,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pid-file", required=True)
     parser.add_argument("module")
     arguments = parser.parse_args(argv)
+
     if arguments.cpu_seconds <= 0:
         parser.error("--cpu-seconds must be positive")
     if arguments.memory_bytes <= 0:
@@ -116,6 +122,7 @@ def main(argv: list[str] | None = None) -> int:
         "payload_valid": payload_valid,
         "payload": payload,
     }
+
     json.dump(envelope, sys.stdout, allow_nan=False)
     sys.stdout.flush()
     return exit_code

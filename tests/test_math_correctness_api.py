@@ -31,6 +31,7 @@ def derivative_request(coefficient="3"):
 def test_public_check_is_exact_and_isolated():
     correct = check_math_correctness(derivative_request())
     wrong = check_math_correctness(derivative_request("4"))
+
     assert correct.outcome == "correct"
     assert wrong.outcome == "incorrect"
     assert correct.sympy_version
@@ -42,6 +43,7 @@ def test_unknown_operation_and_unknown_symbols_fail_safely():
     request = derivative_request()
     request["problem"]["operation"] = "execute_python"
     assert check_math_correctness(request).outcome == "error"
+
     request = derivative_request()
     request["answer"] = {"expression": {"sym": "undeclared"}}
     assert check_math_correctness(request).outcome == "error"
@@ -83,6 +85,7 @@ async def test_mcp_exposes_one_deterministic_correctness_check():
             "math_check_correctness", {"request": derivative_request()}
         )
         tools = await client.list_tools()
+
     assert not result.is_error
     evidence = result.structured_content
     assert evidence["status"] == "passed"
@@ -102,5 +105,6 @@ def test_nested_literal_powers_are_bounded_before_evaluation():
     huge = {"num": "2"}
     for _ in range(12):
         huge = {"op": "pow", "args": [huge, {"num": "12"}]}
+
     request["answer"] = {"expression": huge}
     assert check_math_correctness(request).outcome == "unsupported"

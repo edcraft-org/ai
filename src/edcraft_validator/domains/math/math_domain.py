@@ -150,6 +150,7 @@ class MathDomain:
         template_spec = template.item
         if template_spec is None:
             raise ValueError("Generic finalization requires an item template")
+
         require_checked(
             evidence,
             required=self.required_checks(template),
@@ -162,10 +163,12 @@ class MathDomain:
             raise ValueError(
                 f"Generic templates allow at most {MAX_DISTRACTORS} distractors"
             )
+
         item_spec = next(item for item in evidence if item.tool == MATH_ITEM_SPEC_TOOL)
         combinations_checked = item_spec.details.get("variants_checked", 0)
         if combinations_checked < 1:
             raise ValueError("IR validation checked no parameter combinations")
+
         expected_sha256 = template_sha256(template)
         saved_evidence = [
             save_checked_evidence(
@@ -173,6 +176,7 @@ class MathDomain:
             )
             for item in evidence
         ]
+
         summary = MathValidationSummary(
             checking_mode=MATH_CHECKING_MODE,
             combinations_checked=combinations_checked,
@@ -180,6 +184,7 @@ class MathDomain:
             seed=item_spec.details.get("seed", 0),
             evidence=saved_evidence,
         )
+
         return ValidatedMathTemplate(template=template, validation=summary)
 
     def checked_tool_bindings(

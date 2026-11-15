@@ -111,6 +111,7 @@ class PropertyCheckRun:
         except ValidationFailure as exc:
             exc.context.update(self.details())
             raise
+
         return list(self.passed.values())
 
 
@@ -124,11 +125,14 @@ def boundary_examples(candidate: CodeTemplateCandidate) -> list[dict]:
         elif p.kind == "integer_list":
             values = sorted(values, key=lambda x: (len(x), x))
         ordered[p.name] = values
+
     base = {name: values[0] for name, values in ordered.items()}
     examples = [base, {name: values[-1] for name, values in ordered.items()}]
+
     for p in candidate.parameters:
         examples.append(base | {p.name: ordered[p.name][-1]})
         if p.kind == "integer" and 0 in p.values:
             examples.append(base | {p.name: 0})
     unique = {json.dumps(x, sort_keys=True): x for x in examples}
+
     return list(unique.values())

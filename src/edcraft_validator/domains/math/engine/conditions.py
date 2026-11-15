@@ -106,6 +106,7 @@ def ast_conditions(ctx: EngineContext, root: Expr) -> tuple[Condition, ...]:
             argument = compile_node(args[0])
             conditions.append(Condition("ge", argument + 1))
             conditions.append(Condition("le", argument - 1))
+
         for child in args:
             walk(child)
 
@@ -159,6 +160,7 @@ def symbol_domain(spec: SymbolSpec, requested: str = "real") -> sympy.Set:
         "integer": sympy.S.Integers,
         "rational": sympy.S.Rationals,
     }
+
     domain = domains[requested].intersect(domains[spec.domain])
     if spec.integer:
         domain = domain.intersect(sympy.S.Integers)
@@ -166,4 +168,5 @@ def symbol_domain(spec: SymbolSpec, requested: str = "real") -> sympy.Set:
         domain = domain.intersect(sympy.Interval.open(0, sympy.oo))
     if spec.nonzero:
         domain = domain - sympy.FiniteSet(0)
+
     return domain

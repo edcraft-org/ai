@@ -133,6 +133,7 @@ def load_code_difficulty_rubric() -> CodeDifficultyRubric:
             .read_bytes()
             .decode("utf-8")
         )
+
     version = re.search(r"^Rubric version: `([^`]+)`", text, re.MULTILINE)
     conditions = re.search(
         r"^Assessment conditions version: `([^`]+)`", text, re.MULTILINE

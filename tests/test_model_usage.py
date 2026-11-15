@@ -45,6 +45,7 @@ def test_openai_compatible_usage_survives_bad_json_and_resets_after_transport_fa
         chat=SimpleNamespace(completions=SimpleNamespace(create=create))
     )
     provider = OpenAICompatibleProvider(provider_name, client, model="test")
+
     with pytest.raises(GenerationResponseError):
         provider.generate(generation_request())
     assert provider.last_usage == TokenUsage(input_tokens=123, output_tokens=45)
@@ -68,6 +69,7 @@ def test_missing_or_invalid_openai_usage_does_not_break_valid_generation():
         chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kw: response))
     )
     provider = OpenAICompatibleProvider("openai", client, model="test")
+
     provider.generate(generation_request())
     assert provider.last_usage == TokenUsage()
     del response.usage
@@ -129,6 +131,7 @@ def test_usage_counts_only_generation_and_revision_during_authoring():
     assert result.usage.input_tokens == 200
     assert result.usage.output_tokens == 40
     assert result.usage.unavailable_call_count == 0
+
     provider = Metered()
     first, _ = run(provider)
     second, _ = run(provider)
@@ -204,6 +207,7 @@ def test_partial_usage_keeps_reported_counts_without_claiming_complete_totals():
             ModelCallRecord(operation="checking", duration_ms=10),
         ]
     )
+
     assert summary.model_call_count == 3
     assert summary.unavailable_call_count == 2
     assert summary.input_tokens is None and summary.output_tokens is None
@@ -243,6 +247,7 @@ def test_ollama_generation_captures_native_usage(monkeypatch):
         lambda *args, **kwargs: Response(),
     )
     provider = OllamaProvider(model="test")
+
     request = StructuredGenerationRequest(
         messages=[], response_model=Proposal, prompt_version="test"
     )

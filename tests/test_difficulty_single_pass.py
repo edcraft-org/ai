@@ -49,6 +49,7 @@ async def test_failed_check_is_not_repaired_or_retried(response, error):
     report = await assess_code_question_difficulty(
         question(), provider_factory=factory, requested_difficulty="hard"
     )
+
     assert report.status == "error" and report.error_code == error
     assert report.difficulty_match is None and report.judge.assessment is None
     assert len(providers) == len(providers[0].requests) == 1
@@ -83,6 +84,7 @@ async def test_unknown_usage_from_failed_call_is_not_replaced_with_zero():
     report = await assess_code_question_difficulty(
         question(), provider_factory=lambda: provider
     )
+
     assert report.status == "error" and len(provider.requests) == 1
     assert report.usage.input_tokens is None and report.usage.output_tokens is None
     assert report.usage.unavailable_call_count == 1
@@ -94,6 +96,7 @@ async def test_schema_diagnostics_remain_sanitized_without_a_followup():
         "concepts_and_dependencies": [],
         "reason": "PRIVATE_VALUE",
     }
+
     factory, providers = factory_for([malformed, assessment()])
     report = await assess_code_question_difficulty(question(), provider_factory=factory)
     assert report.status == "error" and len(providers) == 1

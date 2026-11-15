@@ -176,6 +176,7 @@ def test_evaluation_notifies_before_starting_the_next_attempt() -> None:
         repetitions=2,
         on_attempt=record,
     )
+
     assert observed == report.attempts
     assert events == ["generate", "completed:1", "generate", "completed:2"]
 
@@ -254,6 +255,7 @@ def test_successful_evaluation_keeps_failed_attempt_evidence_in_the_report():
         difficulties=("easy",),
         repetitions=1,
     )
+
     attempt = report.attempts[0]
     assert attempt.status == "validated"
     history = attempt.authoring_result.attempts
@@ -295,6 +297,7 @@ def test_evaluation_attributes_failure_to_the_final_attempt():
         difficulties=("easy",),
         repetitions=1,
     )
+
     attempt = report.attempts[0]
     assert attempt.failure_stage == "validation"
     assert attempt.failure_code == "DISTRACTOR_SELECTION_FAILED"
@@ -338,6 +341,7 @@ def test_evaluation_distinguishes_revision_transport_errors_from_check_failures(
         difficulties=("easy",),
         repetitions=1,
     )
+
     attempt = report.attempts[0]
     assert attempt.failure_stage == "generation"
     assert attempt.failure_code == "transport"

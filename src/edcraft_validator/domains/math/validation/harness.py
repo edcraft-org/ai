@@ -104,12 +104,14 @@ def validate_item(
     else:
         checks = [_engine_correctness(spec, recipe, params)]
         options, option_findings = _check_recipe_distractors(spec, params)
+
     findings = [
         f"{result.check}: {result.reason}"
         for result in checks
         if result.status == "failed" and result.reason
     ]
     findings.extend(option_findings)
+
     return HarnessReport(
         report=ValidationReport(
             status=_aggregate(
@@ -141,6 +143,7 @@ def _engine_correctness(
             reason=f"the engine cannot grade this item: {exc}",
             evidence={"outcome": "unsupported", "expected": "correct"},
         )
+
     outcome = str(grading.outcome)
     passed = outcome == "correct"
     return CheckResult(
@@ -251,6 +254,7 @@ def _check_recipe_distractors(
                         "reason": "duplicate distractor option",
                     }
                 )
+
     return checks, findings
 
 
@@ -265,6 +269,7 @@ def _check_distractor_forms(
     """
     if spec.goal.kind not in FORM_SENSITIVE_GOALS:
         return []
+
     checks: list[OptionCheck] = []
     for index, distractor in enumerate(spec.distractors):
         form = _recipe_form(spec, _recipe_from_distractor(distractor), params)
@@ -283,6 +288,7 @@ def _check_distractor_forms(
                 ),
             )
         )
+
     return checks
 
 
@@ -314,6 +320,7 @@ def validate_template(
             )
         )
     sample = sample_parameter_combinations(template, limit=max_variants, seed=seed)
+
     if not sample.combinations:
         return HarnessReport(
             report=ValidationReport(
@@ -323,10 +330,12 @@ def validate_template(
             variants_total=sample.declared_size,
             seed=seed,
         )
+
     reports: list[HarnessReport] = [
         validate_item(template.body, params=combination, aspect=aspect)
         for combination in sample.combinations
     ]
+
     merged_findings: list[str] = []
     failed = [report for report in reports if report.report.status == "failed"]
     inconclusive = [
@@ -337,12 +346,14 @@ def validate_template(
             merged_findings.extend(
                 f"variant {index}: {finding}" for finding in report.report.findings
             )
+
     if failed:
         status: CheckStatus = "failed"
     elif inconclusive:
         status = "inconclusive"
     else:
         status = "passed"
+
     return HarnessReport(
         report=ValidationReport(
             status=status,

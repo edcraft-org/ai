@@ -27,6 +27,7 @@ def keyed_payload(count=4):
         item["option_id"]: {k: v for k, v in item.items() if k != "option_id"}
         for item in payload["option_evidence"][:count]
     }
+
     return payload
 
 
@@ -38,6 +39,7 @@ def test_exact_option_keys_are_required_closed_and_normalize_losslessly(count):
         if node.get("type") == "object":
             assert node["additionalProperties"] is False
             assert set(node["required"]) == set(node["properties"])
+
     payload = keyed_payload(count)
     result = model.model_validate(payload).to_assessment()
     assert isinstance(result, DifficultyAssessment)
@@ -47,6 +49,7 @@ def test_exact_option_keys_are_required_closed_and_normalize_losslessly(count):
             assessment() | {"option_evidence": assessment()["option_evidence"][:count]}
         ).option_evidence
     )
+
     del payload["option_evidence"]["C"]
     with pytest.raises(ValidationError):
         model.model_validate(payload)
@@ -64,6 +67,7 @@ def test_exact_option_schema_keeps_missing_information_and_text_validation():
     ):
         with pytest.raises(ValidationError):
             model.model_validate(keyed_payload() | change)
+
     result = model.model_validate(
         keyed_payload()
         | {"estimated_difficulty": None, "unable_to_assess_reason": "Missing input."}
@@ -75,6 +79,7 @@ def test_runtime_has_only_three_original_anchors_and_no_review_prerequisites():
     rubric = load_code_difficulty_rubric()
     prompt = runtime_instructions(rubric)
     anchors = worked_anchors(rubric)
+
     assert len(anchors) == 3 and prompt.count("```python") == 3
     assert all(anchor in rubric.text and anchor in prompt for anchor in anchors)
     assert len(prompt) < len(rubric.text)
@@ -110,6 +115,7 @@ async def test_request_is_blinded_single_pass_and_mcp_output_remains_canonical()
     assert value["status"] == "assessed" and value["difficulty_match"] == "too_easy"
     assert value["judge"]["assessment"] == assessment()
     assert value["usage"]["model_call_count"] == len(providers) == 1
+
     request = providers[0].requests[0]
     assert request == build_difficulty_request(
         question(), load_code_difficulty_rubric()
@@ -130,9 +136,11 @@ def test_judge_provider_and_model_follow_shared_configuration(monkeypatch):
         "create_model_provider",
         lambda s: selected.append(s) or Provider(),
     )
+
     configured_judge_provider()
     assert selected[0].provider == "soclaas"
     assert selected[0].model == "x-test-3"
+
     for name in ("openai", "ollama"):
         monkeypatch.setenv("EDCRAFT_JUDGE_PROVIDER", name)
         monkeypatch.setenv("EDCRAFT_JUDGE_MODEL", "configured-model")

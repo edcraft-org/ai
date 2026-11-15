@@ -66,6 +66,7 @@ class Provider:
         current = self.proposals[
             min(len(self.generations) - 1, len(self.proposals) - 1)
         ]
+
         if not issubclass(request.response_model, PlannedGenerationResponse):
             return request.response_model.model_validate(current.model_dump())
         return PlannedGenerationResponse(
@@ -94,6 +95,7 @@ def test_direct_checks_deliver_all_evidence_before_self_correction():
     arguments = {FEATURES: {"required": ["arithmetic"]}}
     provider = Provider([wrong_answer(), proposal()], plan, arguments)
     result, client = run(provider)
+
     assert result.status == "checked"
     assert [name for name, _ in client.dispatches] == list(plan) * 2
     assert len(result.attempts) == 2
@@ -124,6 +126,7 @@ def test_application_runs_each_selected_check_once_without_provider_tool_support
             self.plan_arguments = {}
 
     result, client = run(StructuredOnly())
+
     assert result.status == "checked"
     assert [name for name, _ in client.dispatches] == [SEMANTIC, STRUCTURE]
     assert result.usage.model_call_count == 1
@@ -134,6 +137,7 @@ def test_failure_runs_whole_plan_then_corrects_with_same_catalogue_and_fresh_evi
     provider = Provider([wrong_answer(), proposal()])
     executor = Executor()
     result, client = run(provider, RecordingClient(executor))
+
     assert result.status == "checked"
     assert client.listings == 1
     assert [name for name, _ in client.dispatches] == [SEMANTIC, STRUCTURE] * 2
@@ -151,6 +155,7 @@ def test_failure_runs_whole_plan_then_corrects_with_same_catalogue_and_fresh_evi
     )  # Finalization does not execute again.
     assert not any(m["role"] == "tool" for m in provider.generations[1])
     revision = json.loads(provider.generations[1][-1]["content"])
+
     assert revision["fixed_plan"] == list(provider.plan)
     feedback = revision["check_results"]
     assert feedback[0]["evidence"]["status"] == "failed"
@@ -173,6 +178,7 @@ def test_failure_runs_whole_plan_then_corrects_with_same_catalogue_and_fresh_evi
 def test_fourth_failure_retains_full_history_without_attempt_five():
     provider = Provider([wrong_answer()])
     result, client = run(provider)
+
     assert result.status == "needs_review"
     assert result.artifact is None
     assert len(result.attempts) == len(provider.generations) == 4
@@ -190,6 +196,7 @@ def test_fourth_failure_retains_full_history_without_attempt_five():
         assert revision["latest_candidate"] == result.attempts[number - 1].candidate
         assert revision["failed_attempt"] == number
         assert revision["remaining_revisions"] == 4 - number
+
     feedback = json.loads(provider.generations[2][-1]["content"])["check_results"]
     assert feedback == [
         {
@@ -202,12 +209,14 @@ def test_fourth_failure_retains_full_history_without_attempt_five():
 
 def test_exhausted_attempts_expose_technical_check_failure():
     result, _ = run(Provider([wrong_answer()]))
+
     assert result.status == "needs_review" and result.artifact is None
     assert not result.attempts[-1].passed
     assert result.failure == AuthoringError(
         stage="checking", code="TEMPLATE_CHECKS_FAILED"
     )
     summary = summarize_authoring(result)
+
     assert summary.error.code == "TEMPLATE_CHECKS_FAILED"
     assert summary.error.message == (
         "The model did not produce a template that passes technical checks. "
@@ -235,6 +244,7 @@ def test_checked_workflow_exposes_no_public_error():
 )
 def test_invalid_or_overridden_plan_arguments_stop_before_any_dispatch(arguments):
     result, client = run(Provider(plan_arguments={SEMANTIC: arguments}))
+
     assert result.status == "error"
     assert result.failure.code in {"schema_validation", "ValidationError"}
     assert not result.attempts
@@ -275,6 +285,7 @@ def test_revision_schema_cannot_change_plan_after_failed_attempt():
             return super().generate(request)
 
     result, client = run(ChangingProvider([wrong_answer(), proposal()]))
+
     assert result.status == "checked"
     assert [name for name, _ in client.dispatches] == [SEMANTIC, STRUCTURE] * 2
     assert result.fixed_plan == [SEMANTIC, STRUCTURE]
@@ -290,6 +301,7 @@ def test_revision_cannot_return_another_combined_plan_response():
             return super().generate(request)
 
     result, client = run(WrongRevision([wrong_answer()]))
+
     assert result.status == "error"
     assert "Revision must return only the proposal" in result.reason
     assert len(client.dispatches) == 2
@@ -321,6 +333,7 @@ def test_bad_mcp_results_never_pass_and_do_not_skip_other_checks(kind):
             return raw
 
     result, client = run(Provider(), BrokenClient(Executor()))
+
     assert result.status == "needs_review"
     assert all(
         not attempt.executions[0].passed and attempt.executions[1].passed
@@ -336,11 +349,13 @@ def test_tool_execution_failure_is_reported_as_a_check_error():
             return super().call_tool(name, arguments, version=version)
 
     result, _ = run(Provider(), UnavailableClient(Executor()))
+
     assert result.status == "needs_review"
     assert len(result.attempts) == 4  # Retryable failures still use the loop.
     assert result.failure == AuthoringError(stage="checking", code="CHECK_ERROR")
     assert "could not complete" in result.reason
     summary = summarize_authoring(result)
+
     assert summary.error.code == "CHECK_ERROR"
     assert summary.error.message == (
         "A check could not complete. Verify the model or tool service and try again."
@@ -368,8 +383,10 @@ def test_application_injects_exact_candidate_and_original_request_count():
 
 def test_execution_records_keep_model_arguments_separate_from_owned_bindings():
     result, _ = run(Provider())
+
     assert result.status == "checked"
     execution = result.attempts[0].executions[0]
+
     assert execution.application_arguments == {"required_distractors": 3}
     assert execution.requested_arguments == {}
     assert execution.evidence.details["examples_checked"] > 0
@@ -388,6 +405,7 @@ def test_live_workflow_assertions_cover_authoring_and_replay():
     fixture = proposal().model_copy(deep=True)
     fixture.parameters[0].values = [2, 3]
     fixture.parameters[1].values = [4, 5]
+
     check_live_workflow(WorkflowProvider([fixture]), reviewed_inputs=True)
 
 
@@ -404,6 +422,7 @@ def test_revision_cannot_mutate_frozen_feature_arguments():
         plan_arguments={FEATURES: {"required": ["arithmetic"]}},
     )
     result, client = run(provider)
+
     assert result.status == "checked"
     assert len(result.attempts) == 2
     assert [
@@ -414,6 +433,7 @@ def test_revision_cannot_mutate_frozen_feature_arguments():
 
 def test_execution_ids_are_application_owned_and_unique_across_attempts():
     result, _ = run(Provider([wrong_answer(), proposal()]))
+
     ids = [
         execution.call_id
         for attempt in result.attempts
@@ -441,6 +461,7 @@ def test_passing_checks_from_different_attempts_cannot_be_combined():
             return raw
 
     result, _ = run(Provider(), AlternatingClient(Executor()))
+
     assert result.status == "needs_review"
     assert all(not attempt.passed for attempt in result.attempts)
     assert result.artifact is None
@@ -454,6 +475,7 @@ def test_revision_transport_failure_keeps_complete_previous_attempt():
             return super().generate(request)
 
     result, _ = run(FailedRevision([wrong_answer()]))
+
     assert result.status == "error"
     assert result.reason == "TimeoutError: Revision timed out"
     assert len(result.attempts) == 1
@@ -491,8 +513,10 @@ def test_generation_timing_includes_successful_and_failed_corrections(
             return super().generate(request)
 
     result, _ = run(TimedProvider([wrong_answer(), proposal()]))
+
     assert result.duration_ms == 8000
     assert result.generation_duration_ms == 8000
+
     if revision == "success":
         assert result.status == "checked"
         assert result.artifact.authoring.generation_duration_ms == 8000
@@ -520,6 +544,7 @@ def test_invalid_feature_arguments_stop_before_checking(arguments):
     result, client = run(
         Provider(plan=(FEATURES,), plan_arguments={FEATURES: arguments})
     )
+
     assert result.status == "error"
     assert result.failure.code == "schema_validation"
     assert not result.attempts and not client.dispatches

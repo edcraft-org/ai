@@ -26,12 +26,14 @@ def test_large_domain_is_sampled_and_unseen_inputs_generate_without_execution():
     executor = ArithmeticExecutor()
     checked = validate_code(candidate, execution_tool=executor)
     counts = checked.validation
+
     assert counts.checking_mode == "property_based"
     assert 1 <= counts.examples_checked <= counts.max_examples + 5
     assert counts.execution_calls == len(executor.calls) == counts.examples_checked
     assert counts.examples_checked < 32**3
     assert "validated_cases" not in counts.model_dump()
     assert checked.template.answer_expression == candidate.answer_expression
+
     reloaded = ValidatedCodeTemplate.model_validate_json(checked.model_dump_json())
     sampled = {json.dumps(x, sort_keys=True) for x in executor.calls}
     before = len(executor.calls)
@@ -88,6 +90,7 @@ def test_failing_generated_input_shrinks_and_replays():
         answer_expression="a + b - c if a < 5 or a > 8 else a + b - c + 1",
     )
     candidate.parameters[0].values = list(range(10))
+
     seen = []
     for _ in range(2):
         with pytest.raises(ValidationFailure) as exc:

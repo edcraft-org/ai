@@ -63,6 +63,7 @@ def decision_from_response(response, labels):
         if choice.finish_reason != "stop" or content not in labels:
             raise ValueError("Decision did not return exactly one allowed label")
         first = choice.logprobs.content[0]
+
         masses = {label: [] for label in labels}
         for token in first.top_logprobs:
             label = token.token.strip().lower().removesuffix(".")
@@ -70,9 +71,11 @@ def decision_from_response(response, labels):
                 if not math.isfinite(token.logprob) or token.logprob > 0:
                     raise ValueError("Invalid token probability")
                 masses[label].append(token.logprob)
+
         observed = [p for values in masses.values() for p in values]
         if not observed:
             raise ValueError("No allowed labels in token probabilities")
+
         peak = max(observed)
         weights = {
             label: sum(math.exp(p - peak) for p in values)
@@ -83,6 +86,7 @@ def decision_from_response(response, labels):
         label = max(distribution, key=distribution.get)
         if content != label:
             raise ValueError("Returned label disagrees with token probabilities")
+
         return ClassDecision(
             label=label,
             confidence=distribution[label],
@@ -98,6 +102,7 @@ class DecisionAdapter:
 
     def __init__(self, provider_factory, labels):
         self.delegate = provider_factory()
+
         if not supports_decisions(self.delegate):
             raise ValueError("Provider does not support token-probability decisions")
         self.provider, self.model = self.delegate.provider, self.delegate.model
@@ -117,6 +122,7 @@ class DecisionAdapter:
         result = ClassDecision.model_validate(
             self.delegate.decide(request.messages, self.labels).model_dump()
         )
+
         if set(result.distribution) != set(self.labels):
             raise GenerationResponseError("Decision labels do not match request")
         return result

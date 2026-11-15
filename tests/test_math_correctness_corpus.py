@@ -110,6 +110,7 @@ def set_answer(
         answer["items"] = items
     if intervals is not None:
         answer["intervals"] = intervals
+
     return answer
 
 
@@ -174,6 +175,7 @@ def scalar_problem(
         problem["upper"] = upper
     if order != 1:
         problem["order"] = order
+
     return problem
 
 
@@ -209,6 +211,7 @@ def matrix_problem(
         problem["right_matrix"] = matrix(right_rows)
     if symbols is not None:
         problem["symbols"] = symbols
+
     return problem
 
 
@@ -2395,6 +2398,7 @@ def _request(case: dict[str, object]) -> CorrectnessRequest:
 @pytest.mark.parametrize("case", CASES, ids=[case["id"] for case in CASES])
 def test_corpus_case(case: dict[str, object]) -> None:
     result = check_in_process(_request(case))
+
     assert result.outcome == case["expected_outcome"], (
         f"{case['contract']}: {case['note']} | reason={result.reason!r} "
         f"| details={result.details!r}"
@@ -2419,6 +2423,7 @@ def test_every_contract_has_at_least_ten_cases() -> None:
         "matrix-multiply",
         "solve-linear-system",
     }
+
     assert required <= set(counts)
     for contract in sorted(required):
         assert counts[contract] >= 10, f"{contract} has only {counts[contract]} cases"

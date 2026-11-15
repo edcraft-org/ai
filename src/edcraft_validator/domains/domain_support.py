@@ -58,6 +58,7 @@ def build_review_view(
     dump = getattr(template, "model_dump", None)
     if not isinstance(template_id, str) or dump is None:
         return None
+
     validation = getattr(artifact, "validation", None)
     return ReviewTemplateView(
         template_id=template_id,
@@ -91,6 +92,7 @@ def build_template_id(
         sort_keys=True,
         separators=(",", ":"),
     ).encode()
+
     digest = hashlib.sha256(identity_payload).hexdigest()[:12]
     return f"{domain_name}.{request.difficulty}.{digest}"
 
@@ -113,6 +115,7 @@ def require_checked(
         for item in evidence
     ):
         raise ValueError("All selected checks must pass")
+
     passed = {item.tool for item in evidence if item.status == "passed"}
     missing = sorted(required - passed)
     if missing:
@@ -141,6 +144,7 @@ def save_checked_evidence(
             issues=[finding.model_dump() for finding in item.findings],
             details={"tool_version": item.version},
         )
+
     details: dict[str, Any] = {"tool_version": item.version, **item.details}
     recorded_sha256 = item.details.get("subject_sha256")
     if recorded_sha256 is None:
@@ -168,6 +172,7 @@ def save_checked_evidence(
         status = "incomplete"
     else:
         status = "passed"
+
     # Saved artifacts identify advisory rows by this flag, so it is set here
     # from application policy and never taken from the tool's own details.
     details["advisory"] = True

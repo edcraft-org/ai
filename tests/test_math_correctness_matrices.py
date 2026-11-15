@@ -71,7 +71,9 @@ def _run(
         problem["right_matrix"] = _matrix(right_matrix)
     if symbols is not None:
         problem["symbols"] = symbols
+
     request = CorrectnessRequest.model_validate({"problem": problem, "answer": answer})
+
     return check_matrices(EngineContext.create(request))
 
 
@@ -149,6 +151,7 @@ def test_determinant_is_exact_for_4x4_and_5x5() -> None:
         [3, 0, 1, 1],
         [0, 2, 1, 4],
     ]
+
     result = _run("determinant", four, _expression_answer(_num(-16)))
     assert result.outcome == "correct", result.reason
     json.dumps(result.details)
@@ -160,6 +163,7 @@ def test_determinant_is_exact_for_4x4_and_5x5() -> None:
         [0, 0, 1, 5, 1],
         [0, 0, 0, 1, 6],
     ]
+
     result = _run("determinant", five, _expression_answer(_num(492)))
     assert result.outcome == "correct", result.reason
 
@@ -167,6 +171,7 @@ def test_determinant_is_exact_for_4x4_and_5x5() -> None:
 def test_determinant_accepts_exact_radical_forms_but_not_tiny_residuals() -> None:
     matrix = [[_sqrt(2), 0], [0, _sqrt(2)]]
     equivalent = _op("div", _sqrt(8), _sqrt(2))
+
     result = _run("determinant", matrix, _expression_answer(equivalent))
     assert result.outcome == "correct", result.reason
 
@@ -192,6 +197,7 @@ def test_singular_determinant_zero_is_correct() -> None:
         [0, 1, 0, 1],
         [1, 1, 1, 1],
     ]
+
     result = _run("determinant", singular, _expression_answer(_num(0)))
     assert result.outcome == "correct", result.reason
 
@@ -209,6 +215,7 @@ def test_determinant_requires_an_expression_answer() -> None:
         [[1, 2], [3, 4]],
         _matrix_answer([[-2]]),
     )
+
     assert result.outcome == "unsupported"
     assert "expression" in result.reason
 
@@ -250,6 +257,7 @@ def test_inverse_4x4_verifies_both_exact_products() -> None:
         ["15/47", "-28/47", "15/47", "-6/47"],
         ["1/47", "-5/47", "1/47", "9/47"],
     ]
+
     result = _run("inverse", matrix, _matrix_answer(inverse))
     assert result.outcome == "correct", result.reason
     assert result.details["nonzero_cells"] == 0
@@ -268,6 +276,7 @@ def test_inverse_4x4_verifies_both_exact_products() -> None:
 def test_inverse_accepts_irrationals_and_rejects_singular_problem() -> None:
     matrix = [[2, 0], [0, _sqrt(2)]]
     inverse = [[Fraction(1, 2), 0], [0, _op("div", _num(1), _sqrt(2))]]
+
     result = _run("inverse", matrix, _matrix_answer(inverse))
     assert result.outcome == "correct", result.reason
 
@@ -387,6 +396,7 @@ def test_lu_4x4_and_singular_matrix() -> None:
         [0, 1, Fraction(13, 3), 1],
         [2, 1, -2, Fraction(11, 2)],
     ]
+
     answer = _lu_answer(
         [
             [1, 0, 0, 0],
@@ -397,6 +407,7 @@ def test_lu_4x4_and_singular_matrix() -> None:
         lower,
         upper,
     )
+
     result = _run("lu", matrix, answer)
     assert result.outcome == "correct", result.reason
 
@@ -453,6 +464,7 @@ def test_unresolved_candidate_comparison_is_unknown() -> None:
         _expression_answer({"sym": "x"}),
         symbols=symbols,
     )
+
     assert result.outcome == "unknown"
     assert result.details["unresolved_cells"] == 1
     json.dumps(result.details)
@@ -462,6 +474,7 @@ def test_eight_by_eight_multiplication_stays_exact() -> None:
     size = 8
     diagonal = [[i + 1 if i == j else 0 for j in range(size)] for i in range(size)]
     identity = [[1 if i == j else 0 for j in range(size)] for i in range(size)]
+
     result = _run(
         "matrix-multiply",
         identity,

@@ -482,6 +482,7 @@ def _merge(*items: _Evidence) -> _Evidence:
     unresolved_cells = 0
     first_cell: tuple[int, int] | None = None
     first_residual: sympy.Expr | None = None
+
     for item in items:
         cells_checked += item.cells_checked
         nonzero_cells += item.nonzero_cells
@@ -490,6 +491,7 @@ def _merge(*items: _Evidence) -> _Evidence:
         if first_cell is None and item.first_cell is not None:
             first_cell = item.first_cell
             first_residual = item.first_residual
+
     return _Evidence(
         state,
         cells_checked=cells_checked,
@@ -547,11 +549,13 @@ def _permutation_state(matrix: _Matrix) -> _State:
     for row in matrix:
         for value in row:
             state = _worse(state, _binary_state(value))
+
     for row_index in range(size):
         state = _worse(
             state,
             _residual_state(sum(matrix[row_index], sympy.Integer(0)) - 1),
         )
+
     for column in range(size):
         state = _worse(
             state,
@@ -616,6 +620,7 @@ def _finish(
         "operation": operation,
         **_evidence_details(evidence),
     }
+
     if extra:
         details.update(extra)
     if evidence.state == "equal":
@@ -631,6 +636,7 @@ def _evidence_details(evidence: _Evidence) -> dict[str, object]:
         "nonzero_cells": evidence.nonzero_cells,
         "unresolved_cells": evidence.unresolved_cells,
     }
+
     if evidence.first_cell is not None:
         details["first_residual_cell"] = list(evidence.first_cell)
     if evidence.first_residual is not None:

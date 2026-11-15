@@ -158,6 +158,7 @@ def test_samples_recipes_then_generates_without_executor() -> None:
     assert "validated_cases" not in summary.model_dump()
     assert summary.execution_calls == summary.examples_checked == len(executor.calls)
     assert summary.execution_calls <= summary.max_execution_calls
+
     before = len(executor.calls)
     first = generate_code_question(validated, seed=42)
     assert first == generate_code_question(validated, seed=42)
@@ -269,6 +270,7 @@ def test_two_model_distractors_are_enough_when_two_are_requested() -> None:
         }
     )
     payload["distractors"] = payload["distractors"][:2]
+
     proposal = CodeTemplateProposal.model_validate(payload)
 
     built = build_code_candidate(
@@ -334,6 +336,7 @@ def test_candidate_builder_leaves_missing_distractors_for_check_failure() -> Non
         }
     )
     payload["distractors"] = payload["distractors"][:2]
+
     proposal = CodeTemplateProposal.model_validate(payload)
 
     built = build_code_candidate(
@@ -346,6 +349,7 @@ def test_candidate_builder_leaves_missing_distractors_for_check_failure() -> Non
     )
 
     assert built.distractors == proposal.distractors
+
     original = built.model_copy(deep=True)
     with pytest.raises(TemplateValidationError) as error:
         validate_code(built, execution_tool=ArithmeticExecutor(), num_distractors=3)
@@ -1025,6 +1029,7 @@ def test_sampled_collision_requires_revision_without_exclusions() -> None:
     item = CodeTemplateCandidate.model_validate(value)
 
     original = item.model_copy(deep=True)
+
     with pytest.raises(ValidationFailure) as error:
         validate_code(item, execution_tool=ArithmeticExecutor(), num_distractors=2)
     assert error.value.code == "DISTRACTOR_SELECTION_FAILED"
@@ -1035,6 +1040,7 @@ def test_selection_rejects_invalid_model_distractors_without_fallbacks() -> None
     data = template().model_dump()
     for distractor in data["distractors"]:
         distractor["expression"] = "a + b - c"
+
     item = CodeTemplateCandidate.model_validate(data)
 
     original = item.model_copy(deep=True)
@@ -1075,7 +1081,9 @@ def test_invalid_non_numeric_distractors_fail_without_fallbacks(
             "question_type": "mcq",
         }
     )
+
     original = item.model_copy(deep=True)
+
     with pytest.raises(TemplateValidationError) as error:
         validate_code(item, execution_tool=TrustedBatchExecutor(), num_distractors=3)
     assert error.value.code == "DISTRACTOR_SELECTION_FAILED"
@@ -1097,9 +1105,11 @@ def test_wrong_answer_is_rejected_without_promotion_or_repair() -> None:
         {"expression": "a - b - c", "reason_template": "Subtracts b."},
         {"expression": "a + b", "reason_template": "Omits c."},
     ]
+
     item = CodeTemplateCandidate.model_validate(data)
 
     original = item.model_copy(deep=True)
+
     with pytest.raises(ValidationFailure) as error:
         validate_code(item, execution_tool=ArithmeticExecutor())
     assert error.value.code == "PROPOSED_ANSWER_MISMATCH"

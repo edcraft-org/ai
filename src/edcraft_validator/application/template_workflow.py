@@ -93,6 +93,7 @@ class _AuthoringJob:
     def generate(self, operation, *args, phase="generating", **kwargs):
         self.stage = "generation"
         self.notify(phase)
+
         started = time.perf_counter()
         try:
             return operation(*args, **kwargs)
@@ -103,6 +104,7 @@ class _AuthoringJob:
     def notify(self, phase):
         if self.observer is None:
             return
+
         attempt = len(self.result.attempts) + (phase in {"generating", "correcting"})
         progress = AuthoringProgress(phase=phase, attempt=attempt)
         try:
@@ -123,6 +125,7 @@ class TemplateApplication:
     ) -> None:
         self.tool_catalogue = tool_catalogue
         self.tool_client = tool_client
+
         if (
             type(max_correction_attempts) is not int
             or not 0 <= max_correction_attempts <= 3
@@ -140,6 +143,7 @@ class TemplateApplication:
             provider=provider,
             on_catalogue_resolved=on_catalogue_resolved,
         )
+
         if result.artifact is None:
             raise AuthoringFailure(result)
         return result.artifact
@@ -167,6 +171,7 @@ class TemplateApplication:
             fixed_plan=[],
             tool_catalogue=[],
         )
+
         job = _AuthoringJob(
             request,
             domain,
@@ -175,6 +180,7 @@ class TemplateApplication:
             self.max_correction_attempts + 1,
             observer=on_progress,
         )
+
         try:
             result.provider_settings = copy.deepcopy(
                 getattr(provider, "generation_settings", lambda: {})()
@@ -199,6 +205,7 @@ class TemplateApplication:
         capabilities = getattr(job.domain, "capabilities", None)
         if capabilities is None:
             raise ValueError(f"domain {job.domain.name!r} must declare capabilities")
+
         tools = resolve_domain_tools(
             job.domain.name,
             self.tool_catalogue or client,
@@ -208,6 +215,7 @@ class TemplateApplication:
         job.result.tool_catalogue = snapshot.summaries()
         if observer is not None:
             observer(snapshot)
+
         generation_request = job.domain.generation_request(job.request)
         generation_request = replace(
             generation_request,
@@ -233,6 +241,7 @@ class TemplateApplication:
             planned_arguments = {
                 check.name: json.dumps(check.arguments) for check in response.checks
             }
+
             attempt = self._build_attempt(number, candidate, names)
             job.result.attempts.append(attempt)
             job.stage = "checking"
@@ -248,6 +257,7 @@ class TemplateApplication:
                 request=job.request,
                 candidate=candidate,
             )
+
             if not self._should_revise(attempt, number, job.max_attempts):
                 job.stage = "finalization"
                 job.notify("finalizing")
@@ -280,8 +290,10 @@ class TemplateApplication:
                 "domain requires checks the catalogue does not offer: "
                 + ", ".join(unavailable)
             )
+
         if not missing:
             return response
+
         added = [RecommendedCheck(name=name, arguments={}) for name in missing]
         return response.model_copy(update={"checks": [*response.checks, *added]})
 
@@ -291,9 +303,11 @@ class TemplateApplication:
         requested = getattr(job.request, "num_distractors", None)
         if requested is None:
             return
+
         offered = job.domain.distractor_count(candidate)
         if offered >= requested:
             return
+
         attempt.executions.append(
             CheckExecution(
                 call_id=f"attempt-{attempt.number}:{DISTRACTOR_COUNT_CHECK}",
@@ -338,6 +352,7 @@ class TemplateApplication:
             code = exc.category
         elif isinstance(exc, ToolCatalogueError):
             code = "MCP_CATALOGUE_ERROR"
+
         result.failure = AuthoringError(stage=stage, code=code)
 
     @staticmethod
@@ -422,6 +437,7 @@ class TemplateApplication:
                 ),
             },
         ]
+
         revised_proposal = _generate_author(
             provider,
             replace(
@@ -433,6 +449,7 @@ class TemplateApplication:
                 tool_catalogue=None,
             ),
         )
+
         if not isinstance(revised_proposal, response_model):
             raise GenerationSchemaError("Revision must return only the proposal")
         # Revalidate even for adapters that return an existing/constructed model.
@@ -442,6 +459,7 @@ class TemplateApplication:
             )
         except (ValidationError, ValueError) as exc:
             raise GenerationSchemaError(f"Invalid complete revision: {exc}") from exc
+
         response = response.model_copy(update={"proposal": revised_proposal})
         return response
 
@@ -478,6 +496,7 @@ class TemplateApplication:
         advisory_checks = frozenset(
             execution.tool for execution in attempt.executions if execution.advisory
         )
+
         try:
             artifact = job.domain.finalize_checked_template(
                 candidate, evidence, advisory_checks=advisory_checks
@@ -489,6 +508,7 @@ class TemplateApplication:
                 stage="finalization", code="ARTIFACT_UNAVAILABLE"
             )
             return result
+
         if not isinstance(artifact, ValidatedTemplateArtifact):
             raise TypeError("Domain returned no shared validated artifact")
 
@@ -501,10 +521,12 @@ class TemplateApplication:
             generated_at=result.generated_at,
             generation_duration_ms=result.generation_duration_ms,
         )
+
         result.artifact = artifact.model_copy(
             update={"artifact_id": uuid.uuid4().hex, "authoring": provenance}
         )
         result.status = "checked"
+
         result.warnings = [
             finding
             for item in evidence
@@ -522,6 +544,7 @@ class TemplateApplication:
             for execution in attempt.executions
             if execution.advisory and execution.evidence is None
         )
+
         return result
 
     @staticmethod
@@ -530,6 +553,7 @@ class TemplateApplication:
             raise GenerationSchemaError(
                 "generation must return a proposal and recommended checks"
             )
+
         unknown = sorted(
             {check.name for check in response.checks} - set(request.offered_tool_names)
         )
@@ -537,10 +561,12 @@ class TemplateApplication:
             raise GenerationSchemaError(
                 "model recommended checks that were not offered: " + ", ".join(unknown)
             )
+
         # Do not rely on the provider's wire-format support or its parser.
         wire_model = constrained_check_plan(
             type(response), request.offered_tool_names, request.check_argument_models
         )
+
         try:
             wire_model.model_validate_json(response.model_dump_json())
         except ValidationError as exc:
@@ -577,6 +603,7 @@ class TemplateApplication:
         ordered = [name for name in plan if name not in deferred] + [
             name for name in plan if name in deferred
         ]
+
         for name in ordered:
             execution = CheckExecution(
                 call_id=f"attempt-{attempt.number}:{name}",
@@ -603,6 +630,7 @@ class TemplateApplication:
                 attempt,
                 name in deferred,
             )
+
         attempt.complete = not attempt.pending
         # Advisory assessments are retained as evidence but never gate the
         # technical artifact or request revisions.
@@ -622,6 +650,7 @@ class TemplateApplication:
                 if deferred
                 else domain.tool_bindings(request, candidate, execution.tool)
             )
+
             arguments = execution.requested_arguments
             owned = set(arguments) & set(bindings)
             if owned:
@@ -629,24 +658,29 @@ class TemplateApplication:
                     "Do not supply application-owned arguments: "
                     + ", ".join(sorted(owned))
                 )
+
             effective = {**arguments, **copy.deepcopy(bindings)}
             execution.application_arguments = {
                 key: copy.deepcopy(value)
                 for key, value in bindings.items()
                 if key != "candidate" or deferred
             }
+
             Draft202012Validator(definition.input_schema).validate(effective)
             if not isinstance(definition.output_schema, dict):
                 raise ValueError("Tool has no output schema")
+
             raw = client.call_tool(
                 execution.tool, copy.deepcopy(effective), version=definition.version
             )
             Draft202012Validator(definition.output_schema).validate(raw)
+
             evidence = ToolEvidence.model_validate(raw)
             if evidence.tool != execution.tool or (
                 definition.version and evidence.version != definition.version
             ):
                 raise ValueError("MCP evidence tool identity/version mismatch")
+
             # The application, not the tool or model, owns advisory policy.
             details = dict(evidence.details)
             if definition.advisory:

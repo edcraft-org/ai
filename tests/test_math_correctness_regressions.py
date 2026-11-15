@@ -60,6 +60,7 @@ def test_scalar_periodic_domain_is_not_truncated_to_one_period():
     point = op("div", op("mul", n(5), op("acos", n(-1))), n(2))
     denominator = op("sub", X, point)
     candidate = op("mul", source, op("div", denominator, denominator))
+
     result = check_math_correctness(
         {
             "problem": {

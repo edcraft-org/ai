@@ -71,6 +71,7 @@ def _coded_failure(
 ) -> RuntimeError:
     """Build a worker error, recording the transport failure kind if coded."""
     failure = worker_error(message)
+
     if isinstance(failure, CodedWorkerError):
         failure.failure_kind = failure_kind
     return failure
@@ -95,6 +96,7 @@ def normalise_maxrss(value: int, platform: str | None = None) -> int:
     """
     if type(value) is not int or value < 0:
         raise ValueError("ru_maxrss must be a non-negative integer")
+
     selected = sys.platform if platform is None else platform
     if selected.startswith("darwin"):
         return value
@@ -124,10 +126,12 @@ def worker_environment(environ: Mapping[str, str] | None = None) -> dict[str, st
     names = set(_RUNTIME_ENVIRONMENT_NAMES)
     if os.name == "nt":
         names.update(_WINDOWS_ENVIRONMENT_NAMES)
+
     environment = {name: source[name] for name in names if name in source}
     for name, value in source.items():
         if name.startswith(_ENVIRONMENT_PREFIXES):
             environment[name] = value
+
     environment["PYTHONUNBUFFERED"] = "1"
     environment["PYTHONNOUSERSITE"] = "1"
     environment.setdefault("PYTHONIOENCODING", "utf-8")
@@ -150,6 +154,7 @@ def _inherited_limit(kind: int, requested: int) -> int:
     assert resource is not None
     soft, hard = resource.getrlimit(kind)
     infinity = getattr(resource, "RLIM_INFINITY", -1)
+
     candidates = [requested]
     if soft != infinity:
         candidates.append(int(soft))
@@ -168,9 +173,11 @@ def apply_resource_limits(
         raise ValueError("worker CPU limit must be a positive integer")
     if type(memory_bytes) is not int or memory_bytes <= 0:
         raise ValueError("worker memory limit must be a positive integer")
+
     applied: dict[str, int] = {}
     if resource is None:
         return applied
+
     if sys.platform.startswith("linux") and hasattr(resource, "RLIMIT_AS"):
         memory = _inherited_limit(resource.RLIMIT_AS, memory_bytes)
         resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
@@ -179,6 +186,7 @@ def apply_resource_limits(
         cpu = _inherited_limit(resource.RLIMIT_CPU, cpu_seconds)
         resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu))
         applied["cpu_seconds"] = cpu
+
     return applied
 
 
@@ -200,6 +208,7 @@ def apply_best_effort_data_limit(memory_bytes: int) -> int | None:
         return None
     if not hasattr(resource, "RLIMIT_DATA"):
         return None
+
     try:
         soft, hard = resource.getrlimit(resource.RLIMIT_DATA)
         infinity = getattr(resource, "RLIM_INFINITY", -1)
@@ -214,6 +223,7 @@ def apply_best_effort_data_limit(memory_bytes: int) -> int | None:
         resource.setrlimit(resource.RLIMIT_DATA, (current, hard))
     except (OSError, ValueError):  # pragma: no cover - platform dependent
         return None
+
     return current
 
 
@@ -225,6 +235,7 @@ def rss_bytes_for_pid(pid: int) -> int | None:
     """
     if not _RSS_AVAILABLE or type(pid) is not int or pid <= 0:
         return None
+
     try:
         completed = subprocess.run(
             ["ps", "-o", "rss=", "-p", str(pid)],
@@ -244,6 +255,7 @@ def rss_bytes_from_ps(output: str) -> int | None:
     fields = output.split()
     if not fields:
         return None
+
     try:
         kibibytes = int(fields[0])
     except ValueError:
@@ -262,6 +274,7 @@ def pid_start_time(pid: int) -> str | None:
     """
     if not _RSS_AVAILABLE or type(pid) is not int or pid <= 0:
         return None
+
     try:
         completed = subprocess.run(
             ["ps", "-o", "lstart=", "-p", str(pid)],
@@ -273,6 +286,7 @@ def pid_start_time(pid: int) -> str | None:
         )
     except (OSError, subprocess.SubprocessError):
         return None
+
     started = completed.stdout.strip()
     return started or None
 
@@ -295,6 +309,7 @@ class RssWatchdog:
             raise ValueError("watchdog memory limit must be a positive integer")
         if interval <= 0:
             raise ValueError("watchdog poll interval must be positive")
+
         self.pid = pid
         self.memory_bytes = memory_bytes
         self.exceeded = False
@@ -313,6 +328,7 @@ class RssWatchdog:
         """
         if self._verify is None:
             return True
+
         try:
             return bool(self._verify())
         except Exception:  # pragma: no cover - defensive around external probes
@@ -324,9 +340,11 @@ class RssWatchdog:
             return True
         if stop is not None and stop.is_set():
             return False
+
         rss = self._read_rss(self.pid)
         if rss is None or rss <= self.memory_bytes:
             return False
+
         # Recheck the stop flag and the pid's identity immediately before the
         # kill: the child may have exited (and its pid been reused) while the
         # RSS probe ran.
@@ -355,6 +373,7 @@ def _read_pid_file(path: str) -> int | None:
             text = handle.read().strip()
     except OSError:
         return None
+
     if not text.isdigit():
         return None
     pid = int(text)
@@ -380,6 +399,7 @@ def _kill_pid(pid: int, *, verify: Callable[[], bool] | None = None) -> bool:
     """Kill ``pid`` only when ``verify`` still identifies it as our child."""
     if verify is not None and not verify():
         return False
+
     try:
         os.kill(pid, signal.SIGKILL)
     except OSError:  # pragma: no cover - process race
@@ -397,6 +417,7 @@ def _watch_worker_memory(
     pid = _wait_for_pid(pid_path, stop)
     if pid is None or stop.is_set():
         return
+
     started = pid_start_time(pid)
 
     def verify() -> bool:
@@ -443,10 +464,12 @@ def _start_memory_watchdog(memory_bytes: int) -> _MemoryWatchdog:
     """Create the pid handshake file and start the RSS watchdog thread."""
     stop = threading.Event()
     exceeded = threading.Event()
+
     handle, pid_path = tempfile.mkstemp(prefix="edcraft-worker-", suffix=".pid")
     os.close(handle)
     os.unlink(pid_path)
     watch = _MemoryWatchdog(pid_path, stop, exceeded)
+
     if _RSS_AVAILABLE:
         thread = threading.Thread(
             target=_watch_worker_memory,
@@ -468,6 +491,7 @@ def _stop_memory_watchdog(
     stop.set()
     if thread is not None:
         thread.join(timeout=PID_FILE_WAIT_SECONDS)
+
     try:
         os.unlink(pid_path)
     except OSError:
@@ -518,6 +542,7 @@ def run_json_worker(
     worker_label = worker_description or description
     watch = _start_memory_watchdog(memory_bytes)
     pid_path, watch_stop, exceeded, watch_thread = _watchdog_parts(watch)
+
     try:
         completed = subprocess.run(
             [
@@ -561,6 +586,7 @@ def run_json_worker(
             "kernel_memory_bytes"
         ):
             raise _memory_limit_unavailable(worker_error)
+
     if completed.returncode != 0:
         failure_kind = "signal" if completed.returncode < 0 else "exit"
         raise _coded_failure(
@@ -569,6 +595,7 @@ def run_json_worker(
             f"{completed.stderr.strip()[:MAX_STDERR_CHARS]}",
             failure_kind,
         )
+
     if envelope is not None:
         if envelope.get("payload_valid") is not True:
             raise _coded_failure(
@@ -586,12 +613,14 @@ def run_json_worker(
                 f"{worker_label} returned invalid JSON",
                 "invalid_output",
             ) from exc
+
     if not isinstance(response, dict):
         raise _coded_failure(
             worker_error,
             f"{worker_label} returned a non-object",
             "invalid_output",
         )
+
     if "error" in response:
         error = response["error"]
         code = ""
@@ -608,6 +637,7 @@ def run_json_worker(
         if code and isinstance(failure, CodedWorkerError):
             failure.code = code
         raise failure
+
     return response
 
 
@@ -617,6 +647,7 @@ def _worker_envelope(stdout: str) -> dict[str, Any] | None:
         response = json.loads(stdout)
     except json.JSONDecodeError:
         return None
+
     if (
         not isinstance(response, dict)
         or response.get("worker_envelope") != WORKER_ENVELOPE
@@ -635,6 +666,7 @@ def _memory_limit_unavailable(worker_error: type[RuntimeError]) -> RuntimeError:
     failure_type = type(
         "MemoryLimitUnavailable", (MemoryLimitUnavailable, worker_error), {}
     )
+
     return failure_type(
         "worker memory limit could not be enforced: no pid handshake and no "
         "kernel limit were available"

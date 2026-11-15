@@ -78,6 +78,7 @@ def evaluation_cases(dataset: dict, controls: dict) -> list[dict]:
                 "expected": None,
             }
         )
+
     # Preserve the frozen control content. Only deterministic expectations are
     # scored; historical rubric expectations remain in the control source.
     cases.extend(
@@ -91,9 +92,11 @@ def evaluation_cases(dataset: dict, controls: dict) -> list[dict]:
         }
         for case in controls["cases"]
     )
+
     ids = [case["case_id"] for case in cases]
     if len(ids) != len(set(ids)):
         raise ValueError("evaluation case IDs must be unique")
+
     # Validate the entire frozen plan before making any external calls.
     for case in cases:
         CodeDifficultyQuestion.model_validate(case["question"])
@@ -105,6 +108,7 @@ def summary(records: list[dict], requested: int) -> dict:
     groups = {}
     for group in ("held_out", "control"):
         selected = [r for r in records if r["group"] == group]
+
         disagreements = []
         for record in selected:
             observed = {
@@ -120,6 +124,7 @@ def summary(records: list[dict], requested: int) -> dict:
                 disagreements.append(
                     {"case_id": record["case_id"], "fields": mismatches}
                 )
+
         scores = [
             r["report"]["relevance"]["decision"]["score"]
             for r in selected
@@ -134,7 +139,9 @@ def summary(records: list[dict], requested: int) -> dict:
             "score_range": [min(scores), max(scores)] if scores else None,
             "control_disagreements": disagreements,
         }
+
     times = [r["report"]["duration_ms"] for r in records]
+
     return {
         "requested": requested,
         "recorded": len(records),
@@ -178,6 +185,7 @@ async def evaluate(output: Path) -> dict:
     cases = evaluation_cases(
         json.loads(DATASET.read_text()), json.loads(CONTROLS.read_text())
     )
+
     manifest_path = output.with_suffix(".manifest.json")
     summary_path = output.with_suffix(".summary.json")
     decision = ConfiguredDecisionProvider()
@@ -187,6 +195,7 @@ async def evaluate(output: Path) -> dict:
         if settings is not None
         else ConfiguredDecisionProvider
     )
+
     manifest = {
         "protocol": "code-relevance-evaluation-v6-configured-decision",
         "relevance_tool_version": "2.0.0",
@@ -206,6 +215,7 @@ async def evaluate(output: Path) -> dict:
         "concurrency": 2,
         "cases": cases,
     }
+
     close_provider(decision)
     output.parent.mkdir(parents=True, exist_ok=True)
     records = []
@@ -226,12 +236,14 @@ async def evaluate(output: Path) -> dict:
                     CodeQuestionRequest.model_validate(case["request"]),
                     decision_provider_factory=decision_factory,
                 )
+
                 findings = []
                 if (
                     report.relevance.decision.model is not None
                     and report.relevance.decision.model != decision.model
                 ):
                     findings.append("RELEVANCE_MODEL_DRIFT")
+
                 record = {
                     "case_id": case["case_id"],
                     "group": case["group"],
@@ -240,6 +252,7 @@ async def evaluate(output: Path) -> dict:
                     "protocol_findings": findings,
                     "report": report.model_dump(mode="json"),
                 }
+
                 stream.write(json.dumps(record, allow_nan=False) + "\n")
                 stream.flush()
                 records.append(record)
@@ -262,8 +275,10 @@ def main():
     parser.add_argument("--env-file", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+
     if args.env_file:
         load_dotenv(args.env_file, override=False)
+
     result = asyncio.run(evaluate(args.output))
     return (
         0

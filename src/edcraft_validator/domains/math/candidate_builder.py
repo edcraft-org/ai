@@ -28,6 +28,7 @@ def build_math_candidate(
         item = item.model_copy(
             update={"body": item.body.model_copy(update={"distractors": kept})}
         )
+
     return MathTemplateCandidate(
         template_id=build_template_id("math", request, proposal),
         difficulty=request.difficulty,

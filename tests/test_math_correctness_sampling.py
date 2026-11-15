@@ -50,6 +50,7 @@ def test_large_parameter_domain_is_sampled_and_replayable():
     second = qualify_in_process(
         template().model_dump(mode="json"), settings.model_dump()
     )
+
     assert first == second
     assert first["status"] == "passed"
     # Hypothesis may schedule extra or duplicate trials; the property is that
@@ -67,6 +68,7 @@ def test_incorrect_template_reports_replayable_counterexample():
         template(True).model_dump(mode="json"),
         SamplingSettings(max_examples=15, seed=7).model_dump(),
     )
+
     assert report["status"] == "failed"
     assert report["counts"]["incorrect"] > 0
     assert report["counterexample"]["parameters"]["a"] != "0"
@@ -80,6 +82,7 @@ def test_public_qualification_is_isolated_and_bounded():
     )
     assert result["status"] == "passed"
     assert result["cases_checked"] == 5
+
     timed = qualify_math_template(template(), timeout_seconds=0.000001)
     assert timed["status"] == "timeout"
 
@@ -87,5 +90,6 @@ def test_public_qualification_is_isolated_and_bounded():
 def test_missing_parameter_reference_is_not_silently_bound():
     data = template().model_dump(mode="json")
     data["parameters"][0]["name"] = "other"
+
     report = qualify_math_template(data)
     assert report["status"] == "error"

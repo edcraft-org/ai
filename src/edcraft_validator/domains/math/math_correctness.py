@@ -48,6 +48,7 @@ def check_math_correctness(
         or not 0 < timeout_seconds <= 60
     ):
         raise ValueError("timeout must be finite, positive and at most 60 seconds")
+
     started = time.perf_counter()
     try:
         raw = (
@@ -82,6 +83,7 @@ def check_math_correctness(
         result = CorrectnessResult(
             outcome="error", reason=f"isolated calculation failed: {str(exc)[:500]}"
         )
+
     return result.model_copy(
         update={"duration_ms": (time.perf_counter() - started) * 1000}
     )
@@ -96,6 +98,7 @@ def correctness_evidence(result: CorrectnessResult) -> ToolEvidence:
         if result.outcome == "incorrect"
         else "error"
     )
+
     return ToolEvidence(
         tool=TOOL_NAME,
         version=TOOL_VERSION,

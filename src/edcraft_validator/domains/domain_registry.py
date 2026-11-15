@@ -31,6 +31,7 @@ def register_domain(name: str, factory: DomainFactory) -> None:
         raise ValueError(f"Invalid domain name {name!r}.")
     if name in _DOMAIN_FACTORIES:
         raise ValueError(f"Domain {name!r} is already registered.")
+
     _DOMAIN_FACTORIES[name] = factory
 
 

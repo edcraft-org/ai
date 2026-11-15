@@ -87,6 +87,7 @@ def test_template_application_authors_once_then_generates_locally() -> None:
             ],
         }
     )
+
     provider_calls = []
     execution_calls: list[str] = []
 
@@ -266,6 +267,7 @@ def test_application_can_run_a_non_code_domain_without_provider_changes() -> Non
         domain=domain,
         provider=ExampleProvider(),
     )
+
     instance = application.generate_question(validated, domain=domain, seed=5)
 
     assert events == [
@@ -330,6 +332,7 @@ def test_non_deferred_advisory_failure_does_not_skip_deferred_assessment() -> No
         tool_bindings=lambda request, candidate, tool_name: {},
         checked_tool_bindings=lambda request, candidate, tool_name, evidence: {},
     )
+
     candidate = ExampleTemplate(value=12)
     attempt = TemplateApplication._build_attempt(1, candidate, plan)
     TemplateApplication._run_checks(
@@ -396,6 +399,7 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
             raise generation_error
 
     captured_catalogues = []
+
     with pytest.raises(AuthoringFailure, match=str(generation_error)) as failure:
         TemplateApplication(
             tool_catalogue=ExampleCatalogue()
@@ -406,6 +410,7 @@ def test_generation_failures_stop_before_candidate_building_and_validation(
             on_catalogue_resolved=captured_catalogues.append,
         )
     assert len(captured_catalogues) == 1
+
     result = failure.value.result
     assert result.failure.stage == "generation"
     assert result.failure.code == generation_error.category
@@ -635,6 +640,7 @@ def test_non_code_full_revision_enforces_domain_constraints_before_checking(
             )
 
     author = Author()
+
     result = TemplateApplication(tool_client=FastMcpToolClient(server)).author_template(
         Request(topic="A positive value no greater than ten", maximum=10),
         domain=Domain(),

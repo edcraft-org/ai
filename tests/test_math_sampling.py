@@ -103,6 +103,7 @@ def test_representative_item_renders_from_a_large_domain() -> None:
 def test_generation_draws_variants_beyond_the_validated_sample() -> None:
     template = _large_template()
     report = validate_template(template, max_variants=4, seed=0)
+
     assert report.report.status == "passed", report.report.findings
     artifact = ValidatedMathTemplate(
         artifact_id="artifact-large",

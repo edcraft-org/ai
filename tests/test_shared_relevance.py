@@ -32,9 +32,11 @@ async def test_shared_service_preserves_non_python_text():
         author_request="Create a question about triangle angles.",
         question_text="Two angles are 50 and 60 degrees. Find the third angle.",
     )
+
     report = await assess_relevance(
         request, decision_provider_factory=lambda: decisions
     )
+
     assert report.status == "assessed" and report.advisory
     assert report.input_sha256 == request.sha256
     assert decisions.texts == [request.author_request, request.question_text]
@@ -55,6 +57,7 @@ def test_python_adapter_preserves_content_and_excludes_only_answer_designation()
         mode="json", exclude={"correct_option"}
     )
     assert "correct_option" not in representation.question_text
+
     changed_key = item.model_copy(update={"correct_option": "A"})
     assert relevance_input(changed_key, request).sha256 == representation.sha256
     assert changed_key.sha256 != item.sha256
@@ -172,6 +175,7 @@ async def test_each_mcp_check_runs_without_calling_the_other_services():
         code_execution_tool=executor,
     )
     item = question().model_copy(update={"correct_option": "A"})
+
     async with Client(server) as client:
         technical = await client.call_tool(
             "check_code_question_correctness",
@@ -246,6 +250,7 @@ async def test_standalone_correctness_error_is_explicit_and_requirements_still_w
     assert result.status == "error" and result.findings == ["TECHNICAL_CHECK_ERROR"]
     assert result.question_sha256 == item.sha256
     assert "PRIVATE" not in result.model_dump_json()
+
     requirements = check_code_question_requirements(
         item, CodeQuestionRequest(prompt="Arithmetic", required_features=["arithmetic"])
     )

@@ -21,6 +21,7 @@ def assess_template_difficulty(candidate: MathTemplateCandidate) -> ToolEvidence
     started = time.perf_counter()
     estimate = _estimate_difficulty(candidate)
     matches = estimate == candidate.difficulty
+
     outcome = DifficultyOutcome(
         # This is a deterministic policy rule, not model reasoning and not a
         # calibrated confidence. Reporting either would misstate the evidence.
@@ -34,6 +35,7 @@ def assess_template_difficulty(candidate: MathTemplateCandidate) -> ToolEvidence
             "variety, parameter-domain size, and distractor count; not calibrated."
         ),
     )
+
     findings = (
         []
         if matches
@@ -48,6 +50,7 @@ def assess_template_difficulty(candidate: MathTemplateCandidate) -> ToolEvidence
             )
         ]
     )
+
     details = {
         "advisory": True,
         "provisional": True,
@@ -67,6 +70,7 @@ def assess_template_difficulty(candidate: MathTemplateCandidate) -> ToolEvidence
             },
         ),
     }
+
     return ToolEvidence(
         tool=MATH_DIFFICULTY_TOOL,
         version=MATH_TOOL_VERSION,
@@ -86,6 +90,7 @@ def _estimate_difficulty(candidate: MathTemplateCandidate) -> Difficulty:
         for parameter in template.parameters
         for value in parameter.values
     ]
+
     score = 0
     if len(template.parameters) >= 2:
         score += 1
@@ -103,6 +108,7 @@ def _estimate_difficulty(candidate: MathTemplateCandidate) -> Difficulty:
         score += 1
     if template.topic.startswith("university."):
         score += 1
+
     if score <= 1:
         return "easy"
     if score <= 3:

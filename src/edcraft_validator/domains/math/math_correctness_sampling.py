@@ -35,6 +35,7 @@ def qualify_math_template(
         raise ValueError(
             "qualification timeout must be finite, positive and at most 60 seconds"
         )
+
     started = time.perf_counter()
     try:
         raw = (
@@ -50,6 +51,7 @@ def qualify_math_template(
             if settings is not None
             else {}
         )
+
         response = run_json_worker(
             {
                 "operation": "qualify",

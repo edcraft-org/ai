@@ -59,6 +59,7 @@ class DemoPlugin:
     def canonicalize(self, artifact: BaseModel) -> CanonicalArtifact:
         value = _artifact(artifact).value
         payload = {"value": value}
+
         return CanonicalArtifact(
             domain=self.domain,
             payload=payload,
@@ -78,6 +79,7 @@ class DemoPlugin:
     ) -> FidelityVerdict:
         self.equivalence_calls += 1
         parse = _reconstruction(reconstructed)
+
         if parse.ambiguous:
             return FidelityVerdict(
                 status="inconclusive", reasons=["ambiguous demo parse"]
@@ -101,6 +103,7 @@ class DemoProvider:
     def generate(self, request: StructuredGenerationRequest[Any]) -> Any:
         self.calls += 1
         self.last_usage = TokenUsage(input_tokens=5, output_tokens=2)
+
         if isinstance(self.response, Exception):
             raise self.response
         if isinstance(self.response, BaseModel):
@@ -133,6 +136,7 @@ async def test_plugin_can_skip_blind_parse_back() -> None:
         provider_factory=lambda: provider,
         cache=FidelityCache(),
     )
+
     assert report.status == "passed"
     assert provider.calls == 0
     assert report.reconstruction is None
@@ -147,6 +151,7 @@ async def test_inconclusive_anchors_skip_the_model() -> None:
         provider_factory=lambda: provider,
         cache=FidelityCache(),
     )
+
     assert report.status == "inconclusive"
     assert provider.calls == 0
 
@@ -154,6 +159,7 @@ async def test_inconclusive_anchors_skip_the_model() -> None:
 async def test_judge_error_is_inconclusive_and_not_cached() -> None:
     cache = FidelityCache()
     broken = DemoProvider(object())
+
     first = await verify_text_fidelity(
         DemoPlugin(),
         _item(),
@@ -181,6 +187,7 @@ async def test_cached_reconstruction_is_rechecked_not_reused_as_verdict() -> Non
     cache = FidelityCache()
     plugin = DemoPlugin()
     provider = DemoProvider(DemoReconstruction(value=3))
+
     first = await verify_text_fidelity(
         plugin,
         _item(),
@@ -195,6 +202,7 @@ async def test_cached_reconstruction_is_rechecked_not_reused_as_verdict() -> Non
         provider_factory=lambda: provider,
         cache=cache,
     )
+
     assert first.cached is False
     assert second.cached is True
     assert second.status == "passed"
@@ -211,5 +219,6 @@ async def test_ambiguous_parse_is_never_passed() -> None:
         provider_factory=lambda: provider,
         cache=FidelityCache(),
     )
+
     assert report.status == "inconclusive"
     assert report.status != "passed"

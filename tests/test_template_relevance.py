@@ -164,6 +164,7 @@ def test_template_projection_keeps_learner_task_and_omits_answer_and_reasons():
     changed.distractors[0].reason_template = "Different misconception reason."
     first = template_relevance_text(original)
     second = template_relevance_text(changed)
+
     assert first == second
     assert original.code in first
     assert original.question_template in first
@@ -187,6 +188,7 @@ def test_template_projection_keeps_learner_task_and_omits_answer_and_reasons():
         "question_text": first,
         "subject_sha256": template_sha256(original),
     }
+
     changed.code += "\n# changed learner task"
     assert template_relevance_text(changed) != first
 
@@ -307,6 +309,7 @@ def test_relevance_model_error_is_unavailable_without_author_revision():
     assert result.status == "checked" and result.artifact is not None
     assert len(result.attempts) == len(author.generations) == 1
     assert len(relevance_judges) == 1 and len(difficulty_judges) == 1
+
     execution = next(
         item
         for item in result.attempts[0].executions
@@ -316,6 +319,7 @@ def test_relevance_model_error_is_unavailable_without_author_revision():
     assert execution.evidence.findings[0].code == "RELEVANCE_FAILED"
     assert execution.evidence.details["retryable"] is False
     assert execution.evidence.details["relevance_outcome"]["unavailable"] is True
+
     saved = next(
         item
         for item in result.artifact.validation.evidence
@@ -350,6 +354,7 @@ def test_assessments_run_independently_in_either_order(plan):
     result, _, difficulty_judges, relevance_judges = run(
         scores=[0.1], estimates=["hard"], plan=plan
     )
+
     assert result.status == "checked" and len(result.attempts) == 1
     assert len(relevance_judges) == len(difficulty_judges) == 1
     executions = {
@@ -357,6 +362,7 @@ def test_assessments_run_independently_in_either_order(plan):
         for item in result.attempts[0].executions
         if item.tool in {TEMPLATE_RELEVANCE_CHECK, TEMPLATE_DIFFICULTY_TOOL}
     }
+
     assert set(executions) == {TEMPLATE_RELEVANCE_CHECK, TEMPLATE_DIFFICULTY_TOOL}
     assert all(item.evidence is not None for item in executions.values())
     assert all(item.evidence.status == "failed" for item in executions.values())

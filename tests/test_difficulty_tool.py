@@ -66,6 +66,7 @@ class Provider:
         self.last_usage = TokenUsage(input_tokens=123, output_tokens=45)
         if isinstance(self.response, Exception):
             raise self.response
+
         response = self.response
         if issubclass(request.response_model, KeyedDifficultyAssessment):
             response = wire_assessment(response)
@@ -100,12 +101,14 @@ async def test_mcp_assessment_does_not_execute_or_report_correctness():
         difficulty_provider_factory=lambda: provider,
         code_execution_tool=ForbiddenExecutor(),
     )
+
     original = question().model_dump(mode="json")
     async with Client(server) as client:
         response = await client.call_tool(
             "assess_code_difficulty",
             {"question": original, "requested_difficulty": "hard"},
         )
+
     report = response.structured_content
     assert not response.is_error
     assert report["status"] == "assessed" and report["advisory"] is True
@@ -137,12 +140,14 @@ async def test_requested_level_never_reaches_judge_and_full_question_does():
     provider = Provider()
     easy = await assess(provider, requested_difficulty="easy")
     hard = await assess(provider, requested_difficulty="hard")
+
     assert easy.difficulty_match == "matches"
     assert hard.difficulty_match == "too_easy"
     first, second = provider.requests
     assert first.messages == second.messages
     assert easy.judge.request_sha256 == hard.judge.request_sha256
     assert first.tool_catalogue is None
+
     payload = json.loads(first.messages[1]["content"])
     assert payload["question"] == question().model_dump(mode="json")
     assert set(payload) == {"question"}
@@ -182,6 +187,7 @@ async def test_each_answer_target_is_forwarded_without_execution(target):
     item = CodeDifficultyQuestion.model_validate(
         {name: raw[name] for name in CodeDifficultyQuestion.model_fields}
     )
+
     async with Client(
         create_validation_server(
             difficulty_provider_factory=Provider,
@@ -191,6 +197,7 @@ async def test_each_answer_target_is_forwarded_without_execution(target):
         result = await client.call_tool(
             "assess_code_difficulty", {"question": item.model_dump(mode="json")}
         )
+
     report = result.structured_content
     assert report["status"] == "assessed"
     assert "technical" not in report
@@ -201,6 +208,7 @@ async def test_three_options_are_assessed_without_synthesising_a_fourth():
     proposed = assessment()
     proposed["option_evidence"].pop()
     provider = Provider(proposed)
+
     report = await assess(provider, item=item)
     assert report.status == "assessed"
     payload = json.loads(provider.requests[0].messages[1]["content"])
@@ -242,6 +250,7 @@ async def test_missing_rubric_prevents_model_call(monkeypatch):
         raise FileNotFoundError("private path")
 
     monkeypatch.setattr(code_difficulty, "load_code_difficulty_rubric", unavailable)
+
     provider = Provider()
     report = await assess(provider)
     assert report.status == "error" and report.error_code == "RUBRIC_UNAVAILABLE"
@@ -266,6 +275,7 @@ async def test_missing_information_is_unable_to_assess_without_a_comparison():
         "estimated_difficulty": None,
         "unable_to_assess_reason": "The required input is absent.",
     }
+
     report = await assess(Provider(proposed), requested_difficulty="easy")
     assert report.status == "unable_to_assess"
     assert report.difficulty_match is None and report.error_code is None
@@ -291,6 +301,7 @@ async def test_missing_information_is_unable_to_assess_without_a_comparison():
 async def test_question_correctness_is_not_a_prerequisite(item_update):
     provider = Provider()
     raw = question().model_dump(mode="json") | item_update
+
     async with Client(
         create_validation_server(
             difficulty_provider_factory=lambda: provider,
@@ -301,6 +312,7 @@ async def test_question_correctness_is_not_a_prerequisite(item_update):
     report = result.structured_content
     assert report["status"] == "assessed"
     assert "technical" not in report
+
     payload = json.loads(provider.requests[0].messages[1]["content"])
     assert payload == {"question": raw}
 
@@ -319,6 +331,7 @@ async def test_provider_failure_retains_usage_without_match_or_secret(
 ):
     provider = Provider(failure)
     report = await assess(provider, requested_difficulty="easy")
+
     assert report.status == "error" and report.error_code == expected
     assert report.difficulty_match is None
     assert report.judge.assessment is None
@@ -332,9 +345,11 @@ async def test_actual_adapter_malformed_json_retains_tokens():
         usage=SimpleNamespace(prompt_tokens=90, completion_tokens=15),
         choices=[SimpleNamespace(message=SimpleNamespace(content="{invalid"))],
     )
+
     client = SimpleNamespace(
         chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kw: response))
     )
+
     provider = OpenAICompatibleProvider("openai", client, model="test")
     report = await assess(provider)
     assert report.status == "error"
@@ -350,6 +365,7 @@ async def test_adapter_schema_failure_retains_findings_without_response_values()
         unable_to_assess_reason=None,
         reason="PRIVATE_RESPONSE_CONTENT",
     )
+
     response = SimpleNamespace(
         usage=SimpleNamespace(prompt_tokens=90, completion_tokens=15),
         choices=[
@@ -358,9 +374,11 @@ async def test_adapter_schema_failure_retains_findings_without_response_values()
             )
         ],
     )
+
     client = SimpleNamespace(
         chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kw: response))
     )
+
     report = await assess(OpenAICompatibleProvider("openai", client, model="test"))
     assert report.error_code == "JUDGE_SCHEMA_VALIDATION"
     assert report.judge.validation_errors[0].code == "value_error"
@@ -391,6 +409,7 @@ async def test_invalid_judgments_cannot_become_matches(problem):
         proposed["alternative_levels"] = []
     else:
         proposed["option_evidence"].pop()
+
     report = await assess(Provider(proposed), requested_difficulty="easy")
     assert report.status == "error"
     assert report.difficulty_match is None
@@ -429,12 +448,14 @@ async def test_deadline_returns_snapshot_and_discards_late_result():
 async def test_unconfigured_provider_is_explicit_without_breaking_server(monkeypatch):
     monkeypatch.delenv("EDCRAFT_DIFFICULTY_PROVIDER", raising=False)
     monkeypatch.delenv("SOCLAAS_API_KEY", raising=False)
+
     async with Client(
         create_validation_server(code_execution_tool=ForbiddenExecutor())
     ) as client:
         report = await client.call_tool(
             "assess_code_difficulty", {"question": question().model_dump(mode="json")}
         )
+
     data = report.structured_content
     assert data["error_code"] == "JUDGE_CONFIGURATION_ERROR"
     assert "technical" not in data
@@ -464,7 +485,9 @@ async def test_invalid_mcp_input_shapes_fail_before_model_calls(change):
         value["options"] = []
     else:
         value["requested_difficulty"] = "hard"
+
     provider = Provider()
+
     async with Client(
         create_validation_server(difficulty_provider_factory=lambda: provider)
     ) as client:
@@ -478,10 +501,12 @@ def test_output_contract_is_compatible_with_strict_structured_generation():
     assert "confidence" not in schema["properties"]
     assert "alternative_levels" not in schema["properties"]
     assert "uncertainty_reason" not in schema["properties"]
+
     for node in [schema, *schema["$defs"].values()]:
         if node.get("type") == "object":
             assert node["additionalProperties"] is False
             assert set(node["required"]) == set(node["properties"])
+
     value = assessment()
     value["estimated_difficulty"] = "beginner"
     with pytest.raises(ValidationError):
@@ -494,6 +519,7 @@ def test_packaged_rubric_resource_matches_source(monkeypatch, tmp_path):
     resource = tmp_path / "difficulty-rubric.md"
     resource.write_bytes(Path("docs/difficulty-rubric.md").read_bytes())
     monkeypatch.setattr(difficulty, "files", lambda package: tmp_path)
+
     assert (
         difficulty.load_code_difficulty_rubric().sha256
         == hashlib.sha256(resource.read_bytes()).hexdigest()

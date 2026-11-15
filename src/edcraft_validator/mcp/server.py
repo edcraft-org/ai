@@ -49,13 +49,16 @@ def create_validation_server(
     ):
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("tool timeouts must be finite and positive")
+
     server = FastMCP(
         name="EdCraft Validation Tools",
         strict_input_validation=True,
         mask_error_details=True,
     )
+
     selected = judge_settings if judge_settings is not None else load_judge_settings()
     execution_tool = code_execution_tool or LocalPythonTool()
+
     dependencies = ToolDependencies(
         execution_tool=execution_tool,
         code_execution_timeout_seconds=code_execution_timeout_seconds,
@@ -67,12 +70,15 @@ def create_validation_server(
         fidelity_provider_factory=partial(configured_judge_provider, selected),
         fidelity_timeout_seconds=fidelity_judge_timeout_seconds,
     )
+
     for name in available_domains():
         create_domain(name).register_tools(server, dependencies)
+
     register_relevance_tools(
         server,
         decision_provider_factory=decision_provider_factory
         or partial(ConfiguredDecisionProvider, selected),
         relevance_timeout_seconds=relevance_timeout_seconds,
     )
+
     return server

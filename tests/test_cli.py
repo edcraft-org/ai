@@ -203,6 +203,7 @@ def test_author_cli_uses_registered_domain_request_json_end_to_end(
 
     reloaded = AuthoringResult.model_validate_json(json.dumps(result))
     assert reloaded.model_dump(mode="json") == result
+
     result = result["artifact"]
     assert result["lesson"] == "fractions"
     assert result["value"] == 12
@@ -507,6 +508,7 @@ def test_evaluate_cli_writes_attempts_and_prints_summary(
         {"attempt": 1, "status": "validated"},
         {"attempt": 2, "status": "validated"},
     ]
+
     captured_output = capsys.readouterr()
     assert "[1] loops/easy: validated (1.2s)" in captured_output.err
     assert "[2] loops/easy: validated (1.2s)" in captured_output.err
@@ -556,6 +558,7 @@ def test_author_cli_preserves_unsuccessful_result_and_returns_nonzero(
             "easy",
         ],
     )
+
     assert template_cli.main() == 2
     assert json.loads(capsys.readouterr().out) == {
         "status": status,
@@ -607,6 +610,7 @@ def test_cli_writes_one_report_and_small_template_with_optional_schema_file(
         "--request-json",
         str(source),
     ]
+
     monkeypatch.setattr("sys.argv", args)
     monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
 
@@ -614,6 +618,7 @@ def test_cli_writes_one_report_and_small_template_with_optional_schema_file(
     report = json.loads(report_path.read_text())
     artifact = json.loads(template_path.read_text())
     schemas = json.loads(schemas_path.read_text())
+
     assert report["artifact"] == artifact
     assert len(report["attempts"]) == 1
     assert "attempts" not in artifact["authoring"]
@@ -644,6 +649,7 @@ def test_cli_rejects_overlapping_report_and_template_paths_before_model_call(
         ],
     )
     monkeypatch.setattr(template_cli, "load_dotenv", lambda: None)
+
     assert template_cli.main() == 1
     assert "output paths must differ" in capsys.readouterr().err
     assert not path.exists()

@@ -75,8 +75,10 @@ class Expr(Record):
         ]
         if sum(kinds) != 1:
             raise ValueError("an expression node sets exactly one of num/sym/param/op")
+
         if self.op is None and self.args:
             raise ValueError("only operator nodes may have arguments")
+
         return self
 
 
@@ -116,6 +118,7 @@ class Given(Record):
             raise ValueError("domain givens require a symbol and domain")
         if self.kind == "dataset" and not self.values:
             raise ValueError("dataset givens require values")
+
         return self
 
 
@@ -155,6 +158,7 @@ class Goal(Record):
             raise ValueError("goal matrices must be non-empty and rectangular")
         if self.kind == "solve" and self.symbol is not None and self.symbols:
             raise ValueError("solve goals use either symbol or symbols, not both")
+
         return self
 
 
@@ -201,6 +205,7 @@ class AnswerRecipe(Record):
         elif self.kind == "boolean":
             if self.boolean is None:
                 raise ValueError("boolean answer recipes require a boolean value")
+
         primary = {
             "numeric": "items",
             "expression": "items",
@@ -210,6 +215,7 @@ class AnswerRecipe(Record):
             "matrix": "matrix",
             "boolean": "boolean",
         }[self.kind]
+
         payload = {
             "items": bool(self.items),
             "interval": self.interval is not None,
@@ -219,6 +225,7 @@ class AnswerRecipe(Record):
         extra = sorted(
             name for name, present in payload.items() if name != primary and present
         )
+
         if extra:
             raise ValueError(
                 f"{self.kind} answer recipes must not set: " + ", ".join(extra)
@@ -246,6 +253,7 @@ class Distractor(Record):
             raise ValueError(
                 "a distractor requires exactly one of value, items, or components"
             )
+
         return self
 
 
@@ -276,12 +284,14 @@ class MathItemSpec(Record):
         names = [symbol.name for symbol in self.symbols]
         if len(names) != len(set(names)):
             raise ValueError("symbol names must be unique")
+
         known = set(names)
         for given in self.givens:
             if given.kind == "domain" and given.symbol not in known:
                 raise ValueError(
                     f"domain given references unknown symbol {given.symbol!r}"
                 )
+
         if self.goal.symbol is not None and self.goal.symbol not in known:
             raise ValueError(f"goal references unknown symbol {self.goal.symbol!r}")
         for name in self.goal.symbols:
@@ -317,6 +327,7 @@ def _item_expr_nodes(item: MathItemSpec) -> Iterator[Expr]:
     for row in item.goal.matrix or []:
         for cell in row:
             yield from _expr_nodes(cell)
+
     recipe = item.answer_recipe
     if recipe is not None:
         for entry in recipe.items:
@@ -327,6 +338,7 @@ def _item_expr_nodes(item: MathItemSpec) -> Iterator[Expr]:
         if recipe.interval is not None:
             yield from _expr_nodes(recipe.interval.lower)
             yield from _expr_nodes(recipe.interval.upper)
+
     for distractor in item.distractors:
         yield from _expr_nodes(distractor.value)
         for entry in [*distractor.items, *distractor.components]:
@@ -356,6 +368,7 @@ class MathTemplateSpec(Record):
         names = [parameter.name for parameter in self.parameters]
         if len(names) != len(set(names)):
             raise ValueError("template parameter names must be unique")
+
         declared = set(names)
         ambiguous = sorted(declared & item_symbols(self.body))
         if ambiguous:
@@ -363,12 +376,14 @@ class MathTemplateSpec(Record):
                 "parameters must not also be referenced as symbols: "
                 + ", ".join(ambiguous)
             )
+
         used = item_parameters(self.body)
         unknown = sorted(used - declared)
         if unknown:
             raise ValueError(
                 "body references undeclared parameters: " + ", ".join(unknown)
             )
+
         fields = template_fields(self.body.text.template)
         unknown_fields = sorted(fields - declared - RESERVED_TEXT_FIELDS)
         if unknown_fields:
@@ -381,6 +396,7 @@ class MathTemplateSpec(Record):
             raise ValueError(
                 "template declares parameters that are never used: " + ", ".join(unused)
             )
+
         return self
 
 

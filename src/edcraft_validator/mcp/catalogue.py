@@ -34,15 +34,19 @@ def resolve_domain_tools(
         for tool in listed
         if accepted & set(tool.get("_meta", {}).get("fastmcp", {}).get("tags", []))
     ]
+
     if not matched:
         raise ToolCatalogueError(f"no MCP tools tagged for domain: {domain_name}")
+
     names = [tool["name"] for tool in matched]
     duplicate = sorted({name for name in names if names.count(name) > 1})
     if duplicate:
         raise ToolCatalogueError("duplicate MCP tools: " + ", ".join(duplicate))
+
     resolved = tuple(
         copy.deepcopy(tool) for tool in sorted(matched, key=lambda t: t["name"])
     )
+
     for tool in resolved:
         if not tool.get("description") or not isinstance(tool.get("inputSchema"), dict):
             raise ToolCatalogueError(
@@ -52,6 +56,7 @@ def resolve_domain_tools(
             raise ToolCatalogueError(
                 f"MCP tool {tool['name']!r} has an invalid output schema"
             )
+
     return resolved
 
 
@@ -72,4 +77,5 @@ def check_definitions(definitions) -> dict[str, CheckDefinition]:
             after_validation="stage:after-validation" in metadata.get("tags", []),
             advisory="policy:advisory" in metadata.get("tags", []),
         )
+
     return checks

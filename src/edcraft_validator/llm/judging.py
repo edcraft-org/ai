@@ -66,10 +66,12 @@ async def run_judge[AssessmentT: BaseModel](
     """
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError("judge timeout must be finite and positive")
+
     started = time.perf_counter()
     report = _new_run(request, timeout_seconds)
     measured = None
     provider = None
+
     try:
         provider = provider_factory()
         report.provider, report.model = provider.provider, provider.model
@@ -82,6 +84,7 @@ async def run_judge[AssessmentT: BaseModel](
         report.duration_ms = (time.perf_counter() - started) * 1000
         close_provider(provider)
         return report
+
     call_started = time.perf_counter()
     try:
         async with asyncio.timeout(timeout_seconds):
@@ -111,6 +114,7 @@ async def run_judge[AssessmentT: BaseModel](
         report.error_code = "JUDGE_INVALID_RESPONSE"
     except Exception:
         report.error_code = "JUDGE_INTERNAL_ERROR"
+
     if not report.model_calls:
         report.model_calls = [call.model_copy(deep=True) for call in measured.calls]
     if report.status == "error" and report.model_calls:

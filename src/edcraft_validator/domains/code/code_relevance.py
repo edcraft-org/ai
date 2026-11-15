@@ -53,11 +53,13 @@ async def review_code_question_relevance(
     for timeout in (relevance_timeout_seconds, execution_timeout_seconds):
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("review timeouts must be finite and positive")
+
     # Snapshot caller-owned lists and options for the asynchronous review.
     question = question.model_copy(deep=True)
     request = request.model_copy(deep=True)
     representation = relevance_input(question, request)
     started = time.perf_counter()
+
     technical = await check_code_question_correctness(
         question,
         execution_tool=execution_tool,
@@ -69,6 +71,7 @@ async def review_code_question_relevance(
         decision_provider_factory=decision_provider_factory,
         relevance_timeout_seconds=relevance_timeout_seconds,
     )
+
     return CodeRelevanceReview(
         status=relevance.status,
         question_sha256=question.sha256,

@@ -35,6 +35,7 @@ def test_registry_rejects_unknown_model_provider() -> None:
 def test_domain_registry_exposes_code_without_changing_the_application() -> None:
     assert "code" in available_domains()
     domain = create_domain("code")
+
     assert isinstance(domain, CodeDomain)
     assert domain.request_model is not None
     assert domain.candidate_model is not None

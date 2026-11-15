@@ -81,6 +81,7 @@ def check_scalar(ctx: EngineContext) -> CorrectnessResult:
     if problem.relations:
         raise EngineUnsupported("scalar relational givens are unsupported; use solve")
     assert problem.expression is not None
+
     expressions = _Expressions(
         source,
         candidate,
@@ -120,6 +121,7 @@ def _check_equivalence(ctx: EngineContext, branch: _Expressions) -> _Verdict | N
     # equivalence or counterexample work touches it.
     _require_bounded_expansion(branch.source, "problem expression")
     _require_bounded_expansion(branch.candidate, "answer expression")
+
     variable = _variable_for(ctx, branch)
     source_domain = domain_from_conditions(
         ctx, branch.source, branch.source_conditions, variable
@@ -136,6 +138,7 @@ def _check_equivalence(ctx: EngineContext, branch: _Expressions) -> _Verdict | N
             "could not establish that the problem's real domain is non-empty",
             "scalar.equivalence.domain",
         )
+
     coverage = domain_covered(source_domain, candidate_domain, ctx)
     if coverage is False:
         return _Verdict(
@@ -200,6 +203,7 @@ def _check_differentiate(ctx: EngineContext, branch: _Expressions) -> _Verdict |
                     "nonsmooth differentiability requires additional case analysis",
                     "scalar.differentiate.domain",
                 )
+
     expected_domain = sympy_domain(ctx, expected, variable)
     required_domain = intersect_domains(source_domain, expected_domain)
     required_nonempty = domain_nonempty(ctx, required_domain)
@@ -270,6 +274,7 @@ def _check_antiderivative(ctx: EngineContext, branch: _Expressions) -> _Verdict 
             "could not establish the primitive's domain on the integrand domain",
             "scalar.antiderivative.domain",
         )
+
     try:
         derivative = sympy.diff(branch.candidate, variable)
     except (TypeError, ValueError) as exc:
@@ -413,6 +418,7 @@ def _compare_expressions(
     incorrect_reason: str,
 ) -> _Verdict:
     difference = expected - candidate
+
     # A witnessed nonzero point already disproves equality, so search for one
     # before the expensive symbolic zero tests. This keeps a wrong answer
     # cheap to reject instead of paying for simplify/trigsimp/factor first.
@@ -431,8 +437,10 @@ def _compare_expressions(
                 }
             },
         )
+
     if provably_zero(difference, domain):
         return _Verdict("correct", correct_reason, method)
+
     return _Verdict(
         "unknown",
         "could not prove exact equality and found no exact counterexample",

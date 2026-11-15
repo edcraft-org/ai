@@ -82,12 +82,14 @@ class FiniteParameter(BaseModel):
         ]
         if len(encoded) != len(set(encoded)):
             raise ValueError("parameter values must be unique")
+
         validators = {
             "integer": self._validate_integer,
             "boolean": self._validate_boolean,
             "string": self._validate_string,
             "integer_list": self._validate_integer_list,
         }
+
         for value in self.values:
             validators[self.kind](value)
         return self
@@ -231,11 +233,13 @@ class TemplateValidationSummary(BaseModel):
         checks = [item.check for item in self.evidence]
         if len(checks) != len(set(checks)):
             raise ValueError("validation evidence checks must be unique")
+
         if any(
             item.status != "passed" and item.details.get("advisory") is not True
             for item in self.evidence
         ):
             raise ValueError("checked templates require passing validation evidence")
+
         if (
             not self.examples_checked
             <= self.execution_calls
@@ -281,6 +285,7 @@ class TemplateValidationError(ValidationFailure):
         evidence: list[ValidationEvidence] | None = None,
     ) -> None:
         context = {"failing_inputs": inputs} if inputs is not None else None
+
         super().__init__(
             message,
             code=code,

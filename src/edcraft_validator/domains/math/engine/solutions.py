@@ -221,6 +221,7 @@ def _solve_relation(
         raise EngineUnsupported(
             "the deterministic solver could not settle this relation"
         ) from exc
+
     _ensure_set_supported(solution)
     complete_all_domain = (
         solution is sympy.S.Reals
@@ -279,6 +280,7 @@ def _condition_set(
             raise EngineUnknown(
                 "a denominator exclusion could not be evaluated"
             ) from exc
+
     relation = _compile_relation(condition.kind, expression, sympy.Integer(0))
     if _is_true(relation):
         return _DOMAINS[domain]
@@ -294,6 +296,7 @@ def _condition_set(
         raise EngineUnsupported(
             "a source domain restriction could not be evaluated"
         ) from exc
+
     _ensure_set_supported(solution)
     return solution
 
@@ -515,6 +518,7 @@ def _simplify_set(value: sympy.Set) -> sympy.Set:
 def _sets_equal(expected: sympy.Set, candidate: sympy.Set) -> bool:
     expected_finite = expected.is_finite_set
     candidate_finite = candidate.is_finite_set
+
     if expected_finite is True and candidate_finite is False:
         return False
     if expected_finite is False and candidate_finite is True:
@@ -535,6 +539,7 @@ def _sets_equal(expected: sympy.Set, candidate: sympy.Set) -> bool:
         return True
     if simplified.is_empty is False:
         return False
+
     # Exact witnesses can disprove equality when symbolic set reduction stalls.
     # Agreement at these points is never sufficient to accept an answer.
     for point in map(sympy.Rational, (0, 1, -1, "1/2", "-1/2", "1/3", "4/3", 2)):
@@ -550,6 +555,7 @@ def _sets_equal(expected: sympy.Set, candidate: sympy.Set) -> bool:
             and wanted != supplied
         ):
             return False
+
     raise EngineUnknown("whether the answer set equals the solution set is undecidable")
 
 
@@ -588,6 +594,7 @@ def _check_univariate(ctx: EngineContext) -> CorrectnessResult:
             expected = _intersect(
                 expected, _condition_set(condition, variable, problem.domain)
             )
+
     _ensure_set_supported(expected)
 
     try:
@@ -596,6 +603,7 @@ def _check_univariate(ctx: EngineContext) -> CorrectnessResult:
         matches = _sets_equal(expected, effective)
     except _CandidateIncorrect:
         return _incorrect_result(ctx, expected, "a candidate value is not admissible")
+
     if matches:
         return ctx.result(
             "correct",
@@ -700,6 +708,7 @@ def _check_linear_system(ctx: EngineContext) -> CorrectnessResult:
                 raise EngineUnknown(
                     "linear system solution membership cannot be determined"
                 )
+
     if expected_tuple is not None:
         truth = _conditions_hold(
             conditions, dict(zip(variables, expected_tuple, strict=True))
@@ -713,6 +722,7 @@ def _check_linear_system(ctx: EngineContext) -> CorrectnessResult:
 
     if expected_tuple is None:
         raise EngineUnsupported("the linear system has no unique admissible solution")
+
     try:
         matches = _check_system_candidate(
             ctx, variables, specs, conditions, expected_tuple
@@ -794,6 +804,7 @@ def _check_system_candidate(
 
     if expected is None:
         return False
+
     for left, right in zip(values, expected, strict=True):
         exact = _exact_equal(left, right)
         if exact is False:

@@ -31,6 +31,7 @@ def _check(permutation: list[list[int]]):
 
 def test_lu_uses_p_a_equals_l_u_for_a_three_cycle():
     accepted = _check([[0, 0, 1], [1, 0, 0], [0, 1, 0]])  # CYCLE^T
+
     assert accepted.outcome == "correct", accepted.reason
     assert accepted.details["lu_convention"] == LU_CONVENTION
     assert LU_CONVENTION == "P * A = L * U"

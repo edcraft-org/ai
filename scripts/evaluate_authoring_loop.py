@@ -96,6 +96,7 @@ class ObservedProvider:
                     )
                 }
             )
+
         return response
 
     def close(self):
@@ -138,9 +139,11 @@ def summarize_records(records, requested_jobs):
         for result in results
     )
     corrected = sum(result["status"] == "checked" for result in failed_first)
+
     failures = Counter()
     check_findings = Counter()
     calls = []
+
     for record in records:
         result = record.get("authoring_result", {})
         if record["status"] != "checked":
@@ -165,8 +168,10 @@ def summarize_records(records, requested_jobs):
             ModelCallRecord.model_validate(call)
             for call in result.get("model_calls", [])
         )
+
     durations = [record["duration_ms"] for record in records]
     usage = summarize_usage(calls).model_dump()
+
     return {
         "requested_jobs": requested_jobs,
         "recorded_jobs": len(records),
@@ -219,6 +224,7 @@ def source_revision():
         capture_output=True,
         check=True,
     ).stdout.strip()
+
     dirty = bool(
         subprocess.run(
             ["git", "status", "--porcelain"],
@@ -228,6 +234,7 @@ def source_revision():
             check=True,
         ).stdout
     )
+
     return {
         "git_revision": revision,
         "working_tree_dirty": dirty,
@@ -251,12 +258,14 @@ def main():
     )
     parser.add_argument("--correction-drill", action="store_true")
     args = parser.parse_args()
+
     jobs = args.jobs if args.jobs is not None else (1 if args.correction_drill else 5)
     if jobs < 1:
         parser.error("--jobs must be at least one")
     if args.env_file:
         load_dotenv(args.env_file)
     cases = CASES[:1] if args.correction_drill else CASES
+
     manifest = {
         **source_revision(),
         "cases_version": CASES_VERSION,
@@ -271,6 +280,7 @@ def main():
             for name, difficulty, prompt in cases
         ],
     }
+
     args.output.parent.mkdir(parents=True, exist_ok=True)
     artifact_dir = args.output.with_suffix("")
     artifact_dir.mkdir(exist_ok=True)
@@ -290,6 +300,7 @@ def main():
                 "request": request.model_dump(mode="json"),
                 "status": "error",
             }
+
             started = time.perf_counter()
             provider = None
             result = None
@@ -298,6 +309,7 @@ def main():
                 f"{args.model or 'configured model'}",
                 flush=True,
             )
+
             try:
                 provider = ObservedProvider(
                     create_model_provider(
@@ -332,13 +344,16 @@ def main():
                 }
             finally:
                 close_provider(provider)
+
             record["duration_ms"] = (time.perf_counter() - started) * 1000
+
             if result is not None and result.artifact is not None:
                 try:
                     artifact_path = artifact_dir / f"{job_id}.template.json"
                     artifact_path.write_text(
                         result.artifact.model_dump_json(indent=2) + "\n"
                     )
+
                     loaded = ValidatedCodeTemplate.model_validate_json(
                         artifact_path.read_text()
                     )
@@ -354,6 +369,7 @@ def main():
                         if original != replay:
                             raise ValueError(f"Offline replay differed for seed {seed}")
                         previews.append(replay.model_dump(mode="json"))
+
                     previews_path = artifact_dir / f"{job_id}.previews.json"
                     write_json(previews_path, previews)
                     record.update(
@@ -363,8 +379,10 @@ def main():
                     )
                 except Exception as exc:
                     record["replay_error"] = f"{type(exc).__name__}: {exc}"
+
             print(json.dumps(record), file=output, flush=True)
             records.append(record)
+
             summary = summarize_records(records, jobs)
             write_json(summary_path, summary)
             print(

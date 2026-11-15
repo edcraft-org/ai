@@ -67,6 +67,7 @@ class SafeExpression:
             raise TemplateValidationError(
                 f"template expression exceeds {MAX_EXPRESSION_LENGTH} characters"
             )
+
         try:
             self.expression = ast.parse(source, mode="eval").body
         except SyntaxError as exc:
@@ -77,6 +78,7 @@ class SafeExpression:
             raise TemplateValidationError(
                 f"template expression exceeds {MAX_EXPRESSION_NODES} syntax nodes"
             )
+
         self._validate(self.expression, depth=0)
 
     def evaluate(self, values: dict[str, ParameterValue]) -> Any:
@@ -114,6 +116,7 @@ class SafeExpression:
                     f"expression uses unknown parameter {node.id!r}"
                 )
             return
+
         if isinstance(node, ast.BinOp) and type(node.op) in self._binary_operators:
             self._validate(node.left, depth=depth + 1)
             self._validate(node.right, depth=depth + 1)
@@ -165,6 +168,7 @@ class SafeExpression:
             return node.value
         if isinstance(node, ast.Name):
             return values[node.id]
+
         if isinstance(node, ast.BinOp):
             left = self._bounded(self._evaluate(node.left, values))
             right = self._bounded(self._evaluate(node.right, values))
@@ -230,6 +234,7 @@ class SafeExpression:
             sequence, count = left, right
         elif type(left) is int and isinstance(right, (str, list)):
             sequence, count = right, left
+
         if sequence is None or count is None:
             return
         repetitions = max(count, 0)
@@ -239,6 +244,7 @@ class SafeExpression:
                 "expression sequence result exceeds "
                 f"{MAX_EXPRESSION_SEQUENCE_LENGTH} items"
             )
+
         if isinstance(sequence, list):
             payload_size = cls._bounded_value_size(sequence) - 1
             if 1 + payload_size * repetitions > MAX_EXPRESSION_VALUE_SIZE:
@@ -294,6 +300,7 @@ class SafeExpression:
                 )
             size = 1
             cls._ensure_value_size(size, remaining_size)
+
             for item in value:
                 size += cls._bounded_value_size(
                     item,
@@ -304,6 +311,7 @@ class SafeExpression:
             raise TemplateValidationError(
                 f"expression produced unsupported value type {type(value).__name__}"
             )
+
         cls._ensure_value_size(size, remaining_size)
         return size
 

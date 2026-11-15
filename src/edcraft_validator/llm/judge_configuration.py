@@ -36,6 +36,7 @@ class JudgeSettings(BaseModel):
 
 def load_judge_settings(environ: Mapping[str, str] | None = None) -> JudgeSettings:
     env = os.environ if environ is None else environ
+
     return JudgeSettings.model_validate(
         {
             "provider": env.get("EDCRAFT_JUDGE_PROVIDER", "soclaas").strip(),
@@ -52,6 +53,7 @@ def load_judge_settings(environ: Mapping[str, str] | None = None) -> JudgeSettin
 
 def configured_judge_provider(settings: JudgeSettings | None = None) -> ModelProvider:
     selected = settings if settings is not None else load_judge_settings()
+
     return create_model_provider(
         TemplateProviderSelection(provider=selected.provider, model=selected.model)
     )

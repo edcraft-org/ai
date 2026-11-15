@@ -21,10 +21,12 @@ def render_template(
             raise TemplateValidationError(
                 f"text template uses unknown parameter {field_name!r}"
             )
+
     if require_all and fields != set(values):
         raise TemplateValidationError(
             "question_template placeholders must exactly match the parameters"
         )
+
     rendered = source.format_map(values)
     if not rendered.strip():
         raise TemplateValidationError("rendered text must not be blank")

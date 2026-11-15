@@ -251,6 +251,7 @@ def test_template_sweep_blocks_a_failing_variant() -> None:
         ],
         body=body,
     )
+
     report = validate_template(template)
     assert report.report.status == "failed"
     assert report.variants_checked == 2

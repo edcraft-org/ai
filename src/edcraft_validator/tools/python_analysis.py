@@ -100,6 +100,7 @@ class PythonSubsetAnalyzer(ast.NodeVisitor):
             self.errors.append(
                 f"Entry function '{self.entry_function}' is not defined at module level"
             )
+
         for node in tree.body:
             if not isinstance(node, (ast.FunctionDef, ast.Assign, ast.AnnAssign)):
                 self.errors.append(
@@ -120,6 +121,7 @@ class PythonSubsetAnalyzer(ast.NodeVisitor):
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         if node.decorator_list:
             self.errors.append(f"Decorators are not allowed (line {node.lineno})")
+
         previous = self._current_function
         if previous is not None and (
             node.args.defaults
@@ -154,6 +156,7 @@ class PythonSubsetAnalyzer(ast.NodeVisitor):
                 self.errors.append(
                     f"Call to '{called}' is not allowed (line {node.lineno})"
                 )
+
         self.generic_visit(node)
 
 

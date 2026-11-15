@@ -26,6 +26,7 @@ def main() -> int:
             sys.stdout,
         )
         return 0
+
     json.dump(response, sys.stdout, allow_nan=False)
     return 0
 
@@ -35,12 +36,14 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
     aspect = payload.get("aspect", "correctness")
     if aspect not in get_args(Aspect):
         raise ValueError(f"unknown validation aspect {aspect!r}")
+
     if operation == "validate_item":
         spec = MathItemSpec.model_validate(payload["spec"])
         report = validate_item(
             spec, params=_params(payload.get("params")), aspect=aspect
         )
         return {"report": report.model_dump(mode="json")}
+
     if operation == "validate_template":
         template = MathTemplateSpec.model_validate(payload["template"])
         report = validate_template(
@@ -50,6 +53,7 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
             aspect=aspect,
         )
         return {"report": report.model_dump(mode="json")}
+
     raise ValueError(f"unknown validation operation {operation!r}")
 
 

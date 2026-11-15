@@ -93,6 +93,7 @@ def build_symbols(
         if spec.nonzero:
             assumptions["nonzero"] = True
         built[spec.name] = sympy.Symbol(spec.name, **assumptions)
+
     return built
 
 
@@ -105,6 +106,7 @@ def _check_tree(expr: Expr, depth: int = 0) -> int:
         exponent = expr.args[1]
         if exponent.num is not None and abs(parse_exact(exponent.num)) > MAX_EXPONENT:
             raise MathCompileError("exponents are bounded")
+
     count = 1
     for child in expr.args:
         count += _check_tree(child, depth + 1)
@@ -180,6 +182,7 @@ def compile_relation(
 ) -> sympy.Rel:
     left = compile_expr(relation.lhs, symbols, params)
     right = compile_expr(relation.rhs, symbols, params)
+
     operators = {
         "eq": sympy.Eq,
         "ne": sympy.Ne,
@@ -200,6 +203,7 @@ def compile_givens(
     for given in givens:
         if given.kind == "relation" and given.relation is not None:
             relations.append(compile_relation(given.relation, symbols, params))
+
     return relations
 
 

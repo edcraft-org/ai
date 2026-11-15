@@ -29,6 +29,7 @@ def generate_code_question(
     distractor_recipes = [
         SafeExpression(r.expression, names) for r in template.distractors
     ]
+
     # Cheap recipe/rendering checks only: no execution or model calls. Failed
     # variants are resampled with a fixed bound, never repaired with invented options.
     for attempt in range(32):
@@ -56,6 +57,7 @@ def generate_code_question(
             "Could not produce a usable draft within 32 recipe attempts",
             code="GENERATION_ATTEMPTS_EXHAUSTED",
         )
+
     distractor_reasons = [
         render_template(recipe.reason_template, inputs)
         for recipe in template.distractors
@@ -71,6 +73,7 @@ def generate_code_question(
         answer_target=template.answer_target,
         question_type=template.question_type,
     )
+
     return CodeQuestionInstance(
         template_id=template.template_id,
         artifact_id=validated.artifact_id,

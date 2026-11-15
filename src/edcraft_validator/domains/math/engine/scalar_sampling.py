@@ -60,8 +60,10 @@ def sample_points(
         [value for value in values if _sample_allowed(symbol, value, ctx)]
         for symbol in symbols
     ]
+
     if any(not choices for choices in per_symbol):
         return []
+
     # A fixed seed keeps the engine deterministic. Diagonals plus independent
     # draws cover all coordinates without walking a Cartesian prefix.
     rng = Random(0)
@@ -73,6 +75,7 @@ def sample_points(
         tuple(rng.choice(choices) for choices in per_symbol) for _ in range(96)
     )
     unique = dict.fromkeys(combinations)
+
     return [dict(zip(symbols, values, strict=True)) for values in unique]
 
 
@@ -104,10 +107,12 @@ def find_satisfying_point(
         symbols.add(domain.variable)
     for condition in domain.conditions:
         symbols.update(condition.expr.free_symbols)
+
     ordered = sorted(symbols, key=lambda item: item.name)
     for point in sample_points(ordered, ctx):
         if point_in_domain(point, domain):
             return point
+
     return None
 
 
@@ -119,6 +124,7 @@ def find_condition_violation(
     symbols = set(target.expr.free_symbols)
     for condition in source_conditions:
         symbols.update(condition.expr.free_symbols)
+
     ordered = sorted(symbols, key=lambda item: item.name)
     for point in sample_points(ordered, ctx):
         if not all(
@@ -128,6 +134,7 @@ def find_condition_violation(
             continue
         if _condition_truth_at(target, point) is False:
             return point
+
     return None
 
 
@@ -154,6 +161,7 @@ def _condition_truth_at(
         # ``a = -1``). That is not a violation of the condition; the point is
         # simply outside its real domain, so its truth stays unknown.
         return None
+
     return relational_truth(relation)
 
 
@@ -168,6 +176,7 @@ def point_in_domain(point: dict[sympy.Symbol, sympy.Expr], domain: Domain) -> bo
             contains = None
         if contains is not True:
             return False
+
     return all(
         _condition_truth_at(condition, point) is True for condition in domain.conditions
     )
@@ -214,6 +223,7 @@ def simple_zero(expr: sympy.Expr) -> bool:
         sympy.factor,
         sympy.radsimp,
     )
+
     for transform in transforms:
         try:
             result = transform(expr)

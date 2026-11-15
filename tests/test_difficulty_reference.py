@@ -27,6 +27,7 @@ def test_current_reference_ratings_follow_v03_boundaries():
         "medium": 9,
         "hard": 6,
     }
+
     for question in QUESTIONS:
         ratings = question["dimensions"]
         assert set(ratings) == {
@@ -51,6 +52,7 @@ def test_current_reference_ratings_follow_v03_boundaries():
 @pytest.mark.parametrize("question", QUESTIONS, ids=lambda q: q["question_id"])
 def test_reference_answer_matches_bounded_execution(question):
     content = {key: question[key] for key in CodeDifficultyQuestion.model_fields}
+
     result = check_concrete_correctness(
         CodeDifficultyQuestion.model_validate(content),
         LocalPythonTool(),

@@ -30,6 +30,7 @@ class EngineContext:
         # e.g. (1/0)**0 -> 1. Symbolic holes are tracked by domain handlers.
         for child in expr.args:
             self.compile(child)
+
         value = compile_expr(expr, self.symbols)
         if not value.free_symbols and (value.is_finite is False or value is sympy.nan):
             raise EngineUnsupported("expression has a non-finite subexpression")
@@ -40,6 +41,7 @@ class EngineContext:
         # stays with the domain handlers.
         if value.is_real is False:
             raise EngineUnsupported("expression has no real value")
+
         return value
 
     def result(

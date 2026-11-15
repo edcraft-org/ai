@@ -37,6 +37,7 @@ def examples() -> list[tuple[str, dict, str]]:
     inverse = [
         [number(f"1/{i + 1}" if i == j else 0) for j in range(4)] for i in range(4)
     ]
+
     rows = [
         (
             "Differentiate x^8",
@@ -175,6 +176,7 @@ def examples() -> list[tuple[str, dict, str]]:
             "correct",
         ),
     ]
+
     return [
         (title, {"problem": problem, "answer": answer}, expected)
         for title, problem, answer, expected in rows
@@ -194,6 +196,7 @@ def run() -> dict:
                 "result": observed.model_dump(mode="json"),
             }
         )
+
     template = {
         "request": {
             "problem": {
@@ -210,9 +213,11 @@ def run() -> dict:
         },
         "parameters": [{"name": "a", "minimum": -1000000, "maximum": 1000000}],
     }
+
     qualification = qualify_math_template(
         template, settings=SamplingSettings(max_examples=50, seed=42)
     )
+
     return {
         "examples": results,
         "matched_examples": sum(r["matches"] for r in results),

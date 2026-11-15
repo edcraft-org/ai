@@ -93,10 +93,12 @@ def _install_probe(tmp_path, monkeypatch, name: str, source: str) -> str:
         NO_KERNEL_LIMITS_SITECUSTOMIZE, encoding="utf-8"
     )
     (tmp_path / f"{name}.py").write_text(source, encoding="utf-8")
+
     existing = os.environ.get("PYTHONPATH")
     path = str(tmp_path)
     if existing:
         path = f"{path}{os.pathsep}{existing}"
+
     monkeypatch.setenv("PYTHONPATH", path)
     return name
 
@@ -142,6 +144,7 @@ def test_watchdog_kills_a_process_above_the_cap():
     child = FakeWatchdogChild()
     exceeded: list[bool] = []
     readings = iter([1024, 5000, 5000])
+
     watchdog = isolated_process.RssWatchdog(
         4242,
         4096,

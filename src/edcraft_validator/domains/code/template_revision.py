@@ -10,6 +10,7 @@ def author_difficulty_guidance() -> str:
         .split("Choose the closest worked anchor", 1)[0]
         .strip()
     )
+
     return (
         "Difficulty definitions shared with the checker, without worked examples:\n"
         "| Level | Anchor description |\n" + levels + "\n"

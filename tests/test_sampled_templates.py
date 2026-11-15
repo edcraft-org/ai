@@ -46,6 +46,7 @@ def test_author_schema_requires_answer_recipe_and_has_no_eligible_table():
     schema = CodeProposalResponse.model_json_schema()
     assert "answer_expression" in schema["required"]
     assert "eligible_inputs" not in schema["properties"]
+
     value = candidate().model_dump(
         exclude={"template_id", "topic", "difficulty", "question_type"}
     )
@@ -53,6 +54,7 @@ def test_author_schema_requires_answer_recipe_and_has_no_eligible_table():
     canonical = parse_code_template_proposal(json.dumps(proposal.model_dump()))
     assert canonical.answer_expression == "a + b"
     assert canonical.code == proposal.code
+
     del value["answer_expression"]
     with pytest.raises(ValidationError, match="Field required"):
         CodeProposalResponse.model_validate(value)
@@ -84,6 +86,7 @@ def test_selection_maximizes_coverage_before_sampling():
     )
     value = CodeTemplateCandidate.model_validate_json(value.model_dump_json())
     validated = validate_code(value, execution_tool=TrustedBatchExecutor())
+
     assert "eligible_inputs" not in validated.template.model_dump()
     assert len(validated.template.distractors) == 3
     assert all(r.expression != "a * b" for r in validated.template.distractors)
@@ -128,6 +131,7 @@ def test_judge_receives_declared_sampled_domain_and_recipe():
 
 def test_low_confidence_mismatch_returns_warning_without_revision_or_relabelling():
     result, author, judges = run(["hard"], confidence=0.79)
+
     assert result.status == "checked"
     assert len(result.attempts) == len(author.generations) == len(judges) == 1
     assert result.artifact.template.difficulty == "easy"
@@ -142,6 +146,7 @@ def test_low_confidence_mismatch_returns_warning_without_revision_or_relabelling
 
 def test_high_confidence_mismatch_is_advisory_without_author_revision():
     result, author, judges = run(["hard"], confidence=0.80)
+
     assert result.status == "checked" and result.artifact is not None
     assert len(result.attempts) == len(author.generations) == len(judges) == 1
     assert all(len(j.requests) == 1 for j in judges)  # Checks never repair or retry.

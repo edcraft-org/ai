@@ -54,6 +54,7 @@ class KeyedDifficultyAssessment(Record):
 def keyed_assessment_model(option_count: int) -> type[KeyedDifficultyAssessment]:
     if option_count not in {3, 4}:
         raise ValueError("expected three or four supplied options")
+
     fields = {
         name: (field.annotation, copy.deepcopy(field))
         for name, field in DifficultyAssessment.model_fields.items()
@@ -62,6 +63,7 @@ def keyed_assessment_model(option_count: int) -> type[KeyedDifficultyAssessment]
         ThreeOptionEvidence if option_count == 3 else FourOptionEvidence,
         ...,
     )
+
     return create_model(
         f"DifficultyAssessmentFor{option_count}Options",
         __base__=KeyedDifficultyAssessment,
@@ -72,6 +74,7 @@ def keyed_assessment_model(option_count: int) -> type[KeyedDifficultyAssessment]
 def worked_anchors(rubric: CodeDifficultyRubric) -> tuple[str, str, str]:
     """Keep the three existing core worked anchors verbatim; add no examples."""
     text = rubric.text
+
     easy = (
         text.split("### Easy arithmetic\n", 1)[1]
         .split("### Medium conditional accumulation", 1)[0]
@@ -101,7 +104,9 @@ def rubric_reference(rubric: CodeDifficultyRubric) -> str:
         .split("Choose the closest worked anchor", 1)[0]
         .strip()
     )
+
     anchors = worked_anchors(rubric)
+
     return (
         "Dimensions (unchanged):\n| Dimension | Low | Moderate | High |\n"
         + dimensions

@@ -107,6 +107,7 @@ class CodeDomain:
                 "question_text": template_relevance_text(typed_candidate),
                 "subject_sha256": template_sha256(typed_candidate),
             }
+
         bindings = {"candidate": typed_candidate.model_dump(mode="json")}
         if tool_name == SEMANTIC_CHECK:
             bindings["required_distractors"] = require_type(
@@ -135,6 +136,7 @@ class CodeDomain:
             required=self.required_checks(template),
             advisory_checks=advisory_checks,
         )
+
         semantic = next(item for item in evidence if item.tool == SEMANTIC_CHECK)
         selected = [
             DistractorRecipe.model_validate(item)
@@ -144,6 +146,7 @@ class CodeDomain:
             recipe not in template.distractors for recipe in selected
         ):
             raise ValueError("Selected distractors are not checked proposal recipes")
+
         reusable = template.model_copy(
             update={
                 "distractors": selected,
@@ -158,6 +161,7 @@ class CodeDomain:
             )
             for item in evidence
         ]
+
         summary = TemplateValidationSummary.model_validate(
             {
                 **{
@@ -175,6 +179,7 @@ class CodeDomain:
                 "evidence": saved_evidence,
             }
         )
+
         return ValidatedCodeTemplate(
             template=reusable,
             validation=summary,
@@ -187,6 +192,7 @@ class CodeDomain:
             for item in evidence
             if item.tool == SEMANTIC_CHECK and item.status == "passed"
         ]
+
         checked = self.finalize_checked_template(
             candidate, semantic, advisory_checks=frozenset()
         )

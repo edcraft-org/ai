@@ -38,6 +38,7 @@ def test_summary_separates_jobs_attempts_corrections_and_missing_usage():
     success, _ = run(Provider())
     corrected, _ = run(Provider([wrong_answer(), Provider().proposals[0]]))
     failed, _ = run(Provider([wrong_answer()]))
+
     summary = evaluation.summarize_records(
         [record(success), record(corrected), record(failed)], 5
     )
@@ -109,7 +110,9 @@ def test_blocked_checks_fold_into_the_root_structural_failure():
             )
         ],
     )
+
     summary = evaluation.summarize_records([record(result)], 1)
+
     assert summary["failure_counts"] == {"UNSUPPORTED_CODE": 1}
     assert not any(
         code.endswith("_NOT_EVALUATED") for code in summary["failure_counts"]
@@ -157,6 +160,7 @@ def test_five_job_run_retains_provider_setup_failure_and_replays_saved_templates
         ],
     )
     assert evaluation.main() == 1
+
     records = [json.loads(line) for line in output.read_text().splitlines()]
     assert len(records) == len(calls) == 5
     assert records[1]["failure"] == {
@@ -171,6 +175,7 @@ def test_five_job_run_retains_provider_setup_failure_and_replays_saved_templates
         "medium",
         "hard",
     ]
+
     summary = json.loads(output.with_suffix(".summary.json").read_text())
     assert summary["checked"] == summary["replay_passed_jobs"] == 4
     assert summary["error"] == 1
@@ -192,6 +197,7 @@ def test_initial_failure_has_a_summary_without_checking_attempts():
 
     result, _ = run(Failure())
     summary = evaluation.summarize_records([record(result)], 1)
+
     assert summary["error"] == 1
     assert summary["attempts_per_job"] == [0]
     assert summary["usage"]["model_call_count"] == 1
@@ -202,6 +208,7 @@ def test_initial_failure_has_a_summary_without_checking_attempts():
 def test_initial_plan_argument_errors_are_categorized_without_check_findings(arguments):
     result, _ = run(Provider(plan=(SEMANTIC,), plan_arguments={SEMANTIC: arguments}))
     summary = evaluation.summarize_records([record(result)], 1)
+
     assert result.status == "error"
     assert summary["failure_counts"] == {f"generation:{result.failure.code}": 1}
     assert summary["check_finding_counts"] == {}
@@ -216,6 +223,7 @@ def test_terminal_tool_error_preserves_other_check_failure_categories():
 
     result, _ = run(Provider([wrong_answer()]), UnavailableStructure(Executor()))
     summary = evaluation.summarize_records([record(result)], 1)
+
     assert result.status == "needs_review"
     assert summary["failure_counts"] == {
         "PROPOSED_ANSWER_MISMATCH": 1,
@@ -240,6 +248,7 @@ def test_rerun_does_not_attach_catalogue_from_previous_job(
         lambda: TemplateApplication(tool_client=RecordingClient(Executor())),
     )
     assert evaluation.main() == 0
+
     original = json.loads(output.read_text())
     catalogue = output.with_suffix("") / original["catalogue_file"]
     saved_catalogue = catalogue.read_bytes()
@@ -264,6 +273,7 @@ def test_rerun_does_not_attach_catalogue_from_previous_job(
         monkeypatch.setattr(evaluation, "write_json", fail_catalogue_write)
 
     assert evaluation.main() == 1
+
     failed = json.loads(output.read_text())
     assert failed["status"] == "error"
     assert "catalogue_file" not in failed

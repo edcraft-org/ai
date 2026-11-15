@@ -72,6 +72,7 @@ def _set(
         answer["items"] = items
     if intervals is not None:
         answer["intervals"] = intervals
+
     return answer
 
 
@@ -248,6 +249,7 @@ def _cases(mutations: tuple[tuple[str, Any], ...]) -> list[tuple[str, str, Wire]
     for base_id, request in BASE_REQUESTS.items():
         for mutation_name, mutated in applicable(request, mutations):
             cases.append((base_id, mutation_name, mutated))
+
     return cases
 
 
@@ -270,6 +272,7 @@ def test_base_requests_are_accepted() -> None:
         result = _run(request)
         if result.outcome != "correct":
             failures.append(f"{base_id}: {result.outcome} ({result.reason})")
+
     assert not failures, "\n".join(failures)
 
 
@@ -289,6 +292,7 @@ def test_preserving_mutations_are_accepted(
     """
     result = _run(mutated)
     case = _case_id(base_id, mutation_name)
+
     assert result.outcome == "correct", (
         f"D-preserve.{case}: meaning-preserving edit is {result.outcome}, not "
         f"correct ({result.reason})"
@@ -311,6 +315,7 @@ def test_breaking_mutations_are_rejected(
     """
     result = _run(mutated)
     case = _case_id(base_id, mutation_name)
+
     assert result.outcome == "incorrect", (
         f"D-break.{case}: meaning-changing edit is {result.outcome}, not "
         f"incorrect ({result.reason})"
@@ -334,6 +339,7 @@ def test_preserving_unknown_rate_stays_below_half() -> None:
     print(f"\npreserving unknown: {len(unknown)}/{total} ({rate:.1%})")
     for case in unknown:
         print(f"  unknown {case}")
+
     assert rate < 0.5
 
 
@@ -400,6 +406,7 @@ def test_undefined_complex_candidate_is_unsupported(case: str) -> None:
     ``unsupported`` verdict before any cancellation can accept the answer.
     """
     result = _run(UNDEFINED_CANDIDATE_CASES[case])
+
     assert result.outcome == "unsupported", (
         "D-complex-undefined: candidate cancels an undefined non-real "
         f"subexpression and is {result.outcome} in {case} ({result.reason})"
@@ -414,6 +421,7 @@ def _facade_cases() -> list[tuple[str, str, str, Wire]]:
             assert choices, f"{base_id} has no {kind} mutation"
             mutation_name, mutated = choices[0]
             selected.append((base_id, kind, mutation_name, mutated))
+
     return selected
 
 
@@ -431,6 +439,7 @@ def test_isolated_facade_preserves_the_in_process_verdict(
     in_process = _run(mutated)
     facade = check_math_correctness(CorrectnessRequest.model_validate(mutated))
     expected = "correct" if kind == "preserving" else "incorrect"
+
     assert facade.outcome == in_process.outcome, (
         f"{base_id}.{kind}.{mutation_name}: in-process={in_process.outcome} "
         f"facade={facade.outcome}"
@@ -454,6 +463,7 @@ def _random_tree(rng: random.Random, budget: int, depth: int = 0) -> Wire:
         return _leaf(rng)
     if budget == 2:
         return {"op": "sin", "args": [_leaf(rng)]}
+
     kind = rng.choice(["add", "mul", "sub", "pow", "sin", "cos", "add", "mul"])
     if kind == "sin" or kind == "cos":
         return {"op": kind, "args": [_random_tree(rng, budget - 1, depth + 1)]}
@@ -462,6 +472,7 @@ def _random_tree(rng: random.Random, budget: int, depth: int = 0) -> Wire:
         return power(_random_tree(rng, budget - 2, depth + 1), exponent)
     left_budget = rng.randint(1, budget - 2)
     right_budget = budget - 1 - left_budget
+
     if kind == "sub":
         return sub(
             _random_tree(rng, left_budget, depth + 1),
@@ -485,6 +496,7 @@ def _wide_random_tree(rng: random.Random, budget: int) -> Wire:
     """
     if budget <= 9:
         return _random_tree(rng, budget)
+
     arity = min(1000, max(2, budget // 2))
     remaining = budget - 1
     share, extra = divmod(remaining, arity)
@@ -492,6 +504,7 @@ def _wide_random_tree(rng: random.Random, budget: int) -> Wire:
         _wide_random_tree(rng, share + (1 if index < extra else 0))
         for index in range(arity)
     ]
+
     return {"op": rng.choice(["add", "mul"]), "args": children}
 
 
@@ -523,6 +536,7 @@ def test_large_random_trees_are_rejected_or_bounded(node_budget: int) -> None:
     else:
         rejected = False
     validation_seconds = time.perf_counter() - started
+
     assert validation_seconds < 2.0
 
     if rejected:
@@ -544,6 +558,7 @@ def _safe_sum_tree(rng: random.Random, budget: int) -> Wire:
     kind = rng.choice(["add", "sub", "sin", "cos"])
     if kind in {"sin", "cos"}:
         return {"op": kind, "args": [_safe_sum_tree(rng, budget - 1)]}
+
     left_budget = rng.randint(1, budget - 2)
     right_budget = budget - 1 - left_budget
     if kind == "add":
@@ -562,4 +577,5 @@ def test_accepted_random_tree_finishes_within_two_seconds() -> None:
     request = CorrectnessRequest.model_validate(_fuzz_request(_safe_sum_tree(rng, 20)))
     validate_request(request)
     result = check_in_process(request)
+
     assert result.duration_ms < 2000.0

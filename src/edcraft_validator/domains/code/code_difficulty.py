@@ -57,6 +57,7 @@ async def assess_code_question_difficulty(
 ) -> CodeDifficultyReport:
     if not math.isfinite(judge_timeout_seconds) or judge_timeout_seconds <= 0:
         raise ValueError("judge timeout must be finite and positive")
+
     # Validate the input contract and isolate caller state, without checking code
     # semantics, the answer, option correctness or execution eligibility.
     question = CodeDifficultyQuestion.model_validate(question.model_dump())
@@ -65,6 +66,7 @@ async def assess_code_question_difficulty(
         question_sha256=question.sha256,
         requested_difficulty=requested_difficulty,
     )
+
     try:
         rubric = load_code_difficulty_rubric()
         request = build_difficulty_request(question, rubric)
@@ -74,11 +76,13 @@ async def assess_code_question_difficulty(
         report.rubric_version = rubric.version
         report.rubric_sha256 = rubric.sha256
         report.assessment_conditions_version = rubric.assessment_conditions_version
+
         judge = await run_judge(
             request,
             provider_factory=provider_factory,
             timeout_seconds=judge_timeout_seconds,
         )
+
         payload = judge.model_dump()
         if isinstance(judge.assessment, KeyedDifficultyAssessment):
             payload["assessment"] = judge.assessment.to_assessment().model_dump()
@@ -86,6 +90,7 @@ async def assess_code_question_difficulty(
         report.judge = judge
         report.error_code = judge.error_code
         report.usage = judge.usage.model_copy(deep=True)
+
         if judge.status == "completed":
             assessment = judge.assessment
             if assessment.estimated_difficulty is None:

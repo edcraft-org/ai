@@ -31,6 +31,7 @@ def main() -> int:
             raise ValueError("unknown worker operation")
     except Exception as exc:
         response = {"error": {"type": type(exc).__name__, "message": str(exc)[:500]}}
+
     json.dump(response, sys.stdout, allow_nan=False)
     return 0
 

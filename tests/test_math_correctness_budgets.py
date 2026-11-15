@@ -62,6 +62,7 @@ def test_eight_symbol_product_is_rejected_before_the_worker_starts(monkeypatch):
 
     monkeypatch.setattr(math_correctness, "run_json_worker", forbidden_worker)
     result = math_correctness.check_math_correctness(_request(problem, answer))
+
     assert result.outcome == "unsupported"
     assert "20" in result.reason and "term" in result.reason
 
@@ -99,6 +100,7 @@ def test_estimator_is_monotone_on_nested_growth():
     base = _op("add", *[_sym(name) for name in SYMBOLS])
     child = _op("mul", _op("pow", base, _num(2)), base)
     parent = _op("mul", child, child)
+
     assert estimated_terms(child) >= estimated_terms(base)
     assert estimated_terms(parent) >= estimated_terms(child)
 
@@ -115,6 +117,7 @@ def test_estimator_clamps_quickly_on_adversarial_trees():
     deeply_nested: Expr = _sym("a")
     for _ in range(1000):
         deeply_nested = _op("sin", deeply_nested)
+
     started = time.perf_counter()
     assert estimated_terms(deeply_nested) == 1
     assert time.perf_counter() - started < 0.25
@@ -125,6 +128,7 @@ def test_scalar_defence_refuses_oversized_expanded_candidate():
     widened = sympy.Add(*symbols)
     with pytest.raises(EngineUnsupported):
         _require_bounded_expansion(widened, "answer expression")
+
     _require_bounded_expansion(sympy.expand((sympy.Symbol("x") + 1) ** 2), "ok")
 
 
@@ -141,6 +145,7 @@ def test_negative_integer_power_is_bounded_by_its_magnitude():
     }
     with pytest.raises(EngineUnsupported):
         validate_request(CorrectnessRequest.model_validate(request))
+
     assert estimated_terms(_op("pow", _sum(), _num(-2))) < MAX_OUTPUT_TERMS
 
 
@@ -155,6 +160,7 @@ def test_nested_division_is_rejected_before_the_worker_starts():
         ),
         _op("pow", _op("add", _sym("z"), one), _num(12)),
     )
+
     assert estimated_terms(nested) == 2197
 
     request = CorrectnessRequest.model_validate(
@@ -203,6 +209,7 @@ def test_cancelling_rational_expansion_is_accepted():
         }
     )
     validate_request(request)
+
     validate_request(
         CorrectnessRequest.model_validate(
             {
@@ -255,6 +262,7 @@ def test_estimator_is_idempotent_under_normalisation():
         ),
         _op("pow", _op("pow", _op("add", _sym("x"), _sym("y")), _num(1)), _num(0)),
     ]
+
     for case in cases:
         once = normalise_expression(case)
         assert normalise_expression(once) == once
@@ -270,6 +278,7 @@ def test_estimator_stays_fast_on_wide_and_deep_adversarial_trees():
     nested: Expr = _sym("a")
     for _ in range(500):
         nested = _op("sub", nested, _sym("b"))
+
     started = time.perf_counter()
     assert estimated_terms(nested) == 501
     assert time.perf_counter() - started < 0.25

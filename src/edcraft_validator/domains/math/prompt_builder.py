@@ -126,6 +126,7 @@ Requested difficulty: {request.difficulty}
 Required usable distractors: {request.num_distractors}
 Supported distractor range: {MIN_DISTRACTORS} to {MAX_DISTRACTORS}
 """
+
     return StructuredGenerationRequest(
         messages=[
             {"role": "system", "content": MATH_TEMPLATE_SYSTEM_PROMPT},

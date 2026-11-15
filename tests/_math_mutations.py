@@ -177,6 +177,7 @@ def _transform_all(
 ) -> Wire:
     mutated = copy.deepcopy(request)
     paths = _answer_slots(mutated) if answer_only else _all_slots(mutated)
+
     for path in paths:
         _set(mutated, path, _map_tree(_get(mutated, path), transform))
     return mutated
@@ -258,6 +259,7 @@ def _poly_of(expr: Wire) -> _Polynomial | None:
             return None
     if expr.get("sym") is not None:
         return {((expr["sym"], 1),): Fraction(1)}
+
     operator = expr.get("op")
     args = expr.get("args") or []
     if operator is None:
@@ -406,6 +408,7 @@ def distribute_then_collect(request: Wire) -> Wire:
     """Expand products/powers and re-collect like terms, purely symbolically."""
     changed = False
     mutated = copy.deepcopy(request)
+
     for path in _all_slots(mutated):
         expr = _get(mutated, path)
         if not _needs_expansion(expr):
@@ -463,6 +466,7 @@ def alternate_lu_permutation(request: Wire) -> Wire | None:
         return None
     current = _permutation_indices(answer.get("permutation"))
     size = len(matrix)
+
     for permutation in itertools.permutations(range(size)):
         if permutation == tuple(range(size)) or permutation == current:
             continue
@@ -533,6 +537,7 @@ def add_extraneous_solution(request: Wire) -> Wire | None:
     answer = request["answer"]
     if answer.get("kind") != "set":
         return None
+
     candidate = next(
         (
             value
@@ -552,6 +557,7 @@ def drop_solution_item(request: Wire) -> Wire | None:
     answer = request["answer"]
     mutated = copy.deepcopy(request)
     answer = mutated["answer"]
+
     if answer.get("kind") == "set":
         items = answer.get("items") or []
         if len(items) > 1:
@@ -576,6 +582,7 @@ def flip_inequality_direction(request: Wire) -> Wire | None:
     if not any(relation.get("kind") in opposite for relation in relations):
         return None
     mutated = copy.deepcopy(request)
+
     for relation in mutated["problem"]["relations"]:
         if relation.get("kind") in opposite:
             relation["kind"] = opposite[relation["kind"]]
@@ -588,6 +595,7 @@ def change_interval_endpoint_by_one(request: Wire) -> Wire | None:
     if answer.get("kind") != "set":
         return None
     mutated = copy.deepcopy(request)
+
     for bounds in mutated["answer"].get("intervals") or []:
         for side in ("upper", "lower"):
             endpoint = bounds.get(side)
@@ -603,6 +611,7 @@ def close_open_endpoint(request: Wire) -> Wire | None:
     if answer.get("kind") != "set":
         return None
     mutated = copy.deepcopy(request)
+
     for bounds in mutated["answer"].get("intervals") or []:
         for side, flag in (("lower", "lower_open"), ("upper", "upper_open")):
             if bounds.get(side) is not None and bounds.get(flag):
@@ -734,6 +743,7 @@ def _numeric_matrix(matrix: object) -> list[list[Fraction]] | None:
                 return None
             converted.append(value)
         result.append(converted)
+
     if len({len(row) for row in result}) != 1:
         return None
     return result
@@ -748,6 +758,7 @@ def _lu_for_permutation(
         [Fraction(1 if row == column else 0) for column in range(size)]
         for row in range(size)
     ]
+
     for pivot in range(size):
         value = working[pivot][pivot]
         if value == 0:
@@ -759,6 +770,7 @@ def _lu_for_permutation(
             lower[row][pivot] = factor
             for column in range(pivot, size):
                 working[row][column] -= factor * working[pivot][column]
+
     upper = [[working[row][column] for column in range(size)] for row in range(size)]
     for row in range(size):
         for column in range(row):
@@ -834,6 +846,7 @@ def _first_number_path(expr: Wire) -> tuple[Any, ...] | None:
 def applicable(request: Wire, mutations: Iterable[Mutation]) -> list[tuple[str, Wire]]:
     """Return ``(name, mutated_request)`` for every mutation that applies."""
     results: list[tuple[str, Wire]] = []
+
     for name, mutation in mutations:
         mutated = mutation(copy.deepcopy(request))
         if mutated is not None:

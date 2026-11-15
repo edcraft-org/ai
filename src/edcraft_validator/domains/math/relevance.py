@@ -15,10 +15,12 @@ def template_relevance_text(candidate: MathTemplateCandidate) -> str:
     template = candidate.item
     if template is None:
         raise ValueError("relevance text requires a generic item template")
+
     parameters = "; ".join(
         f"{parameter.name} in [{', '.join(parameter.values)}]"
         for parameter in template.parameters
     )
+
     return (
         "Mathematics multiple-choice question template\n\n"
         f"Topic: {template.topic}\n"

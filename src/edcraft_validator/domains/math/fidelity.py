@@ -193,6 +193,7 @@ class MathFidelityPlugin:
             for name in set(expected_symbols) & set(reconstructed_symbols)
             if expected_symbols[name] != reconstructed_symbols[name]
         )
+
         reasons: list[str] = []
         if missing:
             reasons.append(f"missing symbols: {', '.join(missing)}")
@@ -305,6 +306,7 @@ def _compare_goals(
     symbols = build_symbols(expected.symbols)
     left_goal = expected.goal
     right_goal = reconstructed.goal
+
     reasons: list[str] = []
     if left_goal.order != right_goal.order:
         reasons.append(f"goal order is {right_goal.order}, not {left_goal.order}")
@@ -380,6 +382,7 @@ def _compare_optional_matrices(
         for row, other in zip(expected, reconstructed, strict=False)
     ):
         return "failed", ["goal matrix shapes differ"]
+
     reasons: list[str] = []
     for row_index, (row, other_row) in enumerate(
         zip(expected, reconstructed, strict=True)
@@ -397,6 +400,7 @@ def _compare_optional_matrices(
                 ]
             if not equivalence:
                 reasons.append(f"goal matrix entry {row_index},{column_index} differs")
+
     if reasons:
         return "failed", reasons
     return "passed", []
@@ -416,9 +420,11 @@ def _canonical_payload(item: MathItemSpec) -> dict[str, Any]:
         (_canonical_given(given) for given in item.givens),
         key=_json_key,
     )
+
     goal = item.goal.model_dump(mode="json")
     goal["symbols"] = list(sorted(goal_symbols(item.goal)))
     goal.pop("symbol", None)
+
     text = {
         "mode": item.text.mode,
         "template": item.text.template,
@@ -426,6 +432,7 @@ def _canonical_payload(item: MathItemSpec) -> dict[str, Any]:
             name: list(span) for name, span in sorted(item.text.anchors.items())
         },
     }
+
     return {
         "schema_version": item.schema_version,
         "topic": item.topic,
@@ -484,6 +491,7 @@ def _compare_givens(
     symbols = build_symbols(expected.symbols)
     expected_givens = _comparable_givens(expected.givens, symbols)
     reconstructed_givens = _comparable_givens(reconstructed.givens, symbols)
+
     matched_expected = [False] * len(expected_givens)
     matched_reconstructed = [False] * len(reconstructed_givens)
     for expected_index, expected_given in enumerate(expected_givens):
@@ -494,6 +502,7 @@ def _compare_givens(
                 matched_expected[expected_index] = True
                 matched_reconstructed[reconstructed_index] = True
                 break
+
     leftover_expected = [
         given
         for index, given in enumerate(expected_givens)

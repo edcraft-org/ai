@@ -47,7 +47,9 @@ def build_relevance_evidence(
                 ),
             )
         ]
+
     unavailable = report.status != "assessed"
+
     return ToolEvidence(
         tool=tool,
         version=TEMPLATE_RELEVANCE_TOOL_VERSION,
@@ -104,6 +106,7 @@ async def assess_template_relevance(
         decision_provider_factory=decision_provider_factory,
         relevance_timeout_seconds=relevance_timeout_seconds,
     )
+
     return build_relevance_evidence(
         report,
         tool=TEMPLATE_RELEVANCE_CHECK,

@@ -61,6 +61,7 @@ class LocalPythonTool:
     ) -> list[ExecutionResult]:
         if not inputs:
             return []
+
         response = self._invoke(
             {
                 "code": code,
@@ -72,6 +73,7 @@ class LocalPythonTool:
         )
         if isinstance(response, ExecutionResult):
             return [replace(response) for _ in inputs]
+
         results = response.get("results")
         if response.get("ok") is not True or not isinstance(results, list):
             failure = _to_result(response)
@@ -83,6 +85,7 @@ class LocalPythonTool:
                 error_message="Python tool returned the wrong result count",
             )
             return [replace(failure) for _ in inputs]
+
         return [_to_result(result) for result in results]
 
     @staticmethod
@@ -131,6 +134,7 @@ def _worker_failure(exc: RuntimeError) -> ExecutionResult:
         # The runner builds this as a subclass of the caller's worker error. It
         # is a policy gap rather than a limit violation, so it stays a failure.
         return _tool_failure(exc)
+
     if isinstance(exc, CodedWorkerError):
         if exc.failure_kind == "signal":
             return ExecutionResult(
@@ -144,6 +148,7 @@ def _worker_failure(exc: RuntimeError) -> ExecutionResult:
                 error_code="INVALID_TOOL_OUTPUT",
                 error_message="Python tool returned invalid JSON",
             )
+
     return _tool_failure(exc)
 
 

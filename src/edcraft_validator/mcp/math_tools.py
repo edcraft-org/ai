@@ -137,6 +137,7 @@ def register_math_tools(
     """Register the math-domain validation and advisory catalogue."""
     if fidelity_timeout_seconds <= 0:
         raise ValueError("fidelity timeout must be positive")
+
     selected_provider = fidelity_provider_factory
     if selected_provider is None:
         settings = load_judge_settings()
@@ -312,6 +313,7 @@ def register_math_tools(
             text=text,
             timeout_seconds=timeout_seconds,
         )
+
         return await verify_text_fidelity_tool(
             request,
             provider_factory=selected_provider,
@@ -326,6 +328,7 @@ async def verify_text_fidelity_tool(
     timeout_seconds: float,
 ) -> ToolEvidence:
     started = time.perf_counter()
+
     try:
         report = await verify_text_fidelity(
             math_fidelity_plugin(),
@@ -347,6 +350,7 @@ async def verify_text_fidelity_tool(
             ],
             duration_ms=_elapsed_ms(started),
         )
+
     if report.status == "passed":
         status: Literal["passed", "failed"] = "passed"
         findings = []
@@ -361,6 +365,7 @@ async def verify_text_fidelity_tool(
             ToolFinding(code=code, message=reason)
             for reason in (report.verdict.reasons or ["fidelity check did not pass"])
         ]
+
     return ToolEvidence(
         tool=MATH_FIDELITY_TOOL,
         version=MATH_IR_TOOL_VERSION,
@@ -387,10 +392,12 @@ def _verify_spec(
 ) -> ToolEvidence:
     operation = "validate_item"
     template = request.template
+
     if request.candidate is not None:
         template = request.candidate.item
     if template is not None:
         operation = "validate_template"
+
     payload: dict[str, Any] = {
         "operation": operation,
         "aspect": aspect,
@@ -403,6 +410,7 @@ def _verify_spec(
         if item is None:
             return _missing_subject(name, "item or template")
         payload["spec"] = item.model_dump(mode="json")
+
     return _run_isolated(name, payload, request.timeout_seconds)
 
 
@@ -410,6 +418,7 @@ def validate_options(request: MathOptionsRequest) -> ToolEvidence:
     template = request.template
     if request.candidate is not None:
         template = request.candidate.item
+
     if template is not None:
         if not template.body.distractors:
             return _no_options(MATH_OPTIONS_TOOL, "template.body.distractors")
@@ -428,6 +437,7 @@ def validate_options(request: MathOptionsRequest) -> ToolEvidence:
             "operation": "validate_item",
             "spec": item.model_dump(mode="json"),
         }
+
     return _run_isolated(MATH_OPTIONS_TOOL, payload, request.timeout_seconds)
 
 
@@ -466,6 +476,7 @@ def _run_isolated(
     timeout_seconds: float,
 ) -> ToolEvidence:
     started = time.perf_counter()
+
     try:
         response = run_isolated(payload, timeout_seconds=timeout_seconds)
     except ValidationTimeout:
@@ -494,6 +505,7 @@ def _run_isolated(
             ],
             duration_ms=_elapsed_ms(started),
         )
+
     report = response.get("report")
     if not isinstance(report, dict):
         return ToolEvidence(
@@ -530,6 +542,7 @@ def _harness_evidence(
             ],
             duration_ms=_elapsed_ms(started),
         )
+
     raw_status = report.get("status")
     findings = [str(item) for item in report.get("findings", []) if item]
     if raw_status not in {"passed", "failed", "inconclusive"}:
@@ -540,6 +553,7 @@ def _harness_evidence(
         ]
     else:
         ir_status = str(raw_status)
+
     options = report.get("options", [])
     checks = report.get("checks", [])
     if name == MATH_OPTIONS_TOOL:
@@ -558,12 +572,14 @@ def _harness_evidence(
                     for option in failed_options
                 ],
             ]
+
     if ir_status == "passed":
         status: Literal["passed", "failed"] = "passed"
     else:
         status = "failed"
         if not findings:
             findings = ["validation did not pass"]
+
     codes = {
         "failed": "IR_VALIDATION_FAILED",
         "inconclusive": "IR_VALIDATION_INCONCLUSIVE",
@@ -573,10 +589,12 @@ def _harness_evidence(
             "failed": "OPTION_CHECK_FAILED",
             "inconclusive": "OPTION_CHECK_INCONCLUSIVE",
         }
+
     tool_findings = [
         ToolFinding(code=codes.get(ir_status, "IR_VALIDATION_FAILED"), message=message)
         for message in findings[:20]
     ]
+
     return ToolEvidence(
         tool=name,
         version=MATH_IR_TOOL_VERSION,

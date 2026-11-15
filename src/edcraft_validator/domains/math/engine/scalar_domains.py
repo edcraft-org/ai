@@ -106,6 +106,7 @@ def sympy_conditions(root: sympy.Expr) -> tuple[Condition, ...]:
             walk(argument)
 
     walk(root)
+
     return merge_conditions(conditions)
 
 
@@ -124,6 +125,7 @@ def domain_from_conditions(
             symbols.update(condition.expr.free_symbols)
         if len(symbols) == 1:
             chosen = next(iter(symbols))
+
     point_set = _point_set(ctx, compiled, conditions, chosen)
     return Domain(conditions, chosen, point_set)
 
@@ -168,6 +170,7 @@ def intersect_domains(left: Domain, right: Domain) -> Domain:
         point_set, missing = right.point_set, left.conditions
     else:
         point_set = None
+
     # A resolved point set already incorporates its own guards. Re-applying
     # periodic exclusions repeatedly can make equivalent ImageSets explode.
     if point_set is not None and variable is not None:
@@ -177,6 +180,7 @@ def intersect_domains(left: Domain, right: Domain) -> Domain:
                 point_set = None
                 break
             point_set = point_set.intersect(condition_set)
+
     return Domain(conditions, variable, point_set)
 
 
@@ -210,10 +214,12 @@ def domain_is_empty(domain: Domain) -> bool | None:
                 and base.measure.is_positive is True
             ) and _countable_set(excluded):
                 return False
+
     for condition in domain.conditions:
         truth = _constant_condition_truth(condition)
         if truth is False:
             return True
+
     return None
 
 
@@ -254,6 +260,7 @@ def domain_covered(
                 return False
         except (TypeError, ValueError):
             pass
+
     result: bool | None = True
     for condition in candidate.conditions:
         implied = condition_implied(source.conditions, condition, ctx)
@@ -382,9 +389,11 @@ def provably_zero(expr: sympy.Expr, domain: Domain | None = None) -> bool:
             return True
     if domain is None or domain.variable is None or domain.point_set is None:
         return False
+
     variable = domain.variable
     if not expr.free_symbols <= {variable}:
         return False
+
     positive = domain.point_set.intersect(sympy.Interval.open(0, sympy.oo))
     negative = domain.point_set.intersect(sympy.Interval.open(-sympy.oo, 0))
     zero = domain.point_set.intersect(sympy.FiniteSet(0))
@@ -429,12 +438,14 @@ def counterexample(
         symbols.update(condition.expr.free_symbols)
     if domain.variable is not None:
         symbols.add(domain.variable)
+
     ordered = sorted(symbols, key=lambda item: item.name)
     for point in sample_points(ordered, ctx):
         if not point_in_domain(point, domain):
             continue
         if value_is_nonzero(expr, point):
             return {symbol.name: value for symbol, value in point.items()}
+
     return None
 
 

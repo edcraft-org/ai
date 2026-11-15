@@ -214,6 +214,7 @@ def zero_on_nonnegative_boundary(
     )
     if len(zeroable) > 6:
         return False
+
     for size in range(1, len(zeroable) + 1):
         for subset in combinations(zeroable, size):
             point = {symbol: sympy.S.Zero for symbol in subset}
@@ -238,6 +239,7 @@ def log_arguments_positive(expr: sympy.Expr, conditions: tuple[Condition, ...]) 
             collect(argument)
 
     collect(expr)
+
     return bool(arguments) and all(
         expr_sign(conditions, argument) == 1 for argument in arguments
     )

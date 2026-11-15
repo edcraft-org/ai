@@ -96,6 +96,7 @@ class TemplateJudge:
         self.last_usage = TokenUsage(input_tokens=100, output_tokens=50)
         if self.failure:
             raise self.failure
+
         value = assessment()
         options = value.pop("option_evidence")
         value.update(
@@ -118,6 +119,7 @@ class TemplateJudge:
                 )
             },
         )
+
         return request.response_model.model_validate(value)
 
 
@@ -144,6 +146,7 @@ class TemplateAuthor:
         value = proposal()
         if self.wrong_first and self.calls == 1:
             value = value.model_copy(update={"answer_expression": "a - b"})
+
         if not issubclass(request.response_model, PlannedGenerationResponse):
             return request.response_model.model_validate(value.model_dump())
         return PlannedGenerationResponse(
