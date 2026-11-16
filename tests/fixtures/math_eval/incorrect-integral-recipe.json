@@ -1,0 +1,209 @@
+{
+  "id": "incorrect-integral-recipe",
+  "category": "incorrect",
+  "expected": "reject",
+  "expected_code": "IR_VALIDATION_FAILED",
+  "note": "The antiderivative recipe misses the division by the exponent.",
+  "schema_version": "math-ir/0.1",
+  "topic": "university.integral",
+  "parameters": [
+    {
+      "name": "a",
+      "values": [
+        "2",
+        "3"
+      ]
+    },
+    {
+      "name": "b",
+      "values": [
+        "1",
+        "2"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "university.integral",
+    "symbols": [
+      {
+        "name": "x",
+        "kind": "unknown",
+        "domain": "real",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "domain_x",
+        "kind": "domain",
+        "symbol": "x",
+        "domain": "real",
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "integral",
+      "symbol": "x",
+      "symbols": [],
+      "expr": {
+        "op": "mul",
+        "args": [
+          {
+            "param": "a",
+            "args": []
+          },
+          {
+            "op": "pow",
+            "args": [
+              {
+                "sym": "x",
+                "args": []
+              },
+              {
+                "num": "2",
+                "args": []
+              }
+            ]
+          }
+        ]
+      },
+      "order": 1,
+      "domain": "real"
+    },
+    "answer_recipe": {
+      "kind": "expression",
+      "items": [
+        {
+          "op": "mul",
+          "args": [
+            {
+              "param": "a",
+              "args": []
+            },
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "num": "3",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "op": "mul",
+          "args": [
+            {
+              "num": "3",
+              "args": []
+            },
+            {
+              "param": "a",
+              "args": []
+            },
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "num": "2",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "DERIVATIVE_NOT_ANTIDERIVATIVE",
+        "reason": "Uses the derivative."
+      },
+      {
+        "value": {
+          "op": "mul",
+          "args": [
+            {
+              "param": "a",
+              "args": []
+            },
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "num": "2",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "COPY_EXPRESSION",
+        "reason": "Copies the integrand."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "param": "a",
+                  "args": []
+                },
+                {
+                  "op": "pow",
+                  "args": [
+                    {
+                      "sym": "x",
+                      "args": []
+                    },
+                    {
+                      "num": "3",
+                      "args": []
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "param": "b",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "MISSING_DIVISION",
+        "reason": "Adds a parameter."
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Find the antiderivative of {expr} with respect to x.",
+      "anchors": {}
+    }
+  }
+}

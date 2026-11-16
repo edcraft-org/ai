@@ -1,0 +1,159 @@
+{
+  "id": "correct-evaluate",
+  "category": "correct",
+  "expected": "pass",
+  "expected_code": null,
+  "note": "An evaluate goal with an exact numeric answer.",
+  "schema_version": "math-ir/0.1",
+  "topic": "school.evaluate",
+  "parameters": [
+    {
+      "name": "a",
+      "values": [
+        "2",
+        "3"
+      ]
+    },
+    {
+      "name": "b",
+      "values": [
+        "4",
+        "5"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "school.evaluate",
+    "symbols": [
+      {
+        "name": "value",
+        "kind": "given",
+        "domain": "rational",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "domain_value",
+        "kind": "domain",
+        "symbol": "value",
+        "domain": "rational",
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "evaluate",
+      "symbols": [],
+      "expr": {
+        "op": "mul",
+        "args": [
+          {
+            "param": "a",
+            "args": []
+          },
+          {
+            "param": "b",
+            "args": []
+          }
+        ]
+      },
+      "order": 1,
+      "domain": "real"
+    },
+    "answer_recipe": {
+      "kind": "numeric",
+      "items": [
+        {
+          "op": "mul",
+          "args": [
+            {
+              "param": "a",
+              "args": []
+            },
+            {
+              "param": "b",
+              "args": []
+            }
+          ]
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "param": "a",
+              "args": []
+            },
+            {
+              "param": "b",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "ADD_NOT_MULTIPLY",
+        "reason": "Adds the factors."
+      },
+      {
+        "value": {
+          "op": "sub",
+          "args": [
+            {
+              "param": "a",
+              "args": []
+            },
+            {
+              "param": "b",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "SUBTRACTS",
+        "reason": "Subtracts the factors."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "param": "a",
+                  "args": []
+                },
+                {
+                  "param": "b",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "num": "1",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "OFF_BY_ONE",
+        "reason": "Adds one."
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Evaluate {expr}.",
+      "anchors": {}
+    }
+  }
+}

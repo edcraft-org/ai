@@ -1,0 +1,262 @@
+{
+  "id": "correct-factor",
+  "category": "correct",
+  "expected": "pass",
+  "expected_code": null,
+  "note": "A factor goal with a product of two irreducible linear factors.",
+  "schema_version": "math-ir/0.1",
+  "topic": "school.factor",
+  "parameters": [
+    {
+      "name": "p",
+      "values": [
+        "2",
+        "3"
+      ]
+    },
+    {
+      "name": "q",
+      "values": [
+        "5",
+        "7"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "school.factor",
+    "symbols": [
+      {
+        "name": "x",
+        "kind": "unknown",
+        "domain": "real",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "g1",
+        "kind": "domain",
+        "symbol": "x",
+        "domain": "real",
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "factor",
+      "symbols": [],
+      "expr": {
+        "op": "add",
+        "args": [
+          {
+            "op": "pow",
+            "args": [
+              {
+                "sym": "x",
+                "args": []
+              },
+              {
+                "num": "2",
+                "args": []
+              }
+            ]
+          },
+          {
+            "op": "mul",
+            "args": [
+              {
+                "op": "add",
+                "args": [
+                  {
+                    "param": "p",
+                    "args": []
+                  },
+                  {
+                    "param": "q",
+                    "args": []
+                  }
+                ]
+              },
+              {
+                "sym": "x",
+                "args": []
+              }
+            ]
+          },
+          {
+            "op": "mul",
+            "args": [
+              {
+                "param": "p",
+                "args": []
+              },
+              {
+                "param": "q",
+                "args": []
+              }
+            ]
+          }
+        ]
+      },
+      "order": 1,
+      "domain": "real"
+    },
+    "answer_recipe": {
+      "kind": "expression",
+      "items": [
+        {
+          "op": "mul",
+          "args": [
+            {
+              "op": "add",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "param": "p",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "add",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "param": "q",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "op": "mul",
+          "args": [
+            {
+              "op": "sub",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "param": "p",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "sub",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "param": "q",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "SIGNS",
+        "reason": ""
+      },
+      {
+        "value": {
+          "op": "mul",
+          "args": [
+            {
+              "op": "add",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "param": "p",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "sub",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "param": "q",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "ONE_SIGN",
+        "reason": ""
+      },
+      {
+        "value": {
+          "op": "mul",
+          "args": [
+            {
+              "op": "sub",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "param": "p",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "add",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "param": "q",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "OTHER_SIGN",
+        "reason": ""
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Factor {expr}.",
+      "anchors": {}
+    }
+  }
+}

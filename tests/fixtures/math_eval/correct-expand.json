@@ -1,0 +1,293 @@
+{
+  "id": "correct-expand",
+  "category": "correct",
+  "expected": "pass",
+  "expected_code": null,
+  "note": "An expand goal with a fully expanded parameterised answer.",
+  "schema_version": "math-ir/0.1",
+  "topic": "school.expand",
+  "parameters": [
+    {
+      "name": "a",
+      "values": [
+        "2",
+        "3"
+      ]
+    },
+    {
+      "name": "b",
+      "values": [
+        "1",
+        "4"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "school.expand",
+    "symbols": [
+      {
+        "name": "x",
+        "kind": "unknown",
+        "domain": "real",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "domain_x",
+        "kind": "domain",
+        "symbol": "x",
+        "domain": "real",
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "expand",
+      "symbols": [],
+      "expr": {
+        "op": "mul",
+        "args": [
+          {
+            "op": "add",
+            "args": [
+              {
+                "sym": "x",
+                "args": []
+              },
+              {
+                "param": "a",
+                "args": []
+              }
+            ]
+          },
+          {
+            "op": "add",
+            "args": [
+              {
+                "sym": "x",
+                "args": []
+              },
+              {
+                "param": "b",
+                "args": []
+              }
+            ]
+          }
+        ]
+      },
+      "order": 1,
+      "domain": "real"
+    },
+    "answer_recipe": {
+      "kind": "expression",
+      "items": [
+        {
+          "op": "add",
+          "args": [
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "num": "2",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "add",
+                  "args": [
+                    {
+                      "param": "a",
+                      "args": []
+                    },
+                    {
+                      "param": "b",
+                      "args": []
+                    }
+                  ]
+                },
+                {
+                  "sym": "x",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "param": "a",
+                  "args": []
+                },
+                {
+                  "param": "b",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "num": "2",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "add",
+                  "args": [
+                    {
+                      "param": "a",
+                      "args": []
+                    },
+                    {
+                      "param": "b",
+                      "args": []
+                    }
+                  ]
+                },
+                {
+                  "sym": "x",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "MISSING_CONSTANT",
+        "reason": "Drops the constant term."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "num": "2",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "param": "a",
+                  "args": []
+                },
+                {
+                  "param": "b",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "MISSING_LINEAR_TERM",
+        "reason": "Drops the linear term."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "num": "2",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "sub",
+                  "args": [
+                    {
+                      "param": "a",
+                      "args": []
+                    },
+                    {
+                      "param": "b",
+                      "args": []
+                    }
+                  ]
+                },
+                {
+                  "sym": "x",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "param": "a",
+                  "args": []
+                },
+                {
+                  "param": "b",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "SIGN_ERROR",
+        "reason": "Subtracts in the linear coefficient."
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Expand {expr}.",
+      "anchors": {}
+    }
+  }
+}

@@ -1,0 +1,224 @@
+{
+  "id": "equivalent-factor-reordered",
+  "category": "equivalent",
+  "expected": "pass",
+  "expected_code": null,
+  "note": "The same factorisation written with its factors in a different order.",
+  "schema_version": "math-ir/0.1",
+  "topic": "school.factor",
+  "parameters": [
+    {
+      "name": "k",
+      "values": [
+        "2",
+        "3"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "school.factor",
+    "symbols": [
+      {
+        "name": "x",
+        "kind": "unknown",
+        "domain": "real",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "domain_x",
+        "kind": "domain",
+        "symbol": "x",
+        "domain": "real",
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "factor",
+      "symbols": [],
+      "expr": {
+        "op": "sub",
+        "args": [
+          {
+            "op": "pow",
+            "args": [
+              {
+                "sym": "x",
+                "args": []
+              },
+              {
+                "num": "2",
+                "args": []
+              }
+            ]
+          },
+          {
+            "op": "pow",
+            "args": [
+              {
+                "param": "k",
+                "args": []
+              },
+              {
+                "num": "2",
+                "args": []
+              }
+            ]
+          }
+        ]
+      },
+      "order": 1,
+      "domain": "real"
+    },
+    "answer_recipe": {
+      "kind": "expression",
+      "items": [
+        {
+          "op": "mul",
+          "args": [
+            {
+              "op": "add",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "param": "k",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "sub",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "param": "k",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "op": "pow",
+          "args": [
+            {
+              "op": "sub",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "param": "k",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "num": "2",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "DOUBLE_ROOT",
+        "reason": "Repeats one factor."
+      },
+      {
+        "value": {
+          "op": "pow",
+          "args": [
+            {
+              "op": "add",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "param": "k",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "num": "2",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "DOUBLE_ROOT",
+        "reason": "Repeats the other factor."
+      },
+      {
+        "value": {
+          "op": "mul",
+          "args": [
+            {
+              "op": "sub",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "param": "k",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "sub",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "op": "mul",
+                  "args": [
+                    {
+                      "num": "2",
+                      "args": []
+                    },
+                    {
+                      "param": "k",
+                      "args": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "WRONG_FACTOR",
+        "reason": "Uses twice k in the second factor."
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Factor {expr}.",
+      "anchors": {}
+    }
+  }
+}

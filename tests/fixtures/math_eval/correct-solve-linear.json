@@ -1,0 +1,199 @@
+{
+  "id": "correct-solve-linear",
+  "category": "correct",
+  "expected": "pass",
+  "expected_code": null,
+  "note": "A linear equation solved with a parameterised set answer.",
+  "schema_version": "math-ir/0.1",
+  "topic": "school.linear",
+  "parameters": [
+    {
+      "name": "a",
+      "values": [
+        "2",
+        "3"
+      ]
+    },
+    {
+      "name": "b",
+      "values": [
+        "1",
+        "4"
+      ]
+    },
+    {
+      "name": "c",
+      "values": [
+        "7",
+        "10"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "school.linear",
+    "symbols": [
+      {
+        "name": "x",
+        "kind": "unknown",
+        "domain": "real",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "equation",
+        "kind": "relation",
+        "relation": {
+          "kind": "eq",
+          "lhs": {
+            "op": "add",
+            "args": [
+              {
+                "op": "mul",
+                "args": [
+                  {
+                    "param": "a",
+                    "args": []
+                  },
+                  {
+                    "sym": "x",
+                    "args": []
+                  }
+                ]
+              },
+              {
+                "param": "b",
+                "args": []
+              }
+            ]
+          },
+          "rhs": {
+            "param": "c",
+            "args": []
+          }
+        },
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "solve",
+      "symbol": "x",
+      "symbols": [],
+      "order": 1,
+      "domain": "real"
+    },
+    "answer_recipe": {
+      "kind": "set",
+      "items": [
+        {
+          "op": "div",
+          "args": [
+            {
+              "op": "sub",
+              "args": [
+                {
+                  "param": "c",
+                  "args": []
+                },
+                {
+                  "param": "b",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "param": "a",
+              "args": []
+            }
+          ]
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "op": "div",
+          "args": [
+            {
+              "op": "sub",
+              "args": [
+                {
+                  "param": "b",
+                  "args": []
+                },
+                {
+                  "param": "c",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "param": "a",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "SIGN_ERROR",
+        "reason": "Negates the numerator."
+      },
+      {
+        "value": {
+          "op": "sub",
+          "args": [
+            {
+              "param": "c",
+              "args": []
+            },
+            {
+              "param": "b",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "NO_DIVISION",
+        "reason": "Omits dividing by the coefficient."
+      },
+      {
+        "value": {
+          "op": "div",
+          "args": [
+            {
+              "op": "add",
+              "args": [
+                {
+                  "param": "c",
+                  "args": []
+                },
+                {
+                  "param": "b",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "param": "a",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "ADD_NOT_SUBTRACT",
+        "reason": "Adds b instead of subtracting."
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Solve {equation} for x.",
+      "anchors": {}
+    }
+  }
+}

@@ -1,0 +1,200 @@
+{
+  "id": "unsupported-symbolic-exponent",
+  "category": "unsupported",
+  "expected": "reject",
+  "expected_code": "IR_VALIDATION_FAILED",
+  "note": "A power with a symbolic exponent is refused by the engine.",
+  "schema_version": "math-ir/0.1",
+  "topic": "university.symbolic_exponent",
+  "parameters": [
+    {
+      "name": "a",
+      "values": [
+        "1",
+        "2"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "university.symbolic_exponent",
+    "symbols": [
+      {
+        "name": "x",
+        "kind": "unknown",
+        "domain": "real",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      },
+      {
+        "name": "n",
+        "kind": "unknown",
+        "domain": "real",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "domain_x",
+        "kind": "domain",
+        "symbol": "x",
+        "domain": "real",
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "evaluate",
+      "symbols": [],
+      "expr": {
+        "op": "mul",
+        "args": [
+          {
+            "param": "a",
+            "args": []
+          },
+          {
+            "op": "pow",
+            "args": [
+              {
+                "sym": "x",
+                "args": []
+              },
+              {
+                "sym": "n",
+                "args": []
+              }
+            ]
+          }
+        ]
+      },
+      "order": 1,
+      "domain": "real"
+    },
+    "answer_recipe": {
+      "kind": "expression",
+      "items": [
+        {
+          "op": "mul",
+          "args": [
+            {
+              "param": "a",
+              "args": []
+            },
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "sym": "n",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "op": "mul",
+          "args": [
+            {
+              "param": "a",
+              "args": []
+            },
+            {
+              "sym": "x",
+              "args": []
+            },
+            {
+              "sym": "n",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "MULTIPLIES",
+        "reason": "Wrong answer."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "param": "a",
+              "args": []
+            },
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "sym": "n",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "ADDS",
+        "reason": "Wrong answer."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "param": "a",
+                  "args": []
+                },
+                {
+                  "op": "pow",
+                  "args": [
+                    {
+                      "sym": "x",
+                      "args": []
+                    },
+                    {
+                      "sym": "n",
+                      "args": []
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "num": "1",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "OFF_BY_ONE",
+        "reason": "Wrong answer."
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Evaluate {expr}.",
+      "anchors": {}
+    }
+  }
+}

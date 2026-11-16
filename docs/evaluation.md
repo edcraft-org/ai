@@ -82,6 +82,39 @@ parameter assignments, not an exhaustive Cartesian enumeration; a passing campai
 supports only the observed samples. Keep request/result records for regression
 comparison, and separate correctness evidence from relevance or difficulty claims.
 
+## Mathematics fixtures
+
+```bash
+uv run python scripts/evaluate_math_fixtures.py --output .artifacts/math-fixtures.jsonl
+```
+
+The runner loads every file in `tests/fixtures/math_eval/`. Each file is a
+complete math template candidate with a header that declares its category and
+expected outcome. The categories are:
+
+- `correct`: a valid template that must pass.
+- `incorrect`: a template with a specific defect that must reject.
+- `equivalent`: a mathematically equal answer in another form that must pass,
+  except one form that the answer form check rejects for expand or factor.
+- `unsupported`: a goal or answer kind with no engine representation that must
+  reject.
+
+The runner applies the production sampling settings with seed 0. It runs the item
+spec check, the option checks, the prose anchor and equivalence checks, and the
+answer form check for factor and expand goals. For every passing fixture it
+expands the template twice at seeds 0, 1 and 42. The JSONL record states whether
+both expansions are identical and whether any model, MCP or network call was
+attempted. Per fixture records go to `--output` and the summary goes to
+`<output>.summary.json`. The command exits nonzero when any fixture differs from
+its expectation.
+
+These fixtures check the checker. They say nothing about model quality, generated
+question quality, learner difficulty or parser recall. A passing correct fixture
+means the checks accept a valid item. A rejected unsupported fixture means the
+checks refuse a construct the engine cannot represent. The offline fidelity path
+uses an identity reconstruction in place of the blind parse back model, so it
+exercises anchors and equivalence but not parser accuracy.
+
 ## Difficulty and relevance
 
 The production [v0.2 rubric](difficulty-rubric.md) and offline

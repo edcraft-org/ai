@@ -1,0 +1,145 @@
+{
+  "id": "incorrect-unanchored-prose",
+  "category": "incorrect",
+  "expected": "reject",
+  "expected_code": "FIDELITY_MISMATCH",
+  "note": "The prose template contains a numeric literal that no anchor covers.",
+  "schema_version": "math-ir/0.1",
+  "topic": "school.linear_prose",
+  "parameters": [
+    {
+      "name": "c",
+      "values": [
+        "6",
+        "10"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "school.linear_prose",
+    "symbols": [
+      {
+        "name": "x",
+        "kind": "unknown",
+        "domain": "real",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "equation",
+        "kind": "relation",
+        "relation": {
+          "kind": "eq",
+          "lhs": {
+            "op": "mul",
+            "args": [
+              {
+                "num": "2",
+                "args": []
+              },
+              {
+                "sym": "x",
+                "args": []
+              }
+            ]
+          },
+          "rhs": {
+            "param": "c",
+            "args": []
+          }
+        },
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "solve",
+      "symbol": "x",
+      "symbols": [],
+      "order": 1,
+      "domain": "real"
+    },
+    "answer_recipe": {
+      "kind": "set",
+      "items": [
+        {
+          "op": "div",
+          "args": [
+            {
+              "param": "c",
+              "args": []
+            },
+            {
+              "num": "2",
+              "args": []
+            }
+          ]
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "param": "c",
+          "args": []
+        },
+        "items": [],
+        "components": [],
+        "misconception": "NO_DIVISION",
+        "reason": "Reports the total instead of the number."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "param": "c",
+              "args": []
+            },
+            {
+              "num": "2",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "OFF_BY_TWO",
+        "reason": "Adds two."
+      },
+      {
+        "value": {
+          "op": "sub",
+          "args": [
+            {
+              "param": "c",
+              "args": []
+            },
+            {
+              "num": "2",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "OFF_BY_TWO",
+        "reason": "Subtracts two."
+      }
+    ],
+    "text": {
+      "mode": "prose",
+      "template": "A number multiplied by 2 is {c}. Find the number.",
+      "anchors": {
+        "c": [
+          28,
+          31
+        ]
+      }
+    }
+  }
+}

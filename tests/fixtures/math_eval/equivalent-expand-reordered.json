@@ -1,0 +1,272 @@
+{
+  "id": "equivalent-expand-reordered",
+  "category": "equivalent",
+  "expected": "pass",
+  "expected_code": null,
+  "note": "The same expanded polynomial written with its terms in a different order.",
+  "schema_version": "math-ir/0.1",
+  "topic": "school.expand",
+  "parameters": [
+    {
+      "name": "k",
+      "values": [
+        "2",
+        "3"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "school.expand",
+    "symbols": [
+      {
+        "name": "x",
+        "kind": "unknown",
+        "domain": "real",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "domain_x",
+        "kind": "domain",
+        "symbol": "x",
+        "domain": "real",
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "expand",
+      "symbols": [],
+      "expr": {
+        "op": "mul",
+        "args": [
+          {
+            "op": "add",
+            "args": [
+              {
+                "sym": "x",
+                "args": []
+              },
+              {
+                "num": "1",
+                "args": []
+              }
+            ]
+          },
+          {
+            "op": "add",
+            "args": [
+              {
+                "sym": "x",
+                "args": []
+              },
+              {
+                "param": "k",
+                "args": []
+              }
+            ]
+          }
+        ]
+      },
+      "order": 1,
+      "domain": "real"
+    },
+    "answer_recipe": {
+      "kind": "expression",
+      "items": [
+        {
+          "op": "add",
+          "args": [
+            {
+              "param": "k",
+              "args": []
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "add",
+                  "args": [
+                    {
+                      "param": "k",
+                      "args": []
+                    },
+                    {
+                      "num": "1",
+                      "args": []
+                    }
+                  ]
+                },
+                {
+                  "sym": "x",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "num": "2",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "num": "2",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "add",
+                  "args": [
+                    {
+                      "param": "k",
+                      "args": []
+                    },
+                    {
+                      "num": "1",
+                      "args": []
+                    }
+                  ]
+                },
+                {
+                  "sym": "x",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "MISSING_CONSTANT",
+        "reason": "Drops the constant."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "num": "2",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "param": "k",
+                  "args": []
+                },
+                {
+                  "sym": "x",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "param": "k",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "LINEAR_COEFFICIENT",
+        "reason": "Uses k as the linear coefficient."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "num": "2",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "add",
+                  "args": [
+                    {
+                      "param": "k",
+                      "args": []
+                    },
+                    {
+                      "num": "2",
+                      "args": []
+                    }
+                  ]
+                },
+                {
+                  "sym": "x",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "param": "k",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "LINEAR_COEFFICIENT",
+        "reason": "Uses k plus two as the linear coefficient."
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Expand {expr}.",
+      "anchors": {}
+    }
+  }
+}

@@ -1,0 +1,163 @@
+{
+  "id": "incorrect-two-distractors-equal",
+  "category": "incorrect",
+  "expected": "reject",
+  "expected_code": "OPTION_CHECK_FAILED",
+  "note": "The first two distractors are equal when b is one.",
+  "schema_version": "math-ir/0.1",
+  "topic": "school.evaluate",
+  "parameters": [
+    {
+      "name": "a",
+      "values": [
+        "2",
+        "3"
+      ]
+    },
+    {
+      "name": "b",
+      "values": [
+        "1",
+        "4"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "school.evaluate",
+    "symbols": [
+      {
+        "name": "value",
+        "kind": "given",
+        "domain": "rational",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "domain_value",
+        "kind": "domain",
+        "symbol": "value",
+        "domain": "rational",
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "evaluate",
+      "symbols": [],
+      "expr": {
+        "op": "add",
+        "args": [
+          {
+            "param": "a",
+            "args": []
+          },
+          {
+            "param": "b",
+            "args": []
+          }
+        ]
+      },
+      "order": 1,
+      "domain": "real"
+    },
+    "answer_recipe": {
+      "kind": "numeric",
+      "items": [
+        {
+          "op": "add",
+          "args": [
+            {
+              "param": "a",
+              "args": []
+            },
+            {
+              "param": "b",
+              "args": []
+            }
+          ]
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "param": "a",
+              "args": []
+            },
+            {
+              "param": "b",
+              "args": []
+            },
+            {
+              "num": "1",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "OFF_BY_ONE",
+        "reason": "Adds one."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "param": "a",
+              "args": []
+            },
+            {
+              "num": "2",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "TREATS_B_AS_TWO",
+        "reason": "Uses two for b, which equals the first option when b is one."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "param": "a",
+                  "args": []
+                },
+                {
+                  "param": "b",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "num": "3",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "PRODUCT_ERROR",
+        "reason": "Multiplies and then adds three."
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Evaluate {expr}.",
+      "anchors": {}
+    }
+  }
+}

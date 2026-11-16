@@ -1,0 +1,280 @@
+{
+  "id": "equivalent-expand-factored-rejected",
+  "category": "equivalent",
+  "expected": "reject",
+  "expected_code": "IR_VALIDATION_FAILED",
+  "note": "A mathematically equal factored answer that the expand form check rejects.",
+  "schema_version": "math-ir/0.1",
+  "topic": "school.expand",
+  "parameters": [
+    {
+      "name": "a",
+      "values": [
+        "2",
+        "3"
+      ]
+    },
+    {
+      "name": "b",
+      "values": [
+        "1",
+        "4"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "school.expand",
+    "symbols": [
+      {
+        "name": "x",
+        "kind": "unknown",
+        "domain": "real",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "domain_x",
+        "kind": "domain",
+        "symbol": "x",
+        "domain": "real",
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "expand",
+      "symbols": [],
+      "expr": {
+        "op": "mul",
+        "args": [
+          {
+            "op": "add",
+            "args": [
+              {
+                "sym": "x",
+                "args": []
+              },
+              {
+                "param": "a",
+                "args": []
+              }
+            ]
+          },
+          {
+            "op": "add",
+            "args": [
+              {
+                "sym": "x",
+                "args": []
+              },
+              {
+                "param": "b",
+                "args": []
+              }
+            ]
+          }
+        ]
+      },
+      "order": 1,
+      "domain": "real"
+    },
+    "answer_recipe": {
+      "kind": "expression",
+      "items": [
+        {
+          "op": "mul",
+          "args": [
+            {
+              "op": "add",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "param": "a",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "add",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "param": "b",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "num": "2",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "add",
+                  "args": [
+                    {
+                      "param": "a",
+                      "args": []
+                    },
+                    {
+                      "param": "b",
+                      "args": []
+                    }
+                  ]
+                },
+                {
+                  "sym": "x",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "MISSING_CONSTANT",
+        "reason": "Drops the constant."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "num": "2",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "param": "a",
+                  "args": []
+                },
+                {
+                  "param": "b",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "MISSING_LINEAR_TERM",
+        "reason": "Drops the linear term."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "sym": "x",
+                  "args": []
+                },
+                {
+                  "num": "2",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "add",
+                  "args": [
+                    {
+                      "param": "a",
+                      "args": []
+                    },
+                    {
+                      "param": "b",
+                      "args": []
+                    }
+                  ]
+                },
+                {
+                  "sym": "x",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "add",
+              "args": [
+                {
+                  "op": "mul",
+                  "args": [
+                    {
+                      "param": "a",
+                      "args": []
+                    },
+                    {
+                      "param": "b",
+                      "args": []
+                    }
+                  ]
+                },
+                {
+                  "num": "1",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "CONSTANT_ERROR",
+        "reason": "Off by one in the constant."
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Expand {expr}.",
+      "anchors": {}
+    }
+  }
+}

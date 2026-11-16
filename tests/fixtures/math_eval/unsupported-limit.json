@@ -1,0 +1,112 @@
+{
+  "id": "unsupported-limit",
+  "category": "unsupported",
+  "expected": "reject",
+  "expected_code": "IR_VALIDATION_FAILED",
+  "note": "A limit goal has no engine operation.",
+  "schema_version": "math-ir/0.1",
+  "topic": "university.limit",
+  "parameters": [
+    {
+      "name": "k",
+      "values": [
+        "1",
+        "2"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "university.limit",
+    "symbols": [
+      {
+        "name": "x",
+        "kind": "unknown",
+        "domain": "real",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "domain_x",
+        "kind": "domain",
+        "symbol": "x",
+        "domain": "real",
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "limit",
+      "symbol": "x",
+      "symbols": [],
+      "expr": {
+        "op": "mul",
+        "args": [
+          {
+            "param": "k",
+            "args": []
+          },
+          {
+            "sym": "x",
+            "args": []
+          }
+        ]
+      },
+      "point": {
+        "num": "0",
+        "args": []
+      },
+      "order": 1,
+      "domain": "real"
+    },
+    "answer_recipe": {
+      "kind": "numeric",
+      "items": [
+        {
+          "num": "0",
+          "args": []
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "num": "1",
+          "args": []
+        },
+        "items": [],
+        "components": [],
+        "misconception": "CONSTANT",
+        "reason": "Wrong answer."
+      },
+      {
+        "value": {
+          "num": "2",
+          "args": []
+        },
+        "items": [],
+        "components": [],
+        "misconception": "CONSTANT",
+        "reason": "Wrong answer."
+      },
+      {
+        "value": {
+          "num": "3",
+          "args": []
+        },
+        "items": [],
+        "components": [],
+        "misconception": "CONSTANT",
+        "reason": "Wrong answer."
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Find the limit of {expr} as x approaches 0.",
+      "anchors": {}
+    }
+  }
+}
