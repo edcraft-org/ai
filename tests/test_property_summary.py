@@ -18,6 +18,7 @@ PROPERTY_FIELDS = {
     "timeout_seconds": 15.0,
     "seed": 0,
     "whole_domain": True,
+    "declared_domain_size": 4,
 }
 
 
@@ -91,7 +92,7 @@ def test_rejects_counts_over_the_checking_budget(overrides) -> None:
 
 
 def test_property_details_returns_only_the_property_fields() -> None:
-    details = {**PROPERTY_FIELDS, "ir_status": "passed", "declared_domain_size": 9}
+    details = {**PROPERTY_FIELDS, "ir_status": "passed"}
 
     assert property_details(details) == PROPERTY_FIELDS
 

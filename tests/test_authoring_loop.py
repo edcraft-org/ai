@@ -109,6 +109,11 @@ def test_direct_checks_deliver_all_evidence_before_self_correction():
     ]
     assert revision["fixed_plan"] == list(plan)
     assert revision["check_plan"] == [check.model_dump() for check in result.check_plan]
+    assert (
+        "A revision keeps or widens the declared parameter domain"
+        in revision["instruction"]
+    )
+    assert "must not drop values only to avoid a failure" in revision["instruction"]
     assert [
         args["required"] for name, args in client.dispatches if name == FEATURES
     ] == [["arithmetic"], ["arithmetic"]]

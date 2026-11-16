@@ -54,6 +54,7 @@ class PropertyCheckRun:
     started: float = field(default_factory=time.perf_counter)
     passed: dict[str, Any] = field(default_factory=dict)
     whole_domain: bool = False
+    declared_domain_size: int = 0
 
     @property
     def remaining_seconds(self) -> float:
@@ -78,6 +79,7 @@ class PropertyCheckRun:
             timeout_seconds=self.config.timeout_seconds,
             seed=self.config.seed,
             whole_domain=self.whole_domain,
+            declared_domain_size=self.declared_domain_size,
         )
 
     def check(
@@ -88,6 +90,9 @@ class PropertyCheckRun:
         *,
         cover_small_domain: bool = False,
     ) -> list[Any]:
+        self.declared_domain_size = math.prod(
+            len(values) for values in parameters.values()
+        )
         strategy = st.fixed_dictionaries(
             {name: st.sampled_from(values) for name, values in parameters.items()}
         )
@@ -147,7 +152,7 @@ class PropertyCheckRun:
             return examples
 
         names = list(parameters)
-        combination_count = math.prod(len(parameters[name]) for name in names)
+        combination_count = self.declared_domain_size
         if combination_count > self.config.max_examples:
             return examples
 

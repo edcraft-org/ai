@@ -256,6 +256,21 @@ def test_prompt_requests_only_the_needed_model_distractors() -> None:
     assert "at least 2 distractor candidates" in prompt
 
 
+def test_prompt_requests_a_broad_parameter_domain_before_dropping_values() -> None:
+    prompt = build_template_prompt(
+        CodeTemplateRequest(prompt="Create an arithmetic question", difficulty="easy")
+    )
+    flat = " ".join(prompt.split())
+
+    assert "broad value list for each parameter" in flat
+    assert "close to the 32-value limit" in flat
+    assert "zero, one and negatives where the parameter type allows" in flat
+    assert "equal operands" in flat
+    assert "prefer choosing or adding other distractor candidates" in flat
+    assert "Remove a value only when no distractor choice works" in flat
+    assert "You may change finite parameter values" not in flat
+
+
 def test_two_model_distractors_are_enough_when_two_are_requested() -> None:
     canonical = template()
     payload = canonical.model_dump(

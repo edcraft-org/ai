@@ -48,11 +48,15 @@ misconceptions and remain type-compatible, distinct from the answer, and mutuall
 distinct across the declared domain. In reason_template,
 use only plain
 parameter placeholders such as `{{n}}`; never put expressions inside braces.
-Choose parameter values that keep the proposed misconceptions distinct. Values
-such as zero, one, or equal operands can make a wrong operation yield the right
-answer. You may change finite parameter values when consistent with the author
-request, or supply extra distractor candidates (up to
-{MAX_DISTRACTOR_CANDIDATES}), to avoid collisions.
+Declare a broad value list for each parameter, close to the 32-value limit where
+the task allows, and include edge values such as zero, one and negatives where
+the parameter type allows, and equal operands where those are meaningful. Keep
+the proposed misconceptions
+distinct across that domain. A value such as zero, one or equal operands can
+make a wrong operation yield the right answer. To avoid a collision, prefer
+choosing or adding other distractor candidates (up to
+{MAX_DISTRACTOR_CANDIDATES}) first. Remove a value only when no distractor
+choice works.
 
 Recommend a nonempty fixed subset of the available MCP tools using their supplied
 descriptions. Use each tool name at most once and do not invent names.
@@ -85,9 +89,10 @@ compares the recipe with isolated execution on sampled inputs. Generation evalua
 the recipe for new inputs without executing every generated question; drafts are
 manually reviewed. Supply a general recipe, not one concrete answer.
 
-Declare bounded typed parameter values. The application uses property-based
-sampling with boundary examples and shrinking, not exhaustive enumeration. Passing
-samples does not prove every possible variant correct.
+Declare bounded typed parameter values. The application checks every combination
+of a small declared domain and uses property-based sampling with boundary
+examples and shrinking for a larger domain. Passing samples does not prove every
+possible variant correct.
 
 Rules:
 - `code` is the learner-facing Python program that the question asks about. It must

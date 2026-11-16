@@ -171,8 +171,9 @@ checker the code domain uses. It receives:
 
 A domain that fits the budget is enumerated completely, so every combination is
 checked. A larger domain is checked within the budget and the full product is
-never materialised. The default budget is 100 examples (`MAX_IR_VARIANTS`), and
-callers may request fewer.
+never materialised. A broad value list usually exceeds the whole-domain limit,
+so checking samples that domain instead of enumerating it. The default budget is
+100 examples (`MAX_IR_VARIANTS`), and callers may request fewer.
 
 If a generated combination fails, the template is rejected. The property checker
 shrinks that combination and reports it in a `variant <parameters>:` finding.
@@ -181,8 +182,8 @@ shrink them, so a failing boundary example is reported exactly as declared.
 Exhausting the execution-call or wall-clock budget is also a failure
 (`PROPERTY_CHECK_BUDGET_EXCEEDED`) and records no partial pass. The summary records
 the shared property-check coverage (`checking_mode`, `examples_checked`,
-`execution_calls`, the checking budgets, `whole_domain` and `seed`) plus the
-template's declared domain size. Generation samples the same declared domain
+`execution_calls`, the checking budgets, `whole_domain`, `declared_domain_size`
+and `seed`). Generation samples the same declared domain
 independently, so a generated question may use a variant that validation did
 not check. Each emitted variant is rendered from the approved recipes.
 

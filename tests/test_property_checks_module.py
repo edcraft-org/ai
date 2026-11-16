@@ -79,6 +79,7 @@ def test_small_domain_is_checked_exhaustively_once():
     assert [(item["a"], item["b"]) for item in record] == expected
     assert run.whole_domain is True
     assert run.details()["whole_domain"] is True
+    assert run.details()["declared_domain_size"] == 6
     assert run.details()["examples_checked"] == len(expected)
 
 

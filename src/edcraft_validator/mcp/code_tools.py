@@ -387,6 +387,7 @@ def validate_answers_and_distractors(
         {p.name: p.values for p in candidate.parameters},
         boundary_examples(candidate),
         check_case,
+        cover_small_domain=True,
     )
     context.inputs_cases = [row[0] for row in rows]
     context.canonical_answers = [row[1] for row in rows]

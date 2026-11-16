@@ -80,7 +80,6 @@ class MathValidationSummary(PropertyCheckSummary):
 
     validator_version: Literal["mcp-math-template-v1"] = MATH_VALIDATOR_VERSION
     checking_mode: Literal["property_based"] = MATH_CHECKING_MODE
-    declared_domain_size: int = Field(ge=1)
     evidence: list[ValidationEvidence] = Field(min_length=1)
 
 

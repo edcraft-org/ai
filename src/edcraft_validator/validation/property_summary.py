@@ -24,6 +24,7 @@ _PROPERTY_FIELDS = (
     "timeout_seconds",
     "seed",
     "whole_domain",
+    "declared_domain_size",
 )
 
 
@@ -40,6 +41,7 @@ class PropertyCheckSummary(BaseModel):
     timeout_seconds: float = Field(gt=0, allow_inf_nan=False)
     seed: int
     whole_domain: bool
+    declared_domain_size: int | None = Field(default=None, ge=1)
     evidence: list[ValidationEvidence] = Field(min_length=1)
 
     @model_validator(mode="after")
