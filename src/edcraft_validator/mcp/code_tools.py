@@ -55,12 +55,9 @@ STATIC_TOOL_TIMEOUT_SECONDS = 5.0
 
 _EXECUTION_ERROR_CODES = {
     "CHECK_TIMEOUT",
-    "EXECUTION_TIMEOUT",
     "EXECUTOR_PROTOCOL_ERROR",
     "INVALID_TOOL_OUTPUT",
-    "RESOURCE_LIMIT_EXCEEDED",
     "TOOL_FAILURE",
-    "TRACE_LIMIT_EXCEEDED",
     "PROPERTY_CHECK_BUDGET_EXCEEDED",
 }
 
@@ -135,9 +132,11 @@ def register_code_validation_tools(
             "that passes every checked sample. Known failures require revision; "
             "there are no fallback recipes or excluded-input tables. This is "
             "sampled evidence, not exhaustive verification. Unseen generated "
-            "questions remain drafts for manual review. Execution, trace and "
-            "sampling-budget limits return explicit error evidence. Only the "
-            "supported Python subset is executed. If the template structure is "
+            "questions remain drafts for manual review. Template execution and "
+            "trace limits return actionable failed evidence. This is separate "
+            "from sampling-budget limits, which return explicit error evidence. "
+            "Only the supported Python subset is executed. If the template "
+            "structure is "
             "invalid, this check reports ANSWERS_NOT_EVALUATED instead of "
             "repeating the structural finding owned by "
             "code_verify_template_structure."

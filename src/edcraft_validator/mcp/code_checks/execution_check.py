@@ -1,12 +1,36 @@
 """Execution-backed validation for code templates."""
 
 from dataclasses import dataclass
+from typing import Any
 
 from edcraft_validator.domains.code.code_schemas import TemplateValidationError
 from edcraft_validator.mcp.code_checks.validation_context import (
     CodeValidationContext,
 )
-from edcraft_validator.tools.python_execution import PythonExecutionTool
+from edcraft_validator.tools.python_execution import (
+    ExecutionResult,
+    PythonExecutionTool,
+)
+
+_LIMIT_FAILURES = {
+    "EXECUTION_TIMEOUT": "took longer than the time limit",
+    "RESOURCE_LIMIT_EXCEEDED": "used too much memory",
+    "TRACE_LIMIT_EXCEEDED": "ran too long",
+}
+_LIMIT_GUIDANCE = (
+    "Reduce the largest parameter values or simplify the loops so every input "
+    "stays well within the limit."
+)
+
+
+def _failure_message(inputs: dict[str, Any], execution: ExecutionResult) -> str:
+    detail = execution.error_message or execution.error_code or "unknown"
+    summary = _LIMIT_FAILURES.get(execution.error_code or "")
+    if summary is None:
+        return f"template execution failed for inputs {inputs}: {detail}"
+
+    formatted = ", ".join(f"{name}={value}" for name, value in inputs.items())
+    return f"The program {summary} for inputs {formatted}: {detail}. {_LIMIT_GUIDANCE}"
 
 
 @dataclass(frozen=True)
@@ -34,9 +58,8 @@ class ExecutionCheck:
         for inputs, execution in zip(context.inputs_cases, executions, strict=True):
             if execution.ok:
                 continue
-            detail = execution.error_message or execution.error_code or "unknown"
             raise TemplateValidationError(
-                f"template execution failed for inputs {inputs}: {detail}",
+                _failure_message(inputs, execution),
                 code=execution.error_code or "EXECUTION_FAILED",
                 field="code",
                 inputs=inputs,

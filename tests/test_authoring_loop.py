@@ -229,6 +229,44 @@ def test_exhausted_attempts_expose_technical_check_failure():
     )
 
 
+def test_trace_limit_failure_is_revised_and_ends_as_template_failure():
+    class TraceLimitExecutor:
+        def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+            return [
+                ExecutionResult(
+                    ok=False,
+                    error_code="TRACE_LIMIT_EXCEEDED",
+                    error_message="Execution exceeded the 100000 trace-event limit",
+                )
+                for _ in inputs
+            ]
+
+    provider = Provider()
+    application = TemplateApplication(
+        tool_client=RecordingClient(TraceLimitExecutor()),
+        max_correction_attempts=1,
+    )
+    result = application.author_template(
+        REQUEST, domain=CodeDomain(), provider=provider
+    )
+
+    assert result.status == "needs_review"
+    assert result.artifact is None
+    assert len(result.attempts) == 2
+    first = result.attempts[0].executions[0]
+    assert first.evidence.status == "failed"
+    assert first.evidence.findings[0].code == "TRACE_LIMIT_EXCEEDED"
+    revision = json.loads(provider.generations[1][-1]["content"])
+    assert revision["check_results"][0]["evidence"]["findings"][0]["message"] == (
+        "The program ran too long for inputs a=1, b=3: Execution exceeded the "
+        "100000 trace-event limit. Reduce the largest parameter values or "
+        "simplify the loops so every input stays well within the limit."
+    )
+    assert result.failure == AuthoringError(
+        stage="checking", code="TEMPLATE_CHECKS_FAILED"
+    )
+
+
 def test_checked_workflow_exposes_no_public_error():
     result, _ = run(Provider())
     summary = summarize_authoring(result)

@@ -266,6 +266,9 @@ def test_prompt_requests_a_broad_parameter_domain_before_dropping_values() -> No
     assert "close to the 32-value limit" in flat
     assert "zero, one and negatives where the parameter type allows" in flat
     assert "equal operands" in flat
+    assert "stay well within the execution trace limit" in flat
+    assert "nested loops need smaller maximum values" in flat
+    assert "broad lists should add variety rather than size" in flat
     assert "prefer choosing or adding other distractor candidates" in flat
     assert "Remove a value only when no distractor choice works" in flat
     assert "You may change finite parameter values" not in flat

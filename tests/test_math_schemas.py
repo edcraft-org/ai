@@ -221,6 +221,19 @@ def test_generation_prompt_asks_revisions_to_keep_the_declared_domain() -> None:
     assert "unless the value is genuinely invalid for the task" in flat
 
 
+def test_prompt_routes_parameter_expressions_through_placeholders() -> None:
+    request = build_math_generation_request(
+        MathTemplateRequest(prompt="expand two binomials", difficulty="medium")
+    )
+
+    flat = " ".join(request.messages[0]["content"].split())
+    assert (
+        "Write any expression or equation that contains a parameter through a "
+        "reserved placeholder" in flat
+    )
+    assert "Use a parameter placeholder only for a standalone number." in flat
+
+
 def test_math_domain_is_registered() -> None:
     assert "math" in available_domains()
     domain = create_domain("math")

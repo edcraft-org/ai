@@ -22,7 +22,7 @@ from edcraft_validator.mcp import code_tools
 from edcraft_validator.mcp.code_tools import CODE_TOOL_VERSION
 from edcraft_validator.mcp.server import create_validation_server
 from edcraft_validator.mcp.tool_dependencies import ToolDependencies
-from edcraft_validator.tools.python_execution import ExecutionResult
+from edcraft_validator.tools.python_execution import ExecutionResult, LocalPythonTool
 from edcraft_validator.validation.property_checks import (
     PropertyCheckRun,
     PropertyCheckSettings,
@@ -45,6 +45,48 @@ class ArithmeticExecutor:
             ExecutionResult(ok=True, answer=item["a"] + item["b"] - item["c"])
             for item in inputs
         ]
+
+
+def nested_loop_template() -> CodeTemplateCandidate:
+    return CodeTemplateCandidate.model_validate(
+        {
+            "template_id": "loops.nested",
+            "difficulty": "medium",
+            "code": (
+                "def nested(n, k):\n"
+                "    total = 0\n"
+                "    for i in range(n):\n"
+                "        for j in range(k):\n"
+                "            total += i + j\n"
+                "    return total"
+            ),
+            "entry_function": "nested",
+            "parameters": [
+                {"name": "n", "kind": "integer", "values": [5, 100]},
+                {"name": "k", "kind": "integer", "values": [4, 40]},
+            ],
+            "question_template": (
+                "How many loop iterations does nested({n}, {k}) perform?"
+            ),
+            "answer_target": "loop_iterations",
+            "answer_expression": "n * k + n",
+            "distractors": [
+                {
+                    "expression": "n * k",
+                    "reason_template": "Omits the outer loop.",
+                },
+                {
+                    "expression": "n * k + k",
+                    "reason_template": "Counts the wrong outer bound.",
+                },
+                {
+                    "expression": "n * k + 1",
+                    "reason_template": "Counts one extra iteration.",
+                },
+            ],
+            "question_type": "mcq",
+        }
+    )
 
 
 async def call_tool(server, name: str, arguments: dict) -> dict:
@@ -360,9 +402,8 @@ async def test_insufficient_model_distractors_fails_without_fallbacks():
 @pytest.mark.parametrize(
     "error_code",
     [
-        "EXECUTION_TIMEOUT",
-        "RESOURCE_LIMIT_EXCEEDED",
-        "TRACE_LIMIT_EXCEEDED",
+        "CHECK_TIMEOUT",
+        "EXECUTOR_PROTOCOL_ERROR",
         "TOOL_FAILURE",
         "INVALID_TOOL_OUTPUT",
     ],
@@ -383,6 +424,98 @@ async def test_execution_infrastructure_failures_return_error_evidence(error_cod
 
     assert result["status"] == "error"
     assert result["findings"][0]["code"] == error_code
+
+
+@pytest.mark.parametrize(
+    "error_code, summary",
+    [
+        ("EXECUTION_TIMEOUT", "took longer than the time limit"),
+        ("RESOURCE_LIMIT_EXCEEDED", "used too much memory"),
+        ("TRACE_LIMIT_EXCEEDED", "ran too long"),
+    ],
+)
+async def test_template_execution_limits_fail_with_actionable_evidence(
+    error_code, summary
+):
+    class LimitExecutor:
+        def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+            return [
+                ExecutionResult(
+                    ok=False,
+                    error_code=error_code,
+                    error_message="Execution exceeded the limit",
+                )
+                for _ in inputs
+            ]
+
+    result = await call_tool(
+        create_validation_server(code_execution_tool=LimitExecutor()),
+        "code_validate_answers_and_distractors",
+        {
+            "candidate": candidate().model_dump(mode="json"),
+            "required_distractors": 3,
+        },
+    )
+
+    finding = result["findings"][0]
+    assert result["status"] == "failed"
+    assert finding["code"] == error_code
+    assert finding["message"].startswith(f"The program {summary} for inputs ")
+    assert finding["message"].endswith(
+        "Reduce the largest parameter values or simplify the loops so every input "
+        "stays well within the limit."
+    )
+    assert result["details"]["failing_inputs"]
+
+
+async def test_trace_limit_for_largest_declared_inputs_fails_actionably():
+    result = await call_tool(
+        create_validation_server(
+            code_execution_tool=LocalPythonTool(),
+            code_execution_timeout_seconds=5.0,
+        ),
+        "code_validate_answers_and_distractors",
+        {
+            "candidate": nested_loop_template().model_dump(mode="json"),
+            "required_distractors": 3,
+        },
+    )
+
+    finding = result["findings"][0]
+    assert result["status"] == "failed"
+    assert finding["code"] == "TRACE_LIMIT_EXCEEDED"
+    assert finding["message"] == (
+        "The program ran too long for inputs n=100, k=40: Execution exceeded the "
+        "100000 trace-event limit. Reduce the largest parameter values or simplify "
+        "the loops so every input stays well within the limit."
+    )
+    assert result["details"]["failing_inputs"] == {"n": 100, "k": 40}
+
+
+async def test_execution_timeout_for_declared_inputs_fails_actionably():
+    result = await call_tool(
+        create_validation_server(
+            code_execution_tool=LocalPythonTool(),
+            code_execution_timeout_seconds=0.001,
+        ),
+        "code_validate_answers_and_distractors",
+        {
+            "candidate": nested_loop_template().model_dump(mode="json"),
+            "required_distractors": 3,
+        },
+    )
+
+    finding = result["findings"][0]
+    assert result["status"] == "failed"
+    assert finding["code"] == "EXECUTION_TIMEOUT"
+    assert finding["message"].startswith(
+        "The program took longer than the time limit for inputs "
+    )
+    assert (
+        "Reduce the largest parameter values or simplify the loops"
+        in (finding["message"])
+    )
+    assert result["details"]["failing_inputs"]
 
 
 async def test_candidate_runtime_failure_is_a_validation_failure():
