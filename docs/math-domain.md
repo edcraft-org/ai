@@ -171,8 +171,9 @@ checker the code domain uses. It receives:
 
 A domain that fits the budget is enumerated completely, so every combination is
 checked. A larger domain is checked within the budget and the full product is
-never materialised. The default budget is 100 examples (`MAX_IR_VARIANTS`), and
-callers may request fewer.
+never materialised. A broad value list usually exceeds the whole-domain limit,
+so checking samples that domain instead of enumerating it. The default budget is
+100 examples (`MAX_IR_VARIANTS`), and callers may request fewer.
 
 If a generated combination fails, the template is rejected. The property checker
 shrinks that combination and reports it in a `variant <parameters>:` finding.

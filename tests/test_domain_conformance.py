@@ -288,6 +288,7 @@ def test_finalized_validation_uses_the_shared_property_summary(domain_name) -> N
     assert summary.max_execution_calls >= summary.execution_calls
     assert summary.timeout_seconds > 0
     assert isinstance(summary.whole_domain, bool)
+    assert summary.declared_domain_size is not None
     assert summary.declared_domain_size >= 1
     assert isinstance(summary.seed, int)
 

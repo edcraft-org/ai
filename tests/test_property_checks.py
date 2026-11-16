@@ -109,6 +109,17 @@ def test_code_domain_size_reports_the_parameter_product():
     }
 
 
+def test_code_summary_domain_size_is_reported_and_legacy_json_still_loads():
+    checked = validate_code(template(), execution_tool=ArithmeticExecutor())
+    assert checked.validation.declared_domain_size == 8
+
+    raw = checked.model_dump(mode="json")
+    raw["validation"].pop("declared_domain_size")
+    loaded = ValidatedCodeTemplate.model_validate_json(json.dumps(raw))
+
+    assert loaded.validation.declared_domain_size is None
+
+
 def test_budget_stops_actual_execution_including_replays():
     executor = ArithmeticExecutor()
     with pytest.raises(ValidationFailure) as exc:

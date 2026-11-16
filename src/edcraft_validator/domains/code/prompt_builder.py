@@ -49,8 +49,9 @@ distinct across the declared domain. In reason_template,
 use only plain
 parameter placeholders such as `{{n}}`; never put expressions inside braces.
 Declare a broad value list for each parameter, close to the 32-value limit where
-the task allows, and include edge values such as zero, one and negatives, and
-equal operands where those are meaningful. Keep the proposed misconceptions
+the task allows, and include edge values such as zero, one and negatives where
+the parameter type allows, and equal operands where those are meaningful. Keep
+the proposed misconceptions
 distinct across that domain. A value such as zero, one or equal operands can
 make a wrong operation yield the right answer. To avoid a collision, prefer
 choosing or adding other distractor candidates (up to
