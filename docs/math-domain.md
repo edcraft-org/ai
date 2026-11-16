@@ -225,6 +225,14 @@ These reject rather than approximate:
   for any checked combination in the declared domain.
 - Templates that need a model, tool, or Python execution at expansion time.
 
+These rules apply to templates. A request the domain cannot check, such as a
+proof, is not rejected. The authoring model may reshape it into a supported item,
+which passes if it is correct. In a live run, "Prove that the square root of 2 is
+irrational" became an integer equation to solve. It passed the technical checks,
+and relevance scored 0.834 against a threshold of about 0.922. Because relevance
+is advisory, the reviewer decides whether the reshaped template still serves the
+request.
+
 ## Retired: the bounded linear-equation authoring mode
 
 The `equation_template` / `question_template` / `answer_expression` /
