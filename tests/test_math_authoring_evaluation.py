@@ -237,10 +237,9 @@ def test_math_unsupported_prompt_records_revision_and_relevance_flag(
     assert record["attempts_used"] == 2
     assert provider.calls == 2
     assert "IR_VALIDATION_FAILED" in record["failed_check_codes_by_attempt"][0]["codes"]
-    assert record["failed_check_codes_by_attempt"][1]["codes"] == [
-        "DIFFICULTY_MISMATCH",
-        "RELEVANCE_MISMATCH",
-    ]
+    # Advisory mismatches are reported through the difficulty and relevance
+    # records below, not as check failures.
+    assert record["failed_check_codes_by_attempt"][1]["codes"] == []
     assert record["difficulty"]["requested"] == "hard"
     assert record["difficulty"]["estimated"] == "easy"
     assert record["difficulty"]["decision"] == "advisory_mismatch"
@@ -294,3 +293,31 @@ def test_code_domain_remains_the_default_with_existing_cases(monkeypatch, tmp_pa
     assert manifest["domain"] == "code"
     assert manifest["cases_version"] == "authoring-baseline-v1"
     assert manifest["validator_revision"] == "test-revision"
+
+
+def test_advisory_assessments_are_not_counted_as_check_failures():
+    executions = [
+        {
+            "error": None,
+            "advisory": False,
+            "evidence": {"details": {}, "findings": [{"code": "FIDELITY_MISMATCH"}]},
+        },
+        {
+            "error": None,
+            "advisory": True,
+            "evidence": {
+                "details": {"advisory": True},
+                "findings": [{"code": "DIFFICULTY_MISMATCH"}],
+            },
+        },
+    ]
+    attempt = {"number": 1, "complete": True, "passed": True, "executions": executions}
+    record = {
+        "status": "checked",
+        "duration_ms": 1.0,
+        "authoring_result": {"status": "checked", "attempts": [attempt]},
+    }
+
+    assert evaluation._failure_codes(executions) == {"FIDELITY_MISMATCH"}
+    summary = evaluation.summarize_records([record], requested_jobs=1)
+    assert summary["failure_taxonomy"] == {"FIDELITY_MISMATCH": 1}

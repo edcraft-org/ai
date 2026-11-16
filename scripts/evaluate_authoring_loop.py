@@ -127,10 +127,18 @@ def load_math_cases():
 MATH_CASES_VERSION, MATH_CASES = load_math_cases()
 
 
+def _is_advisory(execution):
+    """Advisory assessments never fail a template, so they are not failures."""
+    details = (execution.get("evidence") or {}).get("details") or {}
+    return execution.get("advisory") is True or details.get("advisory") is True
+
+
 def _failure_codes(executions):
     """Derive root failure codes, folding blocked checks into their blocker."""
     codes = set()
     for execution in executions:
+        if _is_advisory(execution):
+            continue
         if execution.get("error"):
             codes.add("TOOL_CALL_ERROR")
         evidence = execution.get("evidence") or {}
@@ -349,6 +357,8 @@ def summarize_records(records, requested_jobs, requested_sets=None):
                     failures[code] += 1
         for attempt in result.get("attempts", []):
             for execution in attempt["executions"]:
+                if _is_advisory(execution):
+                    continue
                 if execution["error"]:
                     check_findings["TOOL_CALL_ERROR"] += 1
                 for finding in (execution["evidence"] or {}).get("findings", []):
