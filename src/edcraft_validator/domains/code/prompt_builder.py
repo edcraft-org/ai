@@ -50,7 +50,10 @@ use only plain
 parameter placeholders such as `{{n}}`; never put expressions inside braces.
 Declare a broad value list for each parameter, close to the 32-value limit where
 the task allows, and include edge values such as zero, one and negatives where
-the parameter type allows, and equal operands where those are meaningful. Keep
+the parameter type allows, and equal operands where those are meaningful. The
+program must stay well within the execution trace limit for the largest declared
+values, so nested loops need smaller maximum values, and broad lists should add
+variety rather than size. Keep
 the proposed misconceptions
 distinct across that domain. A value such as zero, one or equal operands can
 make a wrong operation yield the right answer. To avoid a collision, prefer

@@ -37,7 +37,7 @@ async def check_code_question_correctness(
                 execution_timeout_seconds,
             )
     except TimeoutError:
-        finding = "EXECUTION_TIMEOUT"
+        finding = "CHECK_TIMEOUT"
     except Exception:
         finding = "TECHNICAL_CHECK_ERROR"
     return TechnicalCheck(question_sha256=question.sha256, findings=[finding])
