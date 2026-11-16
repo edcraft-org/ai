@@ -33,7 +33,9 @@ ITEM FAMILY (`item`)
   Give each parameter a broad, ordered value list: up to 512 values per axis is
   allowed, and a large declared family produces more distinct questions.
   Validation samples the declared family with boundary and seeded cases, so do
-  not shrink a domain to fit an exhaustive sweep.
+  not shrink a domain to fit an exhaustive sweep. A revision keeps or widens the
+  declared domain and must not drop values only to avoid a failure, unless the
+  value is genuinely invalid for the task.
 - Include negative, zero, positive and fractional values where the task supports
   them, and keep the extremes meaningful. Sampling always checks both ends of
   every value list, so a value that breaks the item is a real defect.

@@ -193,7 +193,6 @@ class MathDomain:
 
         summary = MathValidationSummary(
             **checked,
-            declared_domain_size=item_spec.details.get("declared_domain_size", 0),
             evidence=saved_evidence,
         )
 

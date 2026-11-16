@@ -181,8 +181,8 @@ shrink them, so a failing boundary example is reported exactly as declared.
 Exhausting the execution-call or wall-clock budget is also a failure
 (`PROPERTY_CHECK_BUDGET_EXCEEDED`) and records no partial pass. The summary records
 the shared property-check coverage (`checking_mode`, `examples_checked`,
-`execution_calls`, the checking budgets, `whole_domain` and `seed`) plus the
-template's declared domain size. Generation samples the same declared domain
+`execution_calls`, the checking budgets, `whole_domain`, `declared_domain_size`
+and `seed`). Generation samples the same declared domain
 independently, so a generated question may use a variant that validation did
 not check. Each emitted variant is rendered from the approved recipes.
 

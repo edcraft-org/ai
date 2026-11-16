@@ -209,6 +209,18 @@ def test_generation_request_prompt_is_ir_only() -> None:
     assert "linear" not in system_prompt.lower()
 
 
+def test_generation_prompt_asks_revisions_to_keep_the_declared_domain() -> None:
+    request = build_math_generation_request(
+        MathTemplateRequest(prompt="quadratic equations", difficulty="medium")
+    )
+
+    system_prompt = request.messages[0]["content"]
+    flat = " ".join(system_prompt.split())
+    assert "A revision keeps or widens the declared domain" in flat
+    assert "must not drop values only to avoid a failure" in flat
+    assert "unless the value is genuinely invalid for the task" in flat
+
+
 def test_math_domain_is_registered() -> None:
     assert "math" in available_domains()
     domain = create_domain("math")

@@ -55,6 +55,7 @@ PROPERTY_FIELDS = (
     "timeout_seconds",
     "seed",
     "whole_domain",
+    "declared_domain_size",
 )
 
 
@@ -287,6 +288,7 @@ def test_finalized_validation_uses_the_shared_property_summary(domain_name) -> N
     assert summary.max_execution_calls >= summary.execution_calls
     assert summary.timeout_seconds > 0
     assert isinstance(summary.whole_domain, bool)
+    assert summary.declared_domain_size >= 1
     assert isinstance(summary.seed, int)
 
     passed = {item.check for item in summary.evidence if item.status == "passed"}

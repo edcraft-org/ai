@@ -10,6 +10,7 @@ from test_code_templates import ArithmeticExecutor, template
 from edcraft_validator.domains.code.code_schemas import ValidatedCodeTemplate
 from edcraft_validator.domains.code.question_generator import generate_code_question
 from edcraft_validator.mcp.code_tools import validate_answers_and_distractors
+from edcraft_validator.tools.python_execution import ExecutionResult
 from edcraft_validator.validation.property_checks import PropertyCheckSettings
 from edcraft_validator.validation.validation_contracts import ValidationFailure
 
@@ -49,6 +50,63 @@ def test_large_domain_is_sampled_and_unseen_inputs_generate_without_execution():
         )
         assert len(set(q.question.distractors)) == 3
         assert q.question.proposed_answer not in q.question.distractors
+
+
+def test_small_code_domain_is_checked_completely_and_reports_whole_domain():
+    executor = ArithmeticExecutor()
+    checked = validate_code(template(), execution_tool=executor)
+
+    assert checked.validation.whole_domain is True
+    assert checked.validation.examples_checked == 8
+    assert checked.validation.execution_calls == len(executor.calls) == 8
+    assert {(call["a"], call["b"], call["c"]) for call in executor.calls} == {
+        (a, b, c) for a in (2, 4) for b in (5, 8) for c in (1, 3)
+    }
+
+
+def test_code_domain_size_reports_the_parameter_product():
+    class PairExecutor:
+        def __init__(self):
+            self.calls = []
+
+        def execute_batch(self, code, entry_function, inputs, *, timeout_seconds):
+            self.calls.extend(inputs)
+            return [
+                ExecutionResult(ok=True, answer=item["a"] + item["b"])
+                for item in inputs
+            ]
+
+    candidate = template(
+        code="def combine(a, b):\n    return a + b",
+        entry_function="combine",
+        parameters=[
+            {"name": "a", "kind": "integer", "values": list(range(13))},
+            {"name": "b", "kind": "integer", "values": [1, 2]},
+        ],
+        question_template="What does combine({a}, {b}) return?",
+        answer_expression="a + b",
+        distractors=[
+            {"expression": "a - b", "reason_template": "Subtracts instead of adds."},
+            {
+                "expression": "a + b + 1000",
+                "reason_template": "Adds an unrelated constant.",
+            },
+            {
+                "expression": "a + b + 2000",
+                "reason_template": "Adds a different constant.",
+            },
+        ],
+    )
+    executor = PairExecutor()
+    checked = validate_code(candidate, execution_tool=executor)
+
+    assert checked.validation.declared_domain_size == 26
+    assert checked.validation.whole_domain is True
+    assert checked.validation.examples_checked == 26
+    assert checked.validation.execution_calls == len(executor.calls) == 26
+    assert {(call["a"], call["b"]) for call in executor.calls} == {
+        (a, b) for a in range(13) for b in (1, 2)
+    }
 
 
 def test_budget_stops_actual_execution_including_replays():

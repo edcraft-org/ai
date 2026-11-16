@@ -465,9 +465,8 @@ def validate_template(
                 variant,
                 failing,
                 details=run.details(),
-                declared_domain_size=declared_size,
             )
-        return _property_failure_report(exc, declared_domain_size=declared_size)
+        return _property_failure_report(exc)
 
     details = run.details()
     return HarnessReport(
@@ -479,7 +478,6 @@ def validate_template(
             findings=_variant_findings(reports),
         ),
         **details,
-        declared_domain_size=declared_size,
     )
 
 
@@ -553,8 +551,6 @@ def _variant_text(combination: dict[str, Any]) -> str:
 
 def _property_failure_report(
     failure: ValidationFailure,
-    *,
-    declared_domain_size: int,
 ) -> HarnessReport:
     """Turn a property-check failure into a failed harness report."""
     checked = property_details(failure.context)
@@ -565,7 +561,6 @@ def _property_failure_report(
                 findings=[f"{failure} ({failure.code})"],
             ),
             **checked,
-            declared_domain_size=declared_domain_size,
         )
     if failure.code != _VARIANT_FAILED:
         raise failure
@@ -575,7 +570,6 @@ def _property_failure_report(
         failure.context["variant"],
         failing,
         details=checked,
-        declared_domain_size=declared_domain_size,
     )
 
 
@@ -584,7 +578,6 @@ def _variant_failure_report(
     failing: HarnessReport,
     *,
     details: dict[str, Any],
-    declared_domain_size: int,
 ) -> HarnessReport:
     """Report one failed variant, keeping its findings and coverage."""
     prefix = f"variant {variant}:"
@@ -600,7 +593,6 @@ def _variant_failure_report(
             findings=findings,
         ),
         **details,
-        declared_domain_size=declared_domain_size,
     )
 
 
