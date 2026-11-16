@@ -1,0 +1,77 @@
+{
+  "version": "math-authoring-baseline-v1",
+  "cases": [
+    {
+      "id": "linear-equation",
+      "set": "natural",
+      "difficulty": "easy",
+      "prompt": "Create a mathematics multiple-choice question that asks the learner to solve a one-variable linear equation with integer coefficients and one solution."
+    },
+    {
+      "id": "monic-quadratic-factorise",
+      "set": "natural",
+      "difficulty": "medium",
+      "prompt": "Create a mathematics multiple-choice question that asks the learner to factorise a monic quadratic with two distinct integer roots."
+    },
+    {
+      "id": "binomial-expansion",
+      "set": "natural",
+      "difficulty": "medium",
+      "prompt": "Create a mathematics multiple-choice question that asks the learner to expand the product of two binomials with integer terms."
+    },
+    {
+      "id": "cubic-derivative",
+      "set": "natural",
+      "difficulty": "hard",
+      "prompt": "Create a mathematics multiple-choice question that asks the learner to differentiate a cubic polynomial with integer coefficients."
+    },
+    {
+      "id": "two-by-two-determinant",
+      "set": "natural",
+      "difficulty": "easy",
+      "prompt": "Create a mathematics multiple-choice question that asks the learner to find the determinant of a two by two matrix with integer entries."
+    },
+    {
+      "id": "rational-simplify",
+      "set": "natural",
+      "difficulty": "hard",
+      "prompt": "Create a mathematics multiple-choice question that asks the learner to simplify a rational expression with integer coefficients and one variable."
+    },
+    {
+      "id": "arithmetic-expression",
+      "set": "natural",
+      "difficulty": "easy",
+      "prompt": "Create a mathematics multiple-choice question that asks the learner to evaluate an arithmetic expression with brackets and the usual order of operations."
+    },
+    {
+      "id": "prose-word-problem",
+      "set": "natural",
+      "difficulty": "medium",
+      "prompt": "Create a short prose mathematics word problem about buying two items and receiving change. Use anchored numbers for the prices and the amount paid, and ask for one computed result."
+    },
+    {
+      "id": "formal-proof",
+      "set": "unsupported",
+      "difficulty": "hard",
+      "prompt": "Create a mathematics question that asks the learner to prove that the sum of two even integers is always even."
+    },
+    {
+      "id": "three-by-three-eigenvalues",
+      "set": "unsupported",
+      "difficulty": "hard",
+      "prompt": "Create a mathematics multiple-choice question that asks the learner to find all eigenvalues of a three by three matrix with integer entries."
+    },
+    {
+      "id": "limit-at-a-point",
+      "set": "unsupported",
+      "difficulty": "medium",
+      "prompt": "Create a mathematics multiple-choice question that asks the learner to evaluate a one-sided limit of a rational function at a finite point."
+    },
+    {
+      "id": "probability-word-problem",
+      "set": "unsupported",
+      "difficulty": "medium",
+      "prompt": "Create a mathematics word problem about drawing two counters without replacement and ask the learner for the probability that both counters have the same colour."
+    }
+  ]
+}
