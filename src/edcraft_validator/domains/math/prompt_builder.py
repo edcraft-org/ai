@@ -68,6 +68,10 @@ ITEM FAMILY (`item`)
   placeholders such as `{a}` and these reserved placeholders:
   `{expr}` (the goal expression), `{equation}` (the first relation),
   `{equations}` (all relations), and `{matrix}` (the goal matrix).
+  Write any expression or equation that contains a parameter through a reserved
+  placeholder, never as prose around parameter placeholders such as
+  `(x + {a})`, because a negative value would then read as `x + -3`. Use a
+  parameter placeholder only for a standalone number.
   Escape literal braces by doubling them. Use `mode: "symbolic"` whenever the
   text is fully rendered by the deterministic renderer.
 - `item.body.answer_recipe` declares the answer as typed expression trees, using
