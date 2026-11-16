@@ -58,6 +58,14 @@ arguments stay fixed across revisions. Application-owned inputs cannot be replac
 by model arguments. Every replacement is rebuilt and checked again. Unsupported
 Python, malformed responses and incomplete checks cannot become technical passes.
 
+A technical pass covers the template alone. It means the template's answer and
+wrong choices are correct for its own program or mathematics on the checked
+inputs. When a request asks for something the domain cannot check, such as a
+proof, the model may write a related question that the domain can check, and
+that question passes if it is correct. The reviewer judges whether it still
+matches the request. The advisory relevance assessment can flag such cases but
+does not block approval.
+
 The selected difficulty check runs after correctness checks pass. It first returns
 only a level. A decision at confidence >=0.70 is accepted; otherwise the same model
 runs one structured reasoning assessment. Difficulty mismatches are advisory: they
