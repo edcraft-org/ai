@@ -482,7 +482,11 @@ def _text_values_latex(
     if fields & {"expr"}:
         if item.goal.expr is None:
             raise ValueError("text template uses {{expr}} but the goal has none")
-        values["expr"] = render_authored_expr_latex(item.goal.expr, symbols, params)
+        values["expr"] = (
+            render_authored_expr_latex(item.goal.expr, symbols, params)
+            if item.goal.kind == "evaluate"
+            else sympy.latex(compile_expr(item.goal.expr, symbols, params))
+        )
     if fields & {"equation", "equations"}:
         if not relations:
             raise ValueError("text template uses an equation but the item has none")
@@ -549,7 +553,11 @@ def render_item_text(
     if fields & {"expr"}:
         if item.goal.expr is None:
             raise ValueError("text template uses {{expr}} but the goal has none")
-        values["expr"] = render_authored_expr(item.goal.expr, symbols, params)
+        values["expr"] = (
+            render_authored_expr(item.goal.expr, symbols, params)
+            if item.goal.kind == "evaluate"
+            else render_expr(compile_expr(item.goal.expr, symbols, params))
+        )
     if fields & {"equation", "equations"}:
         if not relations:
             raise ValueError("text template uses an equation but the item has none")
