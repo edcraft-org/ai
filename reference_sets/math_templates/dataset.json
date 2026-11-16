@@ -8242,7 +8242,7 @@
         }
       },
       "instance": {
-        "question": "Simplify -x^2 + (x + 3)*(x + 4).",
+        "question": "Simplify (x + 3)*(x + 4) - x^2.",
         "options": [
           {
             "id": "A",
@@ -8545,7 +8545,7 @@
         }
       },
       "instance": {
-        "question": "Simplify -(x - 3)^2 + (x + 3)^2.",
+        "question": "Simplify (x + 3)^2 - (x - 3)^2.",
         "options": [
           {
             "id": "A",

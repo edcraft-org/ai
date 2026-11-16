@@ -498,3 +498,87 @@ def test_prompt_shows_the_evaluated_expression_except_for_evaluate_goals() -> No
     arithmetic = arithmetic_ir_template()
     point = sample_parameter_combinations(arithmetic, limit=1, seed=0).combinations[0]
     assert render_item_text(arithmetic.body, point) == "What is 12 + 14?"
+
+
+def test_simplify_prompt_keeps_the_authored_expression() -> None:
+    """SymPy collects like terms on construction, which would show the answer."""
+    from math_helpers import factor_ir_template
+
+    from edcraft_validator.domains.math.ir.instantiate import (
+        render_goal_display,
+        render_goal_display_latex,
+        render_item_segments,
+        render_item_text,
+        sample_parameter_combinations,
+    )
+    from edcraft_validator.domains.math.ir.schema import Expr
+
+    template = factor_ir_template()
+    like_terms = Expr.model_validate(
+        {
+            "op": "add",
+            "args": [
+                {"op": "mul", "args": [{"num": "3"}, {"sym": "x"}]},
+                {"op": "mul", "args": [{"num": "2"}, {"sym": "x"}]},
+            ],
+        }
+    )
+    goal = template.body.goal.model_copy(
+        update={"kind": "simplify", "expr": like_terms}
+    )
+    body = template.body.model_copy(update={"goal": goal})
+    values = sample_parameter_combinations(template, limit=1, seed=0).combinations[0]
+
+    prompt = render_item_text(body, values)
+    latex = "".join(value for _, value in render_item_segments(body, values))
+
+    assert "3*x + 2*x" in prompt and "5*x" not in prompt
+    assert "5 x" not in latex
+    assert render_goal_display(body, values) == "3*x + 2*x"
+    display_latex = render_goal_display_latex(body, values)
+    assert display_latex is not None and "5 x" not in display_latex
+
+
+def test_simplify_prompt_folds_numeric_arithmetic_but_not_like_terms() -> None:
+    """Coefficients built from roots must not show the roots."""
+    from math_helpers import factor_ir_template
+
+    from edcraft_validator.domains.math.ir.instantiate import (
+        render_item_segments,
+        render_item_text,
+        sample_parameter_combinations,
+    )
+    from edcraft_validator.domains.math.ir.schema import Expr
+
+    template = factor_ir_template()
+    # x^2 - 1*(1 + 3)*x + 1*3 + 2*x - x, authored from the roots 1 and 3.
+    built = Expr.model_validate(
+        {
+            "op": "add",
+            "args": [
+                {"op": "pow", "args": [{"sym": "x"}, {"num": "2"}]},
+                {
+                    "op": "mul",
+                    "args": [
+                        {"num": "-1"},
+                        {"op": "add", "args": [{"num": "1"}, {"num": "3"}]},
+                        {"sym": "x"},
+                    ],
+                },
+                {"op": "mul", "args": [{"num": "1"}, {"num": "3"}]},
+                {"op": "mul", "args": [{"num": "2"}, {"sym": "x"}]},
+                {"op": "mul", "args": [{"num": "-1"}, {"sym": "x"}]},
+            ],
+        }
+    )
+    goal = template.body.goal.model_copy(update={"kind": "simplify", "expr": built})
+    body = template.body.model_copy(update={"goal": goal})
+    values = sample_parameter_combinations(template, limit=1, seed=0).combinations[0]
+
+    prompt = render_item_text(body, values)
+    latex = "".join(value for _, value in render_item_segments(body, values))
+
+    assert "1 + 3" not in prompt and "1*3" not in prompt
+    assert "4*x" in prompt and "+ 3" in prompt
+    assert "2*x" in prompt
+    assert "1 + 3" not in latex

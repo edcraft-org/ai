@@ -68,6 +68,54 @@ _FUNCTION_OPS = {
 }
 
 
+# Goals whose learner-facing expression keeps the authored structure. SymPy
+# folds arithmetic and collects like terms on construction, which would show the
+# answer for these goals.
+_AUTHORED_GOALS = frozenset({"evaluate", "simplify"})
+
+
+def _has_symbol(expr: Expr) -> bool:
+    return expr.sym is not None or any(_has_symbol(child) for child in expr.args)
+
+
+def _fold_numeric_subtrees(
+    expr: Expr,
+    symbols: Mapping[str, sympy.Symbol],
+    params: Mapping[str, Fraction] | None,
+) -> Expr:
+    """Replace every operation with no symbol in it by its exact value.
+
+    A simplify template often builds its coefficients from parameters, for
+    example ``1*(1 + 3)``. Showing that arithmetic would reveal the factors,
+    so it is folded while the symbolic structure stays as authored.
+    """
+    if expr.op is None:
+        return expr
+    if not _has_symbol(expr):
+        value = compile_expr(expr, symbols, params)
+        if value.is_Rational:
+            return Expr.model_validate({"num": str(value)})
+    return expr.model_copy(
+        update={
+            "args": [
+                _fold_numeric_subtrees(child, symbols, params) for child in expr.args
+            ]
+        }
+    )
+
+
+def _authored_goal_expr(
+    item: MathItemSpec,
+    symbols: Mapping[str, sympy.Symbol],
+    params: Mapping[str, Fraction] | None,
+) -> Expr:
+    """The goal tree shown to learners: evaluate keeps its arithmetic."""
+    assert item.goal.expr is not None
+    if item.goal.kind == "evaluate":
+        return item.goal.expr
+    return _fold_numeric_subtrees(item.goal.expr, symbols, params)
+
+
 def render_authored_expr(
     expr: Expr,
     symbols: Mapping[str, sympy.Symbol],
@@ -429,6 +477,9 @@ def render_goal_display(
         # An evaluate goal often encodes the arithmetic itself, so the authored
         # text is the problem and the solved value is not a display.
         return render_item_text(item, params)
+    if item.goal.kind == "simplify" and item.goal.expr is not None:
+        folded = _authored_goal_expr(item, symbols, params)
+        return render_authored_expr(folded, symbols, params)
     if item.goal.expr is not None:
         rendered = render_expr(compile_expr(item.goal.expr, symbols, params))
         if item.goal.kind in {"derivative", "integral"} and item.goal.symbol:
@@ -457,6 +508,9 @@ def render_goal_display_latex(
         # An evaluate goal often encodes the arithmetic itself, so the authored
         # text is the problem and the solved value is not a display.
         return None
+    if item.goal.kind == "simplify" and item.goal.expr is not None:
+        folded = _authored_goal_expr(item, symbols, params)
+        return render_authored_expr_latex(folded, symbols, params)
     if item.goal.expr is not None:
         rendered = sympy.latex(compile_expr(item.goal.expr, symbols, params))
         if item.goal.kind in {"derivative", "integral"} and item.goal.symbol:
@@ -483,8 +537,10 @@ def _text_values_latex(
         if item.goal.expr is None:
             raise ValueError("text template uses {{expr}} but the goal has none")
         values["expr"] = (
-            render_authored_expr_latex(item.goal.expr, symbols, params)
-            if item.goal.kind == "evaluate"
+            render_authored_expr_latex(
+                _authored_goal_expr(item, symbols, params), symbols, params
+            )
+            if item.goal.kind in _AUTHORED_GOALS
             else sympy.latex(compile_expr(item.goal.expr, symbols, params))
         )
     if fields & {"equation", "equations"}:
@@ -554,8 +610,10 @@ def render_item_text(
         if item.goal.expr is None:
             raise ValueError("text template uses {{expr}} but the goal has none")
         values["expr"] = (
-            render_authored_expr(item.goal.expr, symbols, params)
-            if item.goal.kind == "evaluate"
+            render_authored_expr(
+                _authored_goal_expr(item, symbols, params), symbols, params
+            )
+            if item.goal.kind in _AUTHORED_GOALS
             else render_expr(compile_expr(item.goal.expr, symbols, params))
         )
     if fields & {"equation", "equations"}:

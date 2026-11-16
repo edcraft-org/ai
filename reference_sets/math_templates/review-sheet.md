@@ -684,7 +684,7 @@ Family: `simplify-expression`
 Goal kind: `simplify`  
 Split: `development`
 
-**Question.** Simplify -x^2 + (x + 3)*(x + 4).
+**Question.** Simplify (x + 3)*(x + 4) - x^2.
 
 - A. 7*x
 - B. 12
@@ -712,7 +712,7 @@ Family: `simplify-expression`
 Goal kind: `simplify`  
 Split: `development`
 
-**Question.** Simplify -(x - 3)^2 + (x + 3)^2.
+**Question.** Simplify (x + 3)^2 - (x - 3)^2.
 
 - A. 0
 - B. 6*x
