@@ -1,0 +1,114 @@
+{
+  "id": "unsupported-interval",
+  "category": "unsupported",
+  "expected": "reject",
+  "expected_code": "IR_VALIDATION_FAILED",
+  "note": "An interval answer kind has no engine answer kind.",
+  "schema_version": "math-ir/0.1",
+  "topic": "school.interval",
+  "parameters": [
+    {
+      "name": "a",
+      "values": [
+        "1",
+        "2"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "school.interval",
+    "symbols": [
+      {
+        "name": "value",
+        "kind": "given",
+        "domain": "rational",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "domain_value",
+        "kind": "domain",
+        "symbol": "value",
+        "domain": "rational",
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "evaluate",
+      "symbols": [],
+      "expr": {
+        "op": "add",
+        "args": [
+          {
+            "param": "a",
+            "args": []
+          },
+          {
+            "num": "1",
+            "args": []
+          }
+        ]
+      },
+      "order": 1,
+      "domain": "real"
+    },
+    "answer_recipe": {
+      "kind": "interval",
+      "items": [],
+      "interval": {
+        "lower": {
+          "num": "-1",
+          "args": []
+        },
+        "upper": {
+          "num": "1",
+          "args": []
+        },
+        "lower_open": true,
+        "upper_open": true
+      },
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "num": "3",
+          "args": []
+        },
+        "items": [],
+        "components": [],
+        "misconception": "WRONG",
+        "reason": "Wrong answer."
+      },
+      {
+        "value": {
+          "num": "4",
+          "args": []
+        },
+        "items": [],
+        "components": [],
+        "misconception": "WRONG",
+        "reason": "Wrong answer."
+      },
+      {
+        "value": {
+          "num": "5",
+          "args": []
+        },
+        "items": [],
+        "components": [],
+        "misconception": "WRONG",
+        "reason": "Wrong answer."
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Evaluate {expr}.",
+      "anchors": {}
+    }
+  }
+}

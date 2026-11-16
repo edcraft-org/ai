@@ -1,0 +1,227 @@
+{
+  "id": "correct-determinant",
+  "category": "correct",
+  "expected": "pass",
+  "expected_code": null,
+  "note": "A determinant goal with exact numeric entries and a numeric answer.",
+  "schema_version": "math-ir/0.1",
+  "topic": "university.determinant",
+  "parameters": [
+    {
+      "name": "a",
+      "values": [
+        "2",
+        "3"
+      ]
+    },
+    {
+      "name": "b",
+      "values": [
+        "1",
+        "2"
+      ]
+    },
+    {
+      "name": "c",
+      "values": [
+        "1",
+        "2"
+      ]
+    },
+    {
+      "name": "d",
+      "values": [
+        "3",
+        "4"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "university.determinant",
+    "symbols": [
+      {
+        "name": "m",
+        "kind": "given",
+        "domain": "integer",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "entries",
+        "kind": "domain",
+        "symbol": "m",
+        "domain": "integer",
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "determinant",
+      "symbols": [],
+      "order": 1,
+      "domain": "real",
+      "matrix": [
+        [
+          {
+            "param": "a",
+            "args": []
+          },
+          {
+            "param": "b",
+            "args": []
+          }
+        ],
+        [
+          {
+            "param": "c",
+            "args": []
+          },
+          {
+            "param": "d",
+            "args": []
+          }
+        ]
+      ]
+    },
+    "answer_recipe": {
+      "kind": "numeric",
+      "items": [
+        {
+          "op": "sub",
+          "args": [
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "param": "a",
+                  "args": []
+                },
+                {
+                  "param": "d",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "param": "b",
+                  "args": []
+                },
+                {
+                  "param": "c",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "param": "a",
+                  "args": []
+                },
+                {
+                  "param": "d",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "param": "b",
+                  "args": []
+                },
+                {
+                  "param": "c",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "SIGN_ERROR",
+        "reason": "Adds the cross term instead of subtracting"
+      },
+      {
+        "value": {
+          "op": "sub",
+          "args": [
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "param": "a",
+                  "args": []
+                },
+                {
+                  "param": "b",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "param": "c",
+                  "args": []
+                },
+                {
+                  "param": "d",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "MINOR_SWAP",
+        "reason": "Swaps the diagonal pairings"
+      },
+      {
+        "value": {
+          "op": "mul",
+          "args": [
+            {
+              "param": "a",
+              "args": []
+            },
+            {
+              "param": "d",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "MISSING_MINOR",
+        "reason": "Keeps only the main diagonal product"
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Find the determinant of {matrix}.",
+      "anchors": {}
+    }
+  }
+}

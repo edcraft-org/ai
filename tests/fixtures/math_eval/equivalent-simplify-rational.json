@@ -1,0 +1,183 @@
+{
+  "id": "equivalent-simplify-rational",
+  "category": "equivalent",
+  "expected": "pass",
+  "expected_code": null,
+  "note": "A rational expression written in its simplified form.",
+  "schema_version": "math-ir/0.1",
+  "topic": "school.simplify",
+  "parameters": [
+    {
+      "name": "k",
+      "values": [
+        "2",
+        "3"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "school.simplify",
+    "symbols": [
+      {
+        "name": "x",
+        "kind": "unknown",
+        "domain": "real",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "domain_x",
+        "kind": "domain",
+        "symbol": "x",
+        "domain": "real",
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "simplify",
+      "symbols": [],
+      "expr": {
+        "op": "div",
+        "args": [
+          {
+            "op": "sub",
+            "args": [
+              {
+                "op": "pow",
+                "args": [
+                  {
+                    "sym": "x",
+                    "args": []
+                  },
+                  {
+                    "num": "2",
+                    "args": []
+                  }
+                ]
+              },
+              {
+                "op": "pow",
+                "args": [
+                  {
+                    "param": "k",
+                    "args": []
+                  },
+                  {
+                    "num": "2",
+                    "args": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "sub",
+            "args": [
+              {
+                "sym": "x",
+                "args": []
+              },
+              {
+                "param": "k",
+                "args": []
+              }
+            ]
+          }
+        ]
+      },
+      "order": 1,
+      "domain": "real"
+    },
+    "answer_recipe": {
+      "kind": "expression",
+      "items": [
+        {
+          "op": "add",
+          "args": [
+            {
+              "sym": "x",
+              "args": []
+            },
+            {
+              "param": "k",
+              "args": []
+            }
+          ]
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "op": "sub",
+          "args": [
+            {
+              "sym": "x",
+              "args": []
+            },
+            {
+              "param": "k",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "SIGN_ERROR",
+        "reason": "Subtracts instead of adding."
+      },
+      {
+        "value": {
+          "op": "mul",
+          "args": [
+            {
+              "sym": "x",
+              "args": []
+            },
+            {
+              "param": "k",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "PRODUCT_ERROR",
+        "reason": "Multiplies the parts."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "sym": "x",
+              "args": []
+            },
+            {
+              "param": "k",
+              "args": []
+            },
+            {
+              "num": "1",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "OFF_BY_ONE",
+        "reason": "Adds one."
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Simplify {expr}.",
+      "anchors": {}
+    }
+  }
+}

@@ -1,0 +1,200 @@
+{
+  "id": "equivalent-solve-reordered",
+  "category": "equivalent",
+  "expected": "pass",
+  "expected_code": null,
+  "note": "The same solution set with its two elements in the other order.",
+  "schema_version": "math-ir/0.1",
+  "topic": "school.quadratic",
+  "parameters": [
+    {
+      "name": "p",
+      "values": [
+        "2",
+        "3"
+      ]
+    },
+    {
+      "name": "q",
+      "values": [
+        "-7",
+        "-5"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "school.quadratic",
+    "symbols": [
+      {
+        "name": "x",
+        "kind": "unknown",
+        "domain": "real",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "equation",
+        "kind": "relation",
+        "relation": {
+          "kind": "eq",
+          "lhs": {
+            "op": "add",
+            "args": [
+              {
+                "op": "pow",
+                "args": [
+                  {
+                    "sym": "x",
+                    "args": []
+                  },
+                  {
+                    "num": "2",
+                    "args": []
+                  }
+                ]
+              },
+              {
+                "op": "mul",
+                "args": [
+                  {
+                    "op": "sub",
+                    "args": [
+                      {
+                        "num": "0",
+                        "args": []
+                      },
+                      {
+                        "op": "add",
+                        "args": [
+                          {
+                            "param": "p",
+                            "args": []
+                          },
+                          {
+                            "param": "q",
+                            "args": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "sym": "x",
+                    "args": []
+                  }
+                ]
+              },
+              {
+                "op": "mul",
+                "args": [
+                  {
+                    "param": "p",
+                    "args": []
+                  },
+                  {
+                    "param": "q",
+                    "args": []
+                  }
+                ]
+              }
+            ]
+          },
+          "rhs": {
+            "num": "0",
+            "args": []
+          }
+        },
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "solve",
+      "symbol": "x",
+      "symbols": [],
+      "order": 1,
+      "domain": "real"
+    },
+    "answer_recipe": {
+      "kind": "set",
+      "items": [
+        {
+          "param": "q",
+          "args": []
+        },
+        {
+          "param": "p",
+          "args": []
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "op": "sub",
+          "args": [
+            {
+              "num": "0",
+              "args": []
+            },
+            {
+              "param": "p",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "SIGN_ERROR",
+        "reason": "Flips the sign of one root."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "param": "p",
+              "args": []
+            },
+            {
+              "param": "q",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "SUM_AS_ROOT",
+        "reason": "Reports the sum of the roots."
+      },
+      {
+        "value": {
+          "op": "mul",
+          "args": [
+            {
+              "param": "p",
+              "args": []
+            },
+            {
+              "param": "q",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "PRODUCT_AS_ROOT",
+        "reason": "Reports the product of the roots."
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Solve {equation}.",
+      "anchors": {}
+    }
+  }
+}

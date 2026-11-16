@@ -1,0 +1,181 @@
+{
+  "id": "incorrect-parameter-breaks-domain",
+  "category": "incorrect",
+  "expected": "reject",
+  "expected_code": "IR_VALIDATION_FAILED",
+  "note": "The expression is undefined at the last boundary a=4, b=4.",
+  "schema_version": "math-ir/0.1",
+  "topic": "school.evaluate",
+  "parameters": [
+    {
+      "name": "a",
+      "values": [
+        "2",
+        "4"
+      ]
+    },
+    {
+      "name": "b",
+      "values": [
+        "1",
+        "4"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "school.evaluate",
+    "symbols": [
+      {
+        "name": "value",
+        "kind": "given",
+        "domain": "rational",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "domain_value",
+        "kind": "domain",
+        "symbol": "value",
+        "domain": "rational",
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "evaluate",
+      "symbols": [],
+      "expr": {
+        "op": "div",
+        "args": [
+          {
+            "num": "1",
+            "args": []
+          },
+          {
+            "op": "sub",
+            "args": [
+              {
+                "param": "a",
+                "args": []
+              },
+              {
+                "param": "b",
+                "args": []
+              }
+            ]
+          }
+        ]
+      },
+      "order": 1,
+      "domain": "real"
+    },
+    "answer_recipe": {
+      "kind": "numeric",
+      "items": [
+        {
+          "op": "div",
+          "args": [
+            {
+              "num": "1",
+              "args": []
+            },
+            {
+              "op": "sub",
+              "args": [
+                {
+                  "param": "a",
+                  "args": []
+                },
+                {
+                  "param": "b",
+                  "args": []
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "value": {
+          "param": "a",
+          "args": []
+        },
+        "items": [],
+        "components": [],
+        "misconception": "USES_A",
+        "reason": "Reports the first parameter."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "num": "2",
+                  "args": []
+                },
+                {
+                  "param": "b",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "num": "1",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "DOUBLES_B",
+        "reason": "Doubles b and adds one."
+      },
+      {
+        "value": {
+          "op": "add",
+          "args": [
+            {
+              "param": "a",
+              "args": []
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "num": "2",
+                  "args": []
+                },
+                {
+                  "param": "b",
+                  "args": []
+                }
+              ]
+            },
+            {
+              "num": "1",
+              "args": []
+            }
+          ]
+        },
+        "items": [],
+        "components": [],
+        "misconception": "SUMS_PARAMETERS",
+        "reason": "Adds a, twice b and one."
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Evaluate {expr}.",
+      "anchors": {}
+    }
+  }
+}

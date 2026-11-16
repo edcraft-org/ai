@@ -1,0 +1,123 @@
+{
+  "id": "unsupported-eigenvalues",
+  "category": "unsupported",
+  "expected": "reject",
+  "expected_code": "IR_VALIDATION_FAILED",
+  "note": "An eigenvalues goal has no engine operation.",
+  "schema_version": "math-ir/0.1",
+  "topic": "university.eigenvalues",
+  "parameters": [
+    {
+      "name": "k",
+      "values": [
+        "1",
+        "2"
+      ]
+    }
+  ],
+  "body": {
+    "schema_version": "math-ir/0.1",
+    "topic": "university.eigenvalues",
+    "symbols": [
+      {
+        "name": "m",
+        "kind": "given",
+        "domain": "integer",
+        "positive": false,
+        "nonzero": false,
+        "integer": false
+      }
+    ],
+    "givens": [
+      {
+        "id": "domain_m",
+        "kind": "domain",
+        "symbol": "m",
+        "domain": "integer",
+        "values": []
+      }
+    ],
+    "goal": {
+      "kind": "eigenvalues",
+      "symbols": [],
+      "order": 1,
+      "domain": "real",
+      "matrix": [
+        [
+          {
+            "num": "1",
+            "args": []
+          },
+          {
+            "num": "0",
+            "args": []
+          }
+        ],
+        [
+          {
+            "num": "0",
+            "args": []
+          },
+          {
+            "param": "k",
+            "args": []
+          }
+        ]
+      ]
+    },
+    "answer_recipe": {
+      "kind": "set",
+      "items": [
+        {
+          "num": "1",
+          "args": []
+        },
+        {
+          "param": "k",
+          "args": []
+        }
+      ],
+      "display": ""
+    },
+    "distractors": [
+      {
+        "items": [
+          {
+            "num": "1",
+            "args": []
+          }
+        ],
+        "components": [],
+        "misconception": "MISSING_EIGENVALUE",
+        "reason": ""
+      },
+      {
+        "items": [
+          {
+            "num": "2",
+            "args": []
+          }
+        ],
+        "components": [],
+        "misconception": "CONSTANT",
+        "reason": ""
+      },
+      {
+        "items": [
+          {
+            "num": "3",
+            "args": []
+          }
+        ],
+        "components": [],
+        "misconception": "CONSTANT",
+        "reason": ""
+      }
+    ],
+    "text": {
+      "mode": "symbolic",
+      "template": "Find the eigenvalues of {matrix}.",
+      "anchors": {}
+    }
+  }
+}

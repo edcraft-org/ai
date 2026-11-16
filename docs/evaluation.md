@@ -66,6 +66,47 @@ current workflow. Structured output defaults to `json_object` with local schema
 validation; `json_schema` remains an explicit opt-in for endpoints that support
 strict structured outputs.
 
+### Mathematics authoring baseline
+
+```bash
+SOCLAAS_MAX_RETRIES=0 uv run python scripts/evaluate_authoring_loop.py \
+  --env-file .env --domain math --provider soclaas --model x-test-2 \
+  --set all --jobs 12 --output .artifacts/math-authoring.jsonl
+```
+
+Set the provider's SDK retry count to zero for a controlled run, for example
+`SOCLAAS_MAX_RETRIES=0` or `OPENAI_MAX_RETRIES=0`. The manifest records the
+observed provider settings, so check the retry count there as well.
+
+The fixed mathematics set has eight natural prompts and four unsupported prompts.
+Natural prompts cover a linear equation, a monic quadratic to factorise, two
+binomials to expand, a cubic derivative, a 2 by 2 determinant, a rational
+expression to simplify, an arithmetic expression and a short prose word problem.
+Unsupported prompts ask for a proof, 3 by 3 eigenvalues, a limit and a probability
+word problem. Unsupported requests may be reshaped or may fail. Use
+`--set natural`, `--set unsupported` or `--set all`. `--jobs N` cycles through the
+selected set.
+
+Each JSONL record keeps the final status, attempts, failed check codes for every
+attempt, the checked, needs_review, failed and unresolved flags, requested and
+estimated difficulty with its decision path, relevance score, threshold and
+decision, checked examples, declared domain size, author and judge tokens and wall
+time. Unknown token counts are null. Checked jobs also save the reusable artifact
+and deterministic previews at seeds 0, 1 and 42. The runner replays each preview
+twice from the saved artifact without model or MCP calls and asserts that the
+results match.
+
+The summary reports counts by outcome and set, first-attempt and overall checked
+yield with every requested job in the denominator, revision counts, the failure
+taxonomy by check code, relevance flags for the unsupported set, a requested
+against estimated difficulty table, median and maximum latency and author, judge
+and combined token totals. The manifest keeps the exact validator revision,
+provider, resolved model, provider settings, prompt versions and rubric versions.
+
+These results describe one model on a fixed prompt set. They are not a general
+accuracy estimate. Difficulty agreement is measured against the provisional
+`math-ir-v0.1` rubric and remains advisory.
+
 ## Mathematics correctness
 
 ```bash
@@ -81,6 +122,39 @@ benchmark. `qualification` reports seeded property-based observations over sampl
 parameter assignments, not an exhaustive Cartesian enumeration; a passing campaign
 supports only the observed samples. Keep request/result records for regression
 comparison, and separate correctness evidence from relevance or difficulty claims.
+
+## Mathematics fixtures
+
+```bash
+uv run python scripts/evaluate_math_fixtures.py --output .artifacts/math-fixtures.jsonl
+```
+
+The runner loads every file in `tests/fixtures/math_eval/`. Each file is a
+complete math template candidate with a header that declares its category and
+expected outcome. The categories are:
+
+- `correct`: a valid template that must pass.
+- `incorrect`: a template with a specific defect that must reject.
+- `equivalent`: a mathematically equal answer in another form that must pass,
+  except one form that the answer form check rejects for expand or factor.
+- `unsupported`: a goal or answer kind with no engine representation that must
+  reject.
+
+The runner applies the production sampling settings with seed 0. It runs the item
+spec check, the option checks, the prose anchor and equivalence checks, and the
+answer form check for factor and expand goals. For every passing fixture it
+expands the template twice at seeds 0, 1 and 42. The JSONL record states whether
+both expansions are identical and whether any model, MCP or network call was
+attempted. Per fixture records go to `--output` and the summary goes to
+`<output>.summary.json`. The command exits nonzero when any fixture differs from
+its expectation.
+
+These fixtures check the checker. They say nothing about model quality, generated
+question quality, learner difficulty or parser recall. A passing correct fixture
+means the checks accept a valid item. A rejected unsupported fixture means the
+checks refuse a construct the engine cannot represent. The offline fidelity path
+uses an identity reconstruction in place of the blind parse back model, so it
+exercises anchors and equivalence but not parser accuracy.
 
 ## Difficulty and relevance
 
